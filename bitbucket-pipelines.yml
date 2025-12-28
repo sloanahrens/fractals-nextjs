@@ -99,19 +99,19 @@ pipelines:
               - npm ci --silent
               - npx pulumi login "gs://${STATE_BUCKET}"
               - export REGISTRY_URL=$(npx pulumi stack output registryUrl -s organization/infrastructure/prod --show-secrets 2>/dev/null)
-              - echo "Registry URL: ${REGISTRY_URL}"
+              - 'echo "Registry URL: ${REGISTRY_URL}"'
               - cd ../..
 
               # Build and push Docker image
-              - echo "${ACCESS_TOKEN}" | docker login -u oauth2accesstoken --password-stdin "https://${GCP_REGION}-docker.pkg.dev"
-              - docker build --platform linux/amd64 -t "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}" .
-              - docker push "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}"
+              - 'echo "${ACCESS_TOKEN}" | docker login -u oauth2accesstoken --password-stdin "https://${GCP_REGION}-docker.pkg.dev"'
+              - 'docker build --platform linux/amd64 -t "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}" .'
+              - 'docker push "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}"'
 
               # Deploy via Pulumi
               - cd infra/app
               - npm ci --silent
               - npx pulumi stack select "organization/app/${APP_NAME}-${BRANCH_TAG}" --create 2>/dev/null || true
-              - npx pulumi config set gcp:project "${GCP_PROJECT}"
+              - 'npx pulumi config set gcp:project "${GCP_PROJECT}"'
               - npx pulumi config set appName "${APP_NAME}"
               - npx pulumi config set imageTag "${BRANCH_TAG}"
               - npx pulumi config set infraStackRef "organization/infrastructure/prod"
@@ -197,7 +197,7 @@ pipelines:
             - |
               if npx pulumi stack select "organization/app/${STACK_NAME}" 2>/dev/null; then
                 echo "Stack exists, destroying..."
-                npx pulumi config set gcp:project "${GCP_PROJECT}"
+                npx pulumi config set "gcp:project" "${GCP_PROJECT}"
                 npx pulumi destroy --yes
                 npx pulumi stack rm --yes
                 echo "Stack '${STACK_NAME}' destroyed successfully"
