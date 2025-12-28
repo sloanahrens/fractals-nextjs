@@ -1,4 +1,4 @@
-# Bitbucket Pipeline for fractals-nextjs using pulumi-gcp-ops
+# Bitbucket Pipeline for fractals-nextjs using devops-gcp-pulumi
 #
 # Required Repository Variables:
 #   GCP_PROJECT          - GCP project ID
@@ -43,11 +43,43 @@ pipelines:
               # Application configuration
               - export APP_NAME=fractals-nextjs
 
+              # Validate required repository variables
+              - |
+                MISSING=""
+                [ -z "$GCP_PROJECT" ] && MISSING="$MISSING GCP_PROJECT"
+                [ -z "$GCP_PROJECT_NUMBER" ] && MISSING="$MISSING GCP_PROJECT_NUMBER"
+                [ -z "$GCP_REGION" ] && MISSING="$MISSING GCP_REGION"
+                [ -z "$STATE_BUCKET" ] && MISSING="$MISSING STATE_BUCKET"
+                [ -z "$SERVICE_ACCOUNT_EMAIL" ] && MISSING="$MISSING SERVICE_ACCOUNT_EMAIL"
+                [ -z "$PULUMI_ORG" ] && MISSING="$MISSING PULUMI_ORG"
+                [ -z "$PULUMI_CONFIG_PASSPHRASE" ] && MISSING="$MISSING PULUMI_CONFIG_PASSPHRASE"
+                if [ -n "$MISSING" ]; then
+                  echo "=============================================="
+                  echo "ERROR: Missing required repository variables:"
+                  echo "=============================================="
+                  for var in $MISSING; do
+                    echo "  - $var"
+                  done
+                  echo ""
+                  echo "Set these in: Repository Settings > Pipelines > Repository variables"
+                  echo ""
+                  echo "Required variables (from devops-gcp-pulumi bootstrap/infrastructure outputs):"
+                  echo "  GCP_PROJECT          - GCP project ID"
+                  echo "  GCP_PROJECT_NUMBER   - GCP project number (for WIF)"
+                  echo "  GCP_REGION           - GCP region (e.g., us-central1)"
+                  echo "  STATE_BUCKET         - GCS bucket name for Pulumi state"
+                  echo "  SERVICE_ACCOUNT_EMAIL - Deploy service account email"
+                  echo "  PULUMI_ORG           - Pulumi organization/username"
+                  echo "  PULUMI_CONFIG_PASSPHRASE - State encryption passphrase (secured)"
+                  exit 1
+                fi
+                echo "All required variables are set"
+
               # Install dependencies
               - apk add --no-cache git curl jq bash docker-cli
 
               # Clone infrastructure repo
-              - git clone https://bitbucket.org/sloanahrens/pulumi-gcp-ops.git infra
+              - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
 
               # Normalize branch name for Cloud Run (max 63 chars, DNS-safe)
               - export BRANCH_TAG=$(./infra/scripts/normalize-branch.sh "$BITBUCKET_BRANCH")
@@ -118,12 +150,30 @@ pipelines:
             # Application configuration
             - export APP_NAME=fractals-nextjs
 
-            # Validate branch name
+            # Validate required variables
             - |
-              if [ -z "$DELETED_BRANCH" ]; then
-                echo "ERROR: DELETED_BRANCH variable is required"
-                echo "Go to: Pipelines -> Run pipeline -> Custom: branch-cleanup"
-                echo "Then enter the branch name to clean up"
+              MISSING=""
+              [ -z "$DELETED_BRANCH" ] && MISSING="$MISSING DELETED_BRANCH"
+              [ -z "$GCP_PROJECT" ] && MISSING="$MISSING GCP_PROJECT"
+              [ -z "$GCP_PROJECT_NUMBER" ] && MISSING="$MISSING GCP_PROJECT_NUMBER"
+              [ -z "$STATE_BUCKET" ] && MISSING="$MISSING STATE_BUCKET"
+              [ -z "$SERVICE_ACCOUNT_EMAIL" ] && MISSING="$MISSING SERVICE_ACCOUNT_EMAIL"
+              [ -z "$PULUMI_ORG" ] && MISSING="$MISSING PULUMI_ORG"
+              [ -z "$PULUMI_CONFIG_PASSPHRASE" ] && MISSING="$MISSING PULUMI_CONFIG_PASSPHRASE"
+              if [ -n "$MISSING" ]; then
+                echo "=============================================="
+                echo "ERROR: Missing required variables:"
+                echo "=============================================="
+                for var in $MISSING; do
+                  echo "  - $var"
+                done
+                echo ""
+                if echo "$MISSING" | grep -q "DELETED_BRANCH"; then
+                  echo "DELETED_BRANCH: Go to Pipelines -> Run pipeline -> Custom: branch-cleanup"
+                  echo "                Then enter the branch name to clean up"
+                  echo ""
+                fi
+                echo "Repository variables: Settings > Pipelines > Repository variables"
                 exit 1
               fi
 
@@ -131,7 +181,7 @@ pipelines:
             - apk add --no-cache git curl jq bash
 
             # Clone infrastructure repo
-            - git clone https://bitbucket.org/sloanahrens/pulumi-gcp-ops.git infra
+            - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
 
             # Normalize the deleted branch name
             - export BRANCH_TAG=$(./infra/scripts/normalize-branch.sh "$DELETED_BRANCH")
