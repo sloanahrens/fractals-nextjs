@@ -1,15 +1,28 @@
-image: atlassian/default-image:4
+# Bitbucket Pipeline for fractals-nextjs using pulumi-gcp-ops
+#
+# Required Repository Variables:
+#   GCP_PROJECT          - GCP project ID
+#   GCP_PROJECT_NUMBER   - GCP project number (for WIF)
+#   GCP_REGION           - GCP region (e.g., us-central1)
+#   STATE_BUCKET         - GCS bucket name for Pulumi state
+#   SERVICE_ACCOUNT_EMAIL - Deploy service account email
+#   PULUMI_ORG           - Pulumi organization/username
+#
+# Required Repository Variables (Secured):
+#   PULUMI_CONFIG_PASSPHRASE - State encryption passphrase
+
+image: node:22-alpine
 
 definitions:
-  caches:
-    docker-buildx: ~/.docker/buildx
+  services:
+    docker:
+      memory: 2048
 
 pipelines:
   default:
     - parallel:
         - step:
             name: Build and Test Next.js App
-            image: node:20-alpine
             caches:
               - node
             script:
@@ -20,177 +33,130 @@ pipelines:
 
         - step:
             name: Deploy to Cloud Run
+            oidc: true
             services:
               - docker
+            caches:
+              - node
+              - docker
             script:
-              # Set required environment variables
+              # Application configuration
               - export APP_NAME=fractals-nextjs
-              - export APP_CODE_PATH=${BITBUCKET_CLONE_DIR}
 
-              # Clone devops repository
-              - git clone git@bitbucket.org:sloanahrens/devops-cloud-run.git devops-cloud-run
-              - cd devops-cloud-run/devops-cloud-run
+              # Install dependencies
+              - apk add --no-cache git curl jq bash docker-cli
 
-              # Build devops container (required for deployment)
-              - echo "Building DevOps container for deployment..."
-              - cd docker
-              - ./pull-devops-image.sh master
+              # Clone infrastructure repo
+              - git clone https://bitbucket.org/sloanahrens/pulumi-gcp-ops.git infra
 
-              # Validate bootstrap infrastructure is ready
-              - echo "Validating bootstrap infrastructure..."
-              - cd ../bootstrap
-              - ./validate-bootstrap.sh
-              - cd ..
+              # Normalize branch name for Cloud Run (max 63 chars, DNS-safe)
+              - export BRANCH_TAG=$(./infra/scripts/normalize-branch.sh "$BITBUCKET_BRANCH")
+              - echo "Deploying branch '${BITBUCKET_BRANCH}' as '${BRANCH_TAG}'"
 
-              # Normalize branch name for image tag
-              - export NORMALIZED_TAG=$(scripts/normalize-branch-tag.sh ${BITBUCKET_BRANCH})
-              - echo "NORMALIZED_TAG is ${NORMALIZED_TAG}"
-
-              # Build and push application container to Artifact Registry
-              - echo "Building and pushing application container..."
-              - cd cloud-run
-              - ./cloud-run.sh build-push-app-image ${NORMALIZED_TAG}
-
-              # Deploy application with normalized tag
-              - echo "Deploying application to Cloud Run with ${APP_NAME} and ${NORMALIZED_TAG}..."
-              - ./cloud-run.sh apply ${NORMALIZED_TAG}
-
-              # Test that the deployment is working
-              - echo "Testing deployment health..."
+              # Get GCP access token via Workload Identity Federation
               - |
-                export SERVICE_URL=$(docker run --rm \
-                    -v $(pwd):/workspace \
-                    -w /workspace \
-                    -e GCP_SERVICE_ACCOUNT_KEY="$GCP_SERVICE_ACCOUNT_KEY" \
-                    devops:latest \
-                    terraform output -raw service_url 2>/dev/null | tail -n1)
-                echo "Service URL: $SERVICE_URL"
+                export ACCESS_TOKEN=$(./infra/scripts/get-wif-token.sh)
+                if [ -z "$ACCESS_TOKEN" ]; then
+                  echo "Failed to get GCP access token"
+                  exit 1
+                fi
 
-                # Test with retries (up to 30 seconds)
-                for i in {1..6}; do
-                  echo "Attempt $i: Testing $SERVICE_URL..."
-                  if docker run --rm -e GCP_SERVICE_ACCOUNT_KEY devops:latest curl -f -s -o /dev/null -w "%{http_code}\n" "$SERVICE_URL" | grep -q "200"; then
-                    echo "✅ Health check passed! Service is running."
+              # Configure auth for Docker and Pulumi
+              - export CLOUDSDK_AUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
+              - export GOOGLE_OAUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
+
+              # Get registry URL from infrastructure stack
+              - cd infra/infrastructure
+              - npm ci --silent
+              - npx pulumi login "gs://${STATE_BUCKET}"
+              - export REGISTRY_URL=$(npx pulumi stack output registryUrl -s ${PULUMI_ORG}/infrastructure/prod --show-secrets 2>/dev/null)
+              - echo "Registry URL: ${REGISTRY_URL}"
+              - cd ../..
+
+              # Build and push Docker image
+              - echo "${ACCESS_TOKEN}" | docker login -u oauth2accesstoken --password-stdin "https://${GCP_REGION}-docker.pkg.dev"
+              - docker build --platform linux/amd64 -t "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}" .
+              - docker push "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}"
+
+              # Deploy via Pulumi
+              - cd infra/app
+              - npm ci --silent
+              - npx pulumi stack select "${PULUMI_ORG}/app/${APP_NAME}-${BRANCH_TAG}" --create 2>/dev/null || true
+              - npx pulumi config set gcp:project "${GCP_PROJECT}"
+              - npx pulumi config set appName "${APP_NAME}"
+              - npx pulumi config set imageTag "${BRANCH_TAG}"
+              - npx pulumi config set infraStackRef "${PULUMI_ORG}/infrastructure/prod"
+              - npx pulumi config set region "${GCP_REGION}"
+              - npx pulumi up --yes
+
+              # Get deployment URL and run health check
+              - export URL=$(npx pulumi stack output url --show-secrets 2>/dev/null)
+              - echo "Deployed to ${URL}"
+              - |
+                echo "Running health check..."
+                for i in $(seq 1 6); do
+                  if curl -sf "${URL}/health" > /dev/null 2>&1; then
+                    echo "Health check passed!"
                     exit 0
                   fi
-                  echo "Waiting 5 seconds before retry..."
-                  sleep 5
+                  echo "Attempt $i/6 failed, retrying in 10s..."
+                  sleep 10
                 done
-                echo "❌ Health check failed after 30 seconds"
+                echo "Health check failed after 60 seconds"
                 exit 1
 
-  # Custom pipelines
   custom:
-    # Branch cleanup pipeline - triggered by webhook on PR merge (when "Close source branch" checked)
+    # Branch cleanup pipeline - triggered by webhook on PR merge or manually
     branch-cleanup:
-      - step:
-          name: Destroy Branch Resources on Branch Deletion
-          services:
-            - docker
+      - variables:
+          - name: DELETED_BRANCH
+            description: "Name of the deleted branch to clean up"
+        step:
+          name: Cleanup Branch Resources
+          oidc: true
           script:
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # BRANCH DELETION CLEANUP PIPELINE
-            # ═══════════════════════════════════════════════════════════════════════════════
-            #
-            # AUTOMATIC TRIGGER: When PR merged with "Close source branch" checked
-            # MANUAL TRIGGER: Can also be run manually after deleting a branch
-            #
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # HOW IT WORKS (AUTOMATIC):
-            # ═══════════════════════════════════════════════════════════════════════════════
-            #
-            # When you merge a PR with "Close source branch" ✓:
-            #   1. Bitbucket merges PR and deletes the source branch
-            #   2. Webhook fires "pullrequest:fulfilled" event
-            #   3. triggerBranchCleanup Firebase function receives it
-            #   4. Function triggers this pipeline for the deleted branch
-            #   5. Pipeline destroys Cloud Run resources automatically
-            #
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # HOW TO USE (MANUAL TRIGGER):
-            # ═══════════════════════════════════════════════════════════════════════════════
-            #
-            # If you deleted a branch manually (not via PR merge):
-            #
-            # 1. Go to: Bitbucket → Pipelines → Run pipeline
-            #
-            # 2. Pipeline: Select "Custom: branch-cleanup"
-            #
-            # 3. Branch: Select the deleted branch from dropdown
-            #    (or select "Custom" and manually type the branch name)
-            #
-            # 4. Click "Run"
-            #
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # WHAT GETS DESTROYED:
-            # ═══════════════════════════════════════════════════════════════════════════════
-            #
-            # When you run cleanup for branch "feature/new-api":
-            #   ✅ Terraform workspace: "feature-new-api" (normalized)
-            #   ✅ Cloud Run service: "my-app-feature-new-api"
-            #   ✅ All branch-specific resources in that workspace
-            #
-            # SAFETY:
-            #   - Only destroys resources for the SPECIFIED branch
-            #   - Master/main branches should never be deleted (org policy)
-            #   - Each workspace is isolated (no cross-branch impact)
-            #
-            # ═══════════════════════════════════════════════════════════════════════════════
-
-            # Set application name (CUSTOMIZE THIS FOR YOUR APP)
+            # Application configuration
             - export APP_NAME=fractals-nextjs
 
-            # Determine deleted branch name:
-            # - BRANCH_NAME variable (set by webhook when PR merged with "Close source branch")
-            # - BITBUCKET_BRANCH (when manually triggered)
-            # - BITBUCKET_TAG (when triggered for tag deletion)
-            - export DELETED_BRANCH=${BRANCH_NAME:-${BITBUCKET_BRANCH:-${BITBUCKET_TAG}}}
-
-            # Validate branch name exists
+            # Validate branch name
             - |
               if [ -z "$DELETED_BRANCH" ]; then
-                echo "❌ ERROR: No branch or tag name provided"
-                echo "This pipeline must be manually triggered with a branch name."
-                echo "Go to: Pipelines → Run pipeline → Custom: branch-cleanup"
+                echo "ERROR: DELETED_BRANCH variable is required"
+                echo "Go to: Pipelines -> Run pipeline -> Custom: branch-cleanup"
+                echo "Then enter the branch name to clean up"
                 exit 1
               fi
 
-            - echo "🗑️  Cleaning up Cloud Run resources for branch - ${DELETED_BRANCH}"
-            - echo "📦 Application - ${APP_NAME}"
-            - |
-              if [ -n "$BRANCH_NAME" ]; then
-                echo "🤖 Triggered automatically by PR merge webhook"
-              else
-                echo "👤 Triggered manually"
-              fi
+            # Install dependencies
+            - apk add --no-cache git curl jq bash
 
             # Clone infrastructure repo
-            - echo "Cloning infrastructure repo..."
-            - git clone git@bitbucket.org:sloanahrens/devops-cloud-run.git devops-cloud-run
-            - cd devops-cloud-run/devops-cloud-run
+            - git clone https://bitbucket.org/sloanahrens/pulumi-gcp-ops.git infra
 
-            # Pull devops container
-            - echo "Pulling DevOps container..."
-            - cd docker
-            - ./pull-devops-image.sh master
+            # Normalize the deleted branch name
+            - export BRANCH_TAG=$(./infra/scripts/normalize-branch.sh "$DELETED_BRANCH")
+            - export STACK_NAME="${APP_NAME}-${BRANCH_TAG}"
+            - echo "Cleaning up stack '${STACK_NAME}' for deleted branch '${DELETED_BRANCH}'"
 
-            # Normalize branch name for resource identification
-            - export NORMALIZED_BRANCH_TAG=$(../scripts/normalize-branch-tag.sh ${DELETED_BRANCH})
-            - echo "🏷️  Normalized branch tag - ${NORMALIZED_BRANCH_TAG}"
-            - echo "🎯 Target Cloud Run service - ${APP_NAME}-${NORMALIZED_BRANCH_TAG}"
-            - echo "📂 Target Terraform workspace - ${NORMALIZED_BRANCH_TAG}"
+            # Get GCP access token via Workload Identity Federation
+            - |
+              export ACCESS_TOKEN=$(./infra/scripts/get-wif-token.sh)
+              export CLOUDSDK_AUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
+              export GOOGLE_OAUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
 
-            # Destroy Cloud Run resources for this branch
-            - echo "🚨 Destroying Cloud Run resources..."
-            - cd ../cloud-run
-            - ./cloud-run.sh destroy ${NORMALIZED_BRANCH_TAG}
+            # Check if stack exists and destroy
+            - cd infra/app
+            - npm ci --silent
+            - npx pulumi login "gs://${STATE_BUCKET}"
+            - |
+              if npx pulumi stack select "${PULUMI_ORG}/app/${STACK_NAME}" 2>/dev/null; then
+                echo "Stack exists, destroying..."
+                npx pulumi config set gcp:project "${GCP_PROJECT}"
+                npx pulumi destroy --yes
+                npx pulumi stack rm --yes
+                echo "Stack '${STACK_NAME}' destroyed successfully"
+              else
+                echo "No stack found for '${STACK_NAME}', nothing to clean up"
+              fi
 
-            - echo ""
-            - echo "✅ Successfully destroyed Cloud Run resources for deleted branch!"
-            - echo "   Branch - ${DELETED_BRANCH}"
-            - echo "   Service - ${APP_NAME}-${NORMALIZED_BRANCH_TAG}"
-            - echo "   Workspace - ${NORMALIZED_BRANCH_TAG}"
-            - echo ""
-            - echo "💰 Tip - This cleanup prevents orphaned resources and saves GCP costs"
-
-
+            - echo "Cleanup complete for branch '${DELETED_BRANCH}'"
