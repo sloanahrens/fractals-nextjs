@@ -6,7 +6,6 @@
 #   GCP_REGION           - GCP region (e.g., us-central1)
 #   STATE_BUCKET         - GCS bucket name for Pulumi state
 #   SERVICE_ACCOUNT_EMAIL - Deploy service account email
-#   PULUMI_ORG           - Pulumi organization/username
 #
 # Required Repository Variables (Secured):
 #   PULUMI_CONFIG_PASSPHRASE - State encryption passphrase
@@ -51,7 +50,6 @@ pipelines:
                 [ -z "$GCP_REGION" ] && MISSING="$MISSING GCP_REGION"
                 [ -z "$STATE_BUCKET" ] && MISSING="$MISSING STATE_BUCKET"
                 [ -z "$SERVICE_ACCOUNT_EMAIL" ] && MISSING="$MISSING SERVICE_ACCOUNT_EMAIL"
-                [ -z "$PULUMI_ORG" ] && MISSING="$MISSING PULUMI_ORG"
                 [ -z "$PULUMI_CONFIG_PASSPHRASE" ] && MISSING="$MISSING PULUMI_CONFIG_PASSPHRASE"
                 if [ -n "$MISSING" ]; then
                   echo "=============================================="
@@ -69,7 +67,6 @@ pipelines:
                   echo "  GCP_REGION           - GCP region (e.g., us-central1)"
                   echo "  STATE_BUCKET         - GCS bucket name for Pulumi state"
                   echo "  SERVICE_ACCOUNT_EMAIL - Deploy service account email"
-                  echo "  PULUMI_ORG           - Pulumi organization/username"
                   echo "  PULUMI_CONFIG_PASSPHRASE - State encryption passphrase (secured)"
                   exit 1
                 fi
@@ -101,7 +98,7 @@ pipelines:
               - cd infra/infrastructure
               - npm ci --silent
               - npx pulumi login "gs://${STATE_BUCKET}"
-              - export REGISTRY_URL=$(npx pulumi stack output registryUrl -s ${PULUMI_ORG}/infrastructure/prod --show-secrets 2>/dev/null)
+              - export REGISTRY_URL=$(npx pulumi stack output registryUrl -s organization/infrastructure/prod --show-secrets 2>/dev/null)
               - echo "Registry URL: ${REGISTRY_URL}"
               - cd ../..
 
@@ -113,11 +110,11 @@ pipelines:
               # Deploy via Pulumi
               - cd infra/app
               - npm ci --silent
-              - npx pulumi stack select "${PULUMI_ORG}/app/${APP_NAME}-${BRANCH_TAG}" --create 2>/dev/null || true
+              - npx pulumi stack select "organization/app/${APP_NAME}-${BRANCH_TAG}" --create 2>/dev/null || true
               - npx pulumi config set gcp:project "${GCP_PROJECT}"
               - npx pulumi config set appName "${APP_NAME}"
               - npx pulumi config set imageTag "${BRANCH_TAG}"
-              - npx pulumi config set infraStackRef "${PULUMI_ORG}/infrastructure/prod"
+              - npx pulumi config set infraStackRef "organization/infrastructure/prod"
               - npx pulumi config set region "${GCP_REGION}"
               - npx pulumi up --yes
 
@@ -158,7 +155,6 @@ pipelines:
               [ -z "$GCP_PROJECT_NUMBER" ] && MISSING="$MISSING GCP_PROJECT_NUMBER"
               [ -z "$STATE_BUCKET" ] && MISSING="$MISSING STATE_BUCKET"
               [ -z "$SERVICE_ACCOUNT_EMAIL" ] && MISSING="$MISSING SERVICE_ACCOUNT_EMAIL"
-              [ -z "$PULUMI_ORG" ] && MISSING="$MISSING PULUMI_ORG"
               [ -z "$PULUMI_CONFIG_PASSPHRASE" ] && MISSING="$MISSING PULUMI_CONFIG_PASSPHRASE"
               if [ -n "$MISSING" ]; then
                 echo "=============================================="
@@ -199,7 +195,7 @@ pipelines:
             - npm ci --silent
             - npx pulumi login "gs://${STATE_BUCKET}"
             - |
-              if npx pulumi stack select "${PULUMI_ORG}/app/${STACK_NAME}" 2>/dev/null; then
+              if npx pulumi stack select "organization/app/${STACK_NAME}" 2>/dev/null; then
                 echo "Stack exists, destroying..."
                 npx pulumi config set gcp:project "${GCP_PROJECT}"
                 npx pulumi destroy --yes
