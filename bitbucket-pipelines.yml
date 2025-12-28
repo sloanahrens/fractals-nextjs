@@ -73,7 +73,7 @@ pipelines:
                 echo "All required variables are set"
 
               # Install dependencies
-              - apk add --no-cache git curl jq bash docker-cli
+              - apk add --no-cache git curl jq bash
 
               # Clone infrastructure repo
               - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
