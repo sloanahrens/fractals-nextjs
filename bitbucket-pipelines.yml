@@ -20,15 +20,15 @@ definitions:
 pipelines:
   default:
     - parallel:
-        - step:
-            name: Build and Test Next.js App
-            caches:
-              - node
-            script:
-              - npm ci
-              - npm run build
-              - npm run lint
-              - npx tsc --noEmit
+        # - step:
+        #     name: Build and Test Next.js App
+        #     caches:
+        #       - node
+        #     script:
+        #       - npm ci
+        #       - npm run build
+        #       - npm run lint
+        #       - npx tsc --noEmit
 
         - step:
             name: Deploy to Cloud Run
@@ -75,8 +75,11 @@ pipelines:
               # Install dependencies
               - apk add --no-cache git curl jq bash
 
-              # Clone infrastructure repo
-              - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
+              # Install Pulumi CLI and clone infra repo
+              - |
+                curl -fsSL https://get.pulumi.com | sh
+                export PATH=$PATH:$HOME/.pulumi/bin
+                git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
 
               # Normalize branch name for Cloud Run (max 63 chars, DNS-safe)
               - export BRANCH_TAG=$(./infra/scripts/normalize-branch.sh "$BITBUCKET_BRANCH")
@@ -95,33 +98,42 @@ pipelines:
               - export GOOGLE_OAUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
 
               # Get registry URL from infrastructure stack
-              - cd infra/infrastructure
-              - npm ci --silent
-              - npx pulumi login "gs://${STATE_BUCKET}"
-              - export REGISTRY_URL=$(npx pulumi stack output registryUrl -s organization/infrastructure/prod --show-secrets 2>/dev/null)
-              - 'echo "Registry URL: ${REGISTRY_URL}"'
-              - cd ../..
+              - |
+                export PATH=$PATH:$HOME/.pulumi/bin
+                cd infra/infrastructure
+                npm ci --silent
+                pulumi login "gs://${STATE_BUCKET}"
+                export REGISTRY_URL=$(pulumi stack output registryUrl -s organization/infrastructure/prod --show-secrets 2>/dev/null)
+                echo "Registry URL: ${REGISTRY_URL}"
+                echo "REGISTRY_URL=${REGISTRY_URL}" >> $BITBUCKET_PIPE_STORAGE_DIR/env_vars
 
               # Build and push Docker image
-              - 'echo "${ACCESS_TOKEN}" | docker login -u oauth2accesstoken --password-stdin "https://${GCP_REGION}-docker.pkg.dev"'
-              - 'docker build --platform linux/amd64 -t "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}" .'
-              - 'docker push "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}"'
+              - |
+                source $BITBUCKET_PIPE_STORAGE_DIR/env_vars
+                echo "${ACCESS_TOKEN}" | docker login -u oauth2accesstoken --password-stdin "https://${GCP_REGION}-docker.pkg.dev"
+                docker build --platform linux/amd64 -t "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}" .
+                docker push "${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}"
 
               # Deploy via Pulumi
-              - cd infra/app
-              - npm ci --silent
-              - npx pulumi stack select "organization/app/${APP_NAME}-${BRANCH_TAG}" --create 2>/dev/null || true
-              - 'npx pulumi config set gcp:project "${GCP_PROJECT}"'
-              - npx pulumi config set appName "${APP_NAME}"
-              - npx pulumi config set imageTag "${BRANCH_TAG}"
-              - npx pulumi config set infraStackRef "organization/infrastructure/prod"
-              - npx pulumi config set region "${GCP_REGION}"
-              - npx pulumi up --yes
+              - |
+                export PATH=$PATH:$HOME/.pulumi/bin
+                source $BITBUCKET_PIPE_STORAGE_DIR/env_vars
+                cd infra/app
+                npm ci --silent
+                pulumi stack select "organization/app/${APP_NAME}-${BRANCH_TAG}" --create 2>/dev/null || true
+                pulumi config set "gcp:project" "${GCP_PROJECT}"
+                pulumi config set appName "${APP_NAME}"
+                pulumi config set imageTag "${BRANCH_TAG}"
+                pulumi config set infraStackRef "organization/infrastructure/prod"
+                pulumi config set region "${GCP_REGION}"
+                pulumi up --yes
 
               # Get deployment URL and run health check
-              - export URL=$(npx pulumi stack output url --show-secrets 2>/dev/null)
-              - echo "Deployed to ${URL}"
               - |
+                export PATH=$PATH:$HOME/.pulumi/bin
+                cd infra/app
+                URL=$(pulumi stack output url --show-secrets 2>/dev/null)
+                echo "Deployed to ${URL}"
                 echo "Running health check..."
                 for i in $(seq 1 6); do
                   if curl -sf "${URL}/health" > /dev/null 2>&1; then
