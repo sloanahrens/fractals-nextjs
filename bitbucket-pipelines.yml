@@ -43,7 +43,7 @@ pipelines:
               - curl -fsSL https://get.pulumi.com | sh
               - export PATH=$PATH:$HOME/.pulumi/bin
               - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
-              - cd infra/cli && npm ci
+              - cd infra/cli && npm ci && npm run build
               - npx devops-gcp deploy --app fractals-nextjs --branch "$BITBUCKET_BRANCH" --context "$BITBUCKET_CLONE_DIR"
 
   custom:
@@ -59,5 +59,5 @@ pipelines:
             - curl -fsSL https://get.pulumi.com | sh
             - export PATH=$PATH:$HOME/.pulumi/bin
             - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
-            - cd infra/cli && npm ci
+            - cd infra/cli && npm ci && npm run build
             - npx devops-gcp cleanup --app fractals-nextjs --branch "$DELETED_BRANCH"
