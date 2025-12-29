@@ -45,7 +45,6 @@ pipelines:
               - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
               - cd infra/cli && npm ci && npm run build
               - npx devops-gcp deploy --app fractals-nextjs --branch "$BITBUCKET_BRANCH" --context "$BITBUCKET_CLONE_DIR"
-              - cd $BITBUCKET_CLONE_DIR/infra/app && pulumi stack output url --show-secrets
 
   custom:
     branch-cleanup:
