@@ -116,9 +116,18 @@ pipelines:
                 source $BITBUCKET_PIPE_STORAGE_DIR/env_vars
                 cd $BITBUCKET_CLONE_DIR
                 IMAGE="${REGISTRY_URL}/${APP_NAME}:${BRANCH_TAG}"
+                echo "DEBUG: IMAGE=${IMAGE}"
+                echo "DEBUG: REGISTRY_URL=${REGISTRY_URL}"
+                echo "DEBUG: APP_NAME=${APP_NAME}"
+                echo "DEBUG: BRANCH_TAG=${BRANCH_TAG}"
                 echo "${ACCESS_TOKEN}" | docker login -u oauth2accesstoken --password-stdin "https://${GCP_REGION}-docker.pkg.dev"
-                # Pull existing image for layer caching (ignore errors if first build)
-                docker pull "${IMAGE}" 2>/dev/null || echo "No existing image to cache from (first build)"
+                echo "Pulling existing image for cache..."
+                if docker pull "${IMAGE}"; then
+                  echo "Successfully pulled ${IMAGE} for caching"
+                else
+                  echo "No existing image to cache from (first build or pull failed)"
+                fi
+                echo "Building with cache-from ${IMAGE}..."
                 DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from "${IMAGE}" -t "${IMAGE}" .
                 docker push "${IMAGE}"
 
