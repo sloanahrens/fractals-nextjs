@@ -134,7 +134,7 @@ pipelines:
 
               # Get deployment URL and run health check
               - |
-                cd infra/app
+                cd $BITBUCKET_CLONE_DIR/infra/app
                 URL=$(pulumi stack output url --show-secrets 2>/dev/null)
                 echo "Deployed to ${URL}"
                 echo "Running health check..."
