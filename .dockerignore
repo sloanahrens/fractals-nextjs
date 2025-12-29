@@ -2,6 +2,7 @@
 devops-cloud-run
 devops-azure-container-apps
 devops
+infra
 
 # Dependencies
 node_modules
