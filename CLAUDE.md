@@ -129,7 +129,7 @@ Pipeline runs on every push with parallel steps (see `bitbucket-pipelines.yml`):
 1. **Build and Test**: `npm ci && npm run build && npm run lint && npx tsc --noEmit`
 2. **Deploy to Cloud Run**: Pushes to Artifact Registry, deploys via Pulumi
 
-Uses [devops-gcp-pulumi](https://bitbucket.org/sloanahrens/devops-gcp-pulumi) infrastructure.
+Uses [devops-pulumi-ts](https://github.com/sloanahrens/devops-pulumi-ts) infrastructure.
 
 **Branch-Based Deployments:**
 - Each branch gets isolated Cloud Run service

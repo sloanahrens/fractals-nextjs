@@ -1,4 +1,4 @@
-# Bitbucket Pipeline for fractals-nextjs using devops-gcp-pulumi CLI
+# Bitbucket Pipeline for fractals-nextjs using devops-pulumi-ts CLI
 #
 # Required Repository Variables:
 #   GCP_PROJECT          - GCP project ID
@@ -42,7 +42,7 @@ pipelines:
               - apk add --no-cache git curl bash
               - curl -fsSL https://get.pulumi.com | sh
               - export PATH=$PATH:$HOME/.pulumi/bin
-              - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
+              - git clone https://github.com/sloanahrens/devops-pulumi-ts.git infra
               - cd infra/cli && npm ci && npm run build
               - npx devops-gcp deploy --app fractals-nextjs --branch "$BITBUCKET_BRANCH" --context "$BITBUCKET_CLONE_DIR"
               - echo "Service URL - $(cat /tmp/service-url.txt)"
@@ -59,6 +59,6 @@ pipelines:
             - apk add --no-cache git curl bash
             - curl -fsSL https://get.pulumi.com | sh
             - export PATH=$PATH:$HOME/.pulumi/bin
-            - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
+            - git clone https://github.com/sloanahrens/devops-pulumi-ts.git infra
             - cd infra/cli && npm ci && npm run build
             - npx devops-gcp cleanup --app fractals-nextjs --branch "$DELETED_BRANCH"
