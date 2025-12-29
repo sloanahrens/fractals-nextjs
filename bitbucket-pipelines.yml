@@ -33,9 +33,6 @@ pipelines:
 
         - step:
             name: Deploy to Cloud Run
-            # Custom builder image with git, curl, jq, bash, Pulumi pre-installed
-            # Saves ~30s by avoiding apk add and Pulumi CLI installation
-            image: us-central1-docker.pkg.dev/next-fractals-redux/apps-docker/pipeline-builder:latest
             oidc: true
             services:
               - docker
@@ -45,6 +42,13 @@ pipelines:
             script:
               # Application configuration
               - export APP_NAME=fractals-nextjs
+
+              # Install dependencies
+              - apk add --no-cache git curl jq bash
+
+              # Install Pulumi CLI
+              - curl -fsSL https://get.pulumi.com | sh
+              - export PATH=$PATH:$HOME/.pulumi/bin
 
               # Validate required repository variables
               - |
@@ -153,11 +157,17 @@ pipelines:
             description: "Name of the deleted branch to clean up"
         step:
           name: Cleanup Branch Resources
-          image: us-central1-docker.pkg.dev/next-fractals-redux/apps-docker/pipeline-builder:latest
           oidc: true
           script:
             # Application configuration
             - export APP_NAME=fractals-nextjs
+
+            # Install dependencies
+            - apk add --no-cache git curl jq bash
+
+            # Install Pulumi CLI
+            - curl -fsSL https://get.pulumi.com | sh
+            - export PATH=$PATH:$HOME/.pulumi/bin
 
             # Validate required variables
             - |
