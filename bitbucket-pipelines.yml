@@ -87,26 +87,29 @@ pipelines:
               - export BRANCH_TAG=$(./infra/scripts/normalize-branch.sh "$BITBUCKET_BRANCH")
               - echo "Deploying branch '${BITBUCKET_BRANCH}' as '${BRANCH_TAG}'"
 
-              # Get GCP access token via Workload Identity Federation
+              # Get GCP access token and registry URL, save all vars for later steps
               - |
-                export ACCESS_TOKEN=$(./infra/scripts/get-wif-token.sh)
+                # Get WIF token
+                ACCESS_TOKEN=$(./infra/scripts/get-wif-token.sh)
                 if [ -z "$ACCESS_TOKEN" ]; then
                   echo "Failed to get GCP access token"
                   exit 1
                 fi
+                export CLOUDSDK_AUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
+                export GOOGLE_OAUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
 
-              # Configure auth for Docker and Pulumi
-              - export CLOUDSDK_AUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
-              - export GOOGLE_OAUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
-
-              # Get registry URL from infrastructure stack
-              - |
+                # Get registry URL from infrastructure stack
                 cd infra/infrastructure
                 npm ci --silent
                 pulumi login "gs://${STATE_BUCKET}"
-                export REGISTRY_URL=$(pulumi stack output registryUrl -s organization/infrastructure/prod --show-secrets 2>/dev/null)
+                REGISTRY_URL=$(pulumi stack output registryUrl -s organization/infrastructure/prod --show-secrets 2>/dev/null)
                 echo "Registry URL: ${REGISTRY_URL}"
+
+                # Save all variables for subsequent steps
+                echo "ACCESS_TOKEN=${ACCESS_TOKEN}" >> $BITBUCKET_PIPE_STORAGE_DIR/env_vars
                 echo "REGISTRY_URL=${REGISTRY_URL}" >> $BITBUCKET_PIPE_STORAGE_DIR/env_vars
+                echo "APP_NAME=${APP_NAME}" >> $BITBUCKET_PIPE_STORAGE_DIR/env_vars
+                echo "BRANCH_TAG=${BRANCH_TAG}" >> $BITBUCKET_PIPE_STORAGE_DIR/env_vars
 
               # Build and push Docker image (with layer caching)
               - |
@@ -122,8 +125,11 @@ pipelines:
               # Deploy via Pulumi
               - |
                 source $BITBUCKET_PIPE_STORAGE_DIR/env_vars
+                export CLOUDSDK_AUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
+                export GOOGLE_OAUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
                 cd $BITBUCKET_CLONE_DIR/infra/app
                 npm ci --silent
+                pulumi login "gs://${STATE_BUCKET}"
                 pulumi stack select "organization/app/${APP_NAME}-${BRANCH_TAG}" --create 2>/dev/null || true
                 pulumi config set "gcp:project" "${GCP_PROJECT}"
                 pulumi config set appName "${APP_NAME}"
@@ -134,7 +140,11 @@ pipelines:
 
               # Get deployment URL and run health check
               - |
+                source $BITBUCKET_PIPE_STORAGE_DIR/env_vars
+                export CLOUDSDK_AUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
+                export GOOGLE_OAUTH_ACCESS_TOKEN="${ACCESS_TOKEN}"
                 cd $BITBUCKET_CLONE_DIR/infra/app
+                pulumi login "gs://${STATE_BUCKET}"
                 URL=$(pulumi stack output url --show-secrets 2>/dev/null)
                 echo "Deployed to ${URL}"
                 echo "Running health check..."
