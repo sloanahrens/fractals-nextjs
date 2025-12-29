@@ -10,6 +10,7 @@
 # Required Repository Variables (Secured):
 #   PULUMI_CONFIG_PASSPHRASE - State encryption passphrase
 
+# Default image for build/test steps
 image: node:22-alpine
 
 definitions:
@@ -32,6 +33,9 @@ pipelines:
 
         - step:
             name: Deploy to Cloud Run
+            # Custom builder image with git, curl, jq, bash, Pulumi pre-installed
+            # Saves ~30s by avoiding apk add and Pulumi CLI installation
+            image: us-central1-docker.pkg.dev/next-fractals-redux/apps-docker/pipeline-builder:latest
             oidc: true
             services:
               - docker
@@ -72,14 +76,8 @@ pipelines:
                 fi
                 echo "All required variables are set"
 
-              # Install dependencies
-              - apk add --no-cache git curl jq bash
-
-              # Install Pulumi CLI and clone infra repo
-              - |
-                curl -fsSL https://get.pulumi.com | sh
-                export PATH=$PATH:$HOME/.pulumi/bin
-                git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
+              # Clone infra repo (git, Pulumi already installed in builder image)
+              - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
 
               # Normalize branch name for Cloud Run (max 63 chars, DNS-safe)
               - export BRANCH_TAG=$(./infra/scripts/normalize-branch.sh "$BITBUCKET_BRANCH")
@@ -99,7 +97,6 @@ pipelines:
 
               # Get registry URL from infrastructure stack
               - |
-                export PATH=$PATH:$HOME/.pulumi/bin
                 cd infra/infrastructure
                 npm ci --silent
                 pulumi login "gs://${STATE_BUCKET}"
@@ -120,7 +117,6 @@ pipelines:
 
               # Deploy via Pulumi
               - |
-                export PATH=$PATH:$HOME/.pulumi/bin
                 source $BITBUCKET_PIPE_STORAGE_DIR/env_vars
                 cd $BITBUCKET_CLONE_DIR/infra/app
                 npm ci --silent
@@ -134,7 +130,6 @@ pipelines:
 
               # Get deployment URL and run health check
               - |
-                export PATH=$PATH:$HOME/.pulumi/bin
                 cd infra/app
                 URL=$(pulumi stack output url --show-secrets 2>/dev/null)
                 echo "Deployed to ${URL}"
@@ -158,6 +153,7 @@ pipelines:
             description: "Name of the deleted branch to clean up"
         step:
           name: Cleanup Branch Resources
+          image: us-central1-docker.pkg.dev/next-fractals-redux/apps-docker/pipeline-builder:latest
           oidc: true
           script:
             # Application configuration
@@ -189,9 +185,6 @@ pipelines:
                 exit 1
               fi
 
-            # Install dependencies
-            - apk add --no-cache git curl jq bash
-
             # Clone infrastructure repo
             - git clone https://bitbucket.org/sloanahrens/devops-gcp-pulumi.git infra
 
@@ -209,13 +202,13 @@ pipelines:
             # Check if stack exists and destroy
             - cd infra/app
             - npm ci --silent
-            - npx pulumi login "gs://${STATE_BUCKET}"
+            - pulumi login "gs://${STATE_BUCKET}"
             - |
-              if npx pulumi stack select "organization/app/${STACK_NAME}" 2>/dev/null; then
+              if pulumi stack select "organization/app/${STACK_NAME}" 2>/dev/null; then
                 echo "Stack exists, destroying..."
-                npx pulumi config set "gcp:project" "${GCP_PROJECT}"
-                npx pulumi destroy --yes
-                npx pulumi stack rm --yes
+                pulumi config set "gcp:project" "${GCP_PROJECT}"
+                pulumi destroy --yes
+                pulumi stack rm --yes
                 echo "Stack '${STACK_NAME}' destroyed successfully"
               else
                 echo "No stack found for '${STACK_NAME}', nothing to clean up"
