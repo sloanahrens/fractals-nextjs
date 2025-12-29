@@ -124,12 +124,26 @@ GitHub Actions workflows in `.github/workflows/`:
 
 #### GCP Cloud Run (Bitbucket Pipelines)
 
-Bitbucket Pipelines configuration in `bitbucket-pipelines.yml`:
-1. **Build and Test Step**: Node.js 20 Alpine image runs `npm ci`, `npm run build`, `npm run lint`, and `npx tsc --noEmit`
-2. **Deploy Step**: Automated deployment to GCP Cloud Run using devops-cloud-run toolchain
-   - Clones external devops repository
-   - Builds DevOps container and validates bootstrap infrastructure
-   - Normalizes branch names for image tagging
-   - Builds multi-stage Docker images and pushes to Artifact Registry
-   - Deploys to Cloud Run with branch-specific URLs
-   - Health check with retries (up to 30 seconds)
+Pipeline runs on every push with parallel steps (see `bitbucket-pipelines.yml`):
+
+1. **Build and Test**: `npm ci && npm run build && npm run lint && npx tsc --noEmit`
+2. **Deploy to Cloud Run**: Pushes to Artifact Registry, deploys via Pulumi
+
+Uses [devops-gcp-pulumi](https://bitbucket.org/sloanahrens/devops-gcp-pulumi) infrastructure.
+
+**Branch-Based Deployments:**
+- Each branch gets isolated Cloud Run service
+- Branch names normalized: `feature/foo` → `feature-foo`
+- Service pattern: `fractals-nextjs-<branch>`
+
+**Cleanup:** Branch resources auto-cleaned via `branch-cleanup` custom pipeline.
+
+**Environment Variables:**
+| Variable | Description | Secured? |
+|----------|-------------|----------|
+| `GCP_PROJECT` | GCP project ID | No |
+| `GCP_PROJECT_NUMBER` | GCP project number (for WIF) | No |
+| `GCP_REGION` | GCP region | No |
+| `STATE_BUCKET` | GCS bucket for Pulumi state | No |
+| `SERVICE_ACCOUNT_EMAIL` | Deploy SA email | No |
+| `PULUMI_CONFIG_PASSPHRASE` | State encryption passphrase | Yes |
