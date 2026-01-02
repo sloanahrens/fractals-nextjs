@@ -1,10 +1,15 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { FractalBounds, ColorScheme } from '../../types/fractal';
-import { FractalPreset, saveCustomPreset, getCustomPresets, deleteCustomPreset } from '../../lib/presets';
-import { Button } from './Button';
-import { Input } from './Input';
+import React from "react";
+import { FractalBounds, ColorScheme } from "../../types/fractal";
+import {
+  FractalPreset,
+  saveCustomPreset,
+  getCustomPresets,
+  deleteCustomPreset,
+} from "../../lib/presets";
+import { Button } from "./Button";
+import { Input } from "./Input";
 
 interface CustomPresetManagerProps {
   currentBounds: FractalBounds;
@@ -23,37 +28,37 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
   currentCanvasWidth,
   currentCanvasHeight,
   onPresetsChange,
-  className = ''
+  className = "",
 }) => {
   const [showSaveDialog, setShowSaveDialog] = React.useState(false);
-  const [presetName, setPresetName] = React.useState('');
-  const [presetDescription, setPresetDescription] = React.useState('');
+  const [presetName, setPresetName] = React.useState("");
+  const [presetDescription, setPresetDescription] = React.useState("");
   const [customPresets, setCustomPresets] = React.useState<FractalPreset[]>([]);
+
+  const loadCustomPresets = React.useCallback(() => {
+    const presets = getCustomPresets();
+    setCustomPresets(presets);
+  }, []);
 
   React.useEffect(() => {
     loadCustomPresets();
-  }, []);
-
-  const loadCustomPresets = () => {
-    const presets = getCustomPresets();
-    setCustomPresets(presets);
-  };
+  }, [loadCustomPresets]);
 
   const handleSavePreset = () => {
     if (!presetName.trim()) {
-      alert('Please enter a preset name');
+      alert("Please enter a preset name");
       return;
     }
 
     const preset: FractalPreset = {
       id: `custom-${Date.now()}`,
       name: presetName.trim(),
-      description: presetDescription.trim() || 'Custom preset',
+      description: presetDescription.trim() || "Custom preset",
       bounds: { ...currentBounds },
       maxIterations: currentMaxIterations,
       colorScheme: currentColorScheme,
       canvasWidth: currentCanvasWidth,
-      canvasHeight: currentCanvasHeight
+      canvasHeight: currentCanvasHeight,
     };
 
     try {
@@ -61,23 +66,23 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
       loadCustomPresets();
       onPresetsChange();
       setShowSaveDialog(false);
-      setPresetName('');
-      setPresetDescription('');
+      setPresetName("");
+      setPresetDescription("");
     } catch (error) {
-      console.error('Error saving preset:', error);
-      alert('Error saving preset. Please try again.');
+      console.error("Error saving preset:", error);
+      alert("Error saving preset. Please try again.");
     }
   };
 
   const handleDeletePreset = (id: string) => {
-    if (confirm('Are you sure you want to delete this preset?')) {
+    if (confirm("Are you sure you want to delete this preset?")) {
       try {
         deleteCustomPreset(id);
         loadCustomPresets();
         onPresetsChange();
       } catch (error) {
-        console.error('Error deleting preset:', error);
-        alert('Error deleting preset. Please try again.');
+        console.error("Error deleting preset:", error);
+        alert("Error deleting preset. Please try again.");
       }
     }
   };
@@ -114,8 +119,8 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
             <Button
               onClick={() => {
                 setShowSaveDialog(false);
-                setPresetName('');
-                setPresetDescription('');
+                setPresetName("");
+                setPresetDescription("");
               }}
               variant="outline"
               size="sm"
@@ -135,7 +140,9 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
               className="flex items-center justify-between bg-gray-50 rounded p-2 border"
             >
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm truncate">{preset.name}</div>
+                <div className="font-medium text-sm truncate">
+                  {preset.name}
+                </div>
                 <div className="text-xs text-gray-500 truncate">
                   {preset.description}
                 </div>

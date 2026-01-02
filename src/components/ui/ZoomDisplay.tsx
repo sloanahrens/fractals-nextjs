@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { FractalBounds } from '../../types/fractal';
-import { calculateZoomLevel, calculateCenter } from '../../lib/presets';
+import React from "react";
+import { FractalBounds } from "../../types/fractal";
+import { calculateZoomLevel, calculateCenter } from "../../lib/presets";
 
 interface ZoomDisplayProps {
   bounds: FractalBounds;
@@ -11,7 +11,7 @@ interface ZoomDisplayProps {
 
 export const ZoomDisplay: React.FC<ZoomDisplayProps> = ({
   bounds,
-  className = ''
+  className = "",
 }) => {
   const zoomLevel = calculateZoomLevel(bounds);
   const center = calculateCenter(bounds);

@@ -1,4 +1,4 @@
-import { ComplexNumber, FractalBounds } from '../types/fractal';
+import { ComplexNumber, FractalBounds } from "../types/fractal";
 
 /**
  * Calculate the number of iterations for a point in the Mandelbrot set
@@ -6,23 +6,26 @@ import { ComplexNumber, FractalBounds } from '../types/fractal';
  * @param maxIterations - Maximum number of iterations to perform
  * @returns Number of iterations before the point escapes (or maxIterations if it doesn't escape)
  */
-export function mandelbrotIterations(c: ComplexNumber, maxIterations: number): number {
+export function mandelbrotIterations(
+  c: ComplexNumber,
+  maxIterations: number,
+): number {
   let z: ComplexNumber = { real: 0, imaginary: 0 };
   let iterations = 0;
-  
+
   while (iterations < maxIterations) {
     // Calculate z^2 + c
     const zSquared = complexSquare(z);
     z = complexAdd(zSquared, c);
-    
+
     // Check if point has escaped (magnitude > 2)
     if (complexMagnitudeSquared(z) > 4) {
       break;
     }
-    
+
     iterations++;
   }
-  
+
   return iterations;
 }
 
@@ -32,24 +35,28 @@ export function mandelbrotIterations(c: ComplexNumber, maxIterations: number): n
  * @param maxIterations - Maximum number of iterations to perform
  * @returns Smooth iteration count as a float
  */
-export function smoothMandelbrotIterations(c: ComplexNumber, maxIterations: number): number {
+export function smoothMandelbrotIterations(
+  c: ComplexNumber,
+  maxIterations: number,
+): number {
   let z: ComplexNumber = { real: 0, imaginary: 0 };
   let iterations = 0;
-  
+
   while (iterations < maxIterations) {
     const zSquared = complexSquare(z);
     z = complexAdd(zSquared, c);
-    
+
     const magnitudeSquared = complexMagnitudeSquared(z);
     if (magnitudeSquared > 4) {
       // Smooth iteration calculation for better color gradients
-      const smoothIterations = iterations + 1 - Math.log2(Math.log2(Math.sqrt(magnitudeSquared)));
+      const smoothIterations =
+        iterations + 1 - Math.log2(Math.log2(Math.sqrt(magnitudeSquared)));
       return smoothIterations;
     }
-    
+
     iterations++;
   }
-  
+
   return maxIterations;
 }
 
@@ -67,11 +74,14 @@ export function pixelToComplex(
   pixelY: number,
   width: number,
   height: number,
-  bounds: FractalBounds
+  bounds: FractalBounds,
 ): ComplexNumber {
-  const real = bounds.minReal + (pixelX / width) * (bounds.maxReal - bounds.minReal);
-  const imaginary = bounds.minImaginary + (pixelY / height) * (bounds.maxImaginary - bounds.minImaginary);
-  
+  const real =
+    bounds.minReal + (pixelX / width) * (bounds.maxReal - bounds.minReal);
+  const imaginary =
+    bounds.minImaginary +
+    (pixelY / height) * (bounds.maxImaginary - bounds.minImaginary);
+
   return { real, imaginary };
 }
 
@@ -87,11 +97,16 @@ export function complexToPixel(
   complex: ComplexNumber,
   width: number,
   height: number,
-  bounds: FractalBounds
+  bounds: FractalBounds,
 ): { x: number; y: number } {
-  const x = ((complex.real - bounds.minReal) / (bounds.maxReal - bounds.minReal)) * width;
-  const y = ((complex.imaginary - bounds.minImaginary) / (bounds.maxImaginary - bounds.minImaginary)) * height;
-  
+  const x =
+    ((complex.real - bounds.minReal) / (bounds.maxReal - bounds.minReal)) *
+    width;
+  const y =
+    ((complex.imaginary - bounds.minImaginary) /
+      (bounds.maxImaginary - bounds.minImaginary)) *
+    height;
+
   return { x, y };
 }
 
@@ -136,14 +151,14 @@ export function getDefaultBounds(): FractalBounds {
 export function calculateZoomBounds(
   centerX: number,
   centerY: number,
-  zoomLevel: number
+  zoomLevel: number,
 ): FractalBounds {
   const baseWidth = 3.5; // Default width of Mandelbrot view
   const baseHeight = 2.5; // Default height of Mandelbrot view
-  
+
   const width = baseWidth / zoomLevel;
   const height = baseHeight / zoomLevel;
-  
+
   return {
     minReal: centerX - width / 2,
     maxReal: centerX + width / 2,

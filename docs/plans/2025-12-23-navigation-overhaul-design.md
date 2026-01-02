@@ -24,13 +24,13 @@ The URL is the single source of truth for the fractal view.
 https://example.com/?x=-0.75&y=0.1&z=1000&i=500&c=ocean
 ```
 
-| Param | Description | Default |
-|-------|-------------|---------|
-| `x` | Center X (real axis) | -0.5 |
-| `y` | Center Y (imaginary axis) | 0 |
-| `z` | Zoom level (1 = full view) | 1 |
-| `i` | Max iterations | 100 |
-| `c` | Color scheme | classic |
+| Param | Description                | Default |
+| ----- | -------------------------- | ------- |
+| `x`   | Center X (real axis)       | -0.5    |
+| `y`   | Center Y (imaginary axis)  | 0       |
+| `z`   | Zoom level (1 = full view) | 1       |
+| `i`   | Max iterations             | 100     |
+| `c`   | Color scheme               | classic |
 
 ### Implementation
 
@@ -59,18 +59,18 @@ Canvas resolution (400x300, 800x600, 1200x900) remains a local preference, not p
 
 Global keyboard shortcuts, active when page is focused:
 
-| Key | Action |
-|-----|--------|
-| Arrow Up | Pan up 10% of view |
-| Arrow Down | Pan down 10% of view |
-| Arrow Left | Pan left 10% of view |
-| Arrow Right | Pan right 10% of view |
-| `+` / `=` | Zoom in 1.5x at center |
-| `-` | Zoom out 0.67x at center |
-| `0` | Reset to overview |
-| `1`-`6` | Load built-in preset |
-| `Escape` | Cancel current render |
-| `?` or `h` | Toggle help panel |
+| Key         | Action                   |
+| ----------- | ------------------------ |
+| Arrow Up    | Pan up 10% of view       |
+| Arrow Down  | Pan down 10% of view     |
+| Arrow Left  | Pan left 10% of view     |
+| Arrow Right | Pan right 10% of view    |
+| `+` / `=`   | Zoom in 1.5x at center   |
+| `-`         | Zoom out 0.67x at center |
+| `0`         | Reset to overview        |
+| `1`-`6`     | Load built-in preset     |
+| `Escape`    | Cancel current render    |
+| `?` or `h`  | Toggle help panel        |
 
 ### Implementation
 
@@ -80,8 +80,8 @@ Create `useKeyboardNavigation` hook:
 function useKeyboardNavigation(
   setView: (x, y, z, i, c) => void,
   currentView: ViewState,
-  cancelRender: () => void
-)
+  cancelRender: () => void,
+);
 ```
 
 - Registers `keydown` listener on `window`
@@ -92,21 +92,23 @@ function useKeyboardNavigation(
 
 ## Touch Navigation
 
-| Gesture | Action |
-|---------|--------|
-| Single finger drag | Pan |
-| Pinch in/out | Zoom at pinch center |
-| Double tap | Zoom in 2x at tap location |
-| Two-finger double tap | Zoom out 2x |
+| Gesture               | Action                     |
+| --------------------- | -------------------------- |
+| Single finger drag    | Pan                        |
+| Pinch in/out          | Zoom at pinch center       |
+| Double tap            | Zoom in 2x at tap location |
+| Two-finger double tap | Zoom out 2x                |
 
 ### Implementation
 
 The `ZoomPanManager` class already has touch handlers:
+
 - `handleTouchStart`
 - `handleTouchMove`
 - `handleTouchEnd`
 
 Changes needed:
+
 1. Wire up touch events in `page.tsx` (currently only mouse events connected)
 2. Add pinch-to-zoom logic (track two touch points, calculate distance delta)
 3. Add double-tap detection with timer
@@ -121,6 +123,7 @@ Changes needed:
 Rapid navigation (scrolling, dragging) should not create many history entries.
 
 Approach:
+
 1. During active navigation, use `history.replaceState` (updates URL, no new entry)
 2. After 500ms of inactivity, use `history.pushState` (creates entry)
 3. Browser back/forward triggers `popstate` event
@@ -175,11 +178,12 @@ New API route for container health probes:
 
 ```typescript
 export async function GET() {
-  return Response.json({ status: 'ok', timestamp: Date.now() });
+  return Response.json({ status: "ok", timestamp: Date.now() });
 }
 ```
 
 Used by Azure Container Apps for:
+
 - Startup probe (3s interval, 30 attempts)
 - Readiness probe (10s interval)
 - Liveness probe (30s interval)
@@ -207,6 +211,7 @@ Used by Azure Container Apps for:
 Triggers: Push to any branch
 
 Steps:
+
 1. Checkout code
 2. Setup Node.js 20
 3. Install dependencies (`npm ci`)
@@ -225,25 +230,26 @@ Steps:
 Triggers: Branch deletion
 
 Steps:
+
 1. Authenticate to Azure via OIDC
 2. Run `pulumi destroy` on the branch's app stack
 3. Remove the Pulumi stack
 
 ### Required GitHub Secrets
 
-| Secret | Source |
-|--------|--------|
-| `AZURE_CLIENT_ID` | From infrastructure stack output |
-| `AZURE_TENANT_ID` | Azure Portal |
-| `AZURE_SUBSCRIPTION_ID` | Azure Portal |
-| `AZURE_STORAGE_ACCOUNT` | From bootstrap stack output |
-| `PULUMI_CONFIG_PASSPHRASE` | Chosen passphrase |
+| Secret                     | Source                           |
+| -------------------------- | -------------------------------- |
+| `AZURE_CLIENT_ID`          | From infrastructure stack output |
+| `AZURE_TENANT_ID`          | Azure Portal                     |
+| `AZURE_SUBSCRIPTION_ID`    | Azure Portal                     |
+| `AZURE_STORAGE_ACCOUNT`    | From bootstrap stack output      |
+| `PULUMI_CONFIG_PASSPHRASE` | Chosen passphrase                |
 
 ### Required GitHub Variables
 
-| Variable | Value |
-|----------|-------|
-| `APP_NAME` | `fractals-nextjs` |
+| Variable     | Value                |
+| ------------ | -------------------- |
+| `APP_NAME`   | `fractals-nextjs`    |
 | `PULUMI_ORG` | Your Pulumi org name |
 
 ---
@@ -252,40 +258,40 @@ Steps:
 
 ### New Files
 
-| File | Purpose |
-|------|---------|
-| `src/app/api/health/route.ts` | Health endpoint for container probes |
-| `src/hooks/useUrlState.ts` | URL state management hook |
-| `src/hooks/useKeyboardNav.ts` | Keyboard navigation hook |
-| `src/components/ui/HelpPanel.tsx` | Collapsible instructions panel |
-| `.github/workflows/deploy.yml` | Build and deploy workflow |
-| `.github/workflows/cleanup.yml` | Branch cleanup workflow |
+| File                              | Purpose                              |
+| --------------------------------- | ------------------------------------ |
+| `src/app/api/health/route.ts`     | Health endpoint for container probes |
+| `src/hooks/useUrlState.ts`        | URL state management hook            |
+| `src/hooks/useKeyboardNav.ts`     | Keyboard navigation hook             |
+| `src/components/ui/HelpPanel.tsx` | Collapsible instructions panel       |
+| `.github/workflows/deploy.yml`    | Build and deploy workflow            |
+| `.github/workflows/cleanup.yml`   | Branch cleanup workflow              |
 
 ### Modified Files
 
-| File | Changes |
-|------|---------|
-| `src/app/page.tsx` | Integrate URL state, keyboard nav, help panel, touch events |
-| `src/lib/zoomPan.ts` | Add pinch-to-zoom, double-tap detection |
-| `src/lib/presets.ts` | Add `getPresetByIndex(n)` helper |
-| `src/app/globals.css` | Add `touch-action: none` for canvas |
-| `CLAUDE.md` | Update for Azure/GitHub Actions |
-| `README.md` | Update deployment docs, add navigation instructions |
+| File                  | Changes                                                     |
+| --------------------- | ----------------------------------------------------------- |
+| `src/app/page.tsx`    | Integrate URL state, keyboard nav, help panel, touch events |
+| `src/lib/zoomPan.ts`  | Add pinch-to-zoom, double-tap detection                     |
+| `src/lib/presets.ts`  | Add `getPresetByIndex(n)` helper                            |
+| `src/app/globals.css` | Add `touch-action: none` for canvas                         |
+| `CLAUDE.md`           | Update for Azure/GitHub Actions                             |
+| `README.md`           | Update deployment docs, add navigation instructions         |
 
 ### Deleted Files
 
-| File | Reason |
-|------|--------|
+| File                      | Reason                     |
+| ------------------------- | -------------------------- |
 | `bitbucket-pipelines.yml` | Replaced by GitHub Actions |
 
 ### Unchanged Files
 
-| File | Reason |
-|------|--------|
-| `src/lib/fractalRenderer.ts` | Rendering logic unchanged |
-| `src/lib/mandelbrot.ts` | Math calculations unchanged |
-| `src/lib/colorMapping.ts` | Color schemes unchanged |
-| `Dockerfile` | Already configured correctly (port 8080, standalone) |
+| File                         | Reason                                               |
+| ---------------------------- | ---------------------------------------------------- |
+| `src/lib/fractalRenderer.ts` | Rendering logic unchanged                            |
+| `src/lib/mandelbrot.ts`      | Math calculations unchanged                          |
+| `src/lib/colorMapping.ts`    | Color schemes unchanged                              |
+| `Dockerfile`                 | Already configured correctly (port 8080, standalone) |
 
 ---
 

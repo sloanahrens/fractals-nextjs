@@ -1,19 +1,19 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useMemo } from 'react';
-import { FractalRenderer } from '../lib/fractalRenderer';
-import { calculateZoomBounds } from '../lib/mandelbrot';
-import { FractalConfig, FractalBounds, ColorScheme } from '../types/fractal';
-import { getAvailableColorSchemes } from '../lib/colorMapping';
-import { FractalPreset } from '../lib/presets';
-import { Slider } from '../components/ui/Slider';
-import { Select } from '../components/ui/Select';
-import { Input } from '../components/ui/Input';
-import { Button } from '../components/ui/Button';
-import { PresetSelector } from '../components/ui/PresetSelector';
-import { ZoomDisplay } from '../components/ui/ZoomDisplay';
-import { CenterControls } from '../components/ui/CenterControls';
-import { CustomPresetManager } from '../components/ui/CustomPresetManager';
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { FractalRenderer } from "../lib/fractalRenderer";
+import { calculateZoomBounds } from "../lib/mandelbrot";
+import { FractalConfig, FractalBounds, ColorScheme } from "../types/fractal";
+import { getAvailableColorSchemes } from "../lib/colorMapping";
+import { FractalPreset } from "../lib/presets";
+import { Slider } from "../components/ui/Slider";
+import { Select } from "../components/ui/Select";
+import { Input } from "../components/ui/Input";
+import { Button } from "../components/ui/Button";
+import { PresetSelector } from "../components/ui/PresetSelector";
+import { ZoomDisplay } from "../components/ui/ZoomDisplay";
+import { CenterControls } from "../components/ui/CenterControls";
+import { CustomPresetManager } from "../components/ui/CustomPresetManager";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,33 +34,24 @@ export default function Home() {
 
   // Parameter controls
   const [maxIterations, setMaxIterations] = useState(100);
-  const [colorScheme, setColorScheme] = useState<ColorScheme>('classic');
+  const [colorScheme, setColorScheme] = useState<ColorScheme>("classic");
   const [canvasWidth, setCanvasWidth] = useState(800);
   const [canvasHeight, setCanvasHeight] = useState(600);
 
   // Preset system
-  const [currentPreset, setCurrentPreset] = useState<string>('');
+  const [currentPreset, setCurrentPreset] = useState<string>("");
 
   // Manual coordinate inputs
   const [manualMinReal, setManualMinReal] = useState(bounds.minReal.toString());
   const [manualMaxReal, setManualMaxReal] = useState(bounds.maxReal.toString());
-  const [manualMinImaginary, setManualMinImaginary] = useState(bounds.minImaginary.toString());
-  const [manualMaxImaginary, setManualMaxImaginary] = useState(bounds.maxImaginary.toString());
+  const [manualMinImaginary, setManualMinImaginary] = useState(
+    bounds.minImaginary.toString(),
+  );
+  const [manualMaxImaginary, setManualMaxImaginary] = useState(
+    bounds.maxImaginary.toString(),
+  );
 
-  // Initialize canvas and renderer
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-    rendererRef.current = new FractalRenderer(canvas);
-
-    // Initial render
-    renderFractal();
-  }, []);
-
-  const renderFractal = async () => {
+  const renderFractal = useCallback(async () => {
     if (!rendererRef.current || !canvasRef.current) return;
 
     setIsRendering(true);
@@ -77,11 +68,24 @@ export default function Home() {
     try {
       await rendererRef.current.renderFractal(config, setProgress);
     } catch (error) {
-      console.error('Error rendering fractal:', error);
+      console.error("Error rendering fractal:", error);
     } finally {
       setIsRendering(false);
     }
-  };
+  }, [bounds, maxIterations, colorScheme]);
+
+  // Initialize canvas and renderer
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    rendererRef.current = new FractalRenderer(canvas);
+
+    // Initial render
+    renderFractal();
+  }, [canvasWidth, canvasHeight, renderFractal]);
 
   // Update manual coordinate inputs when bounds change from zoom/pan
   useEffect(() => {
@@ -91,21 +95,10 @@ export default function Home() {
     setManualMaxImaginary(bounds.maxImaginary.toString());
   }, [bounds]);
 
-  // Re-render when parameters change
+  // Re-render when parameters change (renderFractal already handles canvas dimensions)
   useEffect(() => {
     renderFractal();
-  }, [bounds, maxIterations, colorScheme, canvasWidth, canvasHeight]);
-
-  // Update canvas size when resolution changes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
-
-    renderFractal();
-  }, [canvasWidth, canvasHeight]);
+  }, [renderFractal]);
 
   // Helper functions for manual coordinate input
   const applyManualCoordinates = () => {
@@ -132,7 +125,7 @@ export default function Home() {
       setCenterX(newCenterX);
       setCenterY(newCenterY);
       setZoomLevel(newZoom);
-      setCurrentPreset('');
+      setCurrentPreset("");
     }
   };
 
@@ -141,15 +134,16 @@ export default function Home() {
     setCenterY(0);
     setZoomLevel(1);
     setMaxIterations(100);
-    setColorScheme('classic');
-    setCurrentPreset('');
+    setColorScheme("classic");
+    setCurrentPreset("");
   };
 
   // Preset handlers
   const handlePresetSelect = (preset: FractalPreset) => {
     // Calculate center and zoom from preset bounds
     const presetCenterX = (preset.bounds.minReal + preset.bounds.maxReal) / 2;
-    const presetCenterY = (preset.bounds.minImaginary + preset.bounds.maxImaginary) / 2;
+    const presetCenterY =
+      (preset.bounds.minImaginary + preset.bounds.maxImaginary) / 2;
     const presetWidth = preset.bounds.maxReal - preset.bounds.minReal;
     const presetZoom = 3.5 / presetWidth; // 3.5 is baseWidth in calculateZoomBounds
 
@@ -166,24 +160,24 @@ export default function Home() {
   const handleCenterChange = (newCenterX: number, newCenterY: number) => {
     setCenterX(newCenterX);
     setCenterY(newCenterY);
-    setCurrentPreset(''); // Clear preset when manually adjusting
+    setCurrentPreset(""); // Clear preset when manually adjusting
   };
 
   const handleSaveCurrentPreset = () => {
     // Trigger the CustomPresetManager's save dialog
-    const event = new CustomEvent('save-preset');
+    const event = new CustomEvent("save-preset");
     window.dispatchEvent(event);
   };
 
   const handlePresetsChange = () => {
     // Force re-render when presets change
-    setCurrentPreset(prev => prev);
+    setCurrentPreset((prev) => prev);
   };
 
   // Clear preset when manually adjusting parameters
   const handleParameterChange = (updateFn: () => void) => {
     updateFn();
-    setCurrentPreset('');
+    setCurrentPreset("");
   };
 
   return (
@@ -202,9 +196,9 @@ export default function Home() {
             <canvas
               ref={canvasRef}
               className="border border-gray-300"
-              style={{ maxWidth: '100%', height: 'auto' }}
+              style={{ maxWidth: "100%", height: "auto" }}
             />
-            
+
             {isRendering && (
               <div className="mt-4">
                 <div className="bg-gray-200 rounded-full h-2.5">
@@ -221,7 +215,8 @@ export default function Home() {
 
             <div className="mt-4 text-center">
               <p className="text-xs text-gray-500">
-                <strong>Take a screenshot:</strong> macOS: Cmd+Shift+4 • Windows: Win+Shift+S • Linux: Print Screen
+                <strong>Take a screenshot:</strong> macOS: Cmd+Shift+4 •
+                Windows: Win+Shift+S • Linux: Print Screen
               </p>
             </div>
           </div>
@@ -250,7 +245,7 @@ export default function Home() {
                   step={0.01}
                   onChange={(value) => {
                     setCenterX(value);
-                    setCurrentPreset('');
+                    setCurrentPreset("");
                   }}
                   disabled={isRendering}
                   formatValue={(v) => v.toFixed(3)}
@@ -263,7 +258,7 @@ export default function Home() {
                   step={0.01}
                   onChange={(value) => {
                     setCenterY(value);
-                    setCurrentPreset('');
+                    setCurrentPreset("");
                   }}
                   disabled={isRendering}
                   formatValue={(v) => v.toFixed(3)}
@@ -276,7 +271,7 @@ export default function Home() {
                   step={1}
                   onChange={(value) => {
                     setZoomLevel(value);
-                    setCurrentPreset('');
+                    setCurrentPreset("");
                   }}
                   disabled={isRendering}
                   formatValue={(v) => `${v.toFixed(0)}x`}
@@ -324,7 +319,9 @@ export default function Home() {
 
             {/* Rendering Parameters */}
             <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4">Rendering Parameters</h3>
+              <h3 className="text-lg font-semibold mb-4">
+                Rendering Parameters
+              </h3>
               <div className="space-y-4">
                 <Slider
                   label="Maximum Iterations"
@@ -332,16 +329,22 @@ export default function Home() {
                   min={50}
                   max={1000}
                   step={10}
-                  onChange={(value) => handleParameterChange(() => setMaxIterations(value))}
+                  onChange={(value) =>
+                    handleParameterChange(() => setMaxIterations(value))
+                  }
                   disabled={isRendering}
                   formatValue={(v) => v.toString()}
                 />
-                
+
                 <Select
                   label="Color Scheme"
                   value={colorScheme}
                   options={getAvailableColorSchemes()}
-                  onChange={(value) => handleParameterChange(() => setColorScheme(value as ColorScheme))}
+                  onChange={(value) =>
+                    handleParameterChange(() =>
+                      setColorScheme(value as ColorScheme),
+                    )
+                  }
                   disabled={isRendering}
                 />
               </div>
@@ -382,7 +385,7 @@ export default function Home() {
                     onClick={() => {
                       setCanvasWidth(400);
                       setCanvasHeight(300);
-                      setCurrentPreset('');
+                      setCurrentPreset("");
                     }}
                     disabled={isRendering}
                     variant="secondary"
@@ -394,7 +397,7 @@ export default function Home() {
                     onClick={() => {
                       setCanvasWidth(800);
                       setCanvasHeight(600);
-                      setCurrentPreset('');
+                      setCurrentPreset("");
                     }}
                     disabled={isRendering}
                     variant="secondary"
@@ -406,7 +409,7 @@ export default function Home() {
                     onClick={() => {
                       setCanvasWidth(1200);
                       setCanvasHeight(900);
-                      setCurrentPreset('');
+                      setCurrentPreset("");
                     }}
                     disabled={isRendering}
                     variant="secondary"
@@ -430,7 +433,7 @@ export default function Home() {
                     step="any"
                     onChange={(value) => {
                       setManualMinReal(value);
-                      setCurrentPreset('');
+                      setCurrentPreset("");
                     }}
                     disabled={isRendering}
                   />
@@ -441,7 +444,7 @@ export default function Home() {
                     step="any"
                     onChange={(value) => {
                       setManualMaxReal(value);
-                      setCurrentPreset('');
+                      setCurrentPreset("");
                     }}
                     disabled={isRendering}
                   />
@@ -454,7 +457,7 @@ export default function Home() {
                     step="any"
                     onChange={(value) => {
                       setManualMinImaginary(value);
-                      setCurrentPreset('');
+                      setCurrentPreset("");
                     }}
                     disabled={isRendering}
                   />
@@ -465,7 +468,7 @@ export default function Home() {
                     step="any"
                     onChange={(value) => {
                       setManualMaxImaginary(value);
-                      setCurrentPreset('');
+                      setCurrentPreset("");
                     }}
                     disabled={isRendering}
                   />

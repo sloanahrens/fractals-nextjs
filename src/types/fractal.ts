@@ -32,7 +32,12 @@ export interface ColorRGB {
   b: number;
 }
 
-export type ColorScheme = 'classic' | 'fire' | 'ocean' | 'rainbow' | 'grayscale';
+export type ColorScheme =
+  | "classic"
+  | "fire"
+  | "ocean"
+  | "rainbow"
+  | "grayscale";
 
 export interface ZoomState {
   centerX: number;

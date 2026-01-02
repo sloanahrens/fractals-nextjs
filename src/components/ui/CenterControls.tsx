@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { FractalBounds } from '../../types/fractal';
-import { calculateCenter } from '../../lib/presets';
-import { Input } from './Input';
-import { Button } from './Button';
+import React from "react";
+import { FractalBounds } from "../../types/fractal";
+import { calculateCenter } from "../../lib/presets";
+import { Input } from "./Input";
+import { Button } from "./Button";
 
 interface CenterControlsProps {
   bounds: FractalBounds;
@@ -15,7 +15,7 @@ interface CenterControlsProps {
 export const CenterControls: React.FC<CenterControlsProps> = ({
   bounds,
   onCenterChange,
-  className = ''
+  className = "",
 }) => {
   const center = calculateCenter(bounds);
   const [inputX, setInputX] = React.useState(center.x.toString());
@@ -31,7 +31,7 @@ export const CenterControls: React.FC<CenterControlsProps> = ({
   const handleApply = () => {
     const newX = parseFloat(inputX);
     const newY = parseFloat(inputY);
-    
+
     if (!isNaN(newX) && !isNaN(newY)) {
       onCenterChange(newX, newY);
     }
@@ -53,8 +53,10 @@ export const CenterControls: React.FC<CenterControlsProps> = ({
 
   return (
     <div className={`space-y-3 ${className}`}>
-      <div className="text-sm font-medium text-gray-700">Center Coordinates</div>
-      
+      <div className="text-sm font-medium text-gray-700">
+        Center Coordinates
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <Input
           label="Real (X)"
@@ -69,13 +71,9 @@ export const CenterControls: React.FC<CenterControlsProps> = ({
           onChange={setInputY}
         />
       </div>
-      
+
       <div className="flex gap-2">
-        <Button
-          onClick={handleApply}
-          size="sm"
-          className="flex-1"
-        >
+        <Button onClick={handleApply} size="sm" className="flex-1">
           Apply
         </Button>
         <Button

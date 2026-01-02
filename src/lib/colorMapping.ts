@@ -1,4 +1,4 @@
-import { ColorRGB, ColorScheme } from '../types/fractal';
+import { ColorRGB, ColorScheme } from "../types/fractal";
 
 /**
  * Map iteration count to a color based on the selected color scheme
@@ -10,26 +10,26 @@ import { ColorRGB, ColorScheme } from '../types/fractal';
 export function mapIterationsToColor(
   iterations: number,
   maxIterations: number,
-  scheme: ColorScheme = 'classic'
+  scheme: ColorScheme = "classic",
 ): ColorRGB {
   // Points in the set are black
   if (iterations >= maxIterations) {
     return { r: 0, g: 0, b: 0 };
   }
-  
+
   // Normalize iterations to 0-1 range
   const normalizedIterations = iterations / maxIterations;
-  
+
   switch (scheme) {
-    case 'classic':
+    case "classic":
       return classicColorScheme(normalizedIterations);
-    case 'fire':
+    case "fire":
       return fireColorScheme(normalizedIterations);
-    case 'ocean':
+    case "ocean":
       return oceanColorScheme(normalizedIterations);
-    case 'rainbow':
+    case "rainbow":
       return rainbowColorScheme(normalizedIterations);
-    case 'grayscale':
+    case "grayscale":
       return grayscaleColorScheme(normalizedIterations);
     default:
       return classicColorScheme(normalizedIterations);
@@ -39,9 +39,11 @@ export function mapIterationsToColor(
 function classicColorScheme(t: number): ColorRGB {
   // Classic blue to red gradient with yellow highlights
   const r = Math.floor(255 * Math.sin(Math.PI * t * 3) ** 2);
-  const g = Math.floor(255 * Math.sin(Math.PI * t * 5 + Math.PI/3) ** 2);
-  const b = Math.floor(255 * Math.sin(Math.PI * t * 7 + 2*Math.PI/3) ** 2);
-  
+  const g = Math.floor(255 * Math.sin(Math.PI * t * 5 + Math.PI / 3) ** 2);
+  const b = Math.floor(
+    255 * Math.sin(Math.PI * t * 7 + (2 * Math.PI) / 3) ** 2,
+  );
+
   return { r, g, b };
 }
 
@@ -83,7 +85,7 @@ function oceanColorScheme(t: number): ColorRGB {
   const r = Math.floor(255 * Math.pow(t, 3));
   const g = Math.floor(255 * Math.pow(t, 1.5));
   const b = Math.floor(255 * (0.3 + 0.7 * t));
-  
+
   return { r, g, b };
 }
 
@@ -110,23 +112,37 @@ function hsvToRgb(h: number, s: number, v: number): ColorRGB {
   const c = v * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = v - c;
-  
-  let r = 0, g = 0, b = 0;
-  
+
+  let r = 0,
+    g = 0,
+    b = 0;
+
   if (h >= 0 && h < 60) {
-    r = c; g = x; b = 0;
+    r = c;
+    g = x;
+    b = 0;
   } else if (h >= 60 && h < 120) {
-    r = x; g = c; b = 0;
+    r = x;
+    g = c;
+    b = 0;
   } else if (h >= 120 && h < 180) {
-    r = 0; g = c; b = x;
+    r = 0;
+    g = c;
+    b = x;
   } else if (h >= 180 && h < 240) {
-    r = 0; g = x; b = c;
+    r = 0;
+    g = x;
+    b = c;
   } else if (h >= 240 && h < 300) {
-    r = x; g = 0; b = c;
+    r = x;
+    g = 0;
+    b = c;
   } else if (h >= 300 && h < 360) {
-    r = c; g = 0; b = x;
+    r = c;
+    g = 0;
+    b = x;
   }
-  
+
   return {
     r: Math.floor((r + m) * 255),
     g: Math.floor((g + m) * 255),
@@ -137,12 +153,15 @@ function hsvToRgb(h: number, s: number, v: number): ColorRGB {
 /**
  * Get all available color schemes
  */
-export function getAvailableColorSchemes(): { value: ColorScheme; label: string }[] {
+export function getAvailableColorSchemes(): {
+  value: ColorScheme;
+  label: string;
+}[] {
   return [
-    { value: 'classic', label: 'Classic' },
-    { value: 'fire', label: 'Fire' },
-    { value: 'ocean', label: 'Ocean' },
-    { value: 'rainbow', label: 'Rainbow' },
-    { value: 'grayscale', label: 'Grayscale' },
+    { value: "classic", label: "Classic" },
+    { value: "fire", label: "Fire" },
+    { value: "ocean", label: "Ocean" },
+    { value: "rainbow", label: "Rainbow" },
+    { value: "grayscale", label: "Grayscale" },
   ];
 }

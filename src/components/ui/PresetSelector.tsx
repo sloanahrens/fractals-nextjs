@@ -1,9 +1,13 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { FractalPreset, BUILTIN_PRESETS, getCustomPresets } from '../../lib/presets';
-import { Button } from './Button';
-import { Select } from './Select';
+import React from "react";
+import {
+  FractalPreset,
+  BUILTIN_PRESETS,
+  getCustomPresets,
+} from "../../lib/presets";
+import { Button } from "./Button";
+import { Select } from "./Select";
 
 interface PresetSelectorProps {
   currentPreset?: string;
@@ -16,7 +20,7 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
   currentPreset,
   onPresetSelect,
   onSavePreset,
-  className = ''
+  className = "",
 }) => {
   const [customPresets, setCustomPresets] = React.useState<FractalPreset[]>([]);
 
@@ -25,17 +29,27 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
   }, []);
 
   const handlePresetChange = (presetId: string) => {
-    const preset = [...BUILTIN_PRESETS, ...customPresets].find(p => p.id === presetId);
+    const preset = [...BUILTIN_PRESETS, ...customPresets].find(
+      (p) => p.id === presetId,
+    );
     if (preset) {
       onPresetSelect(preset);
     }
   };
 
   const presetOptions = [
-    { value: '', label: 'Select a preset...' },
-    ...BUILTIN_PRESETS.map(preset => ({ value: preset.id, label: preset.name })),
-    ...(customPresets.length > 0 ? [{ value: '---', label: '--- Custom Presets ---', disabled: true }] : []),
-    ...customPresets.map(preset => ({ value: preset.id, label: preset.name }))
+    { value: "", label: "Select a preset..." },
+    ...BUILTIN_PRESETS.map((preset) => ({
+      value: preset.id,
+      label: preset.name,
+    })),
+    ...(customPresets.length > 0
+      ? [{ value: "---", label: "--- Custom Presets ---", disabled: true }]
+      : []),
+    ...customPresets.map((preset) => ({
+      value: preset.id,
+      label: preset.name,
+    })),
   ];
 
   return (
@@ -44,7 +58,7 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
         <Select
           label="Presets"
           options={presetOptions}
-          value={currentPreset || ''}
+          value={currentPreset || ""}
           onChange={handlePresetChange}
         />
         <Button
@@ -56,13 +70,13 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
           Save Current
         </Button>
       </div>
-      
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         {BUILTIN_PRESETS.map((preset) => (
           <Button
             key={preset.id}
             onClick={() => onPresetSelect(preset)}
-            variant={currentPreset === preset.id ? 'primary' : 'secondary'}
+            variant={currentPreset === preset.id ? "primary" : "secondary"}
             size="sm"
             className="text-xs"
           >

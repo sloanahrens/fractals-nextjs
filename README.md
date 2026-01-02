@@ -5,6 +5,7 @@ A modern, interactive web application for exploring the infinite beauty of the M
 ![Next Fractals Preview](public/fractal-preview.png)
 
 **Deployment Targets:**
+
 - **Azure Container Apps** - GitHub Actions + Pulumi via `devops-azure-container-apps`
 - **GCP Cloud Run** - Bitbucket Pipelines + Terraform via `devops-cloud-run`
 
@@ -15,24 +16,28 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 ## Features
 
 ### 🎨 Interactive Visualization
+
 - **Real-time Rendering**: Smooth fractal generation with optimized performance
 - **Zoom Controls**: Seamless zooming with mouse wheel and touch gestures
 - **Pan Navigation**: Click and drag to explore different regions
 - **Center Controls**: Precise positioning with coordinate input
 
 ### ⚙️ Customizable Parameters
+
 - **Iteration Control**: Adjust detail level with iteration sliders
 - **Color Mapping**: Dynamic color schemes for enhanced visualization
 - **Parameter Presets**: Quick access to interesting fractal configurations
 - **Custom Presets**: Save and manage your own configurations
 
 ### 🚀 Technical Features
+
 - **Canvas API Rendering**: Direct pixel manipulation for optimal performance
 - **Progressive Rendering**: Non-blocking calculations with requestAnimationFrame
 - **Responsive Design**: Works seamlessly across desktop and mobile devices
 - **TypeScript**: Full type safety and enhanced developer experience
 
 ### 🔧 DevOps & CI/CD Features
+
 - **Multi-Cloud Deployment**: Azure Container Apps (GitHub Actions) and GCP Cloud Run (Bitbucket)
 - **Branch Isolation**: Each git branch gets its own deployment URL
 - **Auto-Cleanup**: Resources destroyed when branches are deleted
@@ -58,17 +63,20 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 ### Installation
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
 cd fractals-nextjs
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Run the development server:
+
 ```bash
 npm run dev
 ```
@@ -95,11 +103,13 @@ The production container will be available at [http://localhost:8080](http://loc
 ## Usage
 
 ### Basic Navigation
+
 - **Zoom In/Out**: Use mouse wheel or zoom controls
 - **Pan**: Click and drag to move around the fractal
 - **Reset**: Use preset configurations to jump to interesting locations
 
 ### Advanced Features
+
 - **Custom Presets**: Create and save your own fractal configurations (stored in browser localStorage)
 - **Parameter Adjustment**: Fine-tune iterations and other settings
 

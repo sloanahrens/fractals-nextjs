@@ -34,24 +34,29 @@ docker run --rm -p 8080:8080 fractals-nextjs:test
 This is a Next.js 14 TypeScript application that renders interactive Mandelbrot set fractals using Canvas API. Key architectural decisions:
 
 ### Core Rendering System
+
 - **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
 ### State Management Pattern
+
 The main page (`src/app/page.tsx`) uses React hooks for:
+
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
 - Preset system: Built-in and custom fractal configurations
 
 ### Component Structure
+
 - **UI Components** (`src/components/ui/`): Reusable form controls (Slider, Select, Input, Button)
 - **Specialized Controls**: ZoomDisplay, CenterControls, PresetSelector, CustomPresetManager
 - **Layout**: Single-page application with side-by-side canvas and control panels
 
 ### Performance Optimizations
+
 - Progressive rendering with chunked calculations to avoid UI blocking
 - Cancellable rendering operations when parameters change
 - RequestAnimationFrame for smooth updates
@@ -60,6 +65,7 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 ## Next.js Configuration
 
 The application uses Next.js with these key settings:
+
 - `output: 'standalone'` for Docker deployment
 - `poweredByHeader: false` for security
 - `reactStrictMode: true` for development checks
@@ -71,6 +77,7 @@ The application uses Next.js with these key settings:
 ## Testing and Quality
 
 Currently uses ESLint for code quality. The CI pipeline runs:
+
 ```bash
 npm ci
 npm run build
@@ -81,6 +88,7 @@ npx tsc --noEmit
 ## Deployment
 
 ### Docker Configuration
+
 - Multi-stage Dockerfile optimized for container deployment
 - Standalone Next.js output for minimal container size
 - Runs on port 8080 with non-root user for security
@@ -95,6 +103,7 @@ This app supports two deployment targets with independent CI/CD pipelines.
 GitHub Actions workflows in `.github/workflows/`:
 
 **deploy.yml** - Triggered on push to any branch:
+
 1. Tests the app (build, lint, typecheck)
 2. Clones `devops-azure-container-apps` repository
 3. Azure OIDC login + Pulumi login to blob storage
@@ -103,6 +112,7 @@ GitHub Actions workflows in `.github/workflows/`:
 6. Health checks `/health` endpoint
 
 **cleanup.yml** - Triggered on branch deletion:
+
 1. Clones `devops-azure-container-apps` repository
 2. Destroys Container App stack via Pulumi
 
@@ -132,6 +142,7 @@ Pipeline runs on every push with parallel steps (see `bitbucket-pipelines.yml`):
 Uses [devops-pulumi-ts](https://github.com/sloanahrens/devops-pulumi-ts) infrastructure.
 
 **Branch-Based Deployments:**
+
 - Each branch gets isolated Cloud Run service
 - Branch names normalized: `feature/foo` → `feature-foo`
 - Service pattern: `fractals-nextjs-<branch>`
@@ -147,3 +158,18 @@ Uses [devops-pulumi-ts](https://github.com/sloanahrens/devops-pulumi-ts) infrast
 | `STATE_BUCKET` | GCS bucket for Pulumi state | No |
 | `SERVICE_ACCOUNT_EMAIL` | Deploy SA email | No |
 | `PULUMI_CONFIG_PASSPHRASE` | State encryption passphrase | Yes |
+
+## Version Notes
+
+_Last updated: 2025-01-02_
+
+### Next.js 16 + ESLint 9 Migration
+
+- Upgraded to Next.js 16.1.1 with ESLint 9 flat config
+- `next lint` removed in Next.js 16 - now using `eslint .` directly
+- ESLint config migrated to `eslint.config.mjs` flat config format
+- Removed deprecated `swcMinify` option from `next.config.js`
+
+### Potential Improvements
+
+- **Testing**: Consider adding Jest/Vitest for unit testing `mandelbrot.ts` and `colorMapping.ts` math functions

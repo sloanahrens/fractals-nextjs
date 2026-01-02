@@ -1,5 +1,5 @@
-import { FractalBounds, ZoomState, PanState } from '../types/fractal';
-import { pixelToComplex, calculateZoomBounds } from './mandelbrot';
+import { FractalBounds, ZoomState, PanState } from "../types/fractal";
+import { pixelToComplex, calculateZoomBounds } from "./mandelbrot";
 
 /**
  * Zoom and pan manager for fractal navigation
@@ -10,7 +10,11 @@ export class ZoomPanManager {
   private canvasWidth: number;
   private canvasHeight: number;
 
-  constructor(canvasWidth: number, canvasHeight: number, initialBounds: FractalBounds) {
+  constructor(
+    canvasWidth: number,
+    canvasHeight: number,
+    initialBounds: FractalBounds,
+  ) {
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
     this.panState = {
@@ -39,7 +43,7 @@ export class ZoomPanManager {
     pixelX: number,
     pixelY: number,
     zoomFactor: number,
-    currentBounds: FractalBounds
+    currentBounds: FractalBounds,
   ): FractalBounds {
     // Convert pixel coordinates to complex plane
     const zoomCenter = pixelToComplex(
@@ -47,7 +51,7 @@ export class ZoomPanManager {
       pixelY,
       this.canvasWidth,
       this.canvasHeight,
-      currentBounds
+      currentBounds,
     );
 
     // Update zoom state
@@ -59,7 +63,7 @@ export class ZoomPanManager {
     return calculateZoomBounds(
       this.zoomState.centerX,
       this.zoomState.centerY,
-      this.zoomState.scale
+      this.zoomState.scale,
     );
   }
 
@@ -69,16 +73,19 @@ export class ZoomPanManager {
    * @param currentBounds - Current fractal bounds
    * @returns New fractal bounds or null if no change
    */
-  handleWheel(event: WheelEvent, currentBounds: FractalBounds): FractalBounds | null {
+  handleWheel(
+    event: WheelEvent,
+    currentBounds: FractalBounds,
+  ): FractalBounds | null {
     event.preventDefault();
-    
+
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
     const pixelX = event.clientX - rect.left;
     const pixelY = event.clientY - rect.top;
-    
+
     // Determine zoom direction and factor
     const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
-    
+
     return this.zoom(pixelX, pixelY, zoomFactor, currentBounds);
   }
 
@@ -100,7 +107,11 @@ export class ZoomPanManager {
    * @param currentBounds - Current fractal bounds
    * @returns New fractal bounds or null if not panning
    */
-  updatePan(pixelX: number, pixelY: number, currentBounds: FractalBounds): FractalBounds | null {
+  updatePan(
+    pixelX: number,
+    pixelY: number,
+    currentBounds: FractalBounds,
+  ): FractalBounds | null {
     if (!this.panState.isDragging) {
       return null;
     }
@@ -110,8 +121,9 @@ export class ZoomPanManager {
 
     // Convert pixel deltas to complex plane deltas
     const realRange = currentBounds.maxReal - currentBounds.minReal;
-    const imaginaryRange = currentBounds.maxImaginary - currentBounds.minImaginary;
-    
+    const imaginaryRange =
+      currentBounds.maxImaginary - currentBounds.minImaginary;
+
     const realDelta = -(deltaX / this.canvasWidth) * realRange;
     const imaginaryDelta = -(deltaY / this.canvasHeight) * imaginaryRange;
 
@@ -147,7 +159,7 @@ export class ZoomPanManager {
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
     const pixelX = event.clientX - rect.left;
     const pixelY = event.clientY - rect.top;
-    
+
     this.startPan(pixelX, pixelY);
   }
 
@@ -157,11 +169,14 @@ export class ZoomPanManager {
    * @param currentBounds - Current fractal bounds
    * @returns New fractal bounds or null if no change
    */
-  handleMouseMove(event: MouseEvent, currentBounds: FractalBounds): FractalBounds | null {
+  handleMouseMove(
+    event: MouseEvent,
+    currentBounds: FractalBounds,
+  ): FractalBounds | null {
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
     const pixelX = event.clientX - rect.left;
     const pixelY = event.clientY - rect.top;
-    
+
     return this.updatePan(pixelX, pixelY, currentBounds);
   }
 
@@ -181,19 +196,22 @@ export class ZoomPanManager {
       const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
       const pixelX = touch.clientX - rect.left;
       const pixelY = touch.clientY - rect.top;
-      
+
       this.startPan(pixelX, pixelY);
     }
   }
 
-  handleTouchMove(event: TouchEvent, currentBounds: FractalBounds): FractalBounds | null {
+  handleTouchMove(
+    event: TouchEvent,
+    currentBounds: FractalBounds,
+  ): FractalBounds | null {
     if (event.touches.length === 1 && this.panState.isDragging) {
       event.preventDefault();
       const touch = event.touches[0];
       const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
       const pixelX = touch.clientX - rect.left;
       const pixelY = touch.clientY - rect.top;
-      
+
       return this.updatePan(pixelX, pixelY, currentBounds);
     }
     return null;
