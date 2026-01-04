@@ -1,11 +1,12 @@
-import { defineConfig, globalIgnores } from "eslint/config";
 import nextPlugin from "@next/eslint-plugin-next";
 import reactPlugin from "eslint-plugin-react";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
-export default defineConfig([
-  globalIgnores([".next/**", "out/**", "build/**", "node_modules/**"]),
+export default [
+  {
+    ignores: [".next/**", "out/**", "build/**", "node_modules/**"],
+  },
   {
     name: "next-fractals/base",
     files: ["**/*.{js,jsx,ts,tsx}"],
@@ -26,4 +27,4 @@ export default defineConfig([
     },
   },
   ...tseslint.configs.recommended,
-]);
+];
