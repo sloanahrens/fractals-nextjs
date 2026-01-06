@@ -1,18 +1,21 @@
-# Bitbucket Pipeline for fractals-nextjs using devops-pulumi-ts CLI
+# Bitbucket Pipeline for fractals-nextjs - Azure Container Apps deployment
 #
 # Required Repository Variables:
-#   GCP_PROJECT          - GCP project ID
-#   GCP_PROJECT_NUMBER   - GCP project number (for WIF)
-#   GCP_REGION           - GCP region (e.g., us-central1)
-#   STATE_BUCKET         - GCS bucket name for Pulumi state
-#   SERVICE_ACCOUNT_EMAIL - Deploy service account email
+#   AZURE_CLIENT_ID          - Deploy managed identity client ID
+#   AZURE_TENANT_ID          - Azure AD tenant ID
+#   AZURE_SUBSCRIPTION_ID    - Azure subscription ID
+#   AZURE_RESOURCE_GROUP     - Resource group name (e.g., trabian_west_sbx)
+#   STATE_STORAGE_ACCOUNT    - Storage account for Pulumi state
+#   AZURE_LOCATION           - Azure region (e.g., westus2)
 #
 # Required Repository Variables (Secured):
 #   PULUMI_CONFIG_PASSPHRASE - State encryption passphrase
 
-image: node:22-alpine
+image: node:22
 
 definitions:
+  caches:
+    npm: ~/.npm
   services:
     docker:
       memory: 2048
@@ -23,7 +26,7 @@ pipelines:
         - step:
             name: Build and Test Next.js App
             caches:
-              - node
+              - npm
             script:
               - npm ci
               - npm run build
@@ -31,20 +34,34 @@ pipelines:
               - npx tsc --noEmit
 
         - step:
-            name: Deploy to Cloud Run
+            name: Deploy to Container Apps
             oidc: true
             services:
               - docker
             caches:
-              - node
-              - docker
+              - npm
             script:
-              - apk add --no-cache git curl bash
-              - curl -fsSL https://get.pulumi.com | sh
+              # Install Azure CLI
+              - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+              # Install Pulumi
+              - curl -fsSL https://get.pulumi.com | bash
               - export PATH=$PATH:$HOME/.pulumi/bin
-              - git clone https://github.com/sloanahrens/devops-pulumi-ts.git infra
+              # Login with OIDC
+              - |
+                az login --service-principal \
+                  --username $AZURE_CLIENT_ID \
+                  --tenant $AZURE_TENANT_ID \
+                  --federated-token $BITBUCKET_STEP_OIDC_TOKEN
+              - az account set --subscription $AZURE_SUBSCRIPTION_ID
+              # Clone infra repo and deploy
+              - git clone --depth 1 https://github.com/sloanahrens/devops-pulumi-ts.git infra
               - cd infra/cli && npm ci && npm run build
-              - npx devops-deploy deploy --cloud gcp --app fractals-nextjs --branch "$BITBUCKET_BRANCH" --context "$BITBUCKET_CLONE_DIR"
+              - |
+                npx devops-deploy deploy \
+                  --cloud azure \
+                  --app fractals-nextjs \
+                  --branch "$BITBUCKET_BRANCH" \
+                  --context "$BITBUCKET_CLONE_DIR"
               - echo "Service URL - $(cat /tmp/service-url.txt)"
 
   custom:
@@ -56,9 +73,19 @@ pipelines:
           name: Cleanup Branch Resources
           oidc: true
           script:
-            - apk add --no-cache git curl bash
-            - curl -fsSL https://get.pulumi.com | sh
+            - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+            - curl -fsSL https://get.pulumi.com | bash
             - export PATH=$PATH:$HOME/.pulumi/bin
-            - git clone https://github.com/sloanahrens/devops-pulumi-ts.git infra
+            - |
+              az login --service-principal \
+                --username $AZURE_CLIENT_ID \
+                --tenant $AZURE_TENANT_ID \
+                --federated-token $BITBUCKET_STEP_OIDC_TOKEN
+            - az account set --subscription $AZURE_SUBSCRIPTION_ID
+            - git clone --depth 1 https://github.com/sloanahrens/devops-pulumi-ts.git infra
             - cd infra/cli && npm ci && npm run build
-            - npx devops-deploy cleanup --cloud gcp --app fractals-nextjs --branch "$DELETED_BRANCH"
+            - |
+              npx devops-deploy cleanup \
+                --cloud azure \
+                --app fractals-nextjs \
+                --branch "$DELETED_BRANCH"

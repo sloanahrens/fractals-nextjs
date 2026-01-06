@@ -94,74 +94,45 @@ npx tsc --noEmit
 - Runs on port 8080 with non-root user for security
 - Health endpoint at `/health` for container orchestration probes
 
-### CI/CD Pipelines
+### CI/CD Pipeline
 
-This app supports two deployment targets with independent CI/CD pipelines.
-
-#### Azure Container Apps (GitHub Actions)
-
-GitHub Actions workflows in `.github/workflows/`:
-
-**deploy.yml** - Triggered on push to any branch:
-
-1. Tests the app (build, lint, typecheck)
-2. Clones `devops-azure-container-apps` repository
-3. Azure OIDC login + Pulumi login to blob storage
-4. Builds Docker image and pushes to Azure Container Registry
-5. Deploys Container App via Pulumi (`devops/app`)
-6. Health checks `/health` endpoint
-
-**cleanup.yml** - Triggered on branch deletion:
-
-1. Clones `devops-azure-container-apps` repository
-2. Destroys Container App stack via Pulumi
-
-**GitHub Secrets Required:**
-| Secret | Source |
-|--------|--------|
-| `AZURE_CLIENT_ID` | Infrastructure stack output |
-| `AZURE_TENANT_ID` | Azure Portal |
-| `AZURE_SUBSCRIPTION_ID` | Azure Portal |
-| `AZURE_STORAGE_ACCOUNT` | Bootstrap stack output |
-| `PULUMI_CONFIG_PASSPHRASE` | Your passphrase |
-| `DEVOPS_REPO_TOKEN` | GitHub PAT with repo access |
-
-**GitHub Variables Required:**
-| Variable | Value |
-|----------|-------|
-| `PULUMI_ORG` | Your Pulumi org name |
-| `DEVOPS_REPO` | `<owner>/devops-azure-container-apps` |
-
-#### GCP Cloud Run (Bitbucket Pipelines)
+#### Azure Container Apps (Bitbucket Pipelines)
 
 Pipeline runs on every push with parallel steps (see `bitbucket-pipelines.yml`):
 
 1. **Build and Test**: `npm ci && npm run build && npm run lint && npx tsc --noEmit`
-2. **Deploy to Cloud Run**: Pushes to Artifact Registry, deploys via Pulumi
+2. **Deploy to Container Apps**: Pushes to ACR, deploys via Pulumi
 
 Uses [devops-pulumi-ts](https://github.com/sloanahrens/devops-pulumi-ts) infrastructure.
 
 **Branch-Based Deployments:**
 
-- Each branch gets isolated Cloud Run service
-- Branch names normalized: `feature/foo` → `feature-foo`
+- Each branch gets isolated Container App
+- Branch names normalized: `feature/foo` → `feature-foo` (max 32 chars for Azure)
 - Service pattern: `fractals-nextjs-<branch>`
 
-**Cleanup:** Branch resources auto-cleaned via `branch-cleanup` custom pipeline.
+**Cleanup:** Branch resources cleaned via `branch-cleanup` custom pipeline.
 
-**Environment Variables:**
+**Bitbucket Repository Variables:**
 | Variable | Description | Secured? |
 |----------|-------------|----------|
-| `GCP_PROJECT` | GCP project ID | No |
-| `GCP_PROJECT_NUMBER` | GCP project number (for WIF) | No |
-| `GCP_REGION` | GCP region | No |
-| `STATE_BUCKET` | GCS bucket for Pulumi state | No |
-| `SERVICE_ACCOUNT_EMAIL` | Deploy SA email | No |
+| `AZURE_CLIENT_ID` | Deploy managed identity client ID | No |
+| `AZURE_TENANT_ID` | Azure AD tenant ID | No |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID | No |
+| `AZURE_RESOURCE_GROUP` | Resource group name | No |
+| `STATE_STORAGE_ACCOUNT` | Storage account for Pulumi state | No |
+| `AZURE_LOCATION` | Azure region (e.g., westus2) | No |
 | `PULUMI_CONFIG_PASSPHRASE` | State encryption passphrase | Yes |
 
 ## Version Notes
 
-_Last updated: 2025-01-02_
+_Last updated: 2026-01-05_
+
+### Azure Container Apps Migration (2026-01-05)
+
+- Migrated from GCP Cloud Run to Azure Container Apps
+- Updated Bitbucket pipeline for Azure OIDC authentication
+- Using devops-pulumi-ts infrastructure stack
 
 ### Next.js 16 + ESLint 9 Migration
 
