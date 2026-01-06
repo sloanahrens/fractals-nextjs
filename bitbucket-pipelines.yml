@@ -61,7 +61,8 @@ pipelines:
                   --cloud azure \
                   --app fractals-nextjs \
                   --branch "$BITBUCKET_BRANCH" \
-                  --context "$BITBUCKET_CLONE_DIR"
+                  --context "$BITBUCKET_CLONE_DIR" \
+                  --health-path /api/health
               - echo "Service URL - $(cat /tmp/service-url.txt)"
 
   custom:

@@ -92,7 +92,7 @@ npx tsc --noEmit
 - Multi-stage Dockerfile optimized for container deployment
 - Standalone Next.js output for minimal container size
 - Runs on port 8080 with non-root user for security
-- Health endpoint at `/health` for container orchestration probes
+- Health endpoint at `/api/health` for container orchestration probes
 
 ### CI/CD Pipeline
 
