@@ -16,6 +16,7 @@ image: node:22
 definitions:
   caches:
     npm: ~/.npm
+    pnpm: $HOME/.local/share/pnpm/store
   services:
     docker:
       memory: 2048
@@ -40,6 +41,7 @@ pipelines:
               - docker
             caches:
               - npm
+              - pnpm
             script:
               # Install Azure CLI
               - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
@@ -55,7 +57,8 @@ pipelines:
               - az account set --subscription $AZURE_SUBSCRIPTION_ID
               # Clone infra repo and deploy
               - git clone --depth 1 https://github.com/sloanahrens/devops-pulumi-ts.git infra
-              - cd infra/cli && npm ci && npm run build
+              - corepack enable && corepack prepare pnpm@latest --activate
+              - cd infra && pnpm install --frozen-lockfile
               - |
                 npx devops-deploy deploy \
                   --cloud azure \
@@ -84,7 +87,8 @@ pipelines:
                 --federated-token $BITBUCKET_STEP_OIDC_TOKEN
             - az account set --subscription $AZURE_SUBSCRIPTION_ID
             - git clone --depth 1 https://github.com/sloanahrens/devops-pulumi-ts.git infra
-            - cd infra/cli && npm ci && npm run build
+            - corepack enable && corepack prepare pnpm@latest --activate
+            - cd infra && pnpm install --frozen-lockfile
             - |
               npx devops-deploy cleanup \
                 --cloud azure \
