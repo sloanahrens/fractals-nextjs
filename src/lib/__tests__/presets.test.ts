@@ -8,8 +8,11 @@ import {
   deleteCustomPreset,
   getAllPresets,
   getCustomPresets,
+  getCustomPresetsSnapshot,
   getPresetById,
+  getServerCustomPresetsSnapshot,
   saveCustomPreset,
+  subscribeToCustomPresets,
   type FractalPreset,
 } from "../presets";
 
@@ -199,5 +202,81 @@ describe("custom presets", () => {
     expect(errorSpy).toHaveBeenCalled();
 
     errorSpy.mockRestore();
+  });
+});
+
+describe("custom preset store", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", createStorageStub());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the snapshot's identity until storage changes", () => {
+    const empty = getCustomPresetsSnapshot();
+    expect(getCustomPresetsSnapshot()).toBe(empty);
+
+    saveCustomPreset(CUSTOM_PRESET);
+
+    // useSyncExternalStore loops forever on a snapshot that changes identity
+    // every call, so the same stored bytes must yield the same array.
+    const saved = getCustomPresetsSnapshot();
+    expect(saved).not.toBe(empty);
+    expect(saved).toEqual([CUSTOM_PRESET]);
+    expect(getCustomPresetsSnapshot()).toBe(saved);
+  });
+
+  it("tracks a save and a delete", () => {
+    saveCustomPreset(CUSTOM_PRESET);
+    expect(getCustomPresetsSnapshot()).toEqual([CUSTOM_PRESET]);
+
+    deleteCustomPreset(CUSTOM_PRESET.id);
+    expect(getCustomPresetsSnapshot()).toEqual([]);
+  });
+
+  it("hands the server an empty snapshot, since it has no storage", () => {
+    saveCustomPreset(CUSTOM_PRESET);
+    expect(getServerCustomPresetsSnapshot()).toEqual([]);
+  });
+
+  it("notifies subscribers on save and delete", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeToCustomPresets(listener);
+
+    saveCustomPreset(CUSTOM_PRESET);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    deleteCustomPreset(CUSTOM_PRESET.id);
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+  });
+
+  it("stops notifying a listener that unsubscribed", () => {
+    const listener = vi.fn();
+    subscribeToCustomPresets(listener)();
+
+    saveCustomPreset(CUSTOM_PRESET);
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("freezes its snapshots so a stray edit cannot poison every render", () => {
+    expect(Object.isFrozen(getCustomPresetsSnapshot())).toBe(true);
+
+    saveCustomPreset(CUSTOM_PRESET);
+
+    expect(Object.isFrozen(getCustomPresetsSnapshot())).toBe(true);
+    expect(getServerCustomPresetsSnapshot()).toEqual([]);
+  });
+
+  it("returns a fresh list to callers that build on it", () => {
+    const listed = getCustomPresets();
+    listed.push(CUSTOM_PRESET);
+
+    expect(getCustomPresets()).toEqual([]);
+    expect(getCustomPresetsSnapshot()).toEqual([]);
   });
 });

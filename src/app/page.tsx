@@ -57,6 +57,20 @@ export default function Home() {
     bounds.maxImaginary.toString(),
   );
 
+  // The manual inputs mirror the current view until the user edits them, so
+  // they resync whenever the view moves (zoom/pan, preset, reset). Adjusting
+  // the state during the render that sees the new bounds is the documented
+  // alternative to a sync effect:
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [syncedBounds, setSyncedBounds] = useState(bounds);
+  if (syncedBounds !== bounds) {
+    setSyncedBounds(bounds);
+    setManualMinReal(bounds.minReal.toString());
+    setManualMaxReal(bounds.maxReal.toString());
+    setManualMinImaginary(bounds.minImaginary.toString());
+    setManualMaxImaginary(bounds.maxImaginary.toString());
+  }
+
   const renderFractal = useCallback(async () => {
     if (!rendererRef.current || !canvasRef.current) return;
 
@@ -123,14 +137,6 @@ export default function Home() {
       },
     );
   }, [canvasWidth, canvasHeight]);
-
-  // Update manual coordinate inputs when bounds change from zoom/pan
-  useEffect(() => {
-    setManualMinReal(bounds.minReal.toString());
-    setManualMaxReal(bounds.maxReal.toString());
-    setManualMinImaginary(bounds.minImaginary.toString());
-    setManualMaxImaginary(bounds.maxImaginary.toString());
-  }, [bounds]);
 
   // Re-render when parameters change (renderFractal already handles canvas dimensions)
   useEffect(() => {

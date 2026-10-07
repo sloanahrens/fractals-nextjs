@@ -127,7 +127,87 @@ export function getPresetById(id: string): FractalPreset | undefined {
   return BUILTIN_PRESETS.find((preset) => preset.id === id);
 }
 
-// Local storage functions for custom presets
+// Custom presets live in localStorage: an external store that the components
+// read through useSyncExternalStore. Reads go through the helpers below so the
+// snapshot keeps a stable identity between changes, and writes notify the
+// subscribers so the rendered list follows the store without an effect.
+const CUSTOM_PRESETS_KEY = "fractal-custom-presets";
+
+// Snapshot handed back when there is nothing stored, and the value
+// useSyncExternalStore uses on the server.
+const EMPTY_PRESETS: readonly FractalPreset[] = Object.freeze([]);
+
+const presetListeners = new Set<() => void>();
+
+let snapshotSource: string | null | undefined;
+let snapshot: readonly FractalPreset[] = EMPTY_PRESETS;
+
+/** The stored JSON, or null when there is none (or storage is unavailable). */
+function readCustomPresetsSource(): string | null {
+  try {
+    return localStorage.getItem(CUSTOM_PRESETS_KEY) || null;
+  } catch (error) {
+    console.error("Error loading custom presets:", error);
+    return null;
+  }
+}
+
+function parseCustomPresets(source: string): FractalPreset[] {
+  try {
+    return JSON.parse(source);
+  } catch (error) {
+    console.error("Error loading custom presets:", error);
+    return [];
+  }
+}
+
+function writeCustomPresets(presets: FractalPreset[]): void {
+  localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(presets));
+
+  for (const listener of presetListeners) {
+    listener();
+  }
+}
+
+/**
+ * Subscribe to custom preset changes: takes a listener, returns an
+ * unsubscribe. This is the `subscribe` half of useSyncExternalStore.
+ */
+export function subscribeToCustomPresets(listener: () => void): () => void {
+  presetListeners.add(listener);
+  return () => {
+    presetListeners.delete(listener);
+  };
+}
+
+/**
+ * Current custom presets, with a reference that only changes when storage does.
+ * Re-parsing on every call would hand useSyncExternalStore a new array each
+ * render and loop forever.
+ *
+ * Frozen, because this array is both the client cache and (when empty) the
+ * server snapshot: an in-place edit by one caller would show up as a phantom
+ * preset in every component that has none saved. Editing it is a bug, so this
+ * makes it throw. Use getCustomPresets() for a list you intend to build on.
+ */
+export function getCustomPresetsSnapshot(): readonly FractalPreset[] {
+  const source = readCustomPresetsSource();
+
+  if (source !== snapshotSource) {
+    snapshotSource = source;
+    snapshot = Object.freeze(
+      source === null ? EMPTY_PRESETS : parseCustomPresets(source),
+    );
+  }
+
+  return snapshot;
+}
+
+/** The server has no localStorage, so it renders as if nothing were saved. */
+export function getServerCustomPresetsSnapshot(): readonly FractalPreset[] {
+  return EMPTY_PRESETS;
+}
+
 export function saveCustomPreset(preset: FractalPreset): void {
   const customPresets = getCustomPresets();
   const existingIndex = customPresets.findIndex((p) => p.id === preset.id);
@@ -138,22 +218,18 @@ export function saveCustomPreset(preset: FractalPreset): void {
     customPresets.push(preset);
   }
 
-  localStorage.setItem("fractal-custom-presets", JSON.stringify(customPresets));
+  writeCustomPresets(customPresets);
 }
 
 export function getCustomPresets(): FractalPreset[] {
-  try {
-    const stored = localStorage.getItem("fractal-custom-presets");
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error("Error loading custom presets:", error);
-    return [];
-  }
+  const source = readCustomPresetsSource();
+  // A fresh array: callers are free to build on it before saving.
+  return source === null ? [] : parseCustomPresets(source);
 }
 
 export function deleteCustomPreset(id: string): void {
   const customPresets = getCustomPresets().filter((p) => p.id !== id);
-  localStorage.setItem("fractal-custom-presets", JSON.stringify(customPresets));
+  writeCustomPresets(customPresets);
 }
 
 export function getAllPresets(): FractalPreset[] {

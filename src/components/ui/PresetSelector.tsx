@@ -4,7 +4,9 @@ import React from "react";
 import {
   FractalPreset,
   BUILTIN_PRESETS,
-  getCustomPresets,
+  getCustomPresetsSnapshot,
+  getServerCustomPresetsSnapshot,
+  subscribeToCustomPresets,
 } from "../../lib/presets";
 import { Button } from "./Button";
 import { Select } from "./Select";
@@ -22,11 +24,13 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
   onSavePreset,
   className = "",
 }) => {
-  const [customPresets, setCustomPresets] = React.useState<FractalPreset[]>([]);
-
-  React.useEffect(() => {
-    setCustomPresets(getCustomPresets());
-  }, []);
+  // The saved presets live in localStorage; subscribe so the dropdown lists a
+  // preset as soon as it is saved elsewhere in the app.
+  const customPresets = React.useSyncExternalStore(
+    subscribeToCustomPresets,
+    getCustomPresetsSnapshot,
+    getServerCustomPresetsSnapshot,
+  );
 
   const handlePresetChange = (presetId: string) => {
     const preset = [...BUILTIN_PRESETS, ...customPresets].find(
