@@ -113,6 +113,29 @@ devops system, run by the human. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-07_
 
+### Dependency Refresh (2026-10-07)
+
+- `next` and `eslint-config-next` moved to 16.4.0; every other package was
+  refreshed to the newest release its existing major allows (eslint 9.39.5,
+  typescript 5.9.3, tailwindcss 3.4.19, typescript-eslint 8.71.1, prettier
+  3.9.9, and the `@types/*` packages)
+- `eslint-plugin-react-hooks` is pinned to `~7.0.1` on purpose. 7.1.1 turns its
+  new `react-hooks/set-state-in-effect` analysis loose on four pre-existing
+  components (`CenterControls`, `CustomPresetManager`, `PresetSelector`, and
+  the page's bounds sync), which the gate runs as errors. Adopting 7.1.x means
+  refactoring those effects, not a version bump — do that in its own change.
+- `prettier-plugin-tailwindcss` stays on 0.6.x for the same Node reason as the
+  Vite pin below: both 0.7.0 and 0.8.1 declare `engines.node >= 20.19`, and the
+  gate image is Node 20.18.1. Revisit it alongside the Vite pin.
+- React 18, Tailwind 3, ESLint 9, TypeScript 5 and Vite 6 are all held at their
+  current major deliberately; each has a newer major (19, 4, 10, 7, 8) that is
+  out of scope for a dependency refresh.
+- `npm audit --omit=dev --audit-level=high` is clean. The remaining audit
+  findings are dev-only and have no upgrade path today: `braces` and
+  `micromatch` are reported as vulnerable at *every* published version, and the
+  rest of the chain (chokidar, fast-glob, postcss-nested) only clears by
+  moving to Tailwind 4 or waiting on upstream.
+
 ### Vitest Test Suite (2026-10-07)
 
 - Added Vitest (`vitest run` via the `test` npm script and the `test`
