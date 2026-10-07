@@ -124,16 +124,24 @@ export default function Home() {
       // image until something else redrew the canvas.
       await previewInFlightRef.current;
 
-      setIsRendering(true);
-      setProgress(0);
+      // The renderer owns the run: it paints the canvas and reports how far
+      // along it is, so the bar follows those reports. Reporting from its
+      // callback rather than from the draw itself keeps this draw free of a
+      // setState in the calling effect's own body, which would be a second
+      // render stacked on the one that scheduled the draw.
+      const onProgress = (value: number) => {
+        setIsRendering(true);
+        setProgress(value);
+      };
 
-      try {
-        await renderer.renderFractal(config, setProgress);
-      } catch (error) {
-        console.error("Error rendering fractal:", error);
-      } finally {
-        setIsRendering(false);
-      }
+      await renderer
+        .renderFractal(config, onProgress)
+        .catch((error) => {
+          console.error("Error rendering fractal:", error);
+        })
+        .finally(() => {
+          setIsRendering(false);
+        });
     },
     [bounds, maxIterations, colorScheme],
   );
