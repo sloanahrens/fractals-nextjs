@@ -104,33 +104,10 @@ npx tsc --noEmit
 
 ### CI/CD Pipeline
 
-#### Azure Container Apps (Bitbucket Pipelines)
-
-Pipeline runs on every push with parallel steps (see `bitbucket-pipelines.yml`):
-
-1. **Build and Test**: `npm ci && npm run build && npm run lint && npx tsc --noEmit`
-2. **Deploy to Container Apps**: Pushes to ACR, deploys via Pulumi
-
-Uses [devops-pulumi-ts](https://github.com/sloanahrens/devops-pulumi-ts) infrastructure.
-
-**Branch-Based Deployments:**
-
-- Each branch gets isolated Container App
-- Branch names normalized: `feature/foo` → `feature-foo` (max 32 chars for Azure)
-- Service pattern: `fractals-nextjs-<branch>`
-
-**Cleanup:** Branch resources cleaned via `branch-cleanup` custom pipeline.
-
-**Bitbucket Repository Variables:**
-| Variable | Description | Secured? |
-|----------|-------------|----------|
-| `AZURE_CLIENT_ID` | Deploy managed identity client ID | No |
-| `AZURE_TENANT_ID` | Azure AD tenant ID | No |
-| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID | No |
-| `AZURE_RESOURCE_GROUP` | Resource group name | No |
-| `STATE_STORAGE_ACCOUNT` | Storage account for Pulumi state | No |
-| `AZURE_LOCATION` | Azure region (e.g., westus2) | No |
-| `PULUMI_CONFIG_PASSPHRASE` | State encryption passphrase | Yes |
+There is no deploy pipeline in this repo. The landing gate
+(`.forgejo/workflows/gate.yml`) runs `make gate` on a `land/**` branch; it needs
+no cloud credentials. Build and deploy happen on the deploy runner, through the
+devops system, run by the human. See the Gas Town rules at the end of this file.
 
 ## Version Notes
 
@@ -149,11 +126,13 @@ _Last updated: 2026-10-07_
   esbuild) runs on Node 20.18. Revisit the pin when `ci-base` moves past
   Node 20.19.
 
-### Azure Container Apps Migration (2026-01-05)
+### Deploy Pipelines Moved to the DevOps System (2026-10-07)
 
-- Migrated from GCP Cloud Run to Azure Container Apps
-- Updated Bitbucket pipeline for Azure OIDC authentication
-- Using devops-pulumi-ts infrastructure stack
+- Removed the cloud CI pipeline from the repo root and both files under
+  `.github/workflows/`; this repo no longer carries a deploy pipeline
+- Deployment is done only by the human, through the devops system
+- The image contract is unchanged: root `Dockerfile`, `$PORT` (8080),
+  `/api/health`, no baked secrets
 
 ### Next.js 16 + ESLint 9 Migration
 
