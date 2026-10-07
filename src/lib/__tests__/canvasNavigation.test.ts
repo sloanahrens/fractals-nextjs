@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FractalBounds, ZoomState } from "../../types/fractal";
-import { attachCanvasNavigation } from "../canvasNavigation";
+import {
+  attachCanvasNavigation,
+  WHEEL_GESTURE_QUIET_MS,
+} from "../canvasNavigation";
 import { calculateZoomBounds, getDefaultBounds } from "../mandelbrot";
 import { ZoomPanManager } from "../zoomPan";
 
@@ -78,12 +81,14 @@ const touchAt = (clientX: number, clientY: number) => ({ clientX, clientY });
 /**
  * The canvas wired the way the page wires it: an 800x600 canvas, an on-screen
  * box that CSS may have resized, and the reported view fed back as the bounds
- * the next gesture starts from.
+ * the next gesture starts from. Gesture boundaries are recorded as "start" and
+ * "end" so a test can read them off in order.
  */
 function createHarness(rect: Rect = FULL_SIZE_RECT) {
   const canvas = createFakeCanvas(rect);
   const manager = new ZoomPanManager(CANVAS_WIDTH, CANVAS_HEIGHT, BOUNDS);
   const views: ZoomState[] = [];
+  const gestures: string[] = [];
   let bounds: FractalBounds = BOUNDS;
 
   const detach = attachCanvasNavigation(
@@ -94,9 +99,13 @@ function createHarness(rect: Rect = FULL_SIZE_RECT) {
       views.push(view);
       bounds = calculateZoomBounds(view.centerX, view.centerY, view.scale);
     },
+    {
+      onGestureStart: () => gestures.push("start"),
+      onGestureEnd: () => gestures.push("end"),
+    },
   );
 
-  return { canvas, manager, views, detach };
+  return { canvas, manager, views, gestures, detach };
 }
 
 describe("attachCanvasNavigation", () => {
@@ -252,5 +261,114 @@ describe("attachCanvasNavigation", () => {
       canvas.dispatch("wheel", { clientX: 400, clientY: 300, deltaY: -100 }),
     ).toThrow(/no listener/);
     expect(views).toHaveLength(0);
+  });
+
+  it("reports a drag as one gesture from mousedown to mouseup", () => {
+    const { canvas, gestures } = createHarness();
+
+    canvas.dispatch("mousedown", { clientX: 400, clientY: 300, button: 0 });
+    canvas.dispatch("mousemove", { clientX: 450, clientY: 300 });
+    canvas.dispatch("mousemove", { clientX: 500, clientY: 300 });
+    canvas.dispatch("mouseup");
+
+    // The moves in between stay inside the one gesture, so the caller can
+    // redraw cheaply for all of them and pay for a full render only once.
+    expect(gestures).toEqual(["start", "end"]);
+  });
+
+  it("does not report a gesture for a mouseup with no drag behind it", () => {
+    const { canvas, gestures } = createHarness();
+
+    canvas.dispatch("mouseup");
+    canvas.dispatch("mouseleave");
+    // A drag with the secondary button is not ours either.
+    canvas.dispatch("mousedown", { clientX: 400, clientY: 300, button: 2 });
+    canvas.dispatch("mouseup");
+
+    expect(gestures).toEqual([]);
+  });
+
+  it("reports a drag that leaves the canvas as finished", () => {
+    const { canvas, gestures } = createHarness();
+
+    canvas.dispatch("mousedown", { clientX: 400, clientY: 300, button: 0 });
+    canvas.dispatch("mouseleave");
+
+    expect(gestures).toEqual(["start", "end"]);
+  });
+
+  it("reports a single-finger touch drag as one gesture", () => {
+    const { canvas, gestures } = createHarness();
+
+    canvas.dispatch("touchstart", { touches: [touchAt(400, 300)] });
+    canvas.dispatch("touchmove", { touches: [touchAt(400, 400)] });
+    canvas.dispatch("touchend", { touches: [] });
+
+    expect(gestures).toEqual(["start", "end"]);
+  });
+
+  it("leaves a multi-touch gesture out of the reporting", () => {
+    const { canvas, gestures } = createHarness();
+
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(400, 300), touchAt(500, 300)],
+    });
+    canvas.dispatch("touchend", { touches: [] });
+
+    expect(gestures).toEqual([]);
+  });
+
+  describe("wheel", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("holds one gesture open across a burst of notches", () => {
+      const { canvas, gestures } = createHarness();
+
+      canvas.dispatch("wheel", { clientX: 400, clientY: 300, deltaY: -100 });
+      canvas.dispatch("wheel", { clientX: 400, clientY: 300, deltaY: -100 });
+      vi.advanceTimersByTime(WHEEL_GESTURE_QUIET_MS - 1);
+      canvas.dispatch("wheel", { clientX: 400, clientY: 300, deltaY: -100 });
+
+      // Still the same gesture: each notch restarts the quiet period.
+      expect(gestures).toEqual(["start"]);
+
+      vi.advanceTimersByTime(WHEEL_GESTURE_QUIET_MS);
+      expect(gestures).toEqual(["start", "end"]);
+    });
+
+    it("opens a fresh gesture after the previous one closed", () => {
+      const { canvas, gestures } = createHarness();
+
+      canvas.dispatch("wheel", { clientX: 400, clientY: 300, deltaY: -100 });
+      vi.advanceTimersByTime(WHEEL_GESTURE_QUIET_MS);
+      canvas.dispatch("wheel", { clientX: 400, clientY: 300, deltaY: -100 });
+
+      expect(gestures).toEqual(["start", "end", "start"]);
+    });
+
+    it("leaves a wheel that is not a zoom out of the reporting", () => {
+      const { canvas, gestures } = createHarness();
+
+      canvas.dispatch("wheel", { clientX: 400, clientY: 300, deltaY: 0 });
+      vi.advanceTimersByTime(WHEEL_GESTURE_QUIET_MS);
+
+      expect(gestures).toEqual([]);
+    });
+
+    it("drops the pending end of a gesture when it stops listening", () => {
+      const { canvas, gestures, detach } = createHarness();
+
+      canvas.dispatch("wheel", { clientX: 400, clientY: 300, deltaY: -100 });
+      detach();
+      vi.advanceTimersByTime(WHEEL_GESTURE_QUIET_MS);
+
+      expect(gestures).toEqual(["start"]);
+    });
   });
 });

@@ -5,6 +5,7 @@ import { FractalRenderer } from "../lib/fractalRenderer";
 import { calculateZoomBounds, boundsToView } from "../lib/mandelbrot";
 import { ZoomPanManager } from "../lib/zoomPan";
 import { attachCanvasNavigation } from "../lib/canvasNavigation";
+import { RenderQuality, RenderQualityDecider } from "../lib/renderQuality";
 import { FractalConfig, FractalBounds, ColorScheme } from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
 import { FractalPreset } from "../lib/presets";
@@ -24,6 +25,14 @@ const MAX_ZOOM = 10000;
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<FractalRenderer | null>(null);
+
+  // Decides whether a redraw is a cheap preview or a full-resolution render,
+  // and whether the end of a gesture still owes the canvas a full one.
+  const [renderPolicy] = useState(() => new RenderQualityDecider());
+  // Bumped when a finished gesture owes a full render, so the draw effect runs
+  // once more for the view the gesture settled on.
+  const [fullRenderNonce, setFullRenderNonce] = useState(0);
+  const previewInFlightRef = useRef<Promise<void> | null>(null);
 
   // Navigation state - sliders control these directly
   const [centerX, setCenterX] = useState(-0.75); // Center of classic Mandelbrot view
@@ -71,30 +80,75 @@ export default function Home() {
     setManualMaxImaginary(bounds.maxImaginary.toString());
   }
 
-  const renderFractal = useCallback(async () => {
-    if (!rendererRef.current || !canvasRef.current) return;
+  // Draw the canvas at the quality the render policy asks for: the cheap
+  // low-resolution pass while a gesture is moving the view, the full image
+  // otherwise. A preview leaves the progress bar alone so that a drag does not
+  // flash "Rendering..." at every pointer move.
+  const drawCanvas = useCallback(
+    async (quality: RenderQuality) => {
+      const canvas = canvasRef.current;
+      const renderer = rendererRef.current;
+      if (!canvas || !renderer) return;
 
-    setIsRendering(true);
-    setProgress(0);
+      const config: FractalConfig = {
+        bounds,
+        maxIterations,
+        width: canvas.width,
+        height: canvas.height,
+        colorScheme,
+      };
 
-    const config: FractalConfig = {
-      bounds,
-      maxIterations,
-      width: canvasRef.current.width,
-      height: canvasRef.current.height,
-      colorScheme,
-    };
+      if (quality === "preview") {
+        // Previews are cheap but not free and cannot be cancelled once they
+        // start, so drop a step while one is still running instead of letting
+        // a fast drag stack them up. The next step draws the view that is
+        // current by then, and the gesture's own final render replaces
+        // whatever is left on the canvas.
+        if (previewInFlightRef.current) return;
 
-    try {
-      await rendererRef.current.renderFractal(config, setProgress);
-    } catch (error) {
-      console.error("Error rendering fractal:", error);
-    } finally {
-      setIsRendering(false);
-    }
-  }, [bounds, maxIterations, colorScheme]);
+        previewInFlightRef.current = renderer
+          .renderPreview(config)
+          .catch((error) => {
+            console.error("Error rendering preview:", error);
+          });
+        try {
+          await previewInFlightRef.current;
+        } finally {
+          previewInFlightRef.current = null;
+        }
+        return;
+      }
 
-  // Initialize canvas and renderer
+      // Let a preview that is still painting land before drawing over it. The
+      // other order would leave the blocky preview on top of the finished
+      // image until something else redrew the canvas.
+      await previewInFlightRef.current;
+
+      // The renderer owns the run: it paints the canvas and reports how far
+      // along it is, so the bar follows those reports. Reporting from its
+      // callback rather than from the draw itself keeps this draw free of a
+      // setState in the calling effect's own body, which would be a second
+      // render stacked on the one that scheduled the draw.
+      const onProgress = (value: number) => {
+        setIsRendering(true);
+        setProgress(value);
+      };
+
+      await renderer
+        .renderFractal(config, onProgress)
+        .catch((error) => {
+          console.error("Error rendering fractal:", error);
+        })
+        .finally(() => {
+          setIsRendering(false);
+        });
+    },
+    [bounds, maxIterations, colorScheme],
+  );
+
+  // Initialize canvas and renderer. The renderer is rebuilt only when the
+  // canvas is resized, because it owns the image buffer that goes with those
+  // dimensions; the draw effect below paints the canvas either way.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -102,10 +156,7 @@ export default function Home() {
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
     rendererRef.current = new FractalRenderer(canvas);
-
-    // Initial render
-    renderFractal();
-  }, [canvasWidth, canvasHeight, renderFractal]);
+  }, [canvasWidth, canvasHeight]);
 
   // Wheel, drag and touch navigation on the canvas. The listeners are attached
   // once and read the live bounds through a ref, so a drag keeps working while
@@ -135,13 +186,39 @@ export default function Home() {
         setZoomLevel(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.scale)));
         setCurrentPreset("");
       },
-    );
-  }, [canvasWidth, canvasHeight]);
+      {
+        onGestureStart: () => {
+          renderPolicy.beginGesture();
 
-  // Re-render when parameters change (renderFractal already handles canvas dimensions)
+          // A full-resolution pass that is already running is drawing the view
+          // the user is leaving. Stop it, or it keeps painting stale rows over
+          // the previews, and remember that the canvas now owes a full render
+          // in case this gesture ends without moving anything.
+          const renderer = rendererRef.current;
+          if (renderer?.isCurrentlyRendering()) {
+            renderer.cancelRender();
+            renderPolicy.invalidate();
+          }
+        },
+        onGestureEnd: () => {
+          if (renderPolicy.endGesture()) {
+            setFullRenderNonce((nonce) => nonce + 1);
+          }
+        },
+      },
+    );
+  }, [canvasWidth, canvasHeight, renderPolicy]);
+
+  // Redraw whenever the view, the rendering parameters or the canvas size
+  // change, at whatever quality the policy decides. A gesture's steps come back
+  // as previews, so dragging or wheeling never runs a full-resolution pass per
+  // pointer move; the nonce brings back one full-quality render of the view the
+  // gesture settled on.
   useEffect(() => {
-    renderFractal();
-  }, [renderFractal]);
+    drawCanvas(renderPolicy.requestRender());
+    // fullRenderNonce is the trigger for the render a finished gesture owes,
+    // not a value the draw itself reads.
+  }, [drawCanvas, renderPolicy, canvasWidth, canvasHeight, fullRenderNonce]);
 
   // Helper functions for manual coordinate input
   const applyManualCoordinates = () => {
