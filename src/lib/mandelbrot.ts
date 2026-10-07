@@ -1,4 +1,4 @@
-import { ComplexNumber, FractalBounds } from "../types/fractal";
+import { ComplexNumber, FractalBounds, ZoomState } from "../types/fractal";
 
 /**
  * Calculate the number of iterations for a point in the Mandelbrot set
@@ -141,6 +141,10 @@ export function getDefaultBounds(): FractalBounds {
   };
 }
 
+// Size of the un-zoomed Mandelbrot view in the complex plane
+export const BASE_WIDTH = 3.5;
+export const BASE_HEIGHT = 2.5;
+
 /**
  * Calculate zoom bounds around a center point
  * @param centerX - Center X coordinate in complex plane
@@ -153,16 +157,29 @@ export function calculateZoomBounds(
   centerY: number,
   zoomLevel: number,
 ): FractalBounds {
-  const baseWidth = 3.5; // Default width of Mandelbrot view
-  const baseHeight = 2.5; // Default height of Mandelbrot view
-
-  const width = baseWidth / zoomLevel;
-  const height = baseHeight / zoomLevel;
+  const width = BASE_WIDTH / zoomLevel;
+  const height = BASE_HEIGHT / zoomLevel;
 
   return {
     minReal: centerX - width / 2,
     maxReal: centerX + width / 2,
     minImaginary: centerY - height / 2,
     maxImaginary: centerY + height / 2,
+  };
+}
+
+/**
+ * Read the view back out of bounds: the inverse of calculateZoomBounds.
+ *
+ * The zoom is taken from the width, since the view keeps the base aspect
+ * ratio whatever the canvas shape.
+ * @param bounds - Fractal bounds to describe
+ * @returns Center and zoom of the region the bounds cover
+ */
+export function boundsToView(bounds: FractalBounds): ZoomState {
+  return {
+    centerX: (bounds.minReal + bounds.maxReal) / 2,
+    centerY: (bounds.minImaginary + bounds.maxImaginary) / 2,
+    scale: BASE_WIDTH / (bounds.maxReal - bounds.minReal),
   };
 }

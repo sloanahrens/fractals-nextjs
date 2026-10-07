@@ -1,8 +1,17 @@
 import { FractalBounds, ZoomState, PanState } from "../types/fractal";
-import { pixelToComplex, calculateZoomBounds } from "./mandelbrot";
+import {
+  pixelToComplex,
+  calculateZoomBounds,
+  boundsToView,
+} from "./mandelbrot";
 
 /**
  * Zoom and pan manager for fractal navigation
+ *
+ * The bounds the caller passes in are the source of truth for the current
+ * view: every method that produces new bounds also records the matching centre
+ * and scale, so a view set elsewhere (a slider, a preset, a reset) cannot
+ * leave stale zoom state behind.
  */
 export class ZoomPanManager {
   private zoomState: ZoomState;
@@ -24,11 +33,7 @@ export class ZoomPanManager {
     };
 
     // Initialize zoom state from bounds
-    this.zoomState = {
-      centerX: (initialBounds.minReal + initialBounds.maxReal) / 2,
-      centerY: (initialBounds.minImaginary + initialBounds.maxImaginary) / 2,
-      scale: 1,
-    };
+    this.zoomState = boundsToView(initialBounds);
   }
 
   /**
@@ -36,7 +41,8 @@ export class ZoomPanManager {
    * @param pixelX - X coordinate of zoom center in pixels
    * @param pixelY - Y coordinate of zoom center in pixels
    * @param zoomFactor - Factor to zoom by (>1 = zoom in, <1 = zoom out)
-   * @param currentBounds - Current fractal bounds
+   * @param currentBounds - Current fractal bounds; these carry the zoom level
+   * the factor is applied to
    * @returns New fractal bounds after zoom
    */
   zoom(
@@ -54,39 +60,76 @@ export class ZoomPanManager {
       currentBounds,
     );
 
-    // Update zoom state
-    this.zoomState.centerX = zoomCenter.real;
-    this.zoomState.centerY = zoomCenter.imaginary;
-    this.zoomState.scale *= zoomFactor;
-
-    // Calculate new bounds
-    return calculateZoomBounds(
-      this.zoomState.centerX,
-      this.zoomState.centerY,
-      this.zoomState.scale,
+    const scale = boundsToView(currentBounds).scale * zoomFactor;
+    const bounds = calculateZoomBounds(
+      zoomCenter.real,
+      zoomCenter.imaginary,
+      scale,
     );
+
+    // Record the view the bounds were built from rather than reading it back
+    // out of them, so successive zooms compound without a round trip through
+    // the bounds widening the result.
+    this.zoomState = {
+      centerX: zoomCenter.real,
+      centerY: zoomCenter.imaginary,
+      scale,
+    };
+
+    return bounds;
+  }
+
+  /**
+   * Translate a pointer position into the canvas's own pixel space
+   *
+   * Pointer events report CSS pixels relative to the page, while everything in
+   * here is measured in canvas pixels. The two only agree when the layout
+   * shows the canvas at its natural size, so a canvas that CSS has shrunk
+   * (a phone, or the max-width on the element) has to be scaled back up.
+   * @param clientX - Pointer X in CSS pixels
+   * @param clientY - Pointer Y in CSS pixels
+   * @param target - Event target the pointer is over
+   * @returns Pointer position in canvas pixels
+   */
+  private pixelFrom(
+    clientX: number,
+    clientY: number,
+    target: EventTarget | null,
+  ): { x: number; y: number } {
+    const rect = (target as HTMLElement).getBoundingClientRect();
+    const scaleX = rect.width ? this.canvasWidth / rect.width : 1;
+    const scaleY = rect.height ? this.canvasHeight / rect.height : 1;
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
   }
 
   /**
    * Handle mouse wheel zoom
    * @param event - Wheel event
    * @param currentBounds - Current fractal bounds
-   * @returns New fractal bounds or null if no change
+   * @returns New fractal bounds, or null if the event was not a zoom
    */
   handleWheel(
     event: WheelEvent,
     currentBounds: FractalBounds,
   ): FractalBounds | null {
+    // A trackpad can report a horizontal-only swipe; that is a scroll, not a
+    // zoom, so leave it to the page.
+    if (event.deltaY === 0) {
+      return null;
+    }
+
     event.preventDefault();
 
-    const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
-    const pixelX = event.clientX - rect.left;
-    const pixelY = event.clientY - rect.top;
+    const pixel = this.pixelFrom(event.clientX, event.clientY, event.target);
 
     // Determine zoom direction and factor
     const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
 
-    return this.zoom(pixelX, pixelY, zoomFactor, currentBounds);
+    return this.zoom(pixel.x, pixel.y, zoomFactor, currentBounds);
   }
 
   /**
@@ -131,17 +174,16 @@ export class ZoomPanManager {
     this.panState.lastX = pixelX;
     this.panState.lastY = pixelY;
 
-    // Update zoom state center
-    this.zoomState.centerX += realDelta;
-    this.zoomState.centerY += imaginaryDelta;
-
-    // Return new bounds
-    return {
+    const bounds = {
       minReal: currentBounds.minReal + realDelta,
       maxReal: currentBounds.maxReal + realDelta,
       minImaginary: currentBounds.minImaginary + imaginaryDelta,
       maxImaginary: currentBounds.maxImaginary + imaginaryDelta,
     };
+
+    this.zoomState = boundsToView(bounds);
+
+    return bounds;
   }
 
   /**
@@ -156,11 +198,9 @@ export class ZoomPanManager {
    * @param event - Mouse event
    */
   handleMouseDown(event: MouseEvent): void {
-    const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
-    const pixelX = event.clientX - rect.left;
-    const pixelY = event.clientY - rect.top;
+    const pixel = this.pixelFrom(event.clientX, event.clientY, event.target);
 
-    this.startPan(pixelX, pixelY);
+    this.startPan(pixel.x, pixel.y);
   }
 
   /**
@@ -173,11 +213,9 @@ export class ZoomPanManager {
     event: MouseEvent,
     currentBounds: FractalBounds,
   ): FractalBounds | null {
-    const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
-    const pixelX = event.clientX - rect.left;
-    const pixelY = event.clientY - rect.top;
+    const pixel = this.pixelFrom(event.clientX, event.clientY, event.target);
 
-    return this.updatePan(pixelX, pixelY, currentBounds);
+    return this.updatePan(pixel.x, pixel.y, currentBounds);
   }
 
   /**
@@ -193,11 +231,9 @@ export class ZoomPanManager {
   handleTouchStart(event: TouchEvent): void {
     if (event.touches.length === 1) {
       const touch = event.touches[0];
-      const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
-      const pixelX = touch.clientX - rect.left;
-      const pixelY = touch.clientY - rect.top;
+      const pixel = this.pixelFrom(touch.clientX, touch.clientY, event.target);
 
-      this.startPan(pixelX, pixelY);
+      this.startPan(pixel.x, pixel.y);
     }
   }
 
@@ -208,11 +244,9 @@ export class ZoomPanManager {
     if (event.touches.length === 1 && this.panState.isDragging) {
       event.preventDefault();
       const touch = event.touches[0];
-      const rect = (event.target as HTMLCanvasElement).getBoundingClientRect();
-      const pixelX = touch.clientX - rect.left;
-      const pixelY = touch.clientY - rect.top;
+      const pixel = this.pixelFrom(touch.clientX, touch.clientY, event.target);
 
-      return this.updatePan(pixelX, pixelY, currentBounds);
+      return this.updatePan(pixel.x, pixel.y, currentBounds);
     }
     return null;
   }
@@ -240,11 +274,7 @@ export class ZoomPanManager {
    * @param defaultBounds - Default fractal bounds
    */
   reset(defaultBounds: FractalBounds): void {
-    this.zoomState = {
-      centerX: (defaultBounds.minReal + defaultBounds.maxReal) / 2,
-      centerY: (defaultBounds.minImaginary + defaultBounds.maxImaginary) / 2,
-      scale: 1,
-    };
+    this.zoomState = boundsToView(defaultBounds);
     this.endPan();
   }
 
