@@ -127,14 +127,30 @@ _Last updated: 2026-10-07_
 - `prettier-plugin-tailwindcss` stays on 0.6.x for the same Node reason as the
   Vite pin below: both 0.7.0 and 0.8.1 declare `engines.node >= 20.19`, and the
   gate image is Node 20.18.1. Revisit it alongside the Vite pin.
-- React 18, Tailwind 3, ESLint 9, TypeScript 5 and Vite 6 are all held at their
-  current major deliberately; each has a newer major (19, 4, 10, 7, 8) that is
-  out of scope for a dependency refresh.
+- Tailwind 3, ESLint 9, TypeScript 5 and Vite 6 are all held at their current
+  major deliberately; each has a newer major (4, 10, 7, 8) that is out of scope
+  for a dependency refresh. React is off that list as of the React 19 section
+  below.
 - `npm audit --omit=dev --audit-level=high` is clean. The remaining audit
   findings are dev-only and have no upgrade path today: `braces` and
   `micromatch` are reported as vulnerable at *every* published version, and the
   rest of the chain (chokidar, fast-glob, postcss-nested) only clears by
   moving to Tailwind 4 or waiting on upstream.
+
+### React 19 (2026-10-07)
+
+- `react`, `react-dom`, `@types/react` and `@types/react-dom` moved together to
+  19.3.0. Next.js 16 still *runs* on React 18, but prints "React 18 support is
+  deprecated in Next.js 16 and will be removed in Next.js 17" on every
+  `next build`, so React 19 is the supported target going into Next 17.
+- The switch needed no source change. React 19 drops `ReactDOM.render`,
+  `findDOMNode`, `unmountComponentAtNode`, string refs, `createFactory`, and
+  `defaultProps`/`propTypes` on function components; none are used here. The
+  four `React.FC` components (`CenterControls`, `CustomPresetManager`,
+  `PresetSelector`, `ZoomDisplay`) take no implicit `children`, so the 19 types
+  are satisfied as written.
+- `npm run build` is warning-free and `make gate` is green on the same
+  60-test Vitest suite as before.
 
 ### Vitest Test Suite (2026-10-07)
 
