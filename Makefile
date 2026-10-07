@@ -16,6 +16,7 @@ help:
 	@echo "  make lint          Run ESLint"
 	@echo "  make format        Format code with Prettier"
 	@echo "  make typecheck     Run TypeScript type checking"
+	@echo "  make test          Run the Vitest suite"
 	@echo "  make check         Run all quality checks (lint + typecheck)"
 	@echo ""
 	@echo "Docker:"
@@ -75,9 +76,9 @@ clean:
 ci-install:
 	npm ci
 
-# Placeholder until the first test bead lands; it must exit 0.
+# Vitest suite for the pure logic in src/lib and the /api/health route.
 test:
-	@echo "no tests yet"
+	npm test
 
 presubmit: check
 
