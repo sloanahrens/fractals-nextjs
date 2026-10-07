@@ -141,6 +141,13 @@ _Last updated: 2026-10-07_
 - Added Vitest (`vitest run` via the `test` npm script and the `test`
   Makefile target) covering `src/lib` and the `/api/health` route
 - The config is `vitest.config.mts` so Vitest's native loader reads it as ESM
+- `vite` is pinned to the 6.x line on purpose. The landing gate's `ci-base`
+  image ships Node 20.18.1, and Vite 8's rolldown bundler wants
+  `engines.node` `^20.19.0 || >=22.12.0`. npm drops *optional* dependencies
+  that fail their engine check, so on that image rolldown's native binding
+  was silently never installed and vitest died at startup. Vite 6 (rollup +
+  esbuild) runs on Node 20.18. Revisit the pin when `ci-base` moves past
+  Node 20.19.
 
 ### Azure Container Apps Migration (2026-01-05)
 
