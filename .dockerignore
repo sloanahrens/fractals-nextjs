@@ -1,6 +1,4 @@
-# Cloned devops repos (created during CI/CD pipeline)
-devops-cloud-run
-devops-azure-container-apps
+# Cloned devops toolchain (created by the deploy system)
 devops
 infra
 

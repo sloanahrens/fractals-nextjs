@@ -4,10 +4,8 @@ A modern, interactive web application for exploring the infinite beauty of the M
 
 ![Next Fractals Preview](public/fractal-preview.png)
 
-**Deployment Targets:**
-
-- **Azure Container Apps** - GitHub Actions + Pulumi via `devops-azure-container-apps`
-- **GCP Cloud Run** - Bitbucket Pipelines + Terraform via `devops-cloud-run`
+**Deployment:** This repo contains no deploy pipeline. Deployment is done only
+by the human through the devops system.
 
 ## Overview
 
@@ -38,12 +36,10 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 ### 🔧 DevOps & CI/CD Features
 
-- **Multi-Cloud Deployment**: Azure Container Apps (GitHub Actions) and GCP Cloud Run (Bitbucket)
-- **Branch Isolation**: Each git branch gets its own deployment URL
-- **Auto-Cleanup**: Resources destroyed when branches are deleted
 - **Containerized Deployment**: Docker-based deployment with multi-stage builds
-- **Health Endpoints**: `/health` route for container orchestration probes
-- **ESLint + TypeScript**: Code quality and type checking in CI/CD pipeline
+- **Deploy Contract**: Root `Dockerfile`, server on `$PORT` (8080), `/api/health` route for probes
+- **Quality Gate**: `make gate` runs install, lint, typecheck, build and the test suite
+- **ESLint + TypeScript**: Code quality and type checking in CI
 
 ## Technology Stack
 
@@ -116,19 +112,16 @@ The production container will be available at [http://localhost:8080](http://loc
 ## Project Structure
 
 ```
-├── .github/workflows/      # GitHub Actions CI/CD
-│   ├── deploy.yml          # Build, push, deploy to Azure
-│   └── cleanup.yml         # Destroy on branch delete
+├── .forgejo/workflows/     # Landing gate (make gate)
 ├── src/
 │   ├── app/                # Next.js App Router pages
 │   │   ├── layout.tsx      # Root layout with meta tags
 │   │   ├── page.tsx        # Main fractal viewer page
 │   │   ├── globals.css     # Global styles
-│   │   └── health/route.ts # Health check endpoint
+│   │   └── api/health/route.ts # Health check endpoint
 │   ├── components/ui/      # Reusable UI components
 │   ├── lib/                # Core logic and utilities
 │   └── types/              # TypeScript type definitions
-├── bitbucket-pipelines.yml # Bitbucket CI/CD for GCP
 ├── Dockerfile              # Multi-stage container build
 └── public/                 # Static assets
 ```
@@ -167,19 +160,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Deployment
 
-### Azure Container Apps (GitHub Actions)
-
-The project uses GitHub Actions for Azure deployment. Every push triggers:
-
-1. **Build and Test**: Runs `npm ci`, `npm run build`, `npm run lint`, and TypeScript compilation
-2. **Deploy**: Clones `devops-azure-container-apps`, builds image, pushes to ACR, deploys via Pulumi
-3. **Cleanup**: Branch deletion triggers automatic resource destruction
-
-See [CLAUDE.md](CLAUDE.md) for required GitHub secrets and variables.
-
-### GCP Cloud Run (Bitbucket Pipelines)
-
-Alternative deployment via Bitbucket Pipelines to GCP Cloud Run using `devops-cloud-run` toolchain.
+This repo does not deploy itself. Deployment is done only by the human, through
+the devops system; there is no CI/CD pipeline in this repo and no cloud
+credentials here. The image contract the deploy system relies on is a root
+`Dockerfile`, a server that listens on `$PORT` (8080), the `/api/health` route,
+and no baked secrets.
 
 ### Local Docker
 
