@@ -11,6 +11,6 @@ export default defineConfig({
     // The suite covers pure math and the health route, so Node is enough:
     // no browser, no canvas package, no network.
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });
