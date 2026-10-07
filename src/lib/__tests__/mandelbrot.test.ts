@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  boundsToView,
   calculateZoomBounds,
   complexToPixel,
   getDefaultBounds,
@@ -131,5 +132,26 @@ describe("calculateZoomBounds", () => {
     expect(bounds.maxImaginary - bounds.minImaginary).toBeCloseTo(1.25, 12);
     expect((bounds.minReal + bounds.maxReal) / 2).toBeCloseTo(-0.75, 12);
     expect((bounds.minImaginary + bounds.maxImaginary) / 2).toBeCloseTo(0.25, 12);
+  });
+});
+
+describe("boundsToView", () => {
+  it("reads the centre and zoom back out of the default bounds", () => {
+    expect(boundsToView(BOUNDS)).toEqual({
+      centerX: -0.75,
+      centerY: 0,
+      scale: 1,
+    });
+  });
+
+  it("is the inverse of calculateZoomBounds", () => {
+    for (const zoomLevel of [0.5, 1, 2, 1000]) {
+      const view = boundsToView(calculateZoomBounds(-0.5, 0.25, zoomLevel));
+      expect(view.centerX).toBeCloseTo(-0.5, 12);
+      expect(view.centerY).toBeCloseTo(0.25, 12);
+      // Deep zooms divide a small span back out, so the round trip is only
+      // accurate to within a few units in the last place.
+      expect(view.scale).toBeCloseTo(zoomLevel, 9);
+    }
   });
 });

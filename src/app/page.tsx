@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { FractalRenderer } from "../lib/fractalRenderer";
-import { calculateZoomBounds } from "../lib/mandelbrot";
+import { calculateZoomBounds, boundsToView } from "../lib/mandelbrot";
+import { ZoomPanManager } from "../lib/zoomPan";
+import { attachCanvasNavigation } from "../lib/canvasNavigation";
 import { FractalConfig, FractalBounds, ColorScheme } from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
 import { FractalPreset } from "../lib/presets";
@@ -14,6 +16,10 @@ import { PresetSelector } from "../components/ui/PresetSelector";
 import { ZoomDisplay } from "../components/ui/ZoomDisplay";
 import { CenterControls } from "../components/ui/CenterControls";
 import { CustomPresetManager } from "../components/ui/CustomPresetManager";
+
+// The zoom level runs from the full view to the deepest zoom the sliders offer
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 10000;
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -87,6 +93,37 @@ export default function Home() {
     renderFractal();
   }, [canvasWidth, canvasHeight, renderFractal]);
 
+  // Wheel, drag and touch navigation on the canvas. The listeners are attached
+  // once and read the live bounds through a ref, so a drag keeps working while
+  // the view it drives re-renders.
+  const boundsRef = useRef(bounds);
+  useEffect(() => {
+    boundsRef.current = bounds;
+  }, [bounds]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const manager = new ZoomPanManager(
+      canvasWidth,
+      canvasHeight,
+      boundsRef.current,
+    );
+
+    return attachCanvasNavigation(
+      canvas,
+      manager,
+      () => boundsRef.current,
+      (view) => {
+        setCenterX(view.centerX);
+        setCenterY(view.centerY);
+        setZoomLevel(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.scale)));
+        setCurrentPreset("");
+      },
+    );
+  }, [canvasWidth, canvasHeight]);
+
   // Update manual coordinate inputs when bounds change from zoom/pan
   useEffect(() => {
     setManualMinReal(bounds.minReal.toString());
@@ -117,14 +154,16 @@ export default function Home() {
       minImaginary < maxImaginary
     ) {
       // Calculate center and zoom from manual bounds
-      const newCenterX = (minReal + maxReal) / 2;
-      const newCenterY = (minImaginary + maxImaginary) / 2;
-      const width = maxReal - minReal;
-      const newZoom = 3.5 / width; // 3.5 is baseWidth in calculateZoomBounds
+      const view = boundsToView({
+        minReal,
+        maxReal,
+        minImaginary,
+        maxImaginary,
+      });
 
-      setCenterX(newCenterX);
-      setCenterY(newCenterY);
-      setZoomLevel(newZoom);
+      setCenterX(view.centerX);
+      setCenterY(view.centerY);
+      setZoomLevel(view.scale);
       setCurrentPreset("");
     }
   };
@@ -141,15 +180,11 @@ export default function Home() {
   // Preset handlers
   const handlePresetSelect = (preset: FractalPreset) => {
     // Calculate center and zoom from preset bounds
-    const presetCenterX = (preset.bounds.minReal + preset.bounds.maxReal) / 2;
-    const presetCenterY =
-      (preset.bounds.minImaginary + preset.bounds.maxImaginary) / 2;
-    const presetWidth = preset.bounds.maxReal - preset.bounds.minReal;
-    const presetZoom = 3.5 / presetWidth; // 3.5 is baseWidth in calculateZoomBounds
+    const view = boundsToView(preset.bounds);
 
-    setCenterX(presetCenterX);
-    setCenterY(presetCenterY);
-    setZoomLevel(presetZoom);
+    setCenterX(view.centerX);
+    setCenterY(view.centerY);
+    setZoomLevel(view.scale);
     setMaxIterations(preset.maxIterations);
     setColorScheme(preset.colorScheme);
     setCanvasWidth(preset.canvasWidth);
@@ -186,7 +221,7 @@ export default function Home() {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4">Mandelbrot Set Explorer</h1>
           <p className="text-lg text-gray-600">
-            Use the sliders to navigate the fractal
+            Scroll to zoom, drag to pan, or use the sliders
           </p>
         </div>
 
@@ -195,7 +230,7 @@ export default function Home() {
           <div className="bg-white p-4 rounded-lg shadow-lg">
             <canvas
               ref={canvasRef}
-              className="border border-gray-300"
+              className="fractal-canvas border border-gray-300"
               style={{ maxWidth: "100%", height: "auto" }}
             />
 
@@ -266,8 +301,8 @@ export default function Home() {
                 <Slider
                   label="Zoom Level"
                   value={zoomLevel}
-                  min={1}
-                  max={10000}
+                  min={MIN_ZOOM}
+                  max={MAX_ZOOM}
                   step={1}
                   onChange={(value) => {
                     setZoomLevel(value);
@@ -278,16 +313,20 @@ export default function Home() {
                 />
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => setZoomLevel(Math.max(1, zoomLevel / 2))}
-                    disabled={isRendering || zoomLevel <= 1}
+                    onClick={() =>
+                      setZoomLevel(Math.max(MIN_ZOOM, zoomLevel / 2))
+                    }
+                    disabled={isRendering || zoomLevel <= MIN_ZOOM}
                     variant="secondary"
                     size="sm"
                   >
                     Zoom Out
                   </Button>
                   <Button
-                    onClick={() => setZoomLevel(Math.min(10000, zoomLevel * 2))}
-                    disabled={isRendering || zoomLevel >= 10000}
+                    onClick={() =>
+                      setZoomLevel(Math.min(MAX_ZOOM, zoomLevel * 2))
+                    }
+                    disabled={isRendering || zoomLevel >= MAX_ZOOM}
                     variant="secondary"
                     size="sm"
                   >

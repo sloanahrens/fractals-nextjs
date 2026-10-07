@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { getDefaultBounds } from "../mandelbrot";
+import { calculateZoomBounds, getDefaultBounds } from "../mandelbrot";
 import { ZoomPanManager } from "../zoomPan";
 
 const BOUNDS = getDefaultBounds();
+const DEEP_BOUNDS = calculateZoomBounds(-0.75, 0, 100);
+
+// An 800x600 canvas displayed in a 400x300 box offset by (10, 20)
+const HALF_SIZE = { left: 10, top: 20, width: 400, height: 300 };
+
+function fakeTarget(): EventTarget {
+  return {
+    getBoundingClientRect: () => HALF_SIZE,
+  } as unknown as EventTarget;
+}
 
 function createManager(): ZoomPanManager {
   return new ZoomPanManager(800, 600, BOUNDS);
@@ -151,5 +161,140 @@ describe("reset", () => {
       scale: 1,
     });
     expect(manager.isPanning()).toBe(false);
+  });
+
+  it("resets to the zoom of the bounds it is handed", () => {
+    const manager = createManager();
+    manager.zoom(100, 100, 4, BOUNDS);
+
+    manager.reset(DEEP_BOUNDS);
+
+    expect(manager.getZoomState().scale).toBeCloseTo(100, 12);
+  });
+});
+
+describe("view tracking", () => {
+  it("takes the zoom of the bounds it is built with", () => {
+    const manager = new ZoomPanManager(800, 600, DEEP_BOUNDS);
+
+    expect(manager.getZoomState().centerX).toBeCloseTo(-0.75, 12);
+    expect(manager.getZoomState().scale).toBeCloseTo(100, 12);
+  });
+
+  it("zooms from the bounds it is handed, not from the last view it saw", () => {
+    // A slider, preset or reset can move the view without going through the
+    // manager. The bounds the caller passes are what count.
+    const manager = createManager();
+    manager.zoom(400, 300, 2, BOUNDS);
+
+    const rezoomed = manager.zoom(400, 300, 1, DEEP_BOUNDS);
+
+    expect(rezoomed.maxReal - rezoomed.minReal).toBeCloseTo(3.5 / 100, 12);
+    expect(manager.getZoomState().scale).toBeCloseTo(100, 12);
+  });
+});
+
+describe("handleWheel", () => {
+  it("ignores a wheel event that carries no vertical movement", () => {
+    const manager = createManager();
+    let prevented = false;
+    const event = {
+      clientX: 400,
+      clientY: 300,
+      deltaY: 0,
+      target: fakeTarget(),
+      preventDefault: () => {
+        prevented = true;
+      },
+    } as unknown as WheelEvent;
+
+    // A horizontal trackpad swipe is a scroll, so the page keeps it.
+    expect(manager.handleWheel(event, BOUNDS)).toBeNull();
+    expect(prevented).toBe(false);
+  });
+});
+
+describe("pointer events on a canvas CSS has resized", () => {
+  it("maps a wheel position onto the canvas", () => {
+    const manager = createManager();
+    const event = {
+      clientX: 210,
+      clientY: 170,
+      deltaY: -100,
+      target: fakeTarget(),
+      preventDefault: () => {},
+    } as unknown as WheelEvent;
+
+    const zoomed = manager.handleWheel(event, BOUNDS);
+
+    // (210, 170) is the middle of the box, so it is the middle of the canvas.
+    expect((zoomed!.minReal + zoomed!.maxReal) / 2).toBeCloseTo(-0.75, 12);
+    expect((zoomed!.minImaginary + zoomed!.maxImaginary) / 2).toBeCloseTo(
+      0,
+      12,
+    );
+  });
+
+  it("maps a mouse drag onto the canvas", () => {
+    const manager = createManager();
+    const target = fakeTarget();
+
+    manager.handleMouseDown({
+      clientX: 10,
+      clientY: 20,
+      target,
+    } as unknown as MouseEvent);
+    const panned = manager.handleMouseMove(
+      { clientX: 210, clientY: 20, target } as unknown as MouseEvent,
+      BOUNDS,
+    );
+
+    // 200px across the box is half the canvas, so the view moves half a span.
+    expect(panned!.minReal).toBeCloseTo(-2.5 - (400 / 800) * 3.5, 12);
+    expect(panned!.maxReal - panned!.minReal).toBeCloseTo(3.5, 12);
+  });
+
+  it("maps a touch drag onto the canvas", () => {
+    const manager = createManager();
+    const target = fakeTarget();
+
+    manager.handleTouchStart({
+      touches: [{ clientX: 10, clientY: 20 }],
+      target,
+    } as unknown as TouchEvent);
+    const panned = manager.handleTouchMove(
+      {
+        touches: [{ clientX: 10, clientY: 170 }],
+        target,
+        preventDefault: () => {},
+      } as unknown as TouchEvent,
+      BOUNDS,
+    );
+
+    // 150px down the box is the full height of the canvas.
+    expect(panned!.minImaginary).toBeCloseTo(-1.25 - (300 / 600) * 2.5, 12);
+  });
+
+  it("ignores a two-finger move", () => {
+    const manager = createManager();
+    const target = fakeTarget();
+
+    manager.handleTouchStart({
+      touches: [{ clientX: 10, clientY: 20 }],
+      target,
+    } as unknown as TouchEvent);
+    const panned = manager.handleTouchMove(
+      {
+        touches: [
+          { clientX: 10, clientY: 170 },
+          { clientX: 20, clientY: 170 },
+        ],
+        target,
+        preventDefault: () => {},
+      } as unknown as TouchEvent,
+      BOUNDS,
+    );
+
+    expect(panned).toBeNull();
   });
 });

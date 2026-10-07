@@ -62,6 +62,8 @@
 .fractal-canvas {
   cursor: crosshair;
   image-rendering: pixelated;
+  /* Wheel and drag gestures belong to the canvas, not to page scrolling */
+  touch-action: none;
 }
 
 .fractal-canvas:active {
