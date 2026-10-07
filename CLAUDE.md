@@ -144,3 +144,10 @@ _Last updated: 2026-01-05_
 ### Potential Improvements
 
 - **Testing**: Consider adding Jest/Vitest for unit testing `mandelbrot.ts` and `colorMapping.ts` math functions
+
+## Gas Town rules (polecats and crew)
+
+- Gate: `make gate` (npm ci, lint, typecheck, build, test) must pass with no network access to any cloud and no secrets. The landing gate runs the same command.
+- You never have cloud credentials and never deploy. Do not run `gcloud`, `pulumi` or any cloud CLI, and do not add secrets, keys or tokens to the repo. Deployment is done only by the human through the devops system (see the `devops` rig's `docs/design.md`).
+- The container contract the deploy system relies on: root `Dockerfile`, the server listens on `$PORT` (8080), health route `/api/health`, no baked secrets.
+- Keep changes small and tested. Do not bump major versions beyond what your bead names.

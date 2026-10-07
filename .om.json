@@ -1,0 +1,32 @@
+{
+  "threshold": 0.6,
+  "depth": "standard",
+  "timeout": 300,
+  "rubric": [
+    {
+      "name": "correctness",
+      "weight": 3,
+      "guidance": "This is a fractal explorer: wrong math, an off-by-one in iteration or pixel mapping, a render that silently draws the wrong region, or a UI state that desyncs from the canvas outranks every other finding. Server and client boundaries in Next.js must stay correct (no browser-only APIs in server code, no server-only secrets in client code)."
+    },
+    {
+      "name": "deploy-contract",
+      "weight": 2,
+      "guidance": "The container contract the deploy system depends on must hold: a root Dockerfile, the server listens on $PORT (8080), the /api/health route returns 200 with a JSON body, and no secret or environment-specific value is baked into the image or the repo. Flag any change that breaks one of these without an explicit bead requirement."
+    },
+    {
+      "name": "tests",
+      "weight": 2,
+      "guidance": "Rendering and math logic must have tests that would fail if the logic regressed; tests must run without network or a browser. Do not accept a test edited to pass or a snapshot regenerated without explanation."
+    },
+    {
+      "name": "dependency-hygiene",
+      "weight": 1,
+      "guidance": "package.json and package-lock.json changes must be explained: which package, why, and whether it is a major bump. next stays on the 16.x line unless a bead says otherwise. An audit fix that pulls a major bump with no note is a finding."
+    },
+    {
+      "name": "no-credentials",
+      "weight": 2,
+      "guidance": "No secret, key, token or credential in the repo, tests or logs, and no code path that needs a cloud credential to build or pass its gate."
+    }
+  ]
+}

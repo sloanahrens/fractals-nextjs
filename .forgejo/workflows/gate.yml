@@ -1,0 +1,14 @@
+# The landing gate, run by the local Forgejo on the candidate branch the landing worker pushes as land/<bead>.
+# Workflow name + the single job key are the required status context "ci / gate (push)".
+# No secrets, no cloud credentials: this job must never need them.
+name: ci
+on:
+  push:
+    branches: ["land/**"]
+
+jobs:
+  gate:
+    runs-on: ci-base
+    steps:
+      - uses: actions/checkout@v4
+      - run: make gate

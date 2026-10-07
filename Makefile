@@ -68,3 +68,17 @@ clean:
 	rm -rf .next
 	rm -rf node_modules/.cache
 	@echo "Build artifacts cleaned"
+
+# ── Gas Town landing gate (no cloud access, no secrets) ──────────────────
+.PHONY: ci-install test presubmit gate
+
+ci-install:
+	npm ci
+
+# Placeholder until the first test bead lands; it must exit 0.
+test:
+	@echo "no tests yet"
+
+presubmit: check
+
+gate: ci-install check build test
