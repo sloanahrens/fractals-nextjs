@@ -21,12 +21,16 @@ export const CenterControls: React.FC<CenterControlsProps> = ({
   const [inputX, setInputX] = React.useState(center.x.toString());
   const [inputY, setInputY] = React.useState(center.y.toString());
 
-  // Update input values when bounds change (e.g., from preset selection or zoom/pan)
-  React.useEffect(() => {
-    const newCenter = calculateCenter(bounds);
-    setInputX(newCenter.x.toString());
-    setInputY(newCenter.y.toString());
-  }, [bounds]);
+  // The inputs show the current center until the user edits them, so a bounds
+  // change (preset selection, zoom/pan) resyncs them. Comparing against the
+  // render that produced them is the documented way to adjust state from a
+  // changed prop: https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [syncedBounds, setSyncedBounds] = React.useState(bounds);
+  if (syncedBounds !== bounds) {
+    setSyncedBounds(bounds);
+    setInputX(center.x.toString());
+    setInputY(center.y.toString());
+  }
 
   const handleApply = () => {
     const newX = parseFloat(inputX);

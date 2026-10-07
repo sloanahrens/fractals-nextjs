@@ -113,17 +113,37 @@ devops system, run by the human. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-07_
 
+### eslint-plugin-react-hooks 7.1.x (2026-10-07)
+
+- The `~7.0.1` pin is gone; the plugin resolves on 7.1.1. The four
+  `react-hooks/set-state-in-effect` sites are refactored rather than
+  suppressed, so the rule stays an error:
+  - `PresetSelector` and `CustomPresetManager` read the saved presets through
+    `useSyncExternalStore` instead of an effect that copied localStorage into
+    state. `src/lib/presets.ts` now owns the store half of that contract
+    (`subscribeToCustomPresets`, `getCustomPresetsSnapshot`,
+    `getServerCustomPresetsSnapshot`), and `save`/`delete` notify it. The
+    snapshot is keyed on the stored string so its identity is stable between
+    changes — a fresh array per call would loop the hook — and it is frozen,
+    because one array serves as both the client cache and the server
+    snapshot.
+  - `CenterControls` and the page's manual coordinate inputs adjust their
+    state during the render that sees new bounds, comparing against the bounds
+    they were last synced from. The effect that did this ran after commit, so
+    the inputs could paint one stale frame; the render-phase version cannot.
+- `getCustomPresets()` still reads storage afresh on every call, so callers may
+  keep mutating the list it returns.
+
 ### Dependency Refresh (2026-10-07)
 
 - `next` and `eslint-config-next` moved to 16.4.0; every other package was
   refreshed to the newest release its existing major allows (eslint 9.39.5,
   typescript 5.9.3, tailwindcss 3.4.19, typescript-eslint 8.71.1, prettier
   3.9.9, and the `@types/*` packages)
-- `eslint-plugin-react-hooks` is pinned to `~7.0.1` on purpose. 7.1.1 turns its
-  new `react-hooks/set-state-in-effect` analysis loose on four pre-existing
-  components (`CenterControls`, `CustomPresetManager`, `PresetSelector`, and
-  the page's bounds sync), which the gate runs as errors. Adopting 7.1.x means
-  refactoring those effects, not a version bump — do that in its own change.
+- `eslint-plugin-react-hooks` was pinned to `~7.0.1` here, because 7.1.1 turns
+  its new `react-hooks/set-state-in-effect` analysis loose on four pre-existing
+  components. Those four are refactored and the pin is gone as of the section
+  below.
 - `prettier-plugin-tailwindcss` stays on 0.6.x for the same Node reason as the
   Vite pin below: both 0.7.0 and 0.8.1 declare `engines.node >= 20.19`, and the
   gate image is Node 20.18.1. Revisit it alongside the Vite pin.

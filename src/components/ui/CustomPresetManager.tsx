@@ -5,8 +5,10 @@ import { FractalBounds, ColorScheme } from "../../types/fractal";
 import {
   FractalPreset,
   saveCustomPreset,
-  getCustomPresets,
   deleteCustomPreset,
+  getCustomPresetsSnapshot,
+  getServerCustomPresetsSnapshot,
+  subscribeToCustomPresets,
 } from "../../lib/presets";
 import { Button } from "./Button";
 import { Input } from "./Input";
@@ -33,16 +35,13 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
   const [showSaveDialog, setShowSaveDialog] = React.useState(false);
   const [presetName, setPresetName] = React.useState("");
   const [presetDescription, setPresetDescription] = React.useState("");
-  const [customPresets, setCustomPresets] = React.useState<FractalPreset[]>([]);
-
-  const loadCustomPresets = React.useCallback(() => {
-    const presets = getCustomPresets();
-    setCustomPresets(presets);
-  }, []);
-
-  React.useEffect(() => {
-    loadCustomPresets();
-  }, [loadCustomPresets]);
+  // Saved presets come straight from localStorage. Saving or deleting writes
+  // the store, which notifies this subscription and re-renders with the new list.
+  const customPresets = React.useSyncExternalStore(
+    subscribeToCustomPresets,
+    getCustomPresetsSnapshot,
+    getServerCustomPresetsSnapshot,
+  );
 
   const handleSavePreset = () => {
     if (!presetName.trim()) {
@@ -63,7 +62,6 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
 
     try {
       saveCustomPreset(preset);
-      loadCustomPresets();
       onPresetsChange();
       setShowSaveDialog(false);
       setPresetName("");
@@ -78,7 +76,6 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
     if (confirm("Are you sure you want to delete this preset?")) {
       try {
         deleteCustomPreset(id);
-        loadCustomPresets();
         onPresetsChange();
       } catch (error) {
         console.error("Error deleting preset:", error);
