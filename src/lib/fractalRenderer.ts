@@ -59,8 +59,10 @@ export class FractalRenderer {
     const totalPixels = width * height;
     let processedPixels = 0;
 
-    // Render in chunks to avoid blocking the UI
-    const chunkSize = Math.min(1000, Math.floor(totalPixels / 100));
+    // Render in chunks to avoid blocking the UI. The floor keeps canvases
+    // under 10000 pixels (where totalPixels / 100 rounds to 0) from wedging
+    // the row loop on a zero-sized step.
+    const chunkSize = Math.max(1, Math.min(1000, Math.floor(totalPixels / 100)));
 
     for (let y = 0; y < height && !this.shouldCancel; y++) {
       const rowPromises: Promise<RenderPoint[]>[] = [];
