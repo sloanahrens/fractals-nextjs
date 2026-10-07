@@ -21,6 +21,9 @@ npm run format
 # TypeScript compilation check
 npx tsc --noEmit
 
+# Unit tests (Vitest, node environment, no browser or network)
+npm test
+
 # Docker commands for testing CI/CD locally
 docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm run build && npm run lint && npx tsc --noEmit"
 
@@ -76,7 +79,12 @@ The application uses Next.js with these key settings:
 
 ## Testing and Quality
 
-Currently uses ESLint for code quality. The CI pipeline runs:
+ESLint for code quality and Vitest for unit tests. Tests live in
+`src/**/__tests__/*.test.ts` and cover the pure logic in `src/lib` plus the
+`/api/health` route; `vitest.config.mts` aliases `@/*` to `src/*` and pins the
+node environment, so a test must not need a browser, canvas or network.
+
+The CI pipeline runs:
 
 ```bash
 npm ci
@@ -126,7 +134,20 @@ Uses [devops-pulumi-ts](https://github.com/sloanahrens/devops-pulumi-ts) infrast
 
 ## Version Notes
 
-_Last updated: 2026-01-05_
+_Last updated: 2026-10-07_
+
+### Vitest Test Suite (2026-10-07)
+
+- Added Vitest (`vitest run` via the `test` npm script and the `test`
+  Makefile target) covering `src/lib` and the `/api/health` route
+- The config is `vitest.config.mts` so Vitest's native loader reads it as ESM
+- `vite` is pinned to the 6.x line on purpose. The landing gate's `ci-base`
+  image ships Node 20.18.1, and Vite 8's rolldown bundler wants
+  `engines.node` `^20.19.0 || >=22.12.0`. npm drops *optional* dependencies
+  that fail their engine check, so on that image rolldown's native binding
+  was silently never installed and vitest died at startup. Vite 6 (rollup +
+  esbuild) runs on Node 20.18. Revisit the pin when `ci-base` moves past
+  Node 20.19.
 
 ### Azure Container Apps Migration (2026-01-05)
 
@@ -143,7 +164,8 @@ _Last updated: 2026-01-05_
 
 ### Potential Improvements
 
-- **Testing**: Consider adding Jest/Vitest for unit testing `mandelbrot.ts` and `colorMapping.ts` math functions
+- **Testing**: UI components (`src/components/ui`) still have no tests; the
+  suite covers only the pure logic in `src/lib` and the health route
 
 ## Gas Town rules (polecats and crew)
 
