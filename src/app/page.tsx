@@ -41,6 +41,7 @@ import {
 } from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
 import { FractalPreset, formatZoom } from "../lib/presets";
+import { downloadFileName } from "../lib/download";
 import { Slider } from "../components/ui/Slider";
 import { Checkbox } from "../components/ui/Checkbox";
 import { Select } from "../components/ui/Select";
@@ -340,6 +341,32 @@ export default function Home() {
     setCurrentPreset("");
   };
 
+  // Save what is on the canvas. The canvas holds the render at its full pixel
+  // size, so this is the image the user is looking at rather than a screenshot
+  // of the page around it.
+  const handleDownload = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    canvas.toBlob((blob) => {
+      // A canvas can decline to produce an image. There is nothing to save
+      // then, and the page carries on as before.
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = downloadFileName(centerX, centerY, zoomLevel);
+      // Firefox only follows a click on an anchor that is in the document.
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // The browser reads the blob off the URL as the download starts, so
+      // releasing it in this same tick can cancel the save before it begins.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }, "image/png");
+  }, [centerX, centerY, zoomLevel]);
+
   // Preset handlers
   const handlePresetSelect = (preset: FractalPreset) => {
     // Calculate center and zoom from preset bounds
@@ -425,10 +452,14 @@ export default function Home() {
             )}
 
             <div className="mt-4 text-center">
-              <p className="text-xs text-gray-500">
-                <strong>Take a screenshot:</strong> macOS: Cmd+Shift+4 •
-                Windows: Win+Shift+S • Linux: Print Screen
-              </p>
+              <Button
+                onClick={handleDownload}
+                disabled={isRendering}
+                variant="secondary"
+                size="sm"
+              >
+                Download PNG
+              </Button>
             </div>
           </div>
 
