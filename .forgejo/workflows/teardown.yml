@@ -70,6 +70,8 @@ env:
   # The app name is the repository name (pkg/appdeploy Spec.Name), as in
   # deploy.yml; set GT_APP explicitly if the repository is not named after it.
   GT_APP: ${{ github.event.repository.name }}
+  # The cloud project the app lives in (not the Pulumi project name).
+  GT_PROJECT: gt-fractals
   GT_STACK_DIR: deploy
   # The base key, as a path: the deploy runner mounts it mode 600 inside a home
   # only gt-cloud can read (bead B5.4).
