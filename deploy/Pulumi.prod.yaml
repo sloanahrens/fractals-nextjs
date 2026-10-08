@@ -5,7 +5,7 @@
 config:
   fractals:name: fractals-nextjs
   fractals:env: prod
-  fractals:project: gt-fractals
+  fractals:project: gt-fractals-m4xq
   fractals:region: us-central1
   fractals:port: "8080"
   fractals:healthPath: /api/health

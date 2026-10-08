@@ -118,6 +118,22 @@ the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-08_
 
+### GCP project id (2026-10-08)
+
+- The cloud project this app deploys into was `gt-fractals`; it is now
+  `gt-fractals-m4xq` in every place this repository names it — the
+  `fractals:project` key in both stack files, `GT_PROJECT` in both release
+  workflows, and the constants and fakes the tests assert against. A project id
+  is global, and the old one may be taken, so the human chose the new name.
+- The project is created and bootstrapped outside this repository, by the
+  reviewed manifest in the devops repo, so that manifest has to name the new id
+  too (its own bead). Nothing here deploys: the rename changes what a future
+  release targets, not a running service.
+- The service account emails embed the project id, so the runtime account moves
+  with it: `runtime-fractals-nextjs@gt-fractals-m4xq.iam.gserviceaccount.com`.
+  The app name `fractals-nextjs`, the Pulumi project `fractals`, the stack names
+  and the image path layout are unchanged.
+
 ### Deploy program (2026-10-08)
 
 - Added `deploy/`, the Go Pulumi program that deploys this app to Cloud Run

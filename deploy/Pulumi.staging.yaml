@@ -14,7 +14,7 @@ config:
   fractals:env: staging
   # The GCP project the reviewed manifest (devops manifests/fractals.yaml)
   # creates and bootstraps.
-  fractals:project: gt-fractals
+  fractals:project: gt-fractals-m4xq
   fractals:region: us-central1
   # The port the container listens on, and the health path it is probed at:
   # both are the container contract (CLAUDE.md), and the path is the one the
