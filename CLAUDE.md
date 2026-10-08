@@ -124,6 +124,24 @@ the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-08_
 
+### Log-scale zoom slider (2026-10-08)
+
+- The Zoom Level slider is logarithmic: its position `t` in 0..1 maps to
+  `MIN_ZOOM * 10^(4t)`, so equal steps are equal zoom *ratios* and the middle of
+  the travel is 100x. Run linearly to 10000x, the whole 1x-100x range sat in the
+  first percent of the track. `src/lib/zoomScale.ts` owns that mapping
+  (`sliderToZoom`, `zoomToSlider`, spanning `MIN_ZOOM`/`MAX_ZOOM` from
+  `mandelbrot.ts`).
+- `Slider` stays generic: the page hands it the mapped position with `min={0}`
+  and `max={1}`, so the slider's `formatValue` receives a *position* and has to
+  map it back through `sliderToZoom` before formatting. Only the slider's
+  position is mapped — Zoom In/Out and the typed coordinate path stay exact.
+- Coordinate boxes hold only what the user typed (a `draft` in `page.tsx` and
+  `CenterControls`). An untouched box shows `formatCoordinate` of the view — at
+  most six significant digits, trailing zeros dropped — while Apply reuses the
+  view's own float64, so a short display costs no precision. `ZoomDisplay` reads
+  its coordinates through the same helper.
+
 ### One base view for zoom (2026-10-08)
 
 - `mandelbrot.ts` is the one definition of what zoom 1 is: `BASE_WIDTH` x

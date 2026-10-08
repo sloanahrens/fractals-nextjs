@@ -3,6 +3,7 @@
 import React from "react";
 import { FractalBounds } from "../../types/fractal";
 import { calculateCenter } from "../../lib/presets";
+import { formatCoordinate } from "../../lib/zoomScale";
 import { Input } from "./Input";
 import { Button } from "./Button";
 
@@ -12,14 +13,20 @@ interface CenterControlsProps {
   className?: string;
 }
 
+/** A field exists only once the user has typed in it; while it is absent the
+ * box shows the current center. */
+type CenterDraft = { x?: string; y?: string };
+
 export const CenterControls: React.FC<CenterControlsProps> = ({
   bounds,
   onCenterChange,
   className = "",
 }) => {
   const center = calculateCenter(bounds);
-  const [inputX, setInputX] = React.useState(center.x.toString());
-  const [inputY, setInputY] = React.useState(center.y.toString());
+  // Only typed text lives here. Boxes the user has not touched read straight
+  // off the view, which is what lets Apply reuse the full-precision center
+  // while the text on screen stays down to six significant digits.
+  const [draft, setDraft] = React.useState<CenterDraft>({});
 
   // The inputs show the current center until the user edits them, so a bounds
   // change (preset selection, zoom/pan) resyncs them. Comparing against the
@@ -28,13 +35,12 @@ export const CenterControls: React.FC<CenterControlsProps> = ({
   const [syncedBounds, setSyncedBounds] = React.useState(bounds);
   if (syncedBounds !== bounds) {
     setSyncedBounds(bounds);
-    setInputX(center.x.toString());
-    setInputY(center.y.toString());
+    setDraft({});
   }
 
   const handleApply = () => {
-    const newX = parseFloat(inputX);
-    const newY = parseFloat(inputY);
+    const newX = draft.x === undefined ? center.x : parseFloat(draft.x);
+    const newY = draft.y === undefined ? center.y : parseFloat(draft.y);
 
     if (!isNaN(newX) && !isNaN(newY)) {
       onCenterChange(newX, newY);
@@ -50,8 +56,7 @@ export const CenterControls: React.FC<CenterControlsProps> = ({
   const handleReset = () => {
     const defaultX = -0.75;
     const defaultY = 0;
-    setInputX(defaultX.toString());
-    setInputY(defaultY.toString());
+    setDraft({});
     onCenterChange(defaultX, defaultY);
   };
 
@@ -64,15 +69,15 @@ export const CenterControls: React.FC<CenterControlsProps> = ({
       <div className="grid grid-cols-2 gap-2">
         <Input
           label="Real (X)"
-          value={inputX}
+          value={draft.x ?? formatCoordinate(center.x)}
           type="number"
-          onChange={setInputX}
+          onChange={(value) => setDraft((d) => ({ ...d, x: value }))}
         />
         <Input
           label="Imaginary (Y)"
-          value={inputY}
+          value={draft.y ?? formatCoordinate(center.y)}
           type="number"
-          onChange={setInputY}
+          onChange={(value) => setDraft((d) => ({ ...d, y: value }))}
         />
       </div>
 
