@@ -24,7 +24,7 @@ npx tsc --noEmit
 # Unit tests (Vitest, node environment, no browser or network)
 npm test
 
-# Docker commands for testing CI/CD locally
+# Run the gate's checks in a container (`make test-docker` runs this)
 docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm run build && npm run lint && npx tsc --noEmit"
 
 # Build and test production Docker image
@@ -34,7 +34,7 @@ docker run --rm -p 8080:8080 fractals-nextjs:test
 
 ## Project Architecture
 
-This is a Next.js 14 TypeScript application that renders interactive Mandelbrot set fractals using Canvas API. Key architectural decisions:
+This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set fractals using Canvas API. Key architectural decisions:
 
 ### Core Rendering System
 
@@ -62,7 +62,7 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 
 - Progressive rendering with chunked calculations to avoid UI blocking
 - Cancellable rendering operations when parameters change
-- RequestAnimationFrame for smooth updates
+- A preview pass while a gesture is in flight, with the full-resolution render deferred to its end
 - Canvas ImageData direct pixel manipulation
 
 ## Next.js Configuration
@@ -71,8 +71,8 @@ The application uses Next.js with these key settings:
 
 - `output: 'standalone'` for Docker deployment
 - `poweredByHeader: false` for security
+- `compress: true` to gzip responses
 - `reactStrictMode: true` for development checks
-- `swcMinify: true` for production optimization
 - TypeScript with strict mode enabled
 - Path aliases configured (`@/*` maps to `./src/*`)
 - Tailwind CSS with custom HSL color variables for theming
@@ -84,14 +84,20 @@ ESLint for code quality and Vitest for unit tests. Tests live in
 `/api/health` route; `vitest.config.mts` aliases `@/*` to `src/*` and pins the
 node environment, so a test must not need a browser, canvas or network.
 
-The CI pipeline runs:
+The landing gate (`.forgejo/workflows/gate.yml`) runs `make gate` on a
+`land/**` branch, and that is the whole of what CI runs here:
 
 ```bash
-npm ci
-npm run build
-npm run lint
-npx tsc --noEmit
+make gate        # ci-install → check → build → test
+                 #   ci-install = npm ci
+                 #   check      = lint (`eslint .`) + typecheck (`tsc --noEmit`)
+                 #   build      = `next build`
+                 #   test       = vitest run
 ```
+
+`make presubmit` is `make check` alone, for a quick pass without the install or
+the build. The `deploy/` program has its own target, `make deploy-check`, which
+is deliberately not part of `gate` (see the Version Notes below).
 
 ## Deployment
 
@@ -104,7 +110,7 @@ npx tsc --noEmit
 
 ### CI/CD Pipeline
 
-There is no deploy pipeline in this repo. The landing gate
+No push to this repo deploys anything. The landing gate
 (`.forgejo/workflows/gate.yml`) runs `make gate` on a `land/**` branch; it needs
 no cloud credentials. Build and deploy happen on the deploy runner, through the
 devops system, run by the human. The program that deploys the app is `deploy/`,
