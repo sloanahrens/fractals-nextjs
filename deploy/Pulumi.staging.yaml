@@ -6,6 +6,8 @@
 # The keys are namespaced with the Pulumi project name, `fractals` (Pulumi.yaml).
 # No value here is a secret: appdeploy.Spec refuses an env var whose name names
 # a secret, password, token or key, and this deployment sets none.
+secretsprovider: gcpkms://projects/gt-fractals-m4xq/locations/us-central1/keyRings/pulumi/cryptoKeys/secrets
+encryptedkey: CiQAIy+lR2nw14Zo07D988maCzmLY13NY2OD40jpor6ZqrsBcfgSSQBd6seR6HqetW/dInQ5+iih4YA+34TX7dMV7QC3SdLnVzJSxaHxN9633Pz48c3MmIidC1ZaPK1aNrTBEXH0bcUPlmN1b6bqgxg=
 config:
   # The app's name in the deploy system: the service Cloud Run runs is
   # <name>-<env>, this repository's name, which is also what the deploy
