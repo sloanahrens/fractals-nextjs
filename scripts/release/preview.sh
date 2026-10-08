@@ -8,6 +8,11 @@
 # Nothing is applied: the diff printed here is the plan up.sh will execute,
 # because up.sh runs over the same digest and the same stack (bead B5.2).
 #
+# It refuses a stack whose committed Pulumi.<env>.yaml does not name this
+# project's gcpkms secrets provider, before it touches Pulumi at all: a stack
+# without those settings falls back to a passphrase provider, and then no
+# command in this flow can open it (lib.sh, require_stack_settings).
+#
 # Usage:
 #   preview.sh --app APP --digest <registry>@sha256:<64hex> --token-file FILE
 #              [--env staging|prod] [--preview-file FILE] [--init-stack] [--dry-run]
@@ -90,6 +95,11 @@ done
 require_digest "$DIGEST" "digest"
 release_target
 PREVIEW_FILE=${PREVIEW_FILE:-preview-$STACK.diff}
+# The stack's committed settings are required before Pulumi is given anything:
+# a stack whose settings file does not name this project's secrets provider
+# cannot be previewed, and saying so here needs no credentials (lib.sh,
+# require_stack_settings).
+require_stack_settings
 pulumi_env "$TOKEN_FILE"
 
 step "Previewing $APP $ENV_NAME (stack $STACK)"

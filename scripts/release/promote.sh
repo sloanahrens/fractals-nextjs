@@ -12,6 +12,11 @@
 #
 # The environment is always prod. Promotion means prod.
 #
+# It refuses a prod stack whose committed Pulumi.prod.yaml does not name this
+# project's gcpkms secrets provider, before it touches Pulumi at all: a stack
+# without those settings falls back to a passphrase provider, and then no
+# command in this flow can open it (lib.sh, require_stack_settings).
+#
 # Usage:
 #   promote.sh <registry>@sha256:<64hex> --app APP --token-file FILE
 #              [--project gt-APP] [--staging-digest DIGEST] [--init-stack] [--dry-run]
@@ -105,6 +110,11 @@ require_digest "$DIGEST" "the digest to promote"
 # Promotion is a prod action and this script has no --env flag to say otherwise.
 ENV_NAME=prod
 release_target
+# The prod stack's committed settings are required before Pulumi is given
+# anything: a stack whose settings file does not name this project's secrets
+# provider cannot be promoted to, and saying so here needs no credentials
+# (lib.sh, require_stack_settings).
+require_stack_settings
 
 if [[ -n $STAGING_DIGEST ]]; then
   require_digest "$STAGING_DIGEST" "the staging digest"

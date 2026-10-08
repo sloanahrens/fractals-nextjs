@@ -83,6 +83,72 @@ setup() {
   refute_in_log 'passphrase'
 }
 
+# ── The committed settings the block carries (bead dv-8xi) ────────────────
+#
+# `pulumi stack init --secrets-provider` writes the stack's settings file, and
+# Pulumi documents that file as committed state. The first release of
+# 2026-10-08 lost those lines because init_stack.sh ran in a throwaway
+# checkout, so the script now prints them: a block in the log is a block the
+# operator can paste into the file they commit, which is what
+# preview.sh, up.sh and promote.sh refuse to run without
+# (tests/settings.bats).
+
+@test "prints the settings block of the stack it created" {
+  # A first release: the app repo has no settings file for this stack yet, so
+  # the two lines can only come from the file Pulumi has just written.
+  local file=$STACK_DIR/Pulumi.staging.yaml
+  rm -f "$file"
+
+  run "$RELEASE_DIR/init_stack.sh" --app "$APP" --project "$PROJECT" \
+    --env staging --token-file "$TOKEN_FILE"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"created=yes"* ]]
+
+  local provider key block expected
+  provider=$(grep -m1 '^secretsprovider:' "$file")
+  key=$(grep -m1 '^encryptedkey:' "$file")
+  # The stack must have been created with this project's own key, which is what
+  # the block is then telling the operator to commit.
+  [ "$provider" = "secretsprovider: $(secrets_provider_url)" ]
+
+  # The block holds the file's own two lines, in the file's order, between the
+  # markers naming the environment: it can be pasted in without reordering.
+  block=$(printf '%s\n' "$output" | sed -n '/^settings-begin staging$/,/^settings-end staging$/p')
+  expected="settings-begin staging
+$provider
+$key
+settings-end staging"
+  [ "$block" = "$expected" ]
+
+  # And it says what the two lines are for.
+  [[ $output == *"commit these two lines"* ]]
+  [[ $output == *"$file"* ]]
+}
+
+@test "prints the prod block for the prod stack" {
+  run "$RELEASE_DIR/init_stack.sh" --app "$APP" --project "$PROJECT" \
+    --env prod --token-file "$TOKEN_FILE"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"settings-begin prod"* ]]
+  [[ $output == *"settings-end prod"* ]]
+  [[ $output != *"settings-begin staging"* ]]
+}
+
+@test "a dry run prints no settings block, because it creates nothing" {
+  rm -f "$STACK_DIR/Pulumi.staging.yaml"
+
+  run "$RELEASE_DIR/init_stack.sh" --app "$APP" --project "$PROJECT" \
+    --env staging --token-file "$TOKEN_FILE" --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"created=unknown"* ]]
+  [[ $output != *"settings-begin staging"* ]]
+  [[ $output != *"settings-end staging"* ]]
+  [ ! -s "$FAKE_LOG" ]
+}
+
 @test "refuses an env that is not staging or prod" {
   run "$RELEASE_DIR/init_stack.sh" --app "$APP" --env preview --token-file "$TOKEN_FILE"
 

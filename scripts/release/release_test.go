@@ -32,7 +32,8 @@ var forbidden = []string{"/Users/" + "sloan", "claude-" + "501"}
 
 // commands are every script in this directory that is a command, in the order a
 // first release uses them: the one-time stack creation init_stack.sh (bead
-// dv-dw4), then the six steps of the flow.
+// dv-dw4), then the six steps of the flow, and staged_digest.sh, the read the
+// prod job makes of the staging stack before it promotes (bead dv-yf4).
 var commands = []string{
 	"init_stack.sh",
 	"build_push.sh",
@@ -40,6 +41,7 @@ var commands = []string{
 	"preview.sh",
 	"up.sh",
 	"promote.sh",
+	"staged_digest.sh",
 	"health.sh",
 }
 

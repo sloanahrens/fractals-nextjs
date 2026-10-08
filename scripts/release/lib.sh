@@ -435,6 +435,53 @@ pulumi_env() {
 # Pulumi stacks
 # ──────────────────────────────────────────────────────────────────────────
 
+# require_stack_settings refuses to continue unless the stack's committed
+# settings file says the stack's secrets are encrypted with this project's own
+# key. Call it after release_target (it reads STACK, STACK_DIR and PROJECT) and
+# before pulumi_env: it reads one file and needs no credentials, so a stack
+# whose settings cannot work is refused before anything is minted or built.
+#
+# `pulumi stack init --secrets-provider gcpkms://...` records two lines in
+# <stack-dir>/Pulumi.<stack>.yaml -- secretsprovider and encryptedkey -- and
+# Pulumi documents that file as committed state. A checkout that does not have
+# them falls back to the passphrase provider, and every pulumi command then
+# fails with "passphrase must be set with PULUMI_CONFIG_PASSPHRASE". That is
+# what the pre-release rehearsal of 2026-10-08 hit: init_stack.sh ran in a
+# throwaway checkout, so the lines it printed went with the checkout and the
+# file the app repo commits never got them.
+#
+# Two refusals, because they need different fixes: a file with no
+# secretsprovider line at all, and one that names some other project's key. The
+# second is not pedantry -- a stack file copied from another app's stack is a
+# stack whose secrets this release cannot read, and the release would fail
+# later, once a stack had already been touched.
+#
+# Only the secretsprovider line is read from the file, and only its value --
+# the provider URL -- is ever printed. encryptedkey is the stack's secrets key
+# in encrypted form; this check has no use for it, so it is not read, compared
+# or printed. init_stack.sh is the one place that prints it, for the operator to
+# commit (see there).
+require_stack_settings() {
+  local file=$STACK_DIR/Pulumi.$STACK.yaml want got
+  want=$(secrets_provider)
+
+  [[ -f $file ]] ||
+    die "$file does not exist: the stack's settings file is committed state, and without it Pulumi falls back to a passphrase provider (every pulumi command then fails with \"passphrase must be set with PULUMI_CONFIG_PASSPHRASE\"). Create the $STACK stack with scripts/release/init_stack.sh --app $APP --env $ENV_NAME and commit the settings-begin/settings-end block it prints into $file"
+  [[ -r $file ]] || die "$file is not readable by $(id -un)"
+
+  # grep only: one line out of the file, and nothing else in it is read. The
+  # value is the text after the key's colon, with the line's whitespace removed.
+  got=$(grep -m1 '^secretsprovider:' "$file" 2>/dev/null || true)
+  got=${got#*:}
+  got=${got//[[:space:]]/}
+
+  [[ -n $got ]] ||
+    die "$file has no secretsprovider: line, so Pulumi would use a passphrase provider and every pulumi command would fail with \"passphrase must be set with PULUMI_CONFIG_PASSPHRASE\". Create the $STACK stack with scripts/release/init_stack.sh --app $APP --env $ENV_NAME and commit the settings-begin/settings-end block it prints into $file"
+
+  [[ $got == "$want" ]] ||
+    die "$file names a different secrets provider than this project's: $got (want $want). A stack whose secrets are encrypted with another project's KMS key -- or with a passphrase -- is one this release cannot open. Run scripts/release/init_stack.sh --app $APP --env $ENV_NAME in a checkout of this app and commit the settings-begin/settings-end block it prints into $file"
+}
+
 # set_digest_config pins the released digest in the stack's config. The app's
 # Pulumi program reads it as `imageDigest` (examples/app/main.go), so this one
 # value is all a release changes; name, env, project, region, port and

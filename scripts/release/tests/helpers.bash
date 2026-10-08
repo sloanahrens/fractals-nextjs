@@ -12,6 +12,8 @@
 #   base-key.json  a key file containing a marker string that must never
 #                  appear in any output, log or command line
 #   token          the token mint_token.sh would have written
+#   stack/         the Pulumi project directory, holding the Pulumi.<env>.yaml
+#                  settings file an app repo commits for each stack
 #
 # The scripts under test are always invoked through $RELEASE_DIR, never
 # relative to the caller's working directory.
@@ -91,6 +93,38 @@ setup_release_env() {
   # APP/PROJECT names, so that a stray variable in a runner cannot change what a
   # release deploys. The tests set the GT_* spellings for the scripts.
   export GT_APP="$APP" GT_PROJECT="$PROJECT"
+
+  # The app repo commits a settings file per stack — deploy/Pulumi.<env>.yaml —
+  # which is where `pulumi stack init --secrets-provider` records the stack's
+  # secretsprovider and encryptedkey lines (workflows/README.md, "What an app
+  # repo needs before its first release"). preview.sh, up.sh and promote.sh
+  # refuse a stack whose committed file does not name this project's provider
+  # (bead dv-8xi), so the stand-in project directory has to look like the
+  # checkout a release runs in. A test about that refusal deletes or rewrites
+  # one of these.
+  write_stack_settings staging
+  write_stack_settings prod
+}
+
+# FAKE_PULUMI_ENCRYPTED_KEY stands in for the stack's encrypted secrets key,
+# which is committed with the settings file. It is exported so the fake's
+# `stack init` writes the same value as the fixture; real keys are base64 and
+# are not secrets.
+: "${FAKE_PULUMI_ENCRYPTED_KEY:=AAABfakeEncryptedStackKey-0123456789abcdef}"
+export FAKE_PULUMI_ENCRYPTED_KEY
+
+# write_stack_settings ENV [PROVIDER] writes the settings file the app repo
+# commits for one stack into $STACK_DIR: the two lines Pulumi writes, with the
+# given secrets provider URL (this project's own by default). A test passes
+# another project's URL to write the file a copied stack would have.
+write_stack_settings() {
+  local env_name=$1 provider=${2:-$(secrets_provider_url)}
+  {
+    printf 'config:\n'
+    printf '  gcp:project: %s\n' "$PROJECT"
+    printf 'encryptedkey: %s\n' "$FAKE_PULUMI_ENCRYPTED_KEY"
+    printf 'secretsprovider: %s\n' "$provider"
+  } >"$STACK_DIR/Pulumi.$env_name.yaml"
 }
 
 # field OUTPUT KEY prints the value of the last `KEY=value` line in OUTPUT.

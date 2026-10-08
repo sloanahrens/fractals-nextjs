@@ -14,6 +14,7 @@ a Forgejo job running as `gt-cloud` (bead B5.4) and are wired together by
 | `up.sh` | 5 | Applies the previewed digest; prints the service URL |
 | `health.sh` | 5 | Polls the declared health path on that URL; fails the job if it never answers |
 | `promote.sh` | 6 | Deploys the staging digest to prod, refusing anything that is not a digest |
+| `staged_digest.sh` | 6 | Reads the image a stack is running out of `pulumi stack export`, which is what prod checks its promotion against |
 | `init_stack.sh` | — | Creates an app's stack for one environment, with the project's `gcpkms` secrets provider; idempotent |
 | `lib.sh` | — | The names and rules every script shares; sourced, never run |
 
@@ -25,6 +26,39 @@ it created the stack or found it already there. Under `--dry-run` it prints
 backend, so it cannot know. `up.sh --init-stack` creates a stack the same way
 (same `--secrets-provider`), so a release that has to create its own stack gets
 one encrypted like every other.
+
+When it creates a stack, `init_stack.sh` also prints the two lines Pulumi has
+just written into the stack's settings file — `secretsprovider` and
+`encryptedkey` — between `settings-begin <env>` and `settings-end <env>`
+markers. **Those two lines are committed state.** `pulumi stack init
+--secrets-provider gcpkms://...` records them in `<stack-dir>/Pulumi.<env>.yaml`,
+the app repo commits that file, and `preview.sh`, `up.sh` and `promote.sh`
+refuse a stack whose committed copy does not name the target project's own
+provider — before any Pulumi call, so the refusal needs no credentials and a
+`--dry-run` reaches it too. A checkout without the lines falls back to Pulumi's
+passphrase provider, and every command in the flow then fails with `passphrase
+must be set with PULUMI_CONFIG_PASSPHRASE`. That is what the first release's
+rehearsal of 2026-10-08 hit, running `init_stack.sh` in a throwaway checkout:
+the lines went with the checkout instead of into the file. So print them, and
+commit them. The refusal names the file it read; the fix is always to run
+`init_stack.sh` for the app and env and commit the block it prints.
+
+`staged_digest.sh` is the read the prod job makes before it promotes. It is
+a separate script because the digest has to come from the stack's *state* and
+not its config: the staging job pins the released digest with
+`pulumi config set imageDigest`, which writes `Pulumi.<stack>.yaml` in that
+job's own checkout — a workspace no other job shares, and one nothing commits —
+so the first real release (fractals-nextjs, 2026-10-08) failed in prod with
+`configuration key 'imageDigest' not found for stack 'staging'`. State lives in
+the backend every job of a release can read, and the Cloud Run service the stack
+applied records the image it is running at
+`.outputs.template.containers[0].image` in the JSON `pulumi stack export`
+prints. The script prints `digest=` for that one image, selected by resource
+type because an export holds every resource the program created and more than
+one of them carries an `image` key, and refuses a stack whose export holds no
+service, more than one, or an image that is a tag: an empty or tag-shaped read
+would leave `promote.sh` with nothing to compare against. It never reads the
+export with `--show-secrets`.
 
 The run summary (step 7) is the workflow's job: it records the tag, commit and
 digest from the outputs below.
@@ -40,7 +74,9 @@ workflow can pass whatever is convenient. `--help` prints the full list.
 | `token_file=`, `deployer_sa=` | `mint_token.sh` | `preview.sh`, `up.sh`, `promote.sh` |
 | `preview_file=`, `stack=` | `preview.sh` | the run record's preview attachment |
 | `stack=`, `created=` | `init_stack.sh` | the operator creating the stacks for a first release |
+| the `settings-begin`/`settings-end` block | `init_stack.sh` | the operator, who commits it into `Pulumi.<env>.yaml` |
 | `url=` | `up.sh`, `promote.sh` | `health.sh` |
+| `digest=` (the image the stack is running) | `staged_digest.sh` | the prod job's `--staging-digest` check |
 
 Names are derived from `--app`, `--env`, `--project` and `--region` in one place
 (`release_target` in `lib.sh`), and they follow what bootstrap creates:
@@ -99,7 +135,19 @@ built from one — and it builds the file. The deploy image installs it
   `build_push.sh` printed is the release identity from step 2 onwards.
 - **Never a rebuild for prod.** `promote.sh` deploys the digest it is given, and
   refuses one that differs from `--staging-digest`. Prod gets the image staging
-  proved.
+  proved, and `staged_digest.sh` reads that digest out of the stack's own state
+  rather than out of a config file only the job that wrote it has.
+- **Never a digest read out of a job's workspace.** `staged_digest.sh` reads the
+  image a stack is running out of `pulumi stack export`, from the state backend,
+  not with `pulumi config get imageDigest` — a stack's config is `pulumi config
+  set`'s file in the checkout that ran it, and a fresh checkout has no such key
+  (bead dv-yf4).
+- **Never a stack without its committed settings.** `preview.sh`, `up.sh` and
+  `promote.sh` refuse a `Pulumi.<env>.yaml` with no `secretsprovider` line, or
+  one that names another project's key or the passphrase default, before any
+  Pulumi call and before any credential is read (`lib.sh`,
+  `require_stack_settings`). A stack whose settings are not in the repo is a
+  stack no fresh checkout can open.
 - **Never a secret on a command line.** The base key reaches gcloud through
   `CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE` (a path, not key material), the
   minted token reaches the Pulumi provider through `GOOGLE_OAUTH_ACCESS_TOKEN`,
@@ -170,3 +218,26 @@ Bead dv-dw4, the credentials Pulumi's own calls need, is the rest:
   release creates itself gets the same secrets provider" — both creation paths
   pass the provider URL `secrets_provider_url` computes and neither passes a
   passphrase.
+
+Bead dv-8xi, the committed stack settings, is the last:
+
+- `settings.bats`: the answers a `Pulumi.<env>.yaml` can give, refused by all
+  three of `preview.sh`, `up.sh` and `promote.sh` before any Pulumi call — the
+  file is not there, it has no `secretsprovider` line, it names another
+  project's key, it records the passphrase default — and then this project's own
+  provider, which runs. A dry run refuses exactly what a real run refuses, and
+  no refusal prints the file's `encryptedkey`.
+- `init_stack.bats`: "prints the settings block of the stack it created", which
+  compares the block line for line with the file Pulumi wrote, and "a dry run
+  prints no settings block, because it creates nothing".
+
+Bead dv-yf4, the digest the prod job reads back, is the last:
+
+- `staged_digest.bats`: "prints the digest of the one Cloud Run service, not
+  another resource's image" — the fake's export carries a registry resource with
+  a tag-shaped `image` key of its own, so a reader that picked by key rather than
+  by resource type fails loudly instead of printing the wrong thing — then the
+  refusals, each with an empty stdout because stdout is what the workflow appends
+  to `$GITHUB_OUTPUT`: no service, two services, an image that is a tag, a
+  service that records no image, a failed export, and a stack whose committed
+  settings lack this project's provider.

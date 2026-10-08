@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # Fake pulumi for the release script tests (bead B5.2). It records every call,
-# prints a plausible preview diff and a plausible up summary, and answers
-# `stack output url` with the service URL. No stack, no state backend and no
-# provider is involved.
+# prints a plausible preview diff and a plausible up summary, answers
+# `stack output url` with the service URL, and answers `stack export` with a
+# deployment holding the Cloud Run service a released stack holds. No stack, no
+# state backend and no provider is involved.
 #
 # It records whether the Pulumi provider would have had a token and whether
 # Pulumi's own calls would have had Application Default Credentials, and never
@@ -12,17 +13,140 @@
 # the token in the environment, the ADC file as a path, mode 600.
 #
 # Fake-specific environment:
-#   FAKE_LOG            where invocations are recorded (default /dev/null)
-#   FAKE_SERVICE_URL    the URL `stack output url` answers with
-#   FAKE_PULUMI_FAIL    a subcommand to fail, so a test can watch a release stop
-#   FAKE_PULUMI_NO_URL  set to 1 to make `stack output url` print nothing
-#   FAKE_PULUMI_STACKS  the JSON `stack ls --json` prints (default [])
+#   FAKE_LOG                   where invocations are recorded (default /dev/null)
+#   FAKE_SERVICE_URL           the URL `stack output url` answers with
+#   FAKE_PULUMI_FAIL           a subcommand to fail, so a test can watch a release stop
+#   FAKE_PULUMI_NO_URL         set to 1 to make `stack output url` print nothing
+#   FAKE_PULUMI_STACKS         the JSON `stack ls --json` prints (default [])
+#   FAKE_PULUMI_ENCRYPTED_KEY  the encryptedkey `stack init` writes (default below)
+#   FAKE_PULUMI_EXPORT_IMAGE   the image the built-in `stack export` fixture's
+#                              one Cloud Run service records (a digest by default)
+#   FAKE_PULUMI_EXPORT_FILE    a JSON file `stack export` prints instead of the
+#                              built-in fixture, for a state that is missing the
+#                              service or holds something the script must refuse
 
 set -euo pipefail
 # shellcheck source=scripts/release/tests/fakes/_fake.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
 
 service_url=${FAKE_SERVICE_URL:-https://fractals-nextjs-staging-abc123.us-central1.run.app}
+
+# FAKE_PULUMI_ENCRYPTED_KEY stands in for the stack's encrypted secrets key.
+# Real ones are base64 and are committed with the stack settings; this one only
+# has to be recognisable, so a test can assert that a block carries the file's
+# own line rather than one the script made up.
+: "${FAKE_PULUMI_ENCRYPTED_KEY:=AAABfakeEncryptedStackKey-0123456789abcdef}"
+
+# fake_stack_init writes what `pulumi stack init --secrets-provider X` leaves
+# behind: the stack's settings file, Pulumi.<stack>.yaml in the Pulumi project
+# directory (--cwd), holding the provider URL and the stack's encrypted key.
+# init_stack.sh reads those two lines back out of the file it just created and
+# prints them for the operator to commit (bead dv-8xi), so the fake has to write
+# what the real command writes. Without --secrets-provider the real command
+# records the passphrase provider, which is what the fake writes too.
+fake_stack_init() {
+  local stack='' cwd=. provider=passphrase
+  shift 2 # `stack init`
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    --cwd)
+      cwd=${2:-.}
+      shift 2
+      ;;
+    --secrets-provider)
+      provider=${2:-passphrase}
+      shift 2
+      ;;
+    -*)
+      shift
+      ;;
+    *)
+      stack=$1
+      shift
+      ;;
+    esac
+  done
+  [[ -n $stack ]] || return 0
+
+  {
+    printf 'config:\n'
+    printf '  gcp:project: %s\n' "${GT_PROJECT:-gt-fake}"
+    printf 'encryptedkey: %s\n' "$FAKE_PULUMI_ENCRYPTED_KEY"
+    printf 'secretsprovider: %s\n' "$provider"
+  } >"$cwd/Pulumi.$stack.yaml"
+}
+
+# export_hex is the digest body of the built-in export fixture's image. The
+# image that builds is the repository and the hex helpers.bash's $DIGEST names,
+# on purpose: staged_digest.bats asserts the script prints the fixture's image,
+# so a drift between the two fails there instead of passing quietly.
+export_hex=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+
+# fake_stack_export prints what `pulumi stack export` prints for a released
+# stack: a deployment whose resources include the Cloud Run service the stack
+# applied, which records the image it is running at
+# outputs.template.containers[0].image. staged_digest.sh reads the image from
+# there (bead dv-yf4).
+#
+# The fixture's other resources carry their own `image` keys -- the registry
+# repository does -- so a reader that searched for the key rather than for the
+# resource type would find one of those first and fail; and the registry's is a
+# tag, so picking it is a loud failure rather than a quiet wrong digest. A test
+# that wants another answer points FAKE_PULUMI_EXPORT_FILE at its own fixture.
+fake_stack_export() {
+  if [[ -n ${FAKE_PULUMI_EXPORT_FILE:-} ]]; then
+    cat "$FAKE_PULUMI_EXPORT_FILE"
+    return 0
+  fi
+
+  local image
+  image=${FAKE_PULUMI_EXPORT_IMAGE:-us-central1-docker.pkg.dev/gt-fractals-m4xq/apps/fractals-nextjs@sha256:$export_hex}
+
+  cat <<JSON
+{
+  "version": 3,
+  "deployment": {
+    "manifest": {
+      "time": "2026-10-08T12:00:00.000000000Z",
+      "magic": "",
+      "version": "v3.100.0"
+    },
+    "resources": [
+      {
+        "urn": "urn:pulumi:staging::fractals::pulumi:pulumi:Stack::fractals-staging",
+        "type": "pulumi:pulumi:Stack",
+        "outputs": {
+          "url": "$service_url"
+        }
+      },
+      {
+        "urn": "urn:pulumi:staging::fractals::gcp:artifactregistry/repository:Repository::apps",
+        "type": "gcp:artifactregistry/repository:Repository",
+        "outputs": {
+          "name": "apps",
+          "image": "us-central1-docker.pkg.dev/gt-fractals-m4xq/apps/fractals-nextjs:latest"
+        }
+      },
+      {
+        "urn": "urn:pulumi:staging::fractals::gcp:cloudrunv2/service:Service::fractals-nextjs-staging",
+        "type": "gcp:cloudrunv2/service:Service",
+        "outputs": {
+          "name": "fractals-nextjs-staging",
+          "template": {
+            "containers": [
+              {
+                "image": "$image",
+                "ports": [{"containerPort": 8080}]
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
+JSON
+}
 
 # Whether the provider would have had a credential. The value is never read:
 # only its presence is recorded, which is why the log line says present/absent
@@ -92,6 +216,7 @@ stack)
   case ${2:-} in
   init)
     pulumi_log "$*"
+    fake_stack_init "$@"
     ;;
   ls)
     pulumi_log "$*"
@@ -100,6 +225,15 @@ stack)
   output)
     pulumi_log "$*"
     [[ ${FAKE_PULUMI_NO_URL:-} == 1 ]] || printf '%s\n' "$service_url"
+    ;;
+  export)
+    if [[ ${FAKE_PULUMI_FAIL:-} == export ]]; then
+      pulumi_log "$* (failed)"
+      printf 'error: could not read the stack\n' >&2
+      exit 1
+    fi
+    pulumi_log "$*"
+    fake_stack_export
     ;;
   *)
     pulumi_log "$*"
