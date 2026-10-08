@@ -39,7 +39,7 @@ preview)
   fi
   fake_log "pulumi $* token_env=$token_env"
   printf '%s\n' \
-    'Previewing update (gt-fractals/fractals-nextjs-staging):' \
+    'Previewing update (gt-fractals-m4xq/fractals-nextjs-staging):' \
     '     Type                     Name                                    Plan' \
     ' +   pulumi:pulumi:Stack      fractals-nextjs-staging                 create' \
     ' +   └─ gcp:cloudrun:Service  fractals-nextjs-staging                 create' \
@@ -54,7 +54,7 @@ up)
   fi
   fake_log "pulumi $* token_env=$token_env"
   printf '%s\n' \
-    'Updating (gt-fractals/fractals-nextjs-staging):' \
+    'Updating (gt-fractals-m4xq/fractals-nextjs-staging):' \
     '     Type                     Name                                    Status' \
     ' +   pulumi:pulumi:Stack      fractals-nextjs-staging                 created (4s)' \
     'Outputs:' \

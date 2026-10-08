@@ -28,7 +28,7 @@ login)
   ;;
 inspect)
   # The last argument is the image reference build_push.sh tagged, e.g.
-  # us-central1-docker.pkg.dev/gt-fractals/apps/fractals-nextjs:v1.0.0. The tag
+  # us-central1-docker.pkg.dev/gt-fractals-m4xq/apps/fractals-nextjs:v1.0.0. The tag
   # is dropped, because a RepoDigest is emitted per repository, not per tag.
   shift $(($# - 1))
   ref=$1

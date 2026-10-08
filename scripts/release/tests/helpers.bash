@@ -76,7 +76,7 @@ setup_release_env() {
   export GT_STACK_DIR="$STACK_DIR"
 
   APP=fractals-nextjs
-  PROJECT=gt-fractals
+  PROJECT=gt-fractals-m4xq
   IMAGE="us-central1-docker.pkg.dev/$PROJECT/apps/$APP"
   DIGEST="$IMAGE@sha256:$DIGEST_HEX"
   export APP PROJECT IMAGE DIGEST

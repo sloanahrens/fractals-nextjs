@@ -28,7 +28,7 @@ const (
 	stagingEnv     = "staging"
 	stagingService = "fractals-nextjs-staging"
 
-	project        = "gt-fractals"
+	project        = "gt-fractals-m4xq"
 	region         = "us-central1"
 	port           = 8080
 	healthPath     = "/api/health"
@@ -36,7 +36,7 @@ const (
 	minScale       = 0
 	maxScale       = 3
 	concurrency    = 80
-	runtimeAccount = "runtime-fractals-nextjs@gt-fractals.iam.gserviceaccount.com"
+	runtimeAccount = "runtime-fractals-nextjs@gt-fractals-m4xq.iam.gserviceaccount.com"
 
 	// The resource types a deployment creates, as Pulumi names them.
 	serviceType   = "gcp:cloudrunv2/service:Service"
@@ -46,7 +46,7 @@ const (
 // testDigest stands in for the digest a release pins, which a stack config
 // file does not carry: scripts/release/preview.sh sets imageDigest from the
 // digest build_push.sh printed.
-const testDigest = "us-central1-docker.pkg.dev/gt-fractals/apps/fractals-nextjs@" +
+const testDigest = "us-central1-docker.pkg.dev/gt-fractals-m4xq/apps/fractals-nextjs@" +
 	"sha256:9f2b1c0d3e4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4"
 
 // serviceURI is the address the mock provider reports for a created service.
