@@ -171,11 +171,6 @@ Where `c` is a complex number representing each pixel's coordinate. Points that 
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-## License
-
-This project is licensed under the MIT License; the `LICENSE` file itself is
-not in the repository yet.
-
 ## Acknowledgments
 
 - Inspired by the mathematical beauty of Benoit Mandelbrot's work
