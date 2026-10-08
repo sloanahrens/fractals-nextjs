@@ -1,0 +1,12 @@
+# The prod stack's configuration. It is the staging stack's, with the one
+# value that differs: the environment the service is deployed as
+# (deploy/Pulumi.staging.yaml has the rest, and scripts/release/README.md says
+# why a release changes only imageDigest).
+config:
+  fractals:name: fractals-nextjs
+  fractals:env: prod
+  fractals:project: gt-fractals
+  fractals:region: us-central1
+  fractals:port: "8080"
+  fractals:healthPath: /api/health
+  fractals:memory: 512Mi

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+# Fake docker for the release script tests (bead B5.2). It builds nothing and
+# pushes nothing: it records what it was asked to do, and answers `inspect` with
+# a digest derived from the image reference it was given, which is what makes
+# the printed digest in build_push.bats match the image the fake was told to
+# push.
+#
+# Fake-specific environment:
+#   FAKE_LOG          where invocations are recorded (default /dev/null)
+#   FAKE_DIGEST_HEX   64 lowercase hex characters, default eight `deadbeef`
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+digest=${FAKE_DIGEST_HEX:-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef}
+
+case ${1:-} in
+build | push)
+  fake_log "docker $*"
+  ;;
+login)
+  # The password arrives on stdin (docker --password-stdin) and is never read
+  # into a variable, never logged and never echoed. Only its size is recorded,
+  # so a test can prove the token did not travel on the command line.
+  fake_log "docker login password-on-stdin bytes=$(fake_stdin_bytes) ${*#login }"
+  ;;
+inspect)
+  # The last argument is the image reference build_push.sh tagged, e.g.
+  # us-central1-docker.pkg.dev/gt-fractals/apps/fractals-nextjs:v1.0.0. The tag
+  # is dropped, because a RepoDigest is emitted per repository, not per tag.
+  shift $(($# - 1))
+  ref=$1
+  fake_log "docker inspect ref=$ref"
+  printf '%s@sha256:%s\n' "${ref%:*}" "$digest"
+  ;;
+*)
+  fake_log "docker $*"
+  exit 0
+  ;;
+esac

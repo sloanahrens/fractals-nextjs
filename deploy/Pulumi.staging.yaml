@@ -1,0 +1,24 @@
+# The staging stack's configuration: the part of the deployment Spec that is
+# not a release input. A release changes one value, imageDigest, which
+# scripts/release/preview.sh sets from the digest build_push.sh printed; every
+# other value stays here, in the app's own repository (scripts/release/README.md).
+#
+# The keys are namespaced with the Pulumi project name, `fractals` (Pulumi.yaml).
+# No value here is a secret: appdeploy.Spec refuses an env var whose name names
+# a secret, password, token or key, and this deployment sets none.
+config:
+  # The app's name in the deploy system: the service Cloud Run runs is
+  # <name>-<env>, this repository's name, which is also what the deploy
+  # workflow's GT_APP defaults to (workflows/deploy.yml, devops).
+  fractals:name: fractals-nextjs
+  fractals:env: staging
+  # The GCP project the reviewed manifest (devops manifests/fractals.yaml)
+  # creates and bootstraps.
+  fractals:project: gt-fractals
+  fractals:region: us-central1
+  # The port the container listens on, and the health path it is probed at:
+  # both are the container contract (CLAUDE.md), and the path is the one the
+  # release flow health-checks (GT_HEALTH_PATH in the deploy workflow).
+  fractals:port: "8080"
+  fractals:healthPath: /api/health
+  fractals:memory: 512Mi

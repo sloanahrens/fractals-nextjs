@@ -1,0 +1,10 @@
+# The Pulumi program that deploys this app (devops plan, bead B4.5).
+#
+# `name` is the Pulumi project. It is `fractals`, not the repository name: the
+# patrol finds this app's stacks by that project name in the app's state bucket
+# (.pulumi/stacks/fractals/<env>.json), and the reviewed manifest
+# (devops manifests/fractals.yaml) states the name beside `app:`. A program
+# that named its project otherwise writes state the patrol never looks at.
+name: fractals
+runtime: go
+description: Deploys fractals-nextjs to Cloud Run through the gt.local/devops appdeploy library.

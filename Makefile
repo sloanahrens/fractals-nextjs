@@ -1,4 +1,4 @@
-.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker
+.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker deploy-check
 
 # Default target
 help:
@@ -18,6 +18,9 @@ help:
 	@echo "  make typecheck     Run TypeScript type checking"
 	@echo "  make test          Run the Vitest suite"
 	@echo "  make check         Run all quality checks (lint + typecheck)"
+	@echo ""
+	@echo "Deploy:"
+	@echo "  make deploy-check  Test and vet the deploy program (deploy/, Go)"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-build  Build production Docker image"
@@ -83,3 +86,18 @@ test:
 presubmit: check
 
 gate: ci-install check build test
+
+# ── The deploy program (deploy/, a Go module of its own) ──────────────────
+# The Pulumi program the release flow runs, and the mock test that covers it
+# (deploy/README.md). It is not part of `gate`: the landing gate runs in a Node
+# image with no Go toolchain and no route to the Forgejo Go registry that
+# serves gt.local/devops, the one module this needs. GOPROXY defaults to that
+# registry with the public proxy behind it, following the devops repo's
+# consume.yml; override it (make deploy-check GOPROXY=...) on a runner that
+# reaches the module another way.
+GOPROXY ?= http://forgejo:3000/api/packages/sloan/go,https://proxy.golang.org,direct
+DEPLOY_GO_ENV = GOPROXY=$(GOPROXY) GOPRIVATE=gt.local GONOPROXY=none GONOSUMDB=gt.local GOFLAGS=-mod=mod
+
+deploy-check:
+	cd deploy && $(DEPLOY_GO_ENV) go test ./...
+	cd deploy && $(DEPLOY_GO_ENV) go vet ./...

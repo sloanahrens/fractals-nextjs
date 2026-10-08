@@ -2,6 +2,11 @@
 devops
 infra
 
+# The deploy program and the release scripts the deploy runner executes from
+# its own checkout; neither runs inside the app's image (deploy/README.md)
+deploy
+scripts
+
 # Dependencies
 node_modules
 npm-debug.log*
