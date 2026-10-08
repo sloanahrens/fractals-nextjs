@@ -10,8 +10,12 @@ import {
 } from "react";
 import { FractalRenderer } from "../lib/fractalRenderer";
 import {
+  ITERATION_STEP,
+  MAX_ITERATIONS,
   MAX_ZOOM,
+  MIN_ITERATIONS,
   MIN_ZOOM,
+  autoIterations,
   calculateZoomBounds,
   boundsToView,
   clampZoom,
@@ -38,6 +42,7 @@ import {
 import { getAvailableColorSchemes } from "../lib/colorMapping";
 import { FractalPreset, formatZoom } from "../lib/presets";
 import { Slider } from "../components/ui/Slider";
+import { Checkbox } from "../components/ui/Checkbox";
 import { Select } from "../components/ui/Select";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
@@ -76,10 +81,19 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
 
   // Parameter controls
+  // The iterations are two values, not one. `maxIterations` is the count
+  // somebody set by hand; with auto on, the zoom picks the count instead and
+  // the slider follows it. Everything downstream draws and reports the
+  // effective one, so the slider, the canvas and a saved preset agree.
   const [maxIterations, setMaxIterations] = useState(100);
+  const [autoIterationsOn, setAutoIterationsOn] = useState(true);
   const [colorScheme, setColorScheme] = useState<ColorScheme>("classic");
   const [canvasWidth, setCanvasWidth] = useState(800);
   const [canvasHeight, setCanvasHeight] = useState(600);
+
+  const effectiveMaxIterations = autoIterationsOn
+    ? autoIterations(zoomLevel)
+    : maxIterations;
 
   // Preset system
   const [currentPreset, setCurrentPreset] = useState<string>("");
@@ -129,7 +143,7 @@ export default function Home() {
 
       const config: FractalConfig = {
         bounds,
-        maxIterations,
+        maxIterations: effectiveMaxIterations,
         width: canvas.width,
         height: canvas.height,
         colorScheme,
@@ -180,7 +194,7 @@ export default function Home() {
           setIsRendering(false);
         });
     },
-    [bounds, maxIterations, colorScheme],
+    [bounds, effectiveMaxIterations, colorScheme],
   );
 
   // Initialize canvas and renderer. The renderer is rebuilt only when the
@@ -321,6 +335,7 @@ export default function Home() {
     setCenterY(0);
     setZoomLevel(1);
     setMaxIterations(100);
+    setAutoIterationsOn(true);
     setColorScheme("classic");
     setCurrentPreset("");
   };
@@ -334,6 +349,9 @@ export default function Home() {
     setCenterY(view.centerY);
     setZoomLevel(view.scale);
     setMaxIterations(preset.maxIterations);
+    // The preset was framed at its own iteration count, so it renders the way
+    // its author saved it rather than at whatever the zoom would pick.
+    setAutoIterationsOn(false);
     setColorScheme(preset.colorScheme);
     setCanvasWidth(preset.canvasWidth);
     setCanvasHeight(preset.canvasHeight);
@@ -355,6 +373,17 @@ export default function Home() {
   const handleParameterChange = (updateFn: () => void) => {
     updateFn();
     setCurrentPreset("");
+  };
+
+  // Unticking auto hands the slider the count auto was showing, so taking
+  // manual control of the iterations does not change the view by itself.
+  // Ticking it back on needs nothing: the slider follows the zoom again, and
+  // the count that was set by hand is still there for the next untick.
+  const handleAutoIterationsChange = (enabled: boolean) => {
+    handleParameterChange(() => {
+      setAutoIterationsOn(enabled);
+      if (!enabled) setMaxIterations(effectiveMaxIterations);
+    });
   };
 
   return (
@@ -506,16 +535,22 @@ export default function Home() {
                 Rendering Parameters
               </h3>
               <div className="space-y-4">
+                <Checkbox
+                  label="Auto iterations"
+                  checked={autoIterationsOn}
+                  onChange={handleAutoIterationsChange}
+                  disabled={isRendering}
+                />
                 <Slider
                   label="Maximum Iterations"
-                  value={maxIterations}
-                  min={50}
-                  max={1000}
-                  step={10}
+                  value={effectiveMaxIterations}
+                  min={MIN_ITERATIONS}
+                  max={MAX_ITERATIONS}
+                  step={ITERATION_STEP}
                   onChange={(value) =>
                     handleParameterChange(() => setMaxIterations(value))
                   }
-                  disabled={isRendering}
+                  disabled={isRendering || autoIterationsOn}
                   formatValue={(v) => v.toString()}
                 />
 
@@ -670,7 +705,7 @@ export default function Home() {
             <div className="bg-white p-6 rounded-lg shadow-lg">
               <CustomPresetManager
                 currentBounds={bounds}
-                currentMaxIterations={maxIterations}
+                currentMaxIterations={effectiveMaxIterations}
                 currentColorScheme={colorScheme}
                 currentCanvasWidth={canvasWidth}
                 currentCanvasHeight={canvasHeight}

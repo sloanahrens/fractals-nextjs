@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ITERATION_STEP,
+  MAX_ITERATIONS,
   MAX_ZOOM,
+  MIN_ITERATIONS,
   MIN_ZOOM,
+  autoIterations,
   boundsToView,
   calculateZoomBounds,
   clampZoom,
@@ -177,6 +181,52 @@ describe("boundsToView", () => {
       // Deep zooms divide a small span back out, so the round trip is only
       // accurate to within a few units in the last place.
       expect(view.scale).toBeCloseTo(zoomLevel, 9);
+    }
+  });
+});
+
+describe("autoIterations", () => {
+  it("scales the count with the zoom", () => {
+    // 100 + 50 * log2(zoom), landing on the slider's ticks.
+    expect(autoIterations(1)).toBe(100);
+    expect(autoIterations(100)).toBe(430);
+    expect(autoIterations(10000)).toBe(760);
+  });
+
+  it("hands back a count the slider can show, across the whole zoom range", () => {
+    // Evenly spaced octaves plus the ends, so the ends of the range are checked
+    // as exactly as the middle.
+    for (let step = 0; step <= 100; step++) {
+      const zoom = MIN_ZOOM * Math.pow(MAX_ZOOM / MIN_ZOOM, step / 100);
+      const iterations = autoIterations(zoom);
+
+      expect(iterations % ITERATION_STEP).toBe(0);
+      expect(iterations).toBeGreaterThanOrEqual(MIN_ITERATIONS);
+      expect(iterations).toBeLessThanOrEqual(MAX_ITERATIONS);
+    }
+
+    expect(autoIterations(MIN_ZOOM)).toBe(100);
+    expect(autoIterations(MAX_ZOOM)).toBe(760);
+  });
+
+  it("adds detail with every doubling of the zoom", () => {
+    for (let zoom = MIN_ZOOM; zoom <= 5000; zoom *= 2) {
+      expect(autoIterations(zoom * 2)).toBeGreaterThan(autoIterations(zoom));
+    }
+  });
+
+  it("caps a zoom past the slider's ceiling at the top of its range", () => {
+    // Nothing in the app asks for this: the zoom is clamped to MAX_ZOOM before
+    // it gets here. The cap is what keeps the count inside the range the
+    // control offers if one ever does.
+    expect(autoIterations(1_000_000)).toBe(MAX_ITERATIONS);
+  });
+
+  it("keeps a zoom without an octave out of the renderer as a NaN count", () => {
+    // A gesture can never produce these, but NaN survives min/max clamping and
+    // reaches the render loop as a cap it cannot compare against.
+    for (const zoom of [0, -1, NaN, Infinity]) {
+      expect(autoIterations(zoom)).toBe(autoIterations(MIN_ZOOM));
     }
   });
 });
