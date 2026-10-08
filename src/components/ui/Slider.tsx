@@ -23,15 +23,22 @@ export function Slider({
   formatValue = (v) => v.toString(),
   disabled = false,
 }: SliderProps) {
+  // useId gives each instance its own id, so the label points at this slider
+  // and not at the last one that happened to print the same label text.
+  const sliderId = React.useId();
+
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center">
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label htmlFor={sliderId} className="text-sm font-medium text-gray-700">
+          {label}
+        </label>
         <span className="text-sm text-gray-500 font-mono">
           {formatValue(value)}
         </span>
       </div>
       <input
+        id={sliderId}
         type="range"
         min={min}
         max={max}

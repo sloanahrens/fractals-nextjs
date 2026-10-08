@@ -1,12 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+  useCallback,
+  type KeyboardEvent,
+} from "react";
 import { FractalRenderer } from "../lib/fractalRenderer";
 import { calculateZoomBounds, boundsToView } from "../lib/mandelbrot";
 import { ZoomPanManager } from "../lib/zoomPan";
-import { attachCanvasNavigation } from "../lib/canvasNavigation";
+import {
+  attachCanvasNavigation,
+  describeBounds,
+  keyNavigationBounds,
+} from "../lib/canvasNavigation";
 import { RenderQuality, RenderQualityDecider } from "../lib/renderQuality";
-import { FractalConfig, FractalBounds, ColorScheme } from "../types/fractal";
+import {
+  FractalConfig,
+  FractalBounds,
+  ColorScheme,
+  ZoomState,
+} from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
 import { FractalPreset } from "../lib/presets";
 import { Slider } from "../components/ui/Slider";
@@ -166,6 +182,31 @@ export default function Home() {
     boundsRef.current = bounds;
   }, [bounds]);
 
+  // Put a view the canvas produced into the state the sliders and the renderer
+  // read. Both sources of a view (a pointer gesture, a keypress) go through
+  // here, so neither can leave the sliders showing a view the canvas is not on.
+  // The zoom is clamped because both can ask to go past the sliders' range.
+  const applyView = useCallback((view: ZoomState) => {
+    setCenterX(view.centerX);
+    setCenterY(view.centerY);
+    setZoomLevel(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.scale)));
+    setCurrentPreset("");
+  }, []);
+
+  // Arrow keys pan the view and `+`/`-` zoom it, for a user who cannot use a
+  // pointer. The keys are read off the canvas itself, so they only move the
+  // view while the canvas has focus and Tab still reaches every control.
+  const handleCanvasKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
+    const next = keyNavigationBounds(event.key, bounds);
+    if (!next) return;
+
+    // An arrow key would otherwise scroll the page under the focused canvas,
+    // moving the view out of sight.
+    event.preventDefault();
+
+    applyView(boundsToView(next));
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -180,12 +221,7 @@ export default function Home() {
       canvas,
       manager,
       () => boundsRef.current,
-      (view) => {
-        setCenterX(view.centerX);
-        setCenterY(view.centerY);
-        setZoomLevel(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.scale)));
-        setCurrentPreset("");
-      },
+      applyView,
       {
         onGestureStart: () => {
           renderPolicy.beginGesture();
@@ -207,7 +243,7 @@ export default function Home() {
         },
       },
     );
-  }, [canvasWidth, canvasHeight, renderPolicy]);
+  }, [canvasWidth, canvasHeight, renderPolicy, applyView]);
 
   // Redraw whenever the view, the rendering parameters or the canvas size
   // change, at whatever quality the policy decides. A gesture's steps come back
@@ -304,7 +340,8 @@ export default function Home() {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4">Mandelbrot Set Explorer</h1>
           <p className="text-lg text-gray-600">
-            Scroll to zoom, drag to pan, or use the sliders
+            Scroll to zoom, drag to pan, or use the sliders. Focus the image to
+            pan with the arrow keys and zoom with + and −.
           </p>
         </div>
 
@@ -313,7 +350,11 @@ export default function Home() {
           <div className="bg-white p-4 rounded-lg shadow-lg">
             <canvas
               ref={canvasRef}
-              className="fractal-canvas border border-gray-300"
+              role="img"
+              aria-label={describeBounds(bounds)}
+              tabIndex={0}
+              onKeyDown={handleCanvasKeyDown}
+              className="fractal-canvas border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               style={{ maxWidth: "100%", height: "auto" }}
             />
 
