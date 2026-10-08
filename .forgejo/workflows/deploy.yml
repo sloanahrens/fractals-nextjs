@@ -1,0 +1,333 @@
+# Deploy workflow template for an app repo (docs/plan.md, bead B5.3; the flow it
+# implements is docs/design.md, section 6).
+#
+# Copy this file into an app repo as .forgejo/workflows/deploy.yml. It runs the
+# release scripts the app repo carries at the tagged commit (scripts/release/,
+# copied from this repo — workflows/README.md says which revision and why), one
+# job per phase of the release flow: build and push the tag, preview staging,
+# deploy the tag's digest to staging, promote that same digest to prod.
+#
+# Nothing here holds a credential. The base key is a file on the deploy runner
+# (GT_BASE_KEY_FILE), mint_token.sh turns it into a one-hour token for the app's
+# deployer service account, and every script hands that token to a tool through
+# the environment, never through a command line (scripts/release/README.md).
+# No job may run outside `runs-on: deploy`: that label is the only runner with
+# the key and a container runtime, and Forgejo restricts it to the app and
+# devops repos (bead B5.4). The ci-base gate runner never sees a credential.
+#
+# Release identity is the digest the first job prints. Every later job deploys
+# that value, prod takes it from the staging job's output, and promote.sh
+# refuses anything that differs from what staging proved — so nothing between
+# staging and prod can rebuild or re-tag the image.
+#
+# Each checkout sets persist-credentials: false. The checkout is the one thing
+# that needs the runner's own repository token, and this keeps it from writing
+# that token into .git/config where a later step could use it without naming it.
+
+name: deploy
+
+# A release starts at a protected `v*` tag pushed by the human. This file is
+# code the deploy runner executes with a cloud credential in scope, so the
+# revision that decides what it runs has to be one no worker can push
+# (docs/design.md, section 5). The tag push is not, on this instance, the only
+# way the file can start — a dispatch runs the copy at the ref it names, a
+# branch included — so the build job refuses any ref that is not a protected
+# release tag before it does anything else, every other job needs build, and the
+# branch protection rule over `.forgejo/workflows/` is what keeps that refusal
+# from being removed by the account that pushes the ref (docs/design.md, section
+# 6.1; bead dv-x3a). The tag push is also the release's approval. No job here
+# declares an environment, because the Forgejo we run has no Actions
+# environments at all: the keys this file used to carry were a hold that never
+# held, and a release reached through a tag deployed with nobody approving.
+# docs/design.md, section 6.1, is the decision and what replaces them; it is
+# worth reading before adding an approval back here.
+on:
+  push:
+    tags: ["v*"]
+
+# One release at a time, and one teardown shares the group (teardown.yml uses
+# the same one): two runs touching the same stack at once would let the run
+# released last land the older digest, because the stack's imageDigest is one
+# value both runs write. A queued run waits its turn; nothing cancels a release
+# half-way, which would be worse than waiting.
+#
+# Forgejo documents this key, but its Actions engine is Gitea's: older versions
+# listed `concurrency` among the keys they ignore, so the queueing is not
+# something to assume. workflows/README.md asks whoever installs the runner to
+# confirm it holds one run at a time. The declared group is what makes that
+# checkable, and it takes effect the moment the runner honours it.
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  # The app name is the repository name (pkg/appdeploy Spec.Name). Set GT_APP
+  # explicitly if the repository is not named after the app; release_target in
+  # scripts/release/lib.sh refuses anything that is not ^[a-z][a-z0-9-]{1,28}$.
+  GT_APP: ${{ github.event.repository.name }}
+  # The app's Pulumi program. A release changes one value in it, imageDigest,
+  # and the rest of the Spec stays in Pulumi.<env>.yaml (bead B4.5).
+  GT_STACK_DIR: deploy
+  # The health path declared in the app's Spec (docs/plan.md, bead B4.5).
+  GT_HEALTH_PATH: /api/health
+  # The base key, as a path: the deploy runner mounts it mode 600 inside a home
+  # only gt-cloud can read (bead B5.4). Never key material, and never a Forgejo
+  # secret — a workflow file is editable by any worker, a mount is not.
+  GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+
+jobs:
+  # Step 2 of the flow: build the tag and push it to the app's registry. The
+  # digest this prints is the release's identity from here on.
+  build:
+    runs-on: deploy
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      # First, before the checkout and before any call that touches the cloud:
+      # a run that is not at a protected release tag is refused here, and every
+      # job that changes a running service needs this one.
+      #
+      # The tag push (above) is what starts a release. It is not the only way
+      # this file can start: Forgejo will dispatch it at any ref the dispatcher
+      # names, and the copy it runs is the copy at that ref, not this one
+      # (docs/design.md, section 6.1; bead dv-x3a). So the start has to be
+      # decided by the ref the run is at, and that check lives here rather than
+      # in a script, so that a run which is not a release never reaches the
+      # first cloud call. It checks the whole ref, not the name: a branch named
+      # `v1.2.3` passes the name check require_release_tag makes in
+      # build_push.sh, and a branch is exactly the ref a worker can push.
+      #
+      # What makes this step a control rather than a comment is the other half:
+      # no push can put another copy of this file on a branch. That is the
+      # branch protection rule scripts/verify_forgejo_protection.sh verifies
+      # under workflow.protection (docs/design.md, section 6.1).
+      - name: Refuse anything but a protected release tag
+        run: |
+          set -euo pipefail
+          if [[ ! $GITHUB_REF =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            printf 'refusing a release outside a protected release tag: %s\n' "$GITHUB_REF" >&2
+            exit 1
+          fi
+          printf 'release %s at %s\n' "$GITHUB_REF_NAME" "$GITHUB_SHA"
+
+      - uses: actions/checkout@v4
+        with:
+          # build_push.sh refuses a checkout that is not exactly at the tag, and
+          # that check wants the tag's own ref rather than a shallow clone.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Each job mints its own token: a token is good for an hour and one job,
+      # and separate jobs do not share a filesystem. The scripts print notes and
+      # a final block of key=value lines on stdout, so the machine lines are
+      # taken by matching their shape rather than by reprinting every line into
+      # $GITHUB_OUTPUT.
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Build the tag's image and push it
+        id: push
+        env:
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/build_push.sh --tag "$GITHUB_REF_NAME" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+  # Step 4 of the flow: the preview the release is read from. It runs before
+  # the staging job, so the plan is written down before anything changes. On a
+  # Forgejo with environments this was the diff an approver read before
+  # releasing the job; with none it is the record of what the release does
+  # (docs/design.md, section 6.1). The diff is not a secret and not large: it
+  # goes in the log and in the run summary, next to the release record.
+  staging-preview:
+    runs-on: deploy
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Preview the staging deploy over the digest that was built
+        id: preview
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/preview.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Attach the plan to the run record
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+          PREVIEW_FILE: ${{ steps.preview.outputs.preview_file }}
+        run: |
+          set -euo pipefail
+          cat "$PREVIEW_FILE"
+          {
+            printf '### Staging preview for `%s`\n\n' "$GT_APP"
+            printf 'digest `%s`\n\n' "$DIGEST"
+            printf 'The staging job applies exactly this plan, in this run.\n\n'
+            printf '````\n'
+            cat "$PREVIEW_FILE"
+            printf '````\n'
+          } >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+  # Step 5 of the flow: apply the tag's digest to staging and check its health.
+  # No environment, and nothing waits in front of this job: the tag push in step
+  # 1 is the release's authorization and the preview above is the record of what
+  # it does (docs/design.md, section 6.1). Nothing here rebuilds: up.sh deploys
+  # the digest the build job printed and the preview above described, and it
+  # runs with --skip-preview so there is no second, unread plan of the same
+  # change.
+  #
+  # A failed health check fails this job and stops the release. Nothing is
+  # rolled back: recovery is redeploying the previous digest through this same
+  # flow, by hand (docs/design.md, section 6).
+  staging:
+    runs-on: deploy
+    # build is named as well as staging-preview because this job reads the
+    # digest out of build's output: `needs` resolves the outputs of a job's
+    # direct dependencies, and a job only reachable through another job is not
+    # one of them. workflows_test.go checks every `needs.<job>.outputs.<key>`
+    # reference against the job's own needs list.
+    needs: [build, staging-preview]
+    outputs:
+      digest: ${{ needs.build.outputs.digest }}
+      url: ${{ steps.up.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Apply the tag's digest to staging
+        id: up
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Check the staging service answers on its health path
+        env:
+          URL: ${{ steps.up.outputs.url }}
+        run: scripts/release/health.sh --url "$URL" --health-path "$GT_HEALTH_PATH"
+
+  # Step 6 of the flow: the same digest in prod. This job carries no
+  # environment and no preview job of its own: prod gets the plan staging
+  # already ran under the tag's authorization, and promote.sh refuses a digest
+  # that is not the one the staging stack holds, so "prod runs what staging
+  # proved" is checked rather than assumed (docs/design.md, section 6.1).
+  prod:
+    runs-on: deploy
+    needs: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      # The digest staging actually runs, read back out of its stack rather than
+      # assumed from the job output. promote.sh refuses a digest that differs
+      # from this one, so "prod gets the image staging proved" is a check against
+      # the stack itself and not against a value both jobs happen to share.
+      - name: Read the digest the staging stack is running
+        id: staged
+        env:
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          . scripts/release/lib.sh
+          ENV_NAME=staging
+          release_target
+          pulumi_env "$TOKEN_FILE"
+          digest="$(pulumi config get imageDigest --stack "$STACK" --cwd "$STACK_DIR")"
+          # An empty read would leave promote.sh's --staging-digest unset, and
+          # promote.sh skips the comparison when it is empty — so prod would
+          # deploy with no cross-check at all rather than fail.
+          [[ -n $digest ]] ||
+            die "the staging stack has no imageDigest, so there is nothing to compare a promotion against"
+          printf 'digest=%s\n' "$digest" >>"$GITHUB_OUTPUT"
+
+      - name: Promote the staging digest to prod
+        id: promote
+        env:
+          DIGEST: ${{ needs.staging.outputs.digest }}
+          STAGING_DIGEST: ${{ steps.staged.outputs.digest }}
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/promote.sh "$DIGEST" --staging-digest "$STAGING_DIGEST" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Check the prod service answers on its health path
+        env:
+          URL: ${{ steps.promote.outputs.url }}
+        run: scripts/release/health.sh --url "$URL" --health-path "$GT_HEALTH_PATH"
+
+      # Step 7 of the flow: the run summary, which is where a release is read
+      # from afterwards. There is no approval to record on this instance, so the
+      # summary names the tag push as the authorization, and the tag's pusher is
+      # the only name the workflow can see (docs/design.md, section 6.1).
+      - name: Record the release in the run summary
+        env:
+          DIGEST: ${{ needs.staging.outputs.digest }}
+          STAGING_URL: ${{ needs.staging.outputs.url }}
+          PROD_URL: ${{ steps.promote.outputs.url }}
+        run: |
+          set -euo pipefail
+          # The three runner variables are defaulted rather than required:
+          # this runs after prod is deployed, and a missing one of them should
+          # not turn a release that landed into a failed run.
+          {
+            printf '### Released `%s`\n\n' "$GT_APP"
+            printf '| | |\n|---|---|\n'
+            printf '| tag | `%s` |\n' "${GITHUB_REF_NAME:-unknown}"
+            printf '| commit | `%s` |\n' "${GITHUB_SHA:-unknown}"
+            printf '| digest | `%s` |\n' "$DIGEST"
+            printf '| staging | %s |\n' "$STAGING_URL"
+            printf '| prod | %s |\n' "$PROD_URL"
+            printf '| tag pushed by | %s |\n' "${GITHUB_ACTOR:-unknown}"
+            printf '\n'
+            printf 'Prod runs the digest staging proved, and no step between the two rebuilt anything.\n'
+            printf 'No approval is recorded: this Forgejo has no Actions environments,\n'
+            printf 'so the tag push above is the release authorization (docs/design.md, section 6.1).\n'
+          } >>"${GITHUB_STEP_SUMMARY:-/dev/null}"

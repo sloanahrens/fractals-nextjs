@@ -109,7 +109,10 @@ There is no deploy pipeline in this repo. The landing gate
 no cloud credentials. Build and deploy happen on the deploy runner, through the
 devops system, run by the human. The program that deploys the app is `deploy/`,
 which that runner executes at a release tag and no CI here runs
-(`deploy/README.md`). See the Gas Town rules at the end of this file.
+(`deploy/README.md`). That runner also reads the app's release workflows,
+`.forgejo/workflows/deploy.yml` and `teardown.yml`, which no push here starts:
+a protected `v*` or `teardown-v*` tag does, and only the human may push one. See
+the Gas Town rules at the end of this file.
 
 ## Version Notes
 
@@ -132,6 +135,26 @@ _Last updated: 2026-10-08_
   that project name. The app's own name is this repository's,
   `fractals-nextjs`, which is what the library turns into the service
   `fractals-nextjs-staging` and what the deploy workflow's `GT_APP` defaults to.
+
+### App-side release workflows (2026-10-08)
+
+- Added `.forgejo/workflows/deploy.yml` and `.forgejo/workflows/teardown.yml`,
+  copied verbatim from the devops repo's `workflows/` templates at the `v0.1.0`
+  the deploy program's `go.mod` pins — the same revision as `scripts/release/`
+  (bead B4.5, which copied the scripts and left these two behind). The deploy
+  runner picks them up from this directory; nothing in this repo runs them.
+- Both are templates whose four app-owned settings sit in one `env:` block, and
+  every default already fits this app, so neither file took an edit: `GT_APP`
+  resolves to this repository's name, `fractals-nextjs`; `GT_STACK_DIR` is
+  `deploy`; `GT_HEALTH_PATH` is `/api/health`; `GT_BASE_KEY_FILE` is the
+  runner's default. All seven jobs across the two files run on `runs-on: deploy`,
+  and neither names `secrets.` or `GITHUB_TOKEN`.
+- Bump these two together with `deploy/go.mod`'s `gt.local/devops` version and
+  `scripts/release/`, so the workflow, the scripts it calls and the library the
+  program compiles against stay one revision.
+- They start nothing until the human configures Forgejo — the protected `v*` and
+  `teardown-v*` tags, the branch rule covering `.forgejo/workflows/`, and the
+  `deploy` runner label. The devops repo's `workflows/README.md` is the list.
 
 ### eslint-plugin-react-hooks 7.1.x (2026-10-07)
 

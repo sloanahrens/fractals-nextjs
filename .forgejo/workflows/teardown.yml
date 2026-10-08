@@ -1,0 +1,245 @@
+# Teardown workflow template for an app repo (docs/plan.md, bead B5.3; the
+# teardown rule it implements is docs/design.md, section 6).
+#
+# Copy this file into an app repo as .forgejo/workflows/teardown.yml, next to
+# deploy.yml. It destroys the app's two Pulumi stacks, one at a time. A run
+# first shows exactly what `pulumi destroy` would delete, then deletes staging,
+# then prod. It has no environment approval, for the same reason deploy.yml has
+# none: the Forgejo we run has no Actions environments, so a key here would be a
+# hold that does not hold (docs/design.md, section 6.1).
+#
+# What authorizes a teardown is the ref the run is at: a protected `teardown-v*`
+# tag, pushed by the human. Two things hold that, the same two that hold a
+# release (bead dv-x3a). This file refuses any other ref — the preview job checks
+# `GITHUB_REF` before it checks out anything, and every job that deletes needs
+# that job. And the repository refuses the ref's file: a branch protection rule
+# whose branch pattern is `*` protects `.forgejo/workflows/`, so no push can put
+# another copy of this workflow on a branch. Without that second half the check
+# below would be a comment, because the account that pushes a ref supplies the
+# workflow that runs at it (bead dv-csz). The tag is what makes the human's act
+# single-valued: it *is* the run's ref, so there is no confirmation input that
+# could disagree with it. docs/design.md, section 6.1, is the whole of it.
+#
+# It removes the app's resources and never the app's project. The project, its
+# service accounts, its registry, its state bucket and its budget are created by
+# bootstrap and removed by the human from gt-admin; that is the difference
+# between a teardown release and deleting an app (docs/design.md, section 6).
+#
+# This is the only place in the repo where a destroy exists, and four things
+# stand in front of it: it runs only on the deploy runner, only in a run whose
+# ref is a protected `teardown-v*` tag (the preview job refuses any other ref,
+# and every job that deletes needs that job), only while no push can replace the
+# copy of this file that holds that refusal (the branch protection rule above),
+# and only with --skip-preview, so a second plan nobody read cannot be what
+# actually runs.
+#
+# It runs on `runs-on: deploy` for the same reason deploy.yml does: that label
+# is the only runner with the base key, and Forgejo restricts it to the app
+# repos (bead B5.4). No file here holds a credential, and each checkout
+# sets persist-credentials: false so the runner's own repository token is not
+# left in .git/config for a later step to pick up (deploy.yml explains it).
+
+name: teardown
+
+# A teardown is not a release, so it runs on its own protected tag pattern: `v*`
+# starts a release and only a release, `teardown-v*` starts a teardown and only a
+# teardown. The tag names the release this run removes — `teardown-v1.2.3`, on
+# the commit of `v1.2.3` — so the workflow and the scripts that run are the ones
+# that release already ran, at a revision no worker can create.
+#
+# The push is the start this template designs for. Forgejo will also run this
+# file from a dispatch at any ref the dispatcher names, whatever this `on:` says,
+# and the copy it runs is the copy at that ref (bead dv-csz): that is what the
+# preview job's ref check is for, and why the branch protection rule over
+# `.forgejo/workflows/` is part of the design rather than a nicety. A dispatch at
+# a teardown tag the human pushed runs the human's own tagged revision — a
+# teardown being re-run, not a worker authorizing one.
+on:
+  push:
+    tags: ["teardown-v*"]
+
+# The same concurrency group deploy.yml uses, so a teardown and a release cannot
+# overlap on one stack: a destroy running while a deploy pins a digest, or the
+# other way round, is a race nothing asked for. As in deploy.yml, the
+# runner has to honour the key for this to be more than a declaration.
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  # The app name is the repository name (pkg/appdeploy Spec.Name), as in
+  # deploy.yml; set GT_APP explicitly if the repository is not named after it.
+  GT_APP: ${{ github.event.repository.name }}
+  GT_STACK_DIR: deploy
+  # The base key, as a path: the deploy runner mounts it mode 600 inside a home
+  # only gt-cloud can read (bead B5.4).
+  GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+
+jobs:
+  # The destroy preview. It deletes nothing, and every job that does depends on
+  # it, so a run that is at any ref but a teardown tag stops here rather than at
+  # the first destroy.
+  preview:
+    runs-on: deploy
+    steps:
+      # First, before the checkout and before any call that would touch the
+      # cloud: a run that is not at a protected `teardown-v*` tag is refused
+      # here, and every job that deletes anything needs this job. What makes this
+      # a control rather than a comment is the other half — no push can put
+      # another copy of this file on a branch (the header; bead dv-x3a) — and
+      # what it refuses is a start this flow does not design for, the
+      # `teardown-vnext` typo included, which would otherwise destroy two stacks.
+      - name: Refuse anything but a protected teardown tag
+        run: |
+          set -euo pipefail
+          # The whole ref, not the tag name: a branch is exactly the ref a worker
+          # can push, and a branch named `teardown-v1.2.3` is a branch. The shape
+          # is the one require_release_tag accepts in scripts/release/lib.sh,
+          # behind the `teardown-` prefix this flow adds, rather than the looser
+          # `teardown-v[0-9]*` glob a case statement would allow.
+          if [[ ! $GITHUB_REF =~ ^refs/tags/teardown-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            printf 'refusing a teardown outside a protected teardown tag: %s\n' "$GITHUB_REF" >&2
+            exit 1
+          fi
+          printf 'teardown of %s for %s, at %s\n' "$GT_APP" "${GITHUB_REF#refs/tags/}" "$GITHUB_SHA"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      # The destroy itself. scripts/release/ has no destroy script — B5.2's six
+      # scripts cover the release flow, which has no delete in it — so the step
+      # below runs `pulumi destroy` and sources lib.sh for the stack name, the
+      # state backend and the token handling, rather than deriving the same
+      # three things a second time here (scripts/release/lib.sh).
+      #
+      # `--preview-only` is the whole point of this job: the plan is written to
+      # a file and shown to the human before anything is deleted.
+      - name: Preview the staging and prod destroys
+        id: plan
+        env:
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          . scripts/release/lib.sh
+          work="${RUNNER_TEMP:-/tmp}"
+          # release_target first, every time: it is what derives BACKEND_URL,
+          # and pulumi_env exports that (lib.sh). Calling pulumi_env before it
+          # would read an unset variable and stop the step before it previews
+          # anything.
+          for env_name in staging prod; do
+            ENV_NAME="$env_name"
+            release_target
+            pulumi_env "$TOKEN_FILE"
+            step "Previewing the destroy of $STACK"
+            run pulumi destroy --preview-only --diff --stack "$STACK" --cwd "$STACK_DIR" \
+              | tee "$work/destroy-$env_name.diff"
+          done
+          printf 'work=%s\n' "$work" >>"$GITHUB_OUTPUT"
+
+      - name: Attach both plans to the run record
+        env:
+          WORK: ${{ steps.plan.outputs.work }}
+        run: |
+          set -euo pipefail
+          for env_name in staging prod; do
+            printf '===== %s: what pulumi destroy will delete =====\n' "$env_name"
+            cat "$WORK/destroy-$env_name.diff"
+          done
+          {
+            printf '### Teardown of `%s`\n\n' "$GT_APP"
+            printf 'This run deletes staging first, then prod. Both plans are above.\n'
+            printf 'Each deletes exactly the plan below, and the app'"'"'s project is not touched.\n\n'
+            for env_name in staging prod; do
+              printf '#### %s\n\n' "$env_name"
+              printf '````\n'
+              cat "$WORK/destroy-$env_name.diff"
+              printf '````\n\n'
+            done
+          } >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+  # The first delete. `--yes --skip-preview` is the same decision up.sh makes in
+  # the deploy flow: the plan belongs to the preview job above, so an implicit
+  # second preview here would be a second plan nobody had seen. No environment,
+  # because the instance has none (docs/design.md, section 6.1): what authorizes
+  # this run is the ref it is at, checked by the preview job above, and the plan
+  # it wrote is in the run summary.
+  destroy-staging:
+    runs-on: deploy
+    needs: preview
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Each job mints its own token: a token is good for an hour and one job,
+      # and jobs do not share a filesystem (as in deploy.yml).
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      # This job cannot run unless the preview job passed (needs), and that job
+      # refuses any ref that is not a protected teardown tag. `workflows_test.go`
+      # holds both the dependency and the guard in place.
+      - name: Destroy the staging stack
+        env:
+          GT_ENV: staging
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          . scripts/release/lib.sh
+          release_target
+          pulumi_env "$TOKEN_FILE"
+          step "Destroying $STACK"
+          run pulumi destroy --yes --skip-preview --stack "$STACK" --cwd "$STACK_DIR"
+          step "What is left in $STACK"
+          run pulumi stack --show-urns --stack "$STACK" --cwd "$STACK_DIR"
+
+  # The second delete, for the stack that was serving traffic. It runs only
+  # after staging is gone, and its plan is the prod half of the preview above:
+  # nothing this workflow does changes prod in between. No environment, for the
+  # same reason as destroy-staging.
+  destroy-prod:
+    runs-on: deploy
+    needs: destroy-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Destroy the prod stack
+        env:
+          GT_ENV: prod
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          . scripts/release/lib.sh
+          release_target
+          pulumi_env "$TOKEN_FILE"
+          step "Destroying $STACK"
+          run pulumi destroy --yes --skip-preview --stack "$STACK" --cwd "$STACK_DIR"
+          step "What is left in $STACK"
+          run pulumi stack --show-urns --stack "$STACK" --cwd "$STACK_DIR"
