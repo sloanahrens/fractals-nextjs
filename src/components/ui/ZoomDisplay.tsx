@@ -7,6 +7,7 @@ import {
   calculateCenter,
   formatZoom,
 } from "../../lib/presets";
+import { formatCoordinate } from "../../lib/zoomScale";
 
 interface ZoomDisplayProps {
   bounds: FractalBounds;
@@ -19,13 +20,6 @@ export const ZoomDisplay: React.FC<ZoomDisplayProps> = ({
 }) => {
   const zoomLevel = calculateZoomLevel(bounds);
   const center = calculateCenter(bounds);
-
-  const formatCoordinate = (value: number): string => {
-    if (Math.abs(value) < 0.001) {
-      return value.toExponential(3);
-    }
-    return value.toFixed(6);
-  };
 
   return (
     <div className={`bg-gray-50 rounded-lg p-3 border ${className}`}>

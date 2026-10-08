@@ -24,6 +24,12 @@ import {
 } from "../lib/canvasNavigation";
 import { RenderQuality, RenderQualityDecider } from "../lib/renderQuality";
 import {
+  ZOOM_SLIDER_STEP,
+  formatCoordinate,
+  sliderToZoom,
+  zoomToSlider,
+} from "../lib/zoomScale";
+import {
   FractalConfig,
   FractalBounds,
   ColorScheme,
@@ -39,6 +45,10 @@ import { PresetSelector } from "../components/ui/PresetSelector";
 import { ZoomDisplay } from "../components/ui/ZoomDisplay";
 import { CenterControls } from "../components/ui/CenterControls";
 import { CustomPresetManager } from "../components/ui/CustomPresetManager";
+
+// The four manual coordinate boxes. A field is present only once the user has
+// typed in it; while it is absent the box shows the current view.
+type ManualField = "minReal" | "maxReal" | "minImaginary" | "maxImaginary";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -74,29 +84,38 @@ export default function Home() {
   // Preset system
   const [currentPreset, setCurrentPreset] = useState<string>("");
 
-  // Manual coordinate inputs
-  const [manualMinReal, setManualMinReal] = useState(bounds.minReal.toString());
-  const [manualMaxReal, setManualMaxReal] = useState(bounds.maxReal.toString());
-  const [manualMinImaginary, setManualMinImaginary] = useState(
-    bounds.minImaginary.toString(),
-  );
-  const [manualMaxImaginary, setManualMaxImaginary] = useState(
-    bounds.maxImaginary.toString(),
-  );
+  // Manual coordinate inputs. Only text the user typed is held here, so a box
+  // that has not been touched reads straight off the view and Apply reuses the
+  // view's own float64 rather than the rounded text on screen.
+  const [manualDraft, setManualDraft] = useState<
+    Partial<Record<ManualField, string>>
+  >({});
 
-  // The manual inputs mirror the current view until the user edits them, so
-  // they resync whenever the view moves (zoom/pan, preset, reset). Adjusting
-  // the state during the render that sees the new bounds is the documented
+  // The boxes mirror the current view until the user edits them, so they
+  // resync whenever the view moves (zoom/pan, preset, reset). Adjusting the
+  // state during the render that sees the new bounds is the documented
   // alternative to a sync effect:
   // https://react.dev/reference/react/useState#storing-information-from-previous-renders
   const [syncedBounds, setSyncedBounds] = useState(bounds);
   if (syncedBounds !== bounds) {
     setSyncedBounds(bounds);
-    setManualMinReal(bounds.minReal.toString());
-    setManualMaxReal(bounds.maxReal.toString());
-    setManualMinImaginary(bounds.minImaginary.toString());
-    setManualMaxImaginary(bounds.maxImaginary.toString());
+    setManualDraft({});
   }
+
+  const manualText = (field: ManualField, value: number): string =>
+    manualDraft[field] ?? formatCoordinate(value);
+
+  // What Apply should use for a box: exactly what was typed, or the view's own
+  // value when the box still shows the view.
+  const manualValue = (field: ManualField, fallback: number): number => {
+    const typed = manualDraft[field];
+    return typed === undefined ? fallback : parseFloat(typed);
+  };
+
+  const editManualCoordinate = (field: ManualField, value: string) => {
+    setManualDraft((draft) => ({ ...draft, [field]: value }));
+    setCurrentPreset("");
+  };
 
   // Draw the canvas at the quality the render policy asks for: the cheap
   // low-resolution pass while a gesture is moving the view, the full image
@@ -268,10 +287,10 @@ export default function Home() {
 
   // Helper functions for manual coordinate input
   const applyManualCoordinates = () => {
-    const minReal = parseFloat(manualMinReal);
-    const maxReal = parseFloat(manualMaxReal);
-    const minImaginary = parseFloat(manualMinImaginary);
-    const maxImaginary = parseFloat(manualMaxImaginary);
+    const minReal = manualValue("minReal", bounds.minReal);
+    const maxReal = manualValue("maxReal", bounds.maxReal);
+    const minImaginary = manualValue("minImaginary", bounds.minImaginary);
+    const maxImaginary = manualValue("maxImaginary", bounds.maxImaginary);
 
     // Validate bounds
     if (
@@ -427,16 +446,18 @@ export default function Home() {
                 />
                 <Slider
                   label="Zoom Level"
-                  value={zoomLevel}
-                  min={MIN_ZOOM}
-                  max={MAX_ZOOM}
-                  step={1}
-                  onChange={(value) => {
-                    setZoomLevel(value);
+                  value={zoomToSlider(zoomLevel)}
+                  min={0}
+                  max={1}
+                  step={ZOOM_SLIDER_STEP}
+                  onChange={(position) => {
+                    setZoomLevel(sliderToZoom(position));
                     setCurrentPreset("");
                   }}
                   disabled={isRendering}
-                  formatValue={(v) => `${formatZoom(v)}x`}
+                  formatValue={(position) =>
+                    `${formatZoom(sliderToZoom(position))}x`
+                  }
                 />
                 <div className="flex gap-2">
                   <Button
@@ -590,48 +611,40 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-4">
                   <Input
                     label="Min Real"
-                    value={manualMinReal}
+                    value={manualText("minReal", bounds.minReal)}
                     type="number"
                     step="any"
-                    onChange={(value) => {
-                      setManualMinReal(value);
-                      setCurrentPreset("");
-                    }}
+                    onChange={(value) => editManualCoordinate("minReal", value)}
                     disabled={isRendering}
                   />
                   <Input
                     label="Max Real"
-                    value={manualMaxReal}
+                    value={manualText("maxReal", bounds.maxReal)}
                     type="number"
                     step="any"
-                    onChange={(value) => {
-                      setManualMaxReal(value);
-                      setCurrentPreset("");
-                    }}
+                    onChange={(value) => editManualCoordinate("maxReal", value)}
                     disabled={isRendering}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <Input
                     label="Min Imaginary"
-                    value={manualMinImaginary}
+                    value={manualText("minImaginary", bounds.minImaginary)}
                     type="number"
                     step="any"
-                    onChange={(value) => {
-                      setManualMinImaginary(value);
-                      setCurrentPreset("");
-                    }}
+                    onChange={(value) =>
+                      editManualCoordinate("minImaginary", value)
+                    }
                     disabled={isRendering}
                   />
                   <Input
                     label="Max Imaginary"
-                    value={manualMaxImaginary}
+                    value={manualText("maxImaginary", bounds.maxImaginary)}
                     type="number"
                     step="any"
-                    onChange={(value) => {
-                      setManualMaxImaginary(value);
-                      setCurrentPreset("");
-                    }}
+                    onChange={(value) =>
+                      editManualCoordinate("maxImaginary", value)
+                    }
                     disabled={isRendering}
                   />
                 </div>
