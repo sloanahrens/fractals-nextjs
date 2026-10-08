@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"regexp"
@@ -28,26 +29,45 @@ const (
 	stagingEnv     = "staging"
 	stagingService = "fractals-nextjs-staging"
 
-	project        = "gt-fractals-m4xq"
-	region         = "us-central1"
-	port           = 8080
-	healthPath     = "/api/health"
-	memory         = "512Mi"
-	minScale       = 0
-	maxScale       = 3
-	concurrency    = 80
-	runtimeAccount = "runtime-fractals-nextjs@gt-fractals-m4xq.iam.gserviceaccount.com"
+	region      = "us-central1"
+	port        = 8080
+	healthPath  = "/api/health"
+	memory      = "512Mi"
+	minScale    = 0
+	maxScale    = 3
+	concurrency = 80
 
 	// The resource types a deployment creates, as Pulumi names them.
 	serviceType   = "gcp:cloudrunv2/service:Service"
 	iamMemberType = "gcp:cloudrunv2/serviceIamMember:ServiceIamMember"
 )
 
-// testDigest stands in for the digest a release pins, which a stack config
-// file does not carry: scripts/release/preview.sh sets imageDigest from the
-// digest build_push.sh printed.
-const testDigest = "us-central1-docker.pkg.dev/gt-fractals-m4xq/apps/fractals-nextjs@" +
-	"sha256:9f2b1c0d3e4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4"
+// The deployment's identity, read from the stack config files rather than
+// written here. The project is the one value in it that this repository names
+// in several places, so the files the program itself reads are where the test
+// reads it from: a rename is an edit to them, and to what they cannot reach
+// (fr-hz5). loadStackFixture fills these in before any test runs.
+var (
+	// project is the GCP project the deployment creates its service in, the
+	// one the reviewed manifest bootstraps (devops manifests/fractals.yaml).
+	project string
+
+	// runtimeAccount is the account the container runs as. The library derives
+	// it from the app and the project (devops internal/gcp,
+	// RuntimeServiceAccountEmail), so a rename moves it with them.
+	runtimeAccount string
+
+	// testDigest stands in for the digest a release pins, which a stack config
+	// file does not carry: scripts/release/preview.sh sets imageDigest from the
+	// digest build_push.sh printed. Only the digest travelling into the
+	// container unchanged is under test, so any sha256 does; its path is the
+	// one the release flow builds (scripts/release/lib.sh, release_target).
+	testDigest string
+)
+
+// testDigestHex is that digest, as build_push.sh prints it: the sha256 the
+// registry reports for the image, with no path in front of it.
+const testDigestHex = "9f2b1c0d3e4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4"
 
 // serviceURI is the address the mock provider reports for a created service.
 // The .invalid domain is reserved for exactly this (RFC 2606), so nothing here
@@ -69,6 +89,40 @@ var specKeys = []string{"name", "env", "project", "region", "imageDigest", "port
 // releaseKeys are the keys a release writes rather than the repository
 // shipping them (scripts/release/lib.sh, set_digest_config).
 var releaseKeys = []string{"imageDigest"}
+
+// TestMain reads the deployment's identity out of the stack config files
+// before the tests run. The fixture is what those files say, so a checkout
+// where they cannot be read has nothing to test.
+func TestMain(m *testing.M) {
+	if err := loadStackFixture(); err != nil {
+		fmt.Fprintln(os.Stderr, "deploy fixture:", err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+// loadStackFixture fills project, runtimeAccount and testDigest from the stack
+// config files. The project comes from the staging stack's file, the one
+// TestProgramDeploysTheConfiguredApp deploys; TestBothStacksConfigureThisApp
+// holds the prod file to the same project, because the two stacks are this one
+// app in one project.
+func loadStackFixture() error {
+	file := stackFiles[stagingEnv]
+	config, err := readStackConfig(file)
+	if err != nil {
+		return err
+	}
+
+	key := pulumiProject + ":project"
+	got := config[key]
+	if got == "" {
+		return fmt.Errorf("%s names no GCP project (%s)", file, key)
+	}
+	project = got
+	runtimeAccount = fmt.Sprintf("runtime-%s@%s.iam.gserviceaccount.com", appName, project)
+	testDigest = fmt.Sprintf("%s-docker.pkg.dev/%s/apps/%s@sha256:%s", region, project, appName, testDigestHex)
+	return nil
+}
 
 // TestProgramDeploysTheConfiguredApp runs the program the way the release flow
 // runs it -- its program, under the mock provider, with the staging stack's
@@ -173,7 +227,7 @@ func TestBothStacksConfigureThisApp(t *testing.T) {
 				t.Errorf("%s names the app %q, want %q", file, got, appName)
 			}
 			if got := config[pulumiProject+":project"]; got != project {
-				t.Errorf("%s deploys to project %q, want %q", file, got, project)
+				t.Errorf("%s deploys to project %q, want %q: the two stacks are one app in one project", file, got, project)
 			}
 
 			monitor, _ := deploy(t, env)
@@ -247,28 +301,19 @@ func deploy(t *testing.T, env string) (*deployMonitor, map[string]pulumi.Input) 
 	return monitor, exports
 }
 
-// stackConfig reads a stack's config file the way Pulumi reads it: a config
-// block whose every key is namespaced with the Pulumi project name. A key
-// namespaced for another project, a key the program never reads, or a value
-// that is not a plain string is a value the program cannot see, so each one
-// fails the read rather than being ignored.
+// stackConfig reads a stack's config file and holds its keys to what the
+// program reads: a config block whose every key is namespaced with the Pulumi
+// project name. A key namespaced for another project, a key the program never
+// reads, or a value that is not a plain string is a value the program cannot
+// see, so each one fails the read rather than being ignored.
 func stackConfig(t *testing.T, file string) map[string]string {
 	t.Helper()
-	data, err := os.ReadFile(file)
+	config, err := readStackConfig(file)
 	if err != nil {
-		t.Fatalf("read %s: %v", file, err)
-	}
-	var doc struct {
-		Config map[string]string `yaml:"config"`
-	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse %s: %v", file, err)
-	}
-	if len(doc.Config) == 0 {
-		t.Fatalf("%s has no config block", file)
+		t.Fatal(err)
 	}
 
-	for key := range doc.Config {
+	for key := range config {
 		namespace, name, ok := strings.Cut(key, ":")
 		if !ok || namespace != pulumiProject {
 			t.Errorf("%s sets %q, which is not namespaced for the Pulumi project %q (Pulumi.yaml)", file, key, pulumiProject)
@@ -281,7 +326,27 @@ func stackConfig(t *testing.T, file string) map[string]string {
 			t.Errorf("%s sets %q, which a release pins (scripts/release/lib.sh), not the repository", file, key)
 		}
 	}
-	return doc.Config
+	return config
+}
+
+// readStackConfig reads a stack's config file the way Pulumi reads it: the
+// config block, parsed. It reports what it cannot read; whether a key belongs
+// in one of these files is stackConfig's question.
+func readStackConfig(file string) (map[string]string, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", file, err)
+	}
+	var doc struct {
+		Config map[string]string `yaml:"config"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", file, err)
+	}
+	if len(doc.Config) == 0 {
+		return nil, fmt.Errorf("%s has no config block", file)
+	}
+	return doc.Config, nil
 }
 
 // deployMonitor stands in for the provider: it records every resource
