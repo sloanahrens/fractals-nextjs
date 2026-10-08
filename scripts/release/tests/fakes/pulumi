@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#
+# Fake pulumi for the release script tests (bead B5.2). It records every call,
+# prints a plausible preview diff and a plausible up summary, and answers
+# `stack output url` with the service URL. No stack, no state backend and no
+# provider is involved.
+#
+# It records whether the Pulumi provider would have had a token, and never the
+# token: `token_env=present` in the log is what proves the release scripts hand
+# the credential over in the environment instead of on a command line.
+#
+# Fake-specific environment:
+#   FAKE_LOG            where invocations are recorded (default /dev/null)
+#   FAKE_SERVICE_URL    the URL `stack output url` answers with
+#   FAKE_PULUMI_FAIL    a subcommand to fail, so a test can watch a release stop
+#   FAKE_PULUMI_NO_URL  set to 1 to make `stack output url` print nothing
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+service_url=${FAKE_SERVICE_URL:-https://fractals-nextjs-staging-abc123.us-central1.run.app}
+
+# Whether the provider would have had a credential. The value is never read:
+# only its presence is recorded, which is why the log line says present/absent
+# rather than carrying the token.
+token_env=absent
+[[ -n ${GOOGLE_OAUTH_ACCESS_TOKEN:-} ]] && token_env=present
+
+case ${1:-} in
+config)
+  fake_log "pulumi $* token_env=$token_env"
+  ;;
+preview)
+  if [[ ${FAKE_PULUMI_FAIL:-} == preview ]]; then
+    fake_log "pulumi $* token_env=$token_env (failed)"
+    printf 'error: preview failed\n' >&2
+    exit 1
+  fi
+  fake_log "pulumi $* token_env=$token_env"
+  printf '%s\n' \
+    'Previewing update (gt-fractals/fractals-nextjs-staging):' \
+    '     Type                     Name                                    Plan' \
+    ' +   pulumi:pulumi:Stack      fractals-nextjs-staging                 create' \
+    ' +   └─ gcp:cloudrun:Service  fractals-nextjs-staging                 create' \
+    'Resources:' \
+    '    + 2 to create'
+  ;;
+up)
+  if [[ ${FAKE_PULUMI_FAIL:-} == up ]]; then
+    fake_log "pulumi $* token_env=$token_env (failed)"
+    printf 'error: up failed\n' >&2
+    exit 1
+  fi
+  fake_log "pulumi $* token_env=$token_env"
+  printf '%s\n' \
+    'Updating (gt-fractals/fractals-nextjs-staging):' \
+    '     Type                     Name                                    Status' \
+    ' +   pulumi:pulumi:Stack      fractals-nextjs-staging                 created (4s)' \
+    'Outputs:' \
+    "    url: \"$service_url\"" \
+    'Resources:' \
+    '    + 2 created'
+  ;;
+stack)
+  case ${2:-} in
+  init)
+    fake_log "pulumi $* token_env=$token_env"
+    ;;
+  output)
+    fake_log "pulumi $* token_env=$token_env"
+    [[ ${FAKE_PULUMI_NO_URL:-} == 1 ]] || printf '%s\n' "$service_url"
+    ;;
+  *)
+    fake_log "pulumi $* token_env=$token_env"
+    ;;
+  esac
+  ;;
+*)
+  fake_log "pulumi $* token_env=$token_env"
+  ;;
+esac

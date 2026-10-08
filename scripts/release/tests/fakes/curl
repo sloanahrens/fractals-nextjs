@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#
+# Fake curl for the release script tests (bead B5.2). health.sh calls curl for
+# one thing only: the HTTP status of the app's health path. The fake prints a
+# status and records the URL it was asked about, so a test can make the health
+# check succeed, fail, or fail and then succeed.
+#
+# Fake-specific environment:
+#   FAKE_LOG           where invocations are recorded (default /dev/null)
+#   FAKE_HTTP_STATUS   status to print, default 200
+#   FAKE_HTTP_STATUSES statuses to hand out in order, one per call, the last
+#                      one repeating; overrides FAKE_HTTP_STATUS
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+fake_log "curl $*"
+
+statuses=${FAKE_HTTP_STATUSES:-}
+if [[ -z $statuses ]]; then
+  printf '%s\n' "${FAKE_HTTP_STATUS:-200}"
+  exit 0
+fi
+
+# Hand the statuses out in order. The call counter lives next to the log, so it
+# is per-test and removed with the test's temporary directory.
+counter=${FAKE_HTTP_CALLS:-${FAKE_LOG}.curl-calls}
+calls=0
+[[ -f $counter ]] && calls=$(wc -l <"$counter" | tr -d ' ')
+printf 'call\n' >>"$counter"
+
+read -r -a statuses_array <<<"$statuses"
+index=$calls
+((index < ${#statuses_array[@]})) || index=$((${#statuses_array[@]} - 1))
+printf '%s\n' "${statuses_array[$index]}"

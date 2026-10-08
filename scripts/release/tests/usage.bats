@@ -1,0 +1,86 @@
+#!/usr/bin/env bats
+#
+# Every release script has to be safe to run blind: it must explain itself with
+# --help, refuse what it does not understand, and be executable. These tests
+# cover every command in the directory, so a new script that forgets one is
+# caught here rather than during a release.
+#
+# lib.sh is excluded: it is sourced by the commands, not run as one.
+
+load helpers.bash
+
+setup() {
+  setup_release_env
+}
+
+@test "every script has --help that names --dry-run" {
+  local script
+  while read -r script; do
+    run "$script" --help
+    if [[ $status -ne 0 ]]; then
+      printf '%s --help exited %s:\n%s\n' "$script" "$status" "$output" >&2
+      return 1
+    fi
+    if [[ $output != *usage:* ]]; then
+      printf '%s --help printed no usage line:\n%s\n' "$script" "$output" >&2
+      return 1
+    fi
+    if [[ $output != *--dry-run* ]]; then
+      printf '%s --help does not mention --dry-run:\n%s\n' "$script" "$output" >&2
+      return 1
+    fi
+  done < <(release_scripts)
+}
+
+# A flag parser that consumes nothing loops forever, so this test asserts that
+# each script names what it did not understand and stops.
+@test "an unknown flag is refused by every script" {
+  local script
+  while read -r script; do
+    run "$script" --definitely-not-a-flag
+    if [[ $status -eq 0 ]]; then
+      printf '%s accepted an unknown flag:\n%s\n' "$script" "$output" >&2
+      return 1
+    fi
+    if [[ $output != *"unknown argument"* ]]; then
+      printf '%s did not explain the unknown flag:\n%s\n' "$script" "$output" >&2
+      return 1
+    fi
+  done < <(release_scripts)
+}
+
+@test "the boolean flags are consumed rather than spun on" {
+  # --init-stack and --allow-non-checkout take no value; a parser that reads
+  # them without shifting loops until something kills it.
+  local checkout=$BATS_TEST_TMPDIR/flag-checkout
+  make_checkout "$checkout" v1.0.0
+
+  run "$RELEASE_DIR/build_push.sh" --app "$APP" --tag v1.0.0 --source "$checkout" --allow-non-checkout --dry-run
+  [ "$status" -eq 0 ]
+
+  run "$RELEASE_DIR/up.sh" --app "$APP" --digest "$DIGEST" --token-file "$TOKEN_FILE" --init-stack --dry-run
+  [ "$status" -eq 0 ]
+
+  run "$RELEASE_DIR/preview.sh" --app "$APP" --digest "$DIGEST" --token-file "$TOKEN_FILE" --init-stack --dry-run
+  [ "$status" -eq 0 ]
+
+  run "$RELEASE_DIR/promote.sh" "$DIGEST" --app "$APP" --token-file "$TOKEN_FILE" --init-stack --dry-run
+  [ "$status" -eq 0 ]
+}
+
+@test "every script is executable" {
+  local script
+  while read -r script; do
+    if [[ ! -x $script ]]; then
+      printf '%s is not executable\n' "$script" >&2
+      return 1
+    fi
+  done < <(release_scripts)
+}
+
+@test "the directory holds the six scripts of the release flow" {
+  local got
+  got=$(while read -r script; do printf '%s ' "${script##*/}"; done < <(release_scripts))
+
+  [ "$got" = 'build_push.sh health.sh mint_token.sh preview.sh promote.sh up.sh ' ]
+}

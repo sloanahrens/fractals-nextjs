@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+#
+# Fake gcloud for the release script tests (bead B5.2). It mints a fixed token,
+# answers read-only describes and records every call. The one call it models as
+# a state change is `run services update-traffic`, which is what lets
+# health.bats show that a failed health check leaves the previous revision
+# serving — and that the fake would record a shift if one were attempted.
+#
+# The base key is never read: the fake records only *where* the credential came
+# from (the environment, or a command line), never any part of its contents.
+#
+# Fake-specific environment:
+#   FAKE_LOG           where invocations are recorded (default /dev/null)
+#   FAKE_STATE         fake cloud state file (serving_revision, latest_revision)
+#   FAKE_ACCESS_TOKEN  the token `auth print-access-token` prints
+#   FAKE_SERVICE_URL   the URL `run services describe` answers with
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+service_url=${FAKE_SERVICE_URL:-https://fractals-nextjs-staging-abc123.us-central1.run.app}
+
+# mutating_words are the verbs that would change the cloud. A call containing
+# one is recorded as a MUTATION, so a test can assert that a script made none.
+mutating_words='^(deploy|delete|update|create|add-iam-policy-binding|remove-iam-policy-binding|set-iam-policy|update-traffic)$'
+
+record() {
+  local word mutation=no
+  for word in "$@"; do
+    [[ $word =~ $mutating_words ]] && mutation=yes
+  done
+  if [[ $mutation == yes ]]; then
+    fake_mutation "gcloud $*"
+  else
+    fake_log "gcloud $*"
+  fi
+}
+
+case ${1:-} in
+auth)
+  case ${2:-} in
+  print-access-token)
+    shift 2
+    key_env=no
+    key_argv=no
+    if [[ -n ${CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE:-} ]]; then key_env=yes; fi
+    for word in "$@"; do
+      [[ $word == "${CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE:-@@none@@}" ]] && key_argv=yes
+    done
+    fake_log "gcloud auth print-access-token key_env=$key_env key_argv=$key_argv $*"
+    printf '%s\n' "${FAKE_ACCESS_TOKEN:-fake-access-token-0123456789}"
+    ;;
+  *)
+    fake_log "gcloud $*"
+    ;;
+  esac
+  ;;
+run)
+  case "${2:-} ${3:-}" in
+  'services describe')
+    format=''
+    for word in "$@"; do
+      case $word in
+      --format=*) format=${word#--format=} ;;
+      esac
+    done
+    record "$@"
+    case $format in
+    *latestReadyRevisionName*) fake_state_get latest_revision ;;
+    *) printf '%s\n' "$service_url" ;;
+    esac
+    ;;
+  'services update-traffic')
+    # The only modeled mutation: traffic moves to the newest revision.
+    record "$@"
+    fake_state_set serving_revision "$(fake_state_get latest_revision)"
+    ;;
+  *)
+    record "$@"
+    ;;
+  esac
+  ;;
+*)
+  record "$@"
+  ;;
+esac

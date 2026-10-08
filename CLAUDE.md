@@ -107,11 +107,31 @@ npx tsc --noEmit
 There is no deploy pipeline in this repo. The landing gate
 (`.forgejo/workflows/gate.yml`) runs `make gate` on a `land/**` branch; it needs
 no cloud credentials. Build and deploy happen on the deploy runner, through the
-devops system, run by the human. See the Gas Town rules at the end of this file.
+devops system, run by the human. The program that deploys the app is `deploy/`,
+which that runner executes at a release tag and no CI here runs
+(`deploy/README.md`). See the Gas Town rules at the end of this file.
 
 ## Version Notes
 
-_Last updated: 2026-10-07_
+_Last updated: 2026-10-08_
+
+### Deploy program (2026-10-08)
+
+- Added `deploy/`, the Go Pulumi program that deploys this app to Cloud Run
+  through the `gt.local/devops` library (bead B4.5 of the devops plan), and
+  `scripts/release/`, copied verbatim from that library's repository at the
+  `v0.1.0` its `go.mod` pins. No runner clones the devops repo, so the app
+  carries the scripts its release flow runs, and both sides are one revision.
+- `deploy/` is a Go module of its own, so the Node gates never build it.
+  `make deploy-check` runs its mock test and `go vet`, and is deliberately not
+  part of `make gate`: the gate image has no Go toolchain and no route to the
+  Forgejo Go registry that serves `gt.local/devops`. `deploy/README.md` has the
+  proxy settings, the stack names and how a release changes these files.
+- Two names there are load-bearing and easy to get wrong. The Pulumi project is
+  `fractals`, not this repository's name: the patrol finds the app's state under
+  that project name. The app's own name is this repository's,
+  `fractals-nextjs`, which is what the library turns into the service
+  `fractals-nextjs-staging` and what the deploy workflow's `GT_APP` defaults to.
 
 ### eslint-plugin-react-hooks 7.1.x (2026-10-07)
 
