@@ -14,14 +14,12 @@ import { Select } from "./Select";
 interface PresetSelectorProps {
   currentPreset?: string;
   onPresetSelect: (preset: FractalPreset) => void;
-  onSavePreset: () => void;
   className?: string;
 }
 
 export const PresetSelector: React.FC<PresetSelectorProps> = ({
   currentPreset,
   onPresetSelect,
-  onSavePreset,
   className = "",
 }) => {
   // The saved presets live in localStorage; subscribe so the dropdown lists a
@@ -65,14 +63,6 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
           value={currentPreset || ""}
           onChange={handlePresetChange}
         />
-        <Button
-          onClick={onSavePreset}
-          variant="secondary"
-          size="sm"
-          className="min-w-fit"
-        >
-          Save Current
-        </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">

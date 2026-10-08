@@ -327,12 +327,6 @@ export default function Home() {
     setCurrentPreset(""); // Clear preset when manually adjusting
   };
 
-  const handleSaveCurrentPreset = () => {
-    // Trigger the CustomPresetManager's save dialog
-    const event = new CustomEvent("save-preset");
-    window.dispatchEvent(event);
-  };
-
   const handlePresetsChange = () => {
     // Force re-render when presets change
     setCurrentPreset((prev) => prev);
@@ -398,7 +392,6 @@ export default function Home() {
               <PresetSelector
                 currentPreset={currentPreset}
                 onPresetSelect={handlePresetSelect}
-                onSavePreset={handleSaveCurrentPreset}
               />
             </div>
 
