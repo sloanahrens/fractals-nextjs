@@ -19,12 +19,12 @@ setup() {
 
   [ "$status" -eq 0 ]
   [[ $output == *"preview_file=$PREVIEW_FILE"* ]]
-  [[ $output == *"stack=$APP-staging"* ]]
+  [[ $output == *"stack=staging"* ]]
   [ -s "$PREVIEW_FILE" ]
   grep -q 'Previewing update' "$PREVIEW_FILE"
 
-  assert_in_log "pulumi config set imageDigest $DIGEST --stack $APP-staging --cwd $STACK_DIR --plaintext token_env=present"
-  assert_in_log "pulumi preview --diff --stack $APP-staging --cwd $STACK_DIR token_env=present"
+  assert_in_log "pulumi config set imageDigest $DIGEST --stack staging --cwd $STACK_DIR --plaintext token_env=present"
+  assert_in_log "pulumi preview --diff --stack staging --cwd $STACK_DIR token_env=present"
 }
 
 @test "preview refuses a tag where a digest belongs" {
@@ -47,7 +47,7 @@ setup() {
 
   [ "$status" -eq 0 ]
   [[ $output == *"url=$FAKE_SERVICE_URL"* ]]
-  assert_in_log "pulumi up --yes --skip-preview --stack $APP-staging --cwd $STACK_DIR token_env=present"
+  assert_in_log "pulumi up --yes --skip-preview --stack staging --cwd $STACK_DIR token_env=present"
 }
 
 @test "up refuses a tag where a digest belongs" {
@@ -61,7 +61,7 @@ setup() {
   run "$RELEASE_DIR/up.sh" --app "$APP" --env prod --digest "$DIGEST" --token-file "$TOKEN_FILE"
 
   [ "$status" -eq 0 ]
-  assert_in_log "pulumi up --yes --skip-preview --stack $APP-prod --cwd $STACK_DIR token_env=present"
+  assert_in_log "pulumi up --yes --skip-preview --stack prod --cwd $STACK_DIR token_env=present"
 }
 
 @test "the digest reaches the provider through the environment, not argv" {
@@ -81,7 +81,7 @@ setup() {
   : >"$FAKE_LOG"
   run "$RELEASE_DIR/up.sh" --app "$APP" --digest "$DIGEST" --token-file "$TOKEN_FILE" --init-stack
   [ "$status" -eq 0 ]
-  assert_in_log "pulumi stack init $APP-staging --cwd $STACK_DIR"
+  assert_in_log "pulumi stack init staging --cwd $STACK_DIR"
 }
 
 @test "refuses a token file that is not there" {

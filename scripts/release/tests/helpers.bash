@@ -54,6 +54,12 @@ setup_release_env() {
   chmod 600 "$KEY_FILE"
   export KEY_FILE
 
+  # The scripts read the base key's path from GT_BASE_KEY_FILE, the variable the
+  # workflow sets (workflows/README.md), and build the ADC file Pulumi's own
+  # calls need from it (lib.sh, adc_credentials). mint_token.sh takes --key-file
+  # as well; the rest have only this.
+  export GT_BASE_KEY_FILE="$KEY_FILE"
+
   # FAKE_ACCESS_TOKEN is the token the fake gcloud mints. It is unique per test,
   # so a leak can be traced to the file that leaked it and a search for its
   # value cannot match the fakes themselves.
@@ -138,6 +144,23 @@ assert_no_token_value() {
     printf 'the minted token reached the output:\n%s\n' "$text" >&2
     return 1
   fi
+}
+
+# deployer_adc_url prints the impersonation URL the ADC file has to carry for
+# the app the tests release: exactly the account lib.sh's deployer_sa names, in
+# the one form Go's ADC loader accepts for an impersonated_service_account
+# credential (bead dv-dw4). The tests assert on this rather than on a hand-typed
+# email so a change to deployer_sa fails there.
+deployer_adc_url() {
+  printf 'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/deployer-%s@%s.iam.gserviceaccount.com:generateAccessToken' \
+    "$APP" "$PROJECT"
+}
+
+# secrets_provider_url prints the gcpkms secrets provider URL every stack must
+# be created with: the app project's key ring and key, which bootstrap creates
+# as `pulumi` and `secrets` (internal/gcp/kms.go).
+secrets_provider_url() {
+  printf 'gcpkms://projects/%s/locations/us-central1/keyRings/pulumi/cryptoKeys/secrets' "$PROJECT"
 }
 
 # assert_in_log PATTERN fails when the fake tools were never asked for

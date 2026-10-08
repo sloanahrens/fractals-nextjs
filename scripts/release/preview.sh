@@ -13,7 +13,12 @@
 #              [--env staging|prod] [--preview-file FILE] [--init-stack] [--dry-run]
 #
 # Environment fallbacks: GT_APP, GT_ENV, GT_PROJECT, GT_DIGEST, GT_TOKEN_FILE,
-# GT_PREVIEW_FILE, GT_STACK_DIR, GT_BACKEND_URL, DRY_RUN=1.
+# GT_BASE_KEY_FILE, GT_PREVIEW_FILE, GT_STACK_DIR, GT_BACKEND_URL, DRY_RUN=1.
+#
+# GT_BASE_KEY_FILE is the base key lib.sh builds Pulumi's own credential from:
+# the gs:// state backend and the gcpkms secrets provider authenticate through
+# Application Default Credentials, which the provider's token is not (lib.sh,
+# adc_credentials).
 
 set -euo pipefail
 SCRIPT_NAME=${0##*/}

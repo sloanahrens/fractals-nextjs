@@ -18,6 +18,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	gcp "gt.local/devops/internal/gcp"
+	"gt.local/devops/pkg/manifest"
 )
 
 // forbidden are the substrings no file under scripts/release may contain: the
@@ -27,8 +30,11 @@ import (
 // (the same trick as ops/ops_test.go).
 var forbidden = []string{"/Users/" + "sloan", "claude-" + "501"}
 
-// commands are the scripts a release runs, in the order the flow uses them.
+// commands are every script in this directory that is a command, in the order a
+// first release uses them: the one-time stack creation init_stack.sh (bead
+// dv-dw4), then the six steps of the flow.
 var commands = []string{
+	"init_stack.sh",
 	"build_push.sh",
 	"mint_token.sh",
 	"preview.sh",
@@ -82,8 +88,8 @@ func shellFiles(t *testing.T) []string {
 	return append(files, matches...)
 }
 
-// TestReleaseScriptsArePresent checks the six scripts of the release flow are
-// there and executable. Git records the mode, so a lost exec bit is a shipped
+// TestReleaseScriptsArePresent checks every script of the directory is there
+// and executable. Git records the mode, so a lost exec bit is a shipped
 // regression rather than a local quirk.
 func TestReleaseScriptsArePresent(t *testing.T) {
 	for _, script := range commands {
@@ -135,8 +141,9 @@ func TestShellFilesShellcheck(t *testing.T) {
 	}
 }
 
-// TestBatsSuite runs the bats suite in tests/. It is the check the bead names
-// by hand: the six scripts, the fakes, and the acceptance items of dv-cgu.
+// TestBatsSuite runs the bats suite in tests/. It is the check the beads name
+// by hand: the scripts, the fakes, the acceptance items of dv-cgu, and the
+// credentials and stack creation of dv-dw4.
 //
 // bats is not on PATH on every machine (it is a test-only dependency, and the
 // suite's fakes need nothing else), so its absence skips this check rather than
@@ -190,5 +197,46 @@ func TestNoHostSpecificPaths(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk scripts/release: %v", err)
+	}
+}
+
+// TestTheReleaseScriptsImpersonateTheAccountBootstrapCreates ties the release
+// path's one cloud identity to the app's reviewed manifest (beads dv-4fu and
+// dv-iou).
+//
+// A release mints a one-hour token for the app's deployer service account, and
+// lib.sh's deployer_sa is the only place that account is named:
+// deployer-<app>@<project>. Bootstrap creates that same account from the
+// manifest's app field, so an app name that differs between the two sides is a
+// release that cannot mint a token at all -- which is exactly the disagreement
+// the manifest's app field and the workflow's GT_APP had before dv-4fu. The test
+// reads the reviewed manifest and runs the shell function the scripts run,
+// rather than restating either derivation, so a change to lib.sh alone fails
+// here.
+func TestTheReleaseScriptsImpersonateTheAccountBootstrapCreates(t *testing.T) {
+	m, err := manifest.Load(filepath.Join("..", "..", "manifests", "fractals.yaml"))
+	if err != nil {
+		t.Fatalf("load manifests/fractals.yaml: %v", err)
+	}
+
+	// The environment a release runs in: APP and PROJECT are what release_target
+	// resolves GT_APP and GT_PROJECT into.
+	cmd := exec.Command("bash", "-c", ". ./lib.sh; deployer_sa")
+	cmd.Env = append(os.Environ(), "APP="+m.App, "PROJECT="+m.Project)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("deployer_sa with APP=%s PROJECT=%s: %v\n%s", m.App, m.Project, err, out)
+	}
+
+	got := strings.TrimSpace(string(out))
+	want := gcp.DeployerServiceAccountEmail(m.App, m.Project)
+	if got != want {
+		t.Errorf("the release scripts impersonate %q, want %q, the account bootstrap creates from the same manifest", got, want)
+	}
+	// The literal is the name the two derivations have to land on for this app:
+	// a release for fractals-nextjs impersonates deployer-fractals-nextjs in
+	// gt-fractals-m4xq (manifests/fractals.yaml).
+	if want := "deployer-fractals-nextjs@gt-fractals-m4xq.iam.gserviceaccount.com"; got != want {
+		t.Errorf("the release scripts impersonate %q, want %q", got, want)
 	}
 }

@@ -55,9 +55,11 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$(field "$output" url)" = "$FAKE_SERVICE_URL" ]
 
-  # Step 7's summary material: the tag, the digest and the two stacks.
-  assert_in_log "pulumi config set imageDigest $digest --stack $APP-staging --cwd $STACK_DIR --plaintext"
-  assert_in_log "pulumi config set imageDigest $digest --stack $APP-prod --cwd $STACK_DIR --plaintext"
+  # Step 7's summary material: the tag, the digest and the two stacks. The
+  # stacks are the bare environment names -- the name the patrol reads an app's
+  # state under (scripts/release/tests/stack_name.bats).
+  assert_in_log "pulumi config set imageDigest $digest --stack staging --cwd $STACK_DIR --plaintext"
+  assert_in_log "pulumi config set imageDigest $digest --stack prod --cwd $STACK_DIR --plaintext"
 
   # One build for the whole release: prod gets the digest staging proved.
   [ "$(grep -c '^docker build ' "$FAKE_LOG")" -eq 1 ]
@@ -78,5 +80,5 @@ setup() {
   [ "$status" -ne 0 ]
 
   # A failed health check means no promotion: the prod stack was never touched.
-  refute_in_log "$APP-prod"
+  refute_in_log "--stack prod"
 }

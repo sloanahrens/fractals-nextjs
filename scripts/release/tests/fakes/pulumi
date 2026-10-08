@@ -5,15 +5,18 @@
 # `stack output url` with the service URL. No stack, no state backend and no
 # provider is involved.
 #
-# It records whether the Pulumi provider would have had a token, and never the
-# token: `token_env=present` in the log is what proves the release scripts hand
-# the credential over in the environment instead of on a command line.
+# It records whether the Pulumi provider would have had a token and whether
+# Pulumi's own calls would have had Application Default Credentials, and never
+# either value: `token_env=present` and `adc_env=present` in the log are what
+# prove the release scripts hand the credentials over out of a log's reach —
+# the token in the environment, the ADC file as a path, mode 600.
 #
 # Fake-specific environment:
 #   FAKE_LOG            where invocations are recorded (default /dev/null)
 #   FAKE_SERVICE_URL    the URL `stack output url` answers with
 #   FAKE_PULUMI_FAIL    a subcommand to fail, so a test can watch a release stop
 #   FAKE_PULUMI_NO_URL  set to 1 to make `stack output url` print nothing
+#   FAKE_PULUMI_STACKS  the JSON `stack ls --json` prints (default [])
 
 set -euo pipefail
 # shellcheck source=scripts/release/tests/fakes/_fake.sh
@@ -27,17 +30,40 @@ service_url=${FAKE_SERVICE_URL:-https://fractals-nextjs-staging-abc123.us-centra
 token_env=absent
 [[ -n ${GOOGLE_OAUTH_ACCESS_TOKEN:-} ]] && token_env=present
 
+# adc_summary is what the process would have been handed for the gs:// state
+# backend and the gcpkms secrets provider: whether GOOGLE_APPLICATION_CREDENTIALS
+# was set, the mode of the file it names, and the non-secret fields a test
+# asserts on (credential type, impersonation URL, delegate count, and whether
+# source_credentials is there at all). The source key is key material and is
+# never read into the log. The impersonation URL is not a secret — it names the
+# account a job may act as — and recording it is how a test pins the account
+# without reading the credential.
+adc_summary=adc_env=absent
+if [[ -n ${GOOGLE_APPLICATION_CREDENTIALS:-} ]]; then
+  adc_file=$GOOGLE_APPLICATION_CREDENTIALS
+  adc_mode=$(stat -c %a "$adc_file" 2>/dev/null || stat -f %Lp "$adc_file" 2>/dev/null || printf '?')
+  adc_type=$(jq -r '.type // ""' "$adc_file" 2>/dev/null || printf '?')
+  adc_url=$(jq -r '.service_account_impersonation_url // ""' "$adc_file" 2>/dev/null || printf '?')
+  adc_delegates=$(jq -r '(.delegates // []) | length' "$adc_file" 2>/dev/null || printf '?')
+  adc_source=$(jq -r 'if has("source_credentials") then "present" else "absent" end' "$adc_file" 2>/dev/null || printf '?')
+  adc_summary="adc_env=present adc_mode=$adc_mode adc_type=$adc_type adc_url=$adc_url adc_delegates=$adc_delegates adc_source=$adc_source"
+fi
+
+# pulumi_log records one invocation, with what the process was handed. Callers
+# pass the words to record, never a credential value.
+pulumi_log() { fake_log "pulumi $* token_env=$token_env $adc_summary"; }
+
 case ${1:-} in
 config)
-  fake_log "pulumi $* token_env=$token_env"
+  pulumi_log "$*"
   ;;
 preview)
   if [[ ${FAKE_PULUMI_FAIL:-} == preview ]]; then
-    fake_log "pulumi $* token_env=$token_env (failed)"
+    pulumi_log "$* (failed)"
     printf 'error: preview failed\n' >&2
     exit 1
   fi
-  fake_log "pulumi $* token_env=$token_env"
+  pulumi_log "$*"
   printf '%s\n' \
     'Previewing update (gt-fractals-m4xq/fractals-nextjs-staging):' \
     '     Type                     Name                                    Plan' \
@@ -48,11 +74,11 @@ preview)
   ;;
 up)
   if [[ ${FAKE_PULUMI_FAIL:-} == up ]]; then
-    fake_log "pulumi $* token_env=$token_env (failed)"
+    pulumi_log "$* (failed)"
     printf 'error: up failed\n' >&2
     exit 1
   fi
-  fake_log "pulumi $* token_env=$token_env"
+  pulumi_log "$*"
   printf '%s\n' \
     'Updating (gt-fractals-m4xq/fractals-nextjs-staging):' \
     '     Type                     Name                                    Status' \
@@ -65,18 +91,22 @@ up)
 stack)
   case ${2:-} in
   init)
-    fake_log "pulumi $* token_env=$token_env"
+    pulumi_log "$*"
+    ;;
+  ls)
+    pulumi_log "$*"
+    printf '%s\n' "${FAKE_PULUMI_STACKS:-[]}"
     ;;
   output)
-    fake_log "pulumi $* token_env=$token_env"
+    pulumi_log "$*"
     [[ ${FAKE_PULUMI_NO_URL:-} == 1 ]] || printf '%s\n' "$service_url"
     ;;
   *)
-    fake_log "pulumi $* token_env=$token_env"
+    pulumi_log "$*"
     ;;
   esac
   ;;
 *)
-  fake_log "pulumi $* token_env=$token_env"
+  pulumi_log "$*"
   ;;
 esac
