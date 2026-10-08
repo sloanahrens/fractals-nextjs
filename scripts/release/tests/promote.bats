@@ -41,9 +41,9 @@ setup() {
 
   [ "$status" -eq 0 ]
   [[ $output == *"pulumi config set imageDigest $IMAGE@sha256:$DIGEST_HEX"* ]]
-  [[ $output == *"--stack $APP-prod"* ]]
-  [[ $output == *"[dry-run] pulumi up --yes --skip-preview --stack $APP-prod"* ]]
-  [[ $output != *"--stack $APP-staging"* ]]
+  [[ $output == *"--stack prod"* ]]
+  [[ $output == *"[dry-run] pulumi up --yes --skip-preview --stack prod"* ]]
+  [[ $output != *"--stack staging"* ]]
   [ ! -s "$FAKE_LOG" ]
 }
 
@@ -74,8 +74,8 @@ setup() {
   run "$RELEASE_DIR/promote.sh" "$IMAGE@sha256:$DIGEST_HEX" --app "$APP" --project "$PROJECT" --token-file "$TOKEN_FILE" --init-stack
 
   [ "$status" -eq 0 ]
-  assert_in_log "pulumi stack init $APP-prod --cwd $STACK_DIR"
-  assert_in_log "pulumi up --yes --skip-preview --stack $APP-prod --cwd $STACK_DIR token_env=present"
+  assert_in_log "pulumi stack init prod --cwd $STACK_DIR"
+  assert_in_log "pulumi up --yes --skip-preview --stack prod --cwd $STACK_DIR token_env=present"
   # Nothing is rebuilt: promotion deploys the image staging already proved.
   refute_in_log '^docker '
 }

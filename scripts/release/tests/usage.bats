@@ -78,9 +78,9 @@ setup() {
   done < <(release_scripts)
 }
 
-@test "the directory holds the six scripts of the release flow" {
+@test "the directory holds the six scripts of the release flow and init_stack.sh" {
   local got
   got=$(while read -r script; do printf '%s ' "${script##*/}"; done < <(release_scripts))
 
-  [ "$got" = 'build_push.sh health.sh mint_token.sh preview.sh promote.sh up.sh ' ]
+  [ "$got" = 'build_push.sh health.sh init_stack.sh mint_token.sh preview.sh promote.sh up.sh ' ]
 }

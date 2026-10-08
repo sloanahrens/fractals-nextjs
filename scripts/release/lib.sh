@@ -3,27 +3,40 @@
 # Shared helpers for the release scripts (docs/plan.md, bead B5.2). This file is
 # sourced by every script in this directory; it is never executed on its own.
 #
-# Two things live here, and nothing else:
+# Three things live here, and nothing else:
 #
-#   1. The names. Every script derives the project, registry, image, stack and
-#      backend URL the same way from the same inputs, so a release cannot build
-#      an image one script would not push and another would not deploy. The
-#      derivations follow docs/design.md sections 5 and 6 and the bootstrap
-#      code that creates the resources: the registry repository is `apps`
-#      (internal/gcp/registry.go), the state bucket is `<project>-pulumi-state`
-#      (internal/gcp/state_bucket.go), the deployer account is `deployer-<app>`
+#   1. The names. Every script derives the project, registry, image, stack,
+#      secrets provider and backend URL the same way from the same inputs, so a
+#      release cannot build an image one script would not push and another
+#      would not deploy. The derivations follow docs/design.md sections 5 and 6
+#      and the bootstrap code that creates the resources: the registry
+#      repository is `apps` (internal/gcp/registry.go), the state bucket is
+#      `<project>-pulumi-state` (internal/gcp/state_bucket.go), the key ring and
+#      key the stacks encrypt their secrets with are `pulumi`/`secrets`
+#      (internal/gcp/kms.go), the deployer account is `deployer-<app>`
 #      (docs/plan.md, bead B1.10) and a service account's name is
 #      `<name>-<env>` (internal/gcp/cloudrun.go, ServiceName).
 #
 #   2. The rules that keep credentials out of logs. No script ever puts a
 #      secret on a command line: the base key reaches gcloud through
 #      CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE (a path, not the key), the minted
-#      token reaches the Pulumi provider through GOOGLE_OAUTH_ACCESS_TOKEN, and
-#      docker login reads its password from stdin. run() and capture() are the
-#      only ways a script executes an external command, so --dry-run prints
-#      every action before it happens and a script cannot quietly shell out.
+#      token reaches the Pulumi provider through GOOGLE_OAUTH_ACCESS_TOKEN,
+#      docker login reads its password from stdin, and the Application Default
+#      Credentials file Pulumi's own calls need is built from the base key by
+#      jq reading the key file (adc_credentials) rather than from anything in
+#      the environment. run() and capture() are the only ways a script executes
+#      an external command, so --dry-run prints every action before it happens
+#      and a script cannot quietly shell out.
 #
-# Nothing here reads, echoes or returns the contents of a key or a token file.
+#   3. The cleanup. A script that has to remove something at exit registers it
+#      with on_exit rather than setting a trap of its own: this file installs
+#      the one EXIT trap, so no script's cleanup can clobber another's.
+#
+# Nothing here prints, echoes or hands out the contents of a key or a token
+# file. Two functions read one: require_key_file reads a key's "type" field to
+# refuse anything that is not a service account, and adc_credentials copies the
+# key into the ADC file it builds. Neither the key nor the token ever reaches
+# stdout, stderr, a command line or a run() echo.
 
 # Silencing xtrace here covers every script that sources this file: the minted
 # token is read into GOOGLE_OAUTH_ACCESS_TOKEN during a run, and xtrace prints
@@ -102,6 +115,58 @@ common_flag() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────
+# Tools, and cleanup at exit
+# ──────────────────────────────────────────────────────────────────────────
+
+# required_tools are the external commands every script in this directory needs
+# wherever it runs. jq is the only one: it is what reads the base key's type and
+# what builds the ADC file, so a script that mints a token or talks to Pulumi
+# cannot work without it. The deploy image installs it (ops/deploy-image).
+required_tools=(jq)
+
+# require_tools refuses to continue when a required command is not on PATH. It
+# names the tool and where it comes from, because "jq: command not found" from
+# inside a subshell is not a message an operator can act on.
+require_tools() {
+  local tool
+  for tool in "${required_tools[@]}"; do
+    command -v "$tool" >/dev/null 2>&1 ||
+      die "$tool is required and is not on PATH (the deploy image installs it; see ops/deploy-image)"
+  done
+}
+
+# _GT_CLEANUP_TASKS holds the functions on_exit registered, in order.
+_GT_CLEANUP_TASKS=()
+
+# on_exit NAME registers a function to run when the script exits, whatever its
+# status. It exists so a script never sets an EXIT trap of its own: this file
+# installs the one trap, and a task registered here cannot replace or be
+# replaced by another's. A name that is already registered stays where it is, so
+# registering one twice is the same as registering it once — which is what a
+# caller that runs twice in one process needs (adc_credentials, and the teardown
+# template that calls it once per environment). A task must never fail the exit;
+# its failure is swallowed so the script's own status survives.
+on_exit() {
+  local task
+  for task in ${_GT_CLEANUP_TASKS[@]+"${_GT_CLEANUP_TASKS[@]}"}; do
+    if [[ $task == "$1" ]]; then
+      return 0
+    fi
+  done
+  _GT_CLEANUP_TASKS+=("$1")
+}
+
+_gt_cleanup_run() {
+  local status=$? task
+  for task in ${_GT_CLEANUP_TASKS[@]+"${_GT_CLEANUP_TASKS[@]}"}; do
+    "$task" || true
+  done
+  return "$status"
+}
+
+trap _gt_cleanup_run EXIT
+
+# ──────────────────────────────────────────────────────────────────────────
 # Names derived from --app, --env, --project and --region
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -137,7 +202,24 @@ release_target() {
 
   REGISTRY_HOST="$REGION-docker.pkg.dev"
   IMAGE="$REGISTRY_HOST/$PROJECT/apps/$APP"
-  STACK="$APP-$ENV_NAME"
+  # The stack is the bare environment name, not "$APP-$ENV_NAME". Pulumi names
+  # a stack's state object "<project>/<stack>" inside the backend
+  # (.pulumi/stacks/<project>/<stack>.json), and the app's Pulumi project is the
+  # name the manifest states as pulumiProject -- "fractals" for the app named
+  # fractals-nextjs, which its own deploy/Pulumi.yaml declares (manifests/
+  # fractals.yaml; beads dv-iou, dv-4fu). It is not the app's name, which is
+  # what APP here is: an app's name is its repository's, while its Pulumi
+  # project is a name the app repo chose. The patrol reads an app's state at
+  # exactly that path -- it asks for the stack "<pulumiProject>/<env>"
+  # (cmd/patrol's readState, pkg/patrol/state/bucket.go), as the manifest
+  # comments say -- so the stack name here is what makes a released app's state
+  # land where the patrol looks for it. Naming it "<app>-<env>" would write
+  # .pulumi/stacks/<pulumiProject>/<app>-<env>.json, an object the patrol never
+  # asks for, and the app would be reported as having no state recorded.
+  # cmd/patrol's TestAppStackNameMatchesReleaseScripts sources this function and
+  # fails if this name and the patrol's disagree, and the deploy, flow and
+  # promote suites assert the stack the scripts pass to pulumi.
+  STACK="$ENV_NAME"
   BACKEND_URL=${BACKEND_URL:-gs://$PROJECT-pulumi-state}
 
   [[ -d $STACK_DIR ]] || die "stack directory does not exist: $STACK_DIR"
@@ -183,13 +265,23 @@ require_release_tag() {
 # Credentials
 # ──────────────────────────────────────────────────────────────────────────
 
-# require_key_file FILE checks the base key is where the operator said it is,
-# without reading it. The file must be a regular file, and it must not be
-# readable by anyone but its owner: the release runner holds it, nothing else on
-# the machine should (docs/design.md, section 5; bead B3.3 writes it 600).
+# require_key_file FILE checks the base key is where the operator said it is and
+# that it is the kind of key the release path needs. Three things must hold: the
+# file is a regular file, it is not readable by anyone but its owner (the
+# release runner holds it, nothing else on the machine should; docs/design.md,
+# section 5; bead B3.3 writes it 600), and it is a service account key. The last
+# one is not a formality: the ADC file is built by impersonating the deployer
+# from this key, and Go's ADC loader accepts a service_account source
+# credential, not an authorized_user or an external_account one, so an ADC file
+# built from any other type would be a credential Pulumi quietly refuses to use.
+#
+# Only the key's "type" field is read. The type is named in the refusal because
+# it is the one field an operator has to look at again, and the key material is
+# never printed.
 require_key_file() {
-  local file=${1:-} mode
+  local file=${1:-} mode type
   need "--key-file (or GT_BASE_KEY_FILE)" "$file"
+  require_tools
   [[ -f $file ]] || die "base key file does not exist: $file"
   [[ -r $file ]] || die "base key file is not readable by $(id -un): $file"
 
@@ -203,6 +295,11 @@ require_key_file() {
   elif (( (0$mode & 007) != 0 )); then
     die "base key file is readable by group or other: $file (mode $mode, want 600)"
   fi
+
+  type=$(jq -r 'if type == "object" then (.type // "") else "" end' "$file" 2>/dev/null) ||
+    die "base key file is not valid JSON: $file"
+  [[ $type == service_account ]] ||
+    die "base key file is not a service account key (its type is ${type:-missing}): $file"
 }
 
 # deployer_sa prints the deployer service account of the app in PROJECT, the
@@ -210,10 +307,112 @@ require_key_file() {
 # the account is created by bootstrap, bead B1.10).
 deployer_sa() { printf 'deployer-%s@%s.iam.gserviceaccount.com' "$APP" "$PROJECT"; }
 
-# pulumi_env makes the minted token available to the Pulumi GCP provider and
-# points Pulumi at the app's state bucket. The token travels in the environment
-# of the pulumi process, never in its argv, so it cannot be read out of a
-# process listing or a printed command line. It is never echoed.
+# KMS_RING and KMS_KEY name the key ring and the key inside it that bootstrap
+# creates in every app project and that the stacks encrypt their secret values
+# with (internal/gcp/kms.go, keyRingName and secretsKeyName). The names are the
+# same in every project, as the registry's and the state bucket's are.
+KMS_RING=pulumi
+KMS_KEY=secrets
+
+# secrets_provider prints the secrets provider every stack is created with, in
+# the form pulumi's --secrets-provider takes. It is deliberately neither the
+# default (a passphrase, which would be a secret this repo has nowhere to keep)
+# nor the state backend's own encryption: a stack's secrets are encrypted with
+# the app's own Cloud KMS key, so the deployer's single binding on that key is
+# all it takes to read them, and nothing outside the project can.
+secrets_provider() {
+  printf 'gcpkms://projects/%s/locations/%s/keyRings/%s/cryptoKeys/%s' \
+    "$PROJECT" "$REGION" "$KMS_RING" "$KMS_KEY"
+}
+
+# adc_credentials builds the Application Default Credentials file Pulumi's own
+# calls authenticate with, and points GOOGLE_APPLICATION_CREDENTIALS at it. The
+# base key it impersonates from is GT_BASE_KEY_FILE.
+#
+# Why Pulumi needs a second credential: Google defines ADC as the
+# GOOGLE_APPLICATION_CREDENTIALS file, the gcloud application-default file or
+# the metadata server, and an access token in an environment variable is none of
+# those. The GCP provider reads the minted token from GOOGLE_OAUTH_ACCESS_TOKEN,
+# but `pulumi login gs://<project>-pulumi-state` and the gcpkms secrets provider
+# go through Go's ADC loader, which on the deploy runner finds no file and no
+# metadata server: without this the first pulumi command of a release fails with
+# no default credentials.
+#
+# Go's loader accepts an impersonated_service_account credential, which is what
+# `gcloud auth application-default login --impersonate-service-account` writes,
+# so the file built here has that shape: its source_credentials is the base key
+# itself and its impersonation URL mints from the app's deployer account. The
+# authority a job holds is therefore the deployer account for as long as the job
+# runs, because the client libraries refresh the impersonated token themselves —
+# and no longer and no wider than that: the URL names one account, and the base
+# key's single serviceAccountTokenCreator binding is still what authorizes it
+# (docs/design.md, section 5).
+#
+# The file is a credential and is treated as one. It is created with umask 077
+# inside a private mktemp directory, so it is mode 600 from creation; jq is
+# given the key's *path* (--slurpfile) and never its contents on a command line;
+# nothing here prints any of it; and the lib's exit cleanup removes the file and
+# its directory however the script ends.
+adc_credentials() {
+  local key_file=${GT_BASE_KEY_FILE:-} sa url
+  require_key_file "$key_file"
+
+  # A process can ask more than once: the teardown template previews both
+  # environments in one step, and each pass calls pulumi_env. The credential
+  # belongs to the process, so an earlier file is removed before a new one is
+  # written — one copy of the key on disk at a time, and none left behind when
+  # the step ends.
+  adc_cleanup
+
+  sa=$(deployer_sa)
+  url="https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/$sa:generateAccessToken"
+
+  ADC_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gt-adc-${APP}.XXXXXX") ||
+    die "could not create a private directory for the ADC file"
+  chmod 700 "$ADC_DIR"
+  ADC_FILE="$ADC_DIR/adc.json"
+
+  # jq's stderr is dropped for the same reason require_key_file drops it: a
+  # parse diagnostic is the one place a jq that quotes its input could put key
+  # material into a job log, and the file has already been read as valid JSON of
+  # the right type by then, so the diagnostic would be about a race, not about
+  # the operator's input.
+  (umask 077 && jq -n --arg url "$url" --slurpfile source "$key_file" \
+    '{type:"impersonated_service_account",
+      service_account_impersonation_url:$url,
+      delegates:[],
+      source_credentials:$source[0]}' >"$ADC_FILE" 2>/dev/null) ||
+    die "jq could not build the ADC file from $key_file"
+  chmod 600 "$ADC_FILE"
+
+  export GOOGLE_APPLICATION_CREDENTIALS="$ADC_FILE"
+  on_exit adc_cleanup
+}
+
+# adc_cleanup removes the ADC file and its private directory. It is registered
+# with on_exit rather than with a trap of its own, so it cannot clobber a trap a
+# script set for itself, and it is safe to call at any time: with no file to
+# remove it does nothing, which is what lets adc_credentials call it before
+# writing a second one.
+adc_cleanup() {
+  [[ -n ${ADC_FILE:-} ]] || return 0
+  rm -f "$ADC_FILE"
+  rmdir "$ADC_DIR" 2>/dev/null || true
+  ADC_FILE=''
+}
+
+# pulumi_env makes the credentials Pulumi needs available and points Pulumi at
+# the app's state bucket. There are two, for two callers:
+#
+#   - GOOGLE_OAUTH_ACCESS_TOKEN is the minted token, and it is what the GCP
+#     provider reads. It travels in the environment of the pulumi process, never
+#     in its argv, so it cannot be read out of a process listing or a printed
+#     command line. It is never echoed.
+#   - GOOGLE_APPLICATION_CREDENTIALS is the impersonated ADC file, and it is
+#     what the gs:// state backend and the gcpkms secrets provider read
+#     (adc_credentials).
+#
+# A dry run reads neither: it prints what it would do.
 pulumi_env() {
   local token_file=${1:-}
   need "--token-file (or GT_TOKEN_FILE)" "$token_file"
@@ -221,12 +420,15 @@ pulumi_env() {
 
   if dry_run; then
     note "would run the provider with the token from $token_file (not read in a dry run)"
+    note "would build the ADC file for the gs:// backend and gcpkms secrets provider from ${GT_BASE_KEY_FILE:-the base key} (not read in a dry run)"
     return 0
   fi
   [[ -f $token_file ]] || die "token file does not exist: $token_file (run mint_token.sh first)"
   GOOGLE_OAUTH_ACCESS_TOKEN=$(<"$token_file")
   [[ -n $GOOGLE_OAUTH_ACCESS_TOKEN ]] || die "token file is empty: $token_file"
   export GOOGLE_OAUTH_ACCESS_TOKEN
+
+  adc_credentials
 }
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -246,10 +448,13 @@ set_digest_config() {
 
 # ensure_stack creates the stack when --init-stack was given and the stack does
 # not exist yet, so the first release of an app works. It is opt-in: a typo in
-# the app or env must fail loudly rather than silently create a second stack.
+# the app or env must fail loudly rather than silently create a second stack. It
+# creates the stack with the same secrets provider init_stack.sh uses, so a
+# release that creates a stack itself gets one whose secrets are encrypted the
+# way every other stack's are.
 ensure_stack() {
   [[ ${INIT_STACK:-0} == 1 ]] || return 0
-  run pulumi stack init "$STACK" --cwd "$STACK_DIR"
+  run pulumi stack init "$STACK" --cwd "$STACK_DIR" --secrets-provider "$(secrets_provider)"
 }
 
 # preview_stack writes the release's preview diff to PREVIEW_FILE and prints a
