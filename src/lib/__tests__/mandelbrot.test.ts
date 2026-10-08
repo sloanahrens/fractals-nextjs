@@ -13,6 +13,7 @@ import {
   complexToPixel,
   getDefaultBounds,
   mandelbrotIterations,
+  mandelbrotKind,
   pixelToComplex,
   smoothMandelbrotIterations,
 } from "../mandelbrot";
@@ -228,5 +229,37 @@ describe("autoIterations", () => {
     for (const zoom of [0, -1, NaN, Infinity]) {
       expect(autoIterations(zoom)).toBe(autoIterations(MIN_ZOOM));
     }
+  });
+});
+
+describe("mandelbrotKind", () => {
+  it("returns exactly what the two Mandelbrot functions return", () => {
+    // A grid over the set and well outside it, so escaping and non-escaping
+    // points are both covered, and at caps the explorer actually offers.
+    const samples: Array<{ real: number; imaginary: number }> = [];
+    for (let column = 0; column < 15; column++) {
+      for (let row = 0; row < 9; row++) {
+        samples.push({
+          real: -2 + (2.5 * column) / 14,
+          imaginary: -1.2 + (2.4 * row) / 8,
+        });
+      }
+    }
+    expect(samples.length).toBeGreaterThan(100);
+
+    for (const cap of [50, 100, 250]) {
+      for (const point of samples) {
+        expect(mandelbrotKind.iterations(point, cap, false)).toBe(
+          mandelbrotIterations(point, cap),
+        );
+        expect(mandelbrotKind.iterations(point, cap, true)).toBe(
+          smoothMandelbrotIterations(point, cap),
+        );
+      }
+    }
+  });
+
+  it("names itself mandelbrot", () => {
+    expect(mandelbrotKind.id).toBe("mandelbrot");
   });
 });

@@ -1,9 +1,10 @@
-import { FractalConfig, FractalBounds, RenderPoint } from "../types/fractal";
 import {
-  mandelbrotIterations,
-  smoothMandelbrotIterations,
-  pixelToComplex,
-} from "./mandelbrot";
+  FractalConfig,
+  FractalBounds,
+  FractalKind,
+  RenderPoint,
+} from "../types/fractal";
+import { mandelbrotKind, pixelToComplex } from "./mandelbrot";
 import { mapIterationsToColor } from "./colorMapping";
 
 /**
@@ -15,9 +16,15 @@ export class FractalRenderer {
   private imageData: ImageData;
   private isRendering = false;
   private shouldCancel = false;
+  private kind: FractalKind;
 
-  constructor(canvas: HTMLCanvasElement) {
+  /**
+   * @param canvas - Canvas to paint
+   * @param kind - Formula to iterate; defaults to the Mandelbrot set
+   */
+  constructor(canvas: HTMLCanvasElement, kind: FractalKind = mandelbrotKind) {
     this.canvas = canvas;
+    this.kind = kind;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       throw new Error("Could not get 2D rendering context");
@@ -27,7 +34,7 @@ export class FractalRenderer {
   }
 
   /**
-   * Render the Mandelbrot set with the given configuration
+   * Render this renderer's fractal kind with the given configuration
    * @param config - Fractal rendering configuration
    * @param onProgress - Optional progress callback (0-1)
    * @param useSmooth - Whether to use smooth coloring for better gradients
@@ -135,9 +142,11 @@ export class FractalRenderer {
 
     for (let x = startX; x < endX; x++) {
       const complex = pixelToComplex(x, y, width, height, bounds);
-      const iterations = useSmooth
-        ? smoothMandelbrotIterations(complex, maxIterations)
-        : mandelbrotIterations(complex, maxIterations);
+      const iterations = this.kind.iterations(
+        complex,
+        maxIterations,
+        useSmooth,
+      );
 
       points.push({ x, y, iterations });
     }
@@ -207,7 +216,9 @@ export class FractalRenderer {
 
     if (!previewCtx) return;
 
-    const previewRenderer = new FractalRenderer(previewCanvas);
+    // The preview is the same fractal at fewer pixels, so it draws the kind
+    // this renderer was built with rather than falling back to the default.
+    const previewRenderer = new FractalRenderer(previewCanvas, this.kind);
     await previewRenderer.renderFractal(previewConfig, undefined, false);
 
     // Scale up the preview to fill the main canvas
