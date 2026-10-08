@@ -1,5 +1,5 @@
 import { FractalBounds, ZoomState } from "../types/fractal";
-import { boundsToView } from "./mandelbrot";
+import { boundsToView, calculateZoomBounds } from "./mandelbrot";
 import { ZoomPanManager } from "./zoomPan";
 
 /**
@@ -143,4 +143,78 @@ export function attachCanvasNavigation(
     canvas.removeEventListener("touchend", handleTouchEnd);
     canvas.removeEventListener("touchcancel", handleTouchEnd);
   };
+}
+
+/** How far one arrow key moves the view, as a fraction of its own span. */
+export const KEYBOARD_PAN_FRACTION = 0.1;
+
+/**
+ * The factor one `+` or `-` keypress zooms by, so the keys and the Zoom In and
+ * Zoom Out buttons move the view by the same step.
+ */
+export const KEYBOARD_ZOOM_FACTOR = 2;
+
+/**
+ * The bounds one key on a focused canvas moves the view to
+ *
+ * An arrow moves the visible region a tenth of its own width or height in the
+ * direction the arrow points *on screen*: the renderer fills rows from the top
+ * with the smallest imaginary value, so the top edge of the canvas is
+ * `minImaginary` and ArrowUp walks the centre towards the smaller imaginary
+ * values drawn there. `+` and `-` zoom about the centre by the factor the Zoom
+ * In and Zoom Out buttons use; `=` and `_` are the same key as `+` and `-`
+ * under Shift on most layouts.
+ *
+ * @param key - `KeyboardEvent.key` of the press
+ * @param bounds - The view on screen now
+ * @returns The bounds the key moves to, or null for a key this does not handle
+ */
+export function keyNavigationBounds(
+  key: string,
+  bounds: FractalBounds,
+): FractalBounds | null {
+  const view = boundsToView(bounds);
+  const panX = (bounds.maxReal - bounds.minReal) * KEYBOARD_PAN_FRACTION;
+  const panY =
+    (bounds.maxImaginary - bounds.minImaginary) * KEYBOARD_PAN_FRACTION;
+
+  switch (key) {
+    case "ArrowLeft":
+      return calculateZoomBounds(view.centerX - panX, view.centerY, view.scale);
+    case "ArrowRight":
+      return calculateZoomBounds(view.centerX + panX, view.centerY, view.scale);
+    case "ArrowUp":
+      return calculateZoomBounds(view.centerX, view.centerY - panY, view.scale);
+    case "ArrowDown":
+      return calculateZoomBounds(view.centerX, view.centerY + panY, view.scale);
+    case "+":
+    case "=":
+      return calculateZoomBounds(
+        view.centerX,
+        view.centerY,
+        view.scale * KEYBOARD_ZOOM_FACTOR,
+      );
+    case "-":
+    case "_":
+      return calculateZoomBounds(
+        view.centerX,
+        view.centerY,
+        view.scale / KEYBOARD_ZOOM_FACTOR,
+      );
+    default:
+      return null;
+  }
+}
+
+/**
+ * Describe a view the way a screen reader should hear it
+ *
+ * @param bounds - The view on screen
+ * @returns Label text naming the centre in the complex plane and the zoom
+ */
+export function describeBounds(bounds: FractalBounds): string {
+  const { centerX, centerY, scale } = boundsToView(bounds);
+  const coordinate = (value: number) => Number(value.toFixed(3));
+
+  return `Mandelbrot set view, centre real ${coordinate(centerX)}, imaginary ${coordinate(centerY)}, zoom ${Number(scale.toFixed(2))}x`;
 }

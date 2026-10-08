@@ -23,10 +23,17 @@ export function Input({
   placeholder,
   error,
 }: InputProps) {
+  // useId gives each instance its own id, so the label points at this input
+  // and not at the last one that happened to print the same label text.
+  const inputId = React.useId();
+
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
+        {label}
+      </label>
       <input
+        id={inputId}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}

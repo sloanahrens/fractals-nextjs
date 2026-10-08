@@ -3,9 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FractalBounds, ZoomState } from "../../types/fractal";
 import {
   attachCanvasNavigation,
+  describeBounds,
+  keyNavigationBounds,
   WHEEL_GESTURE_QUIET_MS,
 } from "../canvasNavigation";
-import { calculateZoomBounds, getDefaultBounds } from "../mandelbrot";
+import {
+  boundsToView,
+  calculateZoomBounds,
+  getDefaultBounds,
+} from "../mandelbrot";
 import { ZoomPanManager } from "../zoomPan";
 
 const BOUNDS = getDefaultBounds();
@@ -370,5 +376,87 @@ describe("attachCanvasNavigation", () => {
 
       expect(gestures).toEqual(["start"]);
     });
+  });
+});
+
+describe("keyNavigationBounds", () => {
+  // The default view is 3.5 wide and 2.5 tall about (-0.75, 0) at zoom 1, so a
+  // tenth of a pan is 0.35 real and 0.25 imaginary.
+  it("moves the right and left edges a tenth of the view", () => {
+    const right = keyNavigationBounds("ArrowRight", BOUNDS);
+    expect(right?.minReal).toBeCloseTo(-2.15, 12);
+    expect(right?.maxReal).toBeCloseTo(1.35, 12);
+
+    const left = keyNavigationBounds("ArrowLeft", BOUNDS);
+    expect(left?.minReal).toBeCloseTo(-2.85, 12);
+    expect(left?.maxReal).toBeCloseTo(0.65, 12);
+  });
+
+  it("moves the top and bottom edges a tenth of the view", () => {
+    // The canvas draws its smallest imaginary value along the top edge, so
+    // ArrowUp is the direction of smaller imaginary values.
+    const up = keyNavigationBounds("ArrowUp", BOUNDS);
+    expect(up?.minImaginary).toBeCloseTo(-1.5, 12);
+    expect(up?.maxImaginary).toBeCloseTo(1.0, 12);
+
+    const down = keyNavigationBounds("ArrowDown", BOUNDS);
+    expect(down?.minImaginary).toBeCloseTo(-1.0, 12);
+    expect(down?.maxImaginary).toBeCloseTo(1.5, 12);
+  });
+
+  it("pans without changing the span or the zoom", () => {
+    const panned = keyNavigationBounds("ArrowUp", BOUNDS)!;
+
+    expect(panned.maxReal - panned.minReal).toBeCloseTo(3.5, 12);
+    expect(panned.maxImaginary - panned.minImaginary).toBeCloseTo(2.5, 12);
+    expect(boundsToView(panned).scale).toBeCloseTo(1, 12);
+  });
+
+  it("zooms by the factor the Zoom In and Zoom Out buttons use", () => {
+    // The buttons double and halve the zoom level, so a keypress halves or
+    // doubles the span about the same centre.
+    const zoomedIn = keyNavigationBounds("+", BOUNDS)!;
+    expect(zoomedIn.minReal).toBeCloseTo(-1.625, 12);
+    expect(zoomedIn.maxReal).toBeCloseTo(0.125, 12);
+    expect(boundsToView(zoomedIn).scale).toBeCloseTo(2, 12);
+
+    const zoomedOut = keyNavigationBounds("-", BOUNDS)!;
+    expect(zoomedOut.minReal).toBeCloseTo(-4.25, 12);
+    expect(zoomedOut.maxReal).toBeCloseTo(2.75, 12);
+    expect(boundsToView(zoomedOut).scale).toBeCloseTo(0.5, 12);
+  });
+
+  it("reads the shifted keys as the same zoom keys", () => {
+    // Shift is what makes `+` and `_` on most layouts, and a keyboard user
+    // pressing those should not have to know which one the layout produces.
+    expect(keyNavigationBounds("=", BOUNDS)).toEqual(
+      keyNavigationBounds("+", BOUNDS),
+    );
+    expect(keyNavigationBounds("_", BOUNDS)).toEqual(
+      keyNavigationBounds("-", BOUNDS),
+    );
+  });
+
+  it("returns nothing for a key it does not handle", () => {
+    // The page leaves those keys alone, so Tab and Enter still do their job.
+    expect(keyNavigationBounds("Tab", BOUNDS)).toBeNull();
+    expect(keyNavigationBounds("Enter", BOUNDS)).toBeNull();
+    expect(keyNavigationBounds("a", BOUNDS)).toBeNull();
+  });
+});
+
+describe("describeBounds", () => {
+  it("names the centre and the zoom of the default view", () => {
+    expect(describeBounds(BOUNDS)).toBe(
+      "Mandelbrot set view, centre real -0.75, imaginary 0, zoom 1x",
+    );
+  });
+
+  it("describes a zoomed and panned view", () => {
+    const deeper = calculateZoomBounds(-0.743643887, 0.131825904, 1234.5678);
+
+    expect(describeBounds(deeper)).toBe(
+      "Mandelbrot set view, centre real -0.744, imaginary 0.132, zoom 1234.57x",
+    );
   });
 });
