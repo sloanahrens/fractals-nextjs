@@ -9,7 +9,13 @@ import {
   type KeyboardEvent,
 } from "react";
 import { FractalRenderer } from "../lib/fractalRenderer";
-import { calculateZoomBounds, boundsToView } from "../lib/mandelbrot";
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  calculateZoomBounds,
+  boundsToView,
+  clampZoom,
+} from "../lib/mandelbrot";
 import { ZoomPanManager } from "../lib/zoomPan";
 import {
   attachCanvasNavigation,
@@ -24,7 +30,7 @@ import {
   ZoomState,
 } from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
-import { FractalPreset } from "../lib/presets";
+import { FractalPreset, formatZoom } from "../lib/presets";
 import { Slider } from "../components/ui/Slider";
 import { Select } from "../components/ui/Select";
 import { Input } from "../components/ui/Input";
@@ -33,10 +39,6 @@ import { PresetSelector } from "../components/ui/PresetSelector";
 import { ZoomDisplay } from "../components/ui/ZoomDisplay";
 import { CenterControls } from "../components/ui/CenterControls";
 import { CustomPresetManager } from "../components/ui/CustomPresetManager";
-
-// The zoom level runs from the full view to the deepest zoom the sliders offer
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 10000;
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -187,9 +189,17 @@ export default function Home() {
   // here, so neither can leave the sliders showing a view the canvas is not on.
   // The zoom is clamped because both can ask to go past the sliders' range.
   const applyView = useCallback((view: ZoomState) => {
+    const zoom = clampZoom(view.scale);
+
+    // Hand the next step of the gesture the view this one produced, rather
+    // than leaving it to the ref the render below would set: a burst of wheel
+    // notches arrives faster than React commits, and a step that reads the
+    // pre-burst bounds again is a notch the gesture loses.
+    boundsRef.current = calculateZoomBounds(view.centerX, view.centerY, zoom);
+
     setCenterX(view.centerX);
     setCenterY(view.centerY);
-    setZoomLevel(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.scale)));
+    setZoomLevel(zoom);
     setCurrentPreset("");
   }, []);
 
@@ -433,13 +443,11 @@ export default function Home() {
                     setCurrentPreset("");
                   }}
                   disabled={isRendering}
-                  formatValue={(v) => `${v.toFixed(0)}x`}
+                  formatValue={(v) => `${formatZoom(v)}x`}
                 />
                 <div className="flex gap-2">
                   <Button
-                    onClick={() =>
-                      setZoomLevel(Math.max(MIN_ZOOM, zoomLevel / 2))
-                    }
+                    onClick={() => setZoomLevel(clampZoom(zoomLevel / 2))}
                     disabled={isRendering || zoomLevel <= MIN_ZOOM}
                     variant="secondary"
                     size="sm"
@@ -447,9 +455,7 @@ export default function Home() {
                     Zoom Out
                   </Button>
                   <Button
-                    onClick={() =>
-                      setZoomLevel(Math.min(MAX_ZOOM, zoomLevel * 2))
-                    }
+                    onClick={() => setZoomLevel(clampZoom(zoomLevel * 2))}
                     disabled={isRendering || zoomLevel >= MAX_ZOOM}
                     variant="secondary"
                     size="sm"

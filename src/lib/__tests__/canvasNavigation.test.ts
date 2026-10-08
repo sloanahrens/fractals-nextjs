@@ -8,10 +8,12 @@ import {
   WHEEL_GESTURE_QUIET_MS,
 } from "../canvasNavigation";
 import {
+  BASE_WIDTH,
   boundsToView,
   calculateZoomBounds,
   getDefaultBounds,
 } from "../mandelbrot";
+import { calculateZoomLevel, getPresetById } from "../presets";
 import { ZoomPanManager } from "../zoomPan";
 
 const BOUNDS = getDefaultBounds();
@@ -89,13 +91,21 @@ const touchAt = (clientX: number, clientY: number) => ({ clientX, clientY });
  * box that CSS may have resized, and the reported view fed back as the bounds
  * the next gesture starts from. Gesture boundaries are recorded as "start" and
  * "end" so a test can read them off in order.
+ *
+ * `acceptZoom` stands in for what the page does with the zoom it is handed
+ * before it rebuilds its bounds: it clamps it into the range its controls
+ * offer. Leave it out to measure the manager on its own.
  */
-function createHarness(rect: Rect = FULL_SIZE_RECT) {
+function createHarness(
+  rect: Rect = FULL_SIZE_RECT,
+  initial: FractalBounds = BOUNDS,
+  acceptZoom: (scale: number) => number = (scale) => scale,
+) {
   const canvas = createFakeCanvas(rect);
-  const manager = new ZoomPanManager(CANVAS_WIDTH, CANVAS_HEIGHT, BOUNDS);
+  const manager = new ZoomPanManager(CANVAS_WIDTH, CANVAS_HEIGHT, initial);
   const views: ZoomState[] = [];
   const gestures: string[] = [];
-  let bounds: FractalBounds = BOUNDS;
+  let bounds: FractalBounds = initial;
 
   const detach = attachCanvasNavigation(
     canvas.element,
@@ -103,7 +113,11 @@ function createHarness(rect: Rect = FULL_SIZE_RECT) {
     () => bounds,
     (view) => {
       views.push(view);
-      bounds = calculateZoomBounds(view.centerX, view.centerY, view.scale);
+      bounds = calculateZoomBounds(
+        view.centerX,
+        view.centerY,
+        acceptZoom(view.scale),
+      );
     },
     {
       onGestureStart: () => gestures.push("start"),
@@ -111,8 +125,22 @@ function createHarness(rect: Rect = FULL_SIZE_RECT) {
     },
   );
 
-  return { canvas, manager, views, gestures, detach };
+  return {
+    canvas,
+    manager,
+    views,
+    gestures,
+    detach,
+    /** The bounds the page is showing after the last gesture step. */
+    current: () => bounds,
+  };
 }
+
+/**
+ * What `src/app/page.tsx` does with the zoom a gesture reports: the zoom level
+ * runs from the full view to the deepest zoom the sliders offer.
+ */
+const pageZoom = (scale: number) => Math.min(10000, Math.max(1, scale));
 
 describe("attachCanvasNavigation", () => {
   it("zooms at the wheel cursor and reports the view it produced", () => {
@@ -169,8 +197,8 @@ describe("attachCanvasNavigation", () => {
     canvas.dispatch("mousemove", { clientX: 500, clientY: 300 });
 
     expect(views).toHaveLength(1);
-    // Dragging 100px right pulls the view 100/800 of its 3.5-wide span left.
-    expect(views[0].centerX).toBeCloseTo(-0.75 - (100 / 800) * 3.5, 12);
+    // Dragging 100px right pulls the view 100/800 of its 4-wide span left.
+    expect(views[0].centerX).toBeCloseTo(-0.75 - (100 / 800) * 4, 12);
     expect(views[0].centerY).toBeCloseTo(0, 12);
     expect(views[0].scale).toBeCloseTo(1, 12);
   });
@@ -184,7 +212,7 @@ describe("attachCanvasNavigation", () => {
 
     // The second step continues from the view the first one reported, so the
     // drag accumulates instead of snapping back to the bounds it started on.
-    expect(views[1].centerX).toBeCloseTo(-0.75 - (200 / 800) * 3.5, 12);
+    expect(views[1].centerX).toBeCloseTo(-0.75 - (200 / 800) * 4, 12);
     expect(views[1].scale).toBeCloseTo(1, 12);
   });
 
@@ -225,10 +253,10 @@ describe("attachCanvasNavigation", () => {
     });
 
     expect(prevented).toBe(true);
-    // 150px down a 600px canvas pulls the view 150/600 of its 2.5-tall span up.
+    // 150px down a 600px canvas pulls the view 150/600 of its 3-tall span up.
     expect(views).toHaveLength(1);
     expect(views[0].centerX).toBeCloseTo(-0.75, 12);
-    expect(views[0].centerY).toBeCloseTo(-(150 / 600) * 2.5, 12);
+    expect(views[0].centerY).toBeCloseTo(-(150 / 600) * 3, 12);
   });
 
   it("leaves a multi-touch gesture to the browser", () => {
@@ -377,38 +405,86 @@ describe("attachCanvasNavigation", () => {
       expect(gestures).toEqual(["start"]);
     });
   });
+
+  describe("the zoom a wheel gesture leaves behind", () => {
+    it("compounds every notch of a burst from the preset it started on", () => {
+      // The Overview preset frames the whole set and is the widest view the
+      // app offers, so it is where a zoom floor bites.
+      const start = getPresetById("overview")!.bounds;
+      const startWidth = start.maxReal - start.minReal;
+      const notches = 5;
+      const harness = createHarness(FULL_SIZE_RECT, start, pageZoom);
+
+      for (let i = 0; i < notches; i++) {
+        harness.canvas.dispatch("wheel", {
+          clientX: 480,
+          clientY: 300,
+          deltaY: -100,
+        });
+      }
+
+      // Every notch counts: one the page's zoom floor swallows leaves the view
+      // wider than this, because the burst as a whole is what the gesture was.
+      const view = harness.current();
+      const width = view.maxReal - view.minReal;
+      expect(width).toBeCloseTo(startWidth / 1.1 ** notches, 9);
+
+      // And the zoom level the readout shows is the width ratio of that view.
+      expect(calculateZoomLevel(view)).toBeCloseTo(BASE_WIDTH / width, 9);
+    });
+
+    it("leaves the same ratio behind from the default view", () => {
+      const start = getDefaultBounds();
+      const startWidth = start.maxReal - start.minReal;
+      const notches = 3;
+      const harness = createHarness(FULL_SIZE_RECT, start, pageZoom);
+
+      for (let i = 0; i < notches; i++) {
+        harness.canvas.dispatch("wheel", {
+          clientX: 400,
+          clientY: 300,
+          deltaY: -100,
+        });
+      }
+
+      const view = harness.current();
+      const width = view.maxReal - view.minReal;
+      expect(width).toBeCloseTo(startWidth / 1.1 ** notches, 9);
+      expect(calculateZoomLevel(view)).toBeCloseTo(BASE_WIDTH / width, 9);
+    });
+  });
 });
 
 describe("keyNavigationBounds", () => {
-  // The default view is 3.5 wide and 2.5 tall about (-0.75, 0) at zoom 1, so a
-  // tenth of a pan is 0.35 real and 0.25 imaginary.
+  // The default view is 4 wide and 3 tall about (-0.75, 0) at zoom 1, so a
+  // tenth of a pan is 0.4 real and 0.3 imaginary.
   it("moves the right and left edges a tenth of the view", () => {
     const right = keyNavigationBounds("ArrowRight", BOUNDS);
-    expect(right?.minReal).toBeCloseTo(-2.15, 12);
-    expect(right?.maxReal).toBeCloseTo(1.35, 12);
+    expect(right?.minReal).toBeCloseTo(-2.35, 12);
+    expect(right?.maxReal).toBeCloseTo(1.65, 12);
 
     const left = keyNavigationBounds("ArrowLeft", BOUNDS);
-    expect(left?.minReal).toBeCloseTo(-2.85, 12);
-    expect(left?.maxReal).toBeCloseTo(0.65, 12);
+    expect(left?.minReal).toBeCloseTo(-3.15, 12);
+    expect(left?.maxReal).toBeCloseTo(0.85, 12);
   });
 
   it("moves the top and bottom edges a tenth of the view", () => {
     // The canvas draws its smallest imaginary value along the top edge, so
     // ArrowUp is the direction of smaller imaginary values.
     const up = keyNavigationBounds("ArrowUp", BOUNDS);
-    expect(up?.minImaginary).toBeCloseTo(-1.5, 12);
-    expect(up?.maxImaginary).toBeCloseTo(1.0, 12);
+    expect(up?.minImaginary).toBeCloseTo(-1.8, 12);
+    expect(up?.maxImaginary).toBeCloseTo(1.2, 12);
 
     const down = keyNavigationBounds("ArrowDown", BOUNDS);
-    expect(down?.minImaginary).toBeCloseTo(-1.0, 12);
-    expect(down?.maxImaginary).toBeCloseTo(1.5, 12);
+    expect(down?.minImaginary).toBeCloseTo(-1.2, 12);
+    expect(down?.maxImaginary).toBeCloseTo(1.8, 12);
   });
 
   it("pans without changing the span or the zoom", () => {
     const panned = keyNavigationBounds("ArrowUp", BOUNDS)!;
 
-    expect(panned.maxReal - panned.minReal).toBeCloseTo(3.5, 12);
-    expect(panned.maxImaginary - panned.minImaginary).toBeCloseTo(2.5, 12);
+    expect(panned.maxReal - panned.minReal).toBeCloseTo(4, 12);
+    expect(panned.maxImaginary - panned.minImaginary).toBeCloseTo(3, 12);
     expect(boundsToView(panned).scale).toBeCloseTo(1, 12);
   });
 
@@ -416,13 +492,13 @@ describe("keyNavigationBounds", () => {
     // The buttons double and halve the zoom level, so a keypress halves or
     // doubles the span about the same centre.
     const zoomedIn = keyNavigationBounds("+", BOUNDS)!;
-    expect(zoomedIn.minReal).toBeCloseTo(-1.625, 12);
-    expect(zoomedIn.maxReal).toBeCloseTo(0.125, 12);
+    expect(zoomedIn.minReal).toBeCloseTo(-1.75, 12);
+    expect(zoomedIn.maxReal).toBeCloseTo(0.25, 12);
     expect(boundsToView(zoomedIn).scale).toBeCloseTo(2, 12);
 
     const zoomedOut = keyNavigationBounds("-", BOUNDS)!;
-    expect(zoomedOut.minReal).toBeCloseTo(-4.25, 12);
-    expect(zoomedOut.maxReal).toBeCloseTo(2.75, 12);
+    expect(zoomedOut.minReal).toBeCloseTo(-4.75, 12);
+    expect(zoomedOut.maxReal).toBeCloseTo(3.25, 12);
     expect(boundsToView(zoomedOut).scale).toBeCloseTo(0.5, 12);
   });
 

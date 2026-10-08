@@ -124,6 +124,29 @@ the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-08_
 
+### One base view for zoom (2026-10-08)
+
+- `mandelbrot.ts` is the one definition of what zoom 1 is: `BASE_WIDTH` x
+  `BASE_HEIGHT` is now 4 x 3, the whole set and the shape of a canvas, where it
+  used to be 3.5 x 2.5. The app opens on a slightly wider default view than
+  before, and that view is now what the Zoom Level readout means.
+- The readout had a second base of its own (`initialWidth = 4`, hard-coded in
+  `calculateZoomLevel`), so the Overview preset read as 1x while the view math
+  and the page's zoom state called it 0.875. The page's zoom floor is 1, so the
+  first wheel notch after loading that preset was clamped away and the view
+  jumped instead of zooming. `calculateZoomLevel` now reads the ratio back
+  through `boundsToView`, and the built-in presets are framed at exactly 1, 200
+  and 2000 against the 4-unit base.
+- The readout is exact and `formatZoom` (presets.ts) is what makes it short:
+  the Zoom Level slider and the View Info panel format with it, so a notch that
+  moves the view by a hair over 10% shows as 1.1x instead of rounding to 1x.
+  `MIN_ZOOM`, `MAX_ZOOM` and `clampZoom` moved from `page.tsx` into
+  `mandelbrot.ts` so the range the page clamps a gesture into is testable.
+- The page hands each gesture step the bounds that step produced
+  (`boundsRef.current` in the wheel callback). A burst of wheel notches arrives
+  faster than React commits, so a step that read the committed bounds again
+  made the whole burst one notch.
+
 ### GCP project id (2026-10-08)
 
 - The cloud project this app deploys into was `gt-fractals`; it is now

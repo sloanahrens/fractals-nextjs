@@ -129,21 +129,40 @@ function complexMagnitudeSquared(z: ComplexNumber): number {
   return z.real * z.real + z.imaginary * z.imaginary;
 }
 
+// Size of the un-zoomed Mandelbrot view in the complex plane: 4 x 3, the
+// whole set and the 4:3 shape of a canvas. This is zoom 1, and every other
+// zoom in the app is a division of it, so there is one answer to what a set of
+// bounds means. The Overview preset frames exactly this span.
+export const BASE_WIDTH = 4;
+export const BASE_HEIGHT = 3;
+
+// The zoom the explorer accepts: the full base view out to the deepest zoom
+// the controls offer.
+export const MIN_ZOOM = 1;
+export const MAX_ZOOM = 10000;
+
 /**
- * Get default fractal bounds (classic Mandelbrot view)
+ * Clamp a zoom into the range the explorer accepts.
+ *
+ * A floor and a ceiling, not a rounding: a zoom already inside the range
+ * arrives unchanged, so the view a gesture produced is the view the readout
+ * describes. Rounding here instead is how a wheel notch gets swallowed.
+ * @param scale - Zoom to clamp
+ * @returns The closest zoom the explorer will show
  */
-export function getDefaultBounds(): FractalBounds {
-  return {
-    minReal: -2.5,
-    maxReal: 1.0,
-    minImaginary: -1.25,
-    maxImaginary: 1.25,
-  };
+export function clampZoom(scale: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
 }
 
-// Size of the un-zoomed Mandelbrot view in the complex plane
-export const BASE_WIDTH = 3.5;
-export const BASE_HEIGHT = 2.5;
+/**
+ * Get default fractal bounds (classic Mandelbrot view)
+ *
+ * The view the explorer opens on: the whole set at zoom 1, which is what the
+ * base constants describe.
+ */
+export function getDefaultBounds(): FractalBounds {
+  return calculateZoomBounds(-0.75, 0, 1);
+}
 
 /**
  * Calculate zoom bounds around a center point

@@ -34,8 +34,8 @@ describe("zoom", () => {
     const manager = createManager();
     const zoomed = manager.zoom(400, 300, 2, BOUNDS);
 
-    expect(zoomed.maxReal - zoomed.minReal).toBeCloseTo(1.75, 12);
-    expect(zoomed.maxImaginary - zoomed.minImaginary).toBeCloseTo(1.25, 12);
+    expect(zoomed.maxReal - zoomed.minReal).toBeCloseTo(2, 12);
+    expect(zoomed.maxImaginary - zoomed.minImaginary).toBeCloseTo(1.5, 12);
     // The cursor sat on the bounds centre, so the view stays centred there.
     expect((zoomed.minReal + zoomed.maxReal) / 2).toBeCloseTo(-0.75, 12);
     expect((zoomed.minImaginary + zoomed.maxImaginary) / 2).toBeCloseTo(0, 12);
@@ -44,18 +44,21 @@ describe("zoom", () => {
 
   it("zooms towards the complex point under the cursor, not the centre", () => {
     const manager = createManager();
-    // Pixel (0, 0) is the top-left corner: -2.5 - 1.25i.
+    // Pixel (0, 0) is the top-left corner: -2.75 - 1.5i.
     const zoomed = manager.zoom(0, 0, 2, BOUNDS);
 
-    expect((zoomed.minReal + zoomed.maxReal) / 2).toBeCloseTo(-2.5, 12);
-    expect((zoomed.minImaginary + zoomed.maxImaginary) / 2).toBeCloseTo(-1.25, 12);
+    expect((zoomed.minReal + zoomed.maxReal) / 2).toBeCloseTo(-2.75, 12);
+    expect((zoomed.minImaginary + zoomed.maxImaginary) / 2).toBeCloseTo(
+      -1.5,
+      12,
+    );
   });
 
   it("widens the span when zooming out", () => {
     const manager = createManager();
     const zoomed = manager.zoom(400, 300, 0.5, BOUNDS);
 
-    expect(zoomed.maxReal - zoomed.minReal).toBeCloseTo(7, 12);
+    expect(zoomed.maxReal - zoomed.minReal).toBeCloseTo(8, 12);
     expect(manager.getZoomState().scale).toBe(0.5);
   });
 
@@ -65,7 +68,7 @@ describe("zoom", () => {
     const second = manager.zoom(400, 300, 3, first);
 
     expect(manager.getZoomState().scale).toBe(6);
-    expect(second.maxReal - second.minReal).toBeCloseTo(3.5 / 6, 12);
+    expect(second.maxReal - second.minReal).toBeCloseTo(4 / 6, 12);
   });
 
   it("converts the cursor with the current canvas size", () => {
@@ -77,7 +80,7 @@ describe("zoom", () => {
     manager.updateCanvasSize(800, 600);
     // The same pixel is now the right edge of an 800px canvas.
     const edge = manager.zoom(800, 300, 1, BOUNDS);
-    expect((edge.minReal + edge.maxReal) / 2).toBeCloseTo(1.0, 12);
+    expect((edge.minReal + edge.maxReal) / 2).toBeCloseTo(1.25, 12);
   });
 
   it("hands out a copy of the zoom state, not the live object", () => {
@@ -108,12 +111,12 @@ describe("pan", () => {
     const panned = manager.updatePan(500, 400, BOUNDS);
     expect(panned).not.toBeNull();
     // Dragging right and down pulls the visible region left and up.
-    expect(panned!.minReal).toBeCloseTo(-2.5 - (100 / 800) * 3.5, 12);
-    expect(panned!.maxReal).toBeCloseTo(1.0 - (100 / 800) * 3.5, 12);
-    expect(panned!.minImaginary).toBeCloseTo(-1.25 - (100 / 600) * 2.5, 12);
-    expect(panned!.maxImaginary).toBeCloseTo(1.25 - (100 / 600) * 2.5, 12);
-    expect(panned!.maxReal - panned!.minReal).toBeCloseTo(3.5, 12);
-    expect(panned!.maxImaginary - panned!.minImaginary).toBeCloseTo(2.5, 12);
+    expect(panned!.minReal).toBeCloseTo(-2.75 - (100 / 800) * 4, 12);
+    expect(panned!.maxReal).toBeCloseTo(1.25 - (100 / 800) * 4, 12);
+    expect(panned!.minImaginary).toBeCloseTo(-1.5 - (100 / 600) * 3, 12);
+    expect(panned!.maxImaginary).toBeCloseTo(1.5 - (100 / 600) * 3, 12);
+    expect(panned!.maxReal - panned!.minReal).toBeCloseTo(4, 12);
+    expect(panned!.maxImaginary - panned!.minImaginary).toBeCloseTo(3, 12);
   });
 
   it("measures each drag step from the previous position, not the start", () => {
@@ -125,8 +128,8 @@ describe("pan", () => {
     const first = manager.updatePan(500, 300, BOUNDS);
     const second = manager.updatePan(600, 300, first!);
 
-    expect(first!.minReal).toBeCloseTo(-2.5 - (100 / 800) * 3.5, 12);
-    expect(second!.minReal).toBeCloseTo(-2.5 - (200 / 800) * 3.5, 12);
+    expect(first!.minReal).toBeCloseTo(-2.75 - (100 / 800) * 4, 12);
+    expect(second!.minReal).toBeCloseTo(-2.75 - (200 / 800) * 4, 12);
   });
 
   it("carries the accumulated pan into the next zoom centre", () => {
@@ -134,7 +137,10 @@ describe("pan", () => {
     manager.startPan(400, 300);
     manager.updatePan(500, 300, BOUNDS);
 
-    expect(manager.getZoomState().centerX).toBeCloseTo(-0.75 - (100 / 800) * 3.5, 12);
+    expect(manager.getZoomState().centerX).toBeCloseTo(
+      -0.75 - (100 / 800) * 4,
+      12,
+    );
   });
 
   it("stops panning when the drag ends", () => {
@@ -189,7 +195,7 @@ describe("view tracking", () => {
 
     const rezoomed = manager.zoom(400, 300, 1, DEEP_BOUNDS);
 
-    expect(rezoomed.maxReal - rezoomed.minReal).toBeCloseTo(3.5 / 100, 12);
+    expect(rezoomed.maxReal - rezoomed.minReal).toBeCloseTo(4 / 100, 12);
     expect(manager.getZoomState().scale).toBeCloseTo(100, 12);
   });
 });
@@ -250,8 +256,8 @@ describe("pointer events on a canvas CSS has resized", () => {
     );
 
     // 200px across the box is half the canvas, so the view moves half a span.
-    expect(panned!.minReal).toBeCloseTo(-2.5 - (400 / 800) * 3.5, 12);
-    expect(panned!.maxReal - panned!.minReal).toBeCloseTo(3.5, 12);
+    expect(panned!.minReal).toBeCloseTo(-2.75 - (400 / 800) * 4, 12);
+    expect(panned!.maxReal - panned!.minReal).toBeCloseTo(4, 12);
   });
 
   it("maps a touch drag onto the canvas", () => {
@@ -272,7 +278,7 @@ describe("pointer events on a canvas CSS has resized", () => {
     );
 
     // 150px down the box is the full height of the canvas.
-    expect(panned!.minImaginary).toBeCloseTo(-1.25 - (300 / 600) * 2.5, 12);
+    expect(panned!.minImaginary).toBeCloseTo(-1.5 - (300 / 600) * 3, 12);
   });
 
   it("ignores a two-finger move", () => {
