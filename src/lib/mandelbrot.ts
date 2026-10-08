@@ -141,6 +141,20 @@ export const BASE_HEIGHT = 3;
 export const MIN_ZOOM = 1;
 export const MAX_ZOOM = 10000;
 
+// The iteration budget the explorer offers. The Maximum Iterations slider spans
+// exactly this range and steps by ITERATION_STEP, so the count autoIterations
+// picks is always a value that slider can show and the thumb can sit on.
+export const MIN_ITERATIONS = 50;
+export const MAX_ITERATIONS = 1000;
+export const ITERATION_STEP = 10;
+
+// Where the count starts, and how much each doubling of the zoom adds. The
+// detail a view can show grows with its magnification: 1x needs 100 iterations,
+// 100x needs 430, 10000x needs 760. Without this a deep zoom runs out of
+// iterations and paints one flat colour over the detail it is magnifying.
+const BASE_ITERATIONS = 100;
+const ITERATIONS_PER_OCTAVE = 50;
+
 /**
  * Clamp a zoom into the range the explorer accepts.
  *
@@ -152,6 +166,28 @@ export const MAX_ZOOM = 10000;
  */
 export function clampZoom(scale: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+}
+
+/**
+ * The iteration count a zoom needs, so a deep view keeps the detail the zoom is
+ * magnifying instead of flattening into one colour, without the user touching
+ * the slider.
+ *
+ * One more doubling of the zoom is one more octave of detail, so the count
+ * grows with it and then lands on the slider's step, inside its range, which is
+ * what keeps the computed count a value the control can show.
+ * @param zoom - Zoom to pick a count for
+ * @returns The iteration count for that zoom, a multiple of ITERATION_STEP
+ * within MIN_ITERATIONS..MAX_ITERATIONS
+ */
+export function autoIterations(zoom: number): number {
+  // A zoom that is not a positive number has no octave to count, and log2 of
+  // it would put a NaN iteration count into the renderer.
+  const scale = Number.isFinite(zoom) ? Math.max(zoom, MIN_ZOOM) : MIN_ZOOM;
+  const iterations = BASE_ITERATIONS + ITERATIONS_PER_OCTAVE * Math.log2(scale);
+  const onStep = Math.round(iterations / ITERATION_STEP) * ITERATION_STEP;
+
+  return Math.min(MAX_ITERATIONS, Math.max(MIN_ITERATIONS, onStep));
 }
 
 /**
