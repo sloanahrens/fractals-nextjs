@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ColorScheme } from "../../types/fractal";
+import { BASE_WIDTH, MAX_ZOOM, MIN_ZOOM } from "../mandelbrot";
 import {
   BUILTIN_PRESETS,
   calculateCenter,
   calculateZoomLevel,
   deleteCustomPreset,
+  formatZoom,
   getAllPresets,
   getCustomPresets,
   getCustomPresetsSnapshot,
@@ -108,21 +110,59 @@ describe("calculateZoomLevel", () => {
   });
 
   it("matches the depth each built-in preset was framed at", () => {
-    expect(calculateZoomLevel(getPresetById("overview")!.bounds)).toBe(1);
-    expect(calculateZoomLevel(getPresetById("seahorse-valley")!.bounds)).toBe(200);
-    expect(calculateZoomLevel(getPresetById("lightning")!.bounds)).toBe(2000);
+    expect(calculateZoomLevel(getPresetById("overview")!.bounds)).toBeCloseTo(
+      1,
+      9,
+    );
+    expect(
+      calculateZoomLevel(getPresetById("seahorse-valley")!.bounds),
+    ).toBeCloseTo(200, 9);
+    expect(calculateZoomLevel(getPresetById("lightning")!.bounds)).toBeCloseTo(
+      2000,
+      9,
+    );
   });
 
-  it("rounds to the nearest whole level at deep zoom", () => {
-    // 0.002 wide: 4 / 0.002 = 2000, and float error must not shift it.
+  it("measures every built-in preset against the one base view", () => {
+    // The same width ratio the wheel and drag code work in, so a readout and
+    // the view it describes cannot end up on two different scales.
+    for (const preset of BUILTIN_PRESETS) {
+      const width = preset.bounds.maxReal - preset.bounds.minReal;
+      expect(calculateZoomLevel(preset.bounds)).toBeCloseTo(
+        BASE_WIDTH / width,
+        9,
+      );
+    }
+  });
+
+  it("frames every built-in preset at a zoom the controls accept", () => {
+    // The page clamps a gesture's zoom into the range its controls offer. A
+    // preset framed outside that range is one whose view a wheel notch can
+    // no longer move, because the clamp undoes the step.
+    for (const preset of BUILTIN_PRESETS) {
+      const zoom = calculateZoomLevel(preset.bounds);
+      expect(zoom).toBeGreaterThanOrEqual(MIN_ZOOM);
+      expect(zoom).toBeLessThanOrEqual(MAX_ZOOM);
+    }
+  });
+});
+
+describe("formatZoom", () => {
+  it("shows the notch that moved the view", () => {
+    expect(formatZoom(1)).toBe("1");
+    expect(formatZoom(1.1)).toBe("1.1");
+    expect(formatZoom(1.21)).toBe("1.21");
+  });
+
+  it("keeps the float error of a view's bounds out of the readout", () => {
+    // 4 / 0.002 is 2000 with a last-place error in the divide; the readout is
+    // where the rounding happens, not in the zoom it is given.
     expect(
-      calculateZoomLevel({
-        minReal: -1.2515,
-        maxReal: -1.2495,
-        minImaginary: 0.0195,
-        maxImaginary: 0.0215,
-      }),
-    ).toBe(2000);
+      formatZoom(calculateZoomLevel(getPresetById("lightning")!.bounds)),
+    ).toBe("2.0K");
+    expect(
+      formatZoom(calculateZoomLevel(getPresetById("seahorse-valley")!.bounds)),
+    ).toBe("200");
   });
 });
 

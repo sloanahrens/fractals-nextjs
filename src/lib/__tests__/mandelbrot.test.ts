@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MAX_ZOOM,
+  MIN_ZOOM,
   boundsToView,
   calculateZoomBounds,
+  clampZoom,
   complexToPixel,
   getDefaultBounds,
   mandelbrotIterations,
@@ -48,15 +51,16 @@ describe("mandelbrotIterations", () => {
 
 describe("smoothMandelbrotIterations", () => {
   it("returns the raw cap for points that never escaped", () => {
-    expect(smoothMandelbrotIterations({ real: 0, imaginary: 0 }, 100)).toBe(100);
+    expect(smoothMandelbrotIterations({ real: 0, imaginary: 0 }, 100)).toBe(
+      100,
+    );
   });
 
   it("returns a fractional count just past the escape step", () => {
     // z = 2 + 2i at the first step: 0 + 1 - log2(log2(sqrt(8))) = 0.4150375...
-    expect(smoothMandelbrotIterations({ real: 2, imaginary: 2 }, 100)).toBeCloseTo(
-      0.4150375,
-      6,
-    );
+    expect(
+      smoothMandelbrotIterations({ real: 2, imaginary: 2 }, 100),
+    ).toBeCloseTo(0.4150375, 6);
 
     // The same orbit as the integer test above, landing between 4 and 5.
     const smooth = smoothMandelbrotIterations({ real: 0.5, imaginary: 0 }, 100);
@@ -70,12 +74,12 @@ describe("smoothMandelbrotIterations", () => {
 describe("pixelToComplex", () => {
   it("maps the pixel corners onto the bound corners", () => {
     expect(pixelToComplex(0, 0, 800, 600, BOUNDS)).toEqual({
-      real: -2.5,
-      imaginary: -1.25,
+      real: -2.75,
+      imaginary: -1.5,
     });
     expect(pixelToComplex(800, 600, 800, 600, BOUNDS)).toEqual({
-      real: 1.0,
-      imaginary: 1.25,
+      real: 1.25,
+      imaginary: 1.5,
     });
   });
 
@@ -109,29 +113,50 @@ describe("complexToPixel", () => {
 });
 
 describe("getDefaultBounds", () => {
-  it("returns the classic Mandelbrot view", () => {
+  it("returns the classic Mandelbrot view at zoom 1", () => {
     expect(BOUNDS).toEqual({
-      minReal: -2.5,
-      maxReal: 1.0,
-      minImaginary: -1.25,
-      maxImaginary: 1.25,
+      minReal: -2.75,
+      maxReal: 1.25,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
     });
+    expect(boundsToView(BOUNDS).scale).toBe(1);
   });
 });
 
 describe("calculateZoomBounds", () => {
-  it("uses the 3.5 x 2.5 base view at zoom level 1", () => {
+  it("uses the 4 x 3 base view at zoom level 1", () => {
     const bounds = calculateZoomBounds(0, 0, 1);
-    expect(bounds.maxReal - bounds.minReal).toBeCloseTo(3.5, 12);
-    expect(bounds.maxImaginary - bounds.minImaginary).toBeCloseTo(2.5, 12);
+    expect(bounds.maxReal - bounds.minReal).toBeCloseTo(4, 12);
+    expect(bounds.maxImaginary - bounds.minImaginary).toBeCloseTo(3, 12);
   });
 
   it("halves the span each time the zoom level doubles, centred on the target", () => {
     const bounds = calculateZoomBounds(-0.75, 0.25, 2);
-    expect(bounds.maxReal - bounds.minReal).toBeCloseTo(1.75, 12);
-    expect(bounds.maxImaginary - bounds.minImaginary).toBeCloseTo(1.25, 12);
+    expect(bounds.maxReal - bounds.minReal).toBeCloseTo(2, 12);
+    expect(bounds.maxImaginary - bounds.minImaginary).toBeCloseTo(1.5, 12);
     expect((bounds.minReal + bounds.maxReal) / 2).toBeCloseTo(-0.75, 12);
-    expect((bounds.minImaginary + bounds.maxImaginary) / 2).toBeCloseTo(0.25, 12);
+    expect((bounds.minImaginary + bounds.maxImaginary) / 2).toBeCloseTo(
+      0.25,
+      12,
+    );
+  });
+});
+
+describe("clampZoom", () => {
+  it("holds a zoom inside the range the explorer accepts", () => {
+    expect(clampZoom(MIN_ZOOM)).toBe(MIN_ZOOM);
+    expect(clampZoom(MAX_ZOOM)).toBe(MAX_ZOOM);
+    expect(clampZoom(MIN_ZOOM - 0.1)).toBe(MIN_ZOOM);
+    expect(clampZoom(MAX_ZOOM + 1)).toBe(MAX_ZOOM);
+  });
+
+  it("leaves a zoom inside the range alone, to the last bit", () => {
+    // The floor is the whole base view, and a gesture just inside it is a
+    // notch the user asked for: clamping it to a level would swallow the step.
+    for (const zoom of [1, 1.1, 1.21, 200, 9999.9]) {
+      expect(clampZoom(zoom)).toBe(zoom);
+    }
   });
 });
 

@@ -1,4 +1,5 @@
 import { FractalBounds, ColorScheme } from "../types/fractal";
+import { boundsToView } from "./mandelbrot";
 
 export interface FractalPreset {
   id: string;
@@ -104,11 +105,33 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
   },
 ];
 
-// Calculate zoom level from fractal bounds
+/**
+ * The zoom a view shows: how many times the base view is divided into it.
+ *
+ * Read through the view math rather than measured against a base of its own,
+ * so the Zoom Level readout and the wheel, drag and preset code that move the
+ * view always mean the same thing by "1x".
+ */
 export function calculateZoomLevel(bounds: FractalBounds): number {
-  const width = bounds.maxReal - bounds.minReal;
-  const initialWidth = 4; // Default view spans from -2 to 2
-  return Math.round(initialWidth / width);
+  return boundsToView(bounds).scale;
+}
+
+/**
+ * Format a zoom for a readout.
+ *
+ * The zoom is exact, and exact is not printable: a notch of the wheel moves
+ * the view by a hair over 10%, and the bounds a zoom is read from carry float
+ * error in their last digits. So show enough to see the view move (1.1x,
+ * 1.21x), drop the noise, and use the K/M shorthand once the digits get long.
+ * @param zoom - Zoom to format
+ * @returns The zoom as a short string, without a unit
+ */
+export function formatZoom(zoom: number): string {
+  if (zoom >= 1_000_000) return `${(zoom / 1_000_000).toFixed(1)}M`;
+  if (zoom >= 1000) return `${(zoom / 1000).toFixed(1)}K`;
+  if (zoom >= 100) return zoom.toFixed(0);
+  if (zoom >= 10) return Number(zoom.toFixed(1)).toString();
+  return Number(zoom.toFixed(2)).toString();
 }
 
 // Calculate center point from bounds

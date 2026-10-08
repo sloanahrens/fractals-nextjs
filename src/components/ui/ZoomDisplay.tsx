@@ -2,7 +2,11 @@
 
 import React from "react";
 import { FractalBounds } from "../../types/fractal";
-import { calculateZoomLevel, calculateCenter } from "../../lib/presets";
+import {
+  calculateZoomLevel,
+  calculateCenter,
+  formatZoom,
+} from "../../lib/presets";
 
 interface ZoomDisplayProps {
   bounds: FractalBounds;
@@ -21,15 +25,6 @@ export const ZoomDisplay: React.FC<ZoomDisplayProps> = ({
       return value.toExponential(3);
     }
     return value.toFixed(6);
-  };
-
-  const formatZoom = (zoom: number): string => {
-    if (zoom >= 1000000) {
-      return `${(zoom / 1000000).toFixed(1)}M`;
-    } else if (zoom >= 1000) {
-      return `${(zoom / 1000).toFixed(1)}K`;
-    }
-    return zoom.toString();
   };
 
   return (
