@@ -39,6 +39,8 @@ setup() {
     --app "$APP" --digest "$DIGEST" --token-file "$TOKEN_FILE"
   assert_clean "promote.sh" "$RELEASE_DIR/promote.sh" "$DIGEST" \
     --app "$APP" --token-file "$TOKEN_FILE"
+  assert_clean "staged_digest.sh" "$RELEASE_DIR/staged_digest.sh" \
+    --app "$APP" --env staging --token-file "$TOKEN_FILE"
   assert_clean "health.sh" "$RELEASE_DIR/health.sh" \
     --url "$FAKE_SERVICE_URL" --health-path /api/health --timeout 5 --interval 1
   assert_clean "init_stack.sh" "$RELEASE_DIR/init_stack.sh" \
@@ -56,6 +58,8 @@ setup() {
     --app "$APP" --digest "$DIGEST" --token-file "$TOKEN_FILE" --dry-run
   assert_clean "promote.sh" "$RELEASE_DIR/promote.sh" "$DIGEST" \
     --app "$APP" --token-file "$TOKEN_FILE" --dry-run
+  assert_clean "staged_digest.sh" "$RELEASE_DIR/staged_digest.sh" \
+    --app "$APP" --env staging --token-file "$TOKEN_FILE" --dry-run
   assert_clean "health.sh" "$RELEASE_DIR/health.sh" \
     --url "$FAKE_SERVICE_URL" --health-path /api/health --dry-run
   assert_clean "init_stack.sh" "$RELEASE_DIR/init_stack.sh" \
@@ -213,11 +217,14 @@ setup() {
 @test "a missing jq is a clear error" {
   # A PATH with the tools the script needs before it reaches jq, and no jq in
   # it. bash is named by its full path because the script's shebang resolves
-  # bash through PATH too.
+  # bash through PATH too. grep is on the list because the stack settings check
+  # runs before the key is read at all and reads the settings file with it
+  # (lib.sh, require_stack_settings); the fixture has committed settings, so the
+  # check passes and the script gets as far as jq.
   local limited=$BATS_TEST_TMPDIR/limited-bin
   mkdir -p "$limited"
   local tool
-  for tool in dirname id stat mktemp chmod; do
+  for tool in dirname id stat mktemp chmod grep; do
     ln -sf "$(command -v "$tool")" "$limited/$tool"
   done
 

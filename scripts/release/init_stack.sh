@@ -26,7 +26,13 @@
 # GT_BASE_KEY_FILE, GT_STACK_DIR, GT_BACKEND_URL, DRY_RUN=1.
 #
 # Prints stack=<name> and created=<yes|no|unknown> on stdout, so a workflow can
-# read the result the way it reads every other script's output.
+# read the result the way it reads every other script's output. When it creates
+# a stack it also prints the two settings lines Pulumi wrote into the stack's
+# settings file — the secrets provider and the stack's encrypted key — between
+# `settings-begin <env>` and `settings-end <env>` markers, for the operator to
+# commit: that file is committed state, and preview.sh, up.sh and promote.sh
+# refuse a stack whose committed copy does not name this project's provider
+# (lib.sh, require_stack_settings).
 
 set -euo pipefail
 SCRIPT_NAME=${0##*/}
@@ -51,7 +57,9 @@ usage() {
     '' \
     'Creates the stack in the app state backend with the gcpkms key of the app' \
     'project as its secrets provider. A stack that already exists is left alone' \
-    'and the script exits 0. Prints stack= and created= on stdout.'
+    'and the script exits 0. Prints stack= and created= on stdout, and a' \
+    'settings-begin/settings-end block holding the two lines the stack settings' \
+    'file must carry -- commit them to Pulumi.<env>.yaml.'
 }
 
 # stack_in_listing is true when the stack is in a `pulumi stack ls --json`
@@ -65,6 +73,36 @@ stack_in_listing() {
     (if type == "array" then . else (.stacks // []) end)
     | map(if type == "object" then ((.name // "") | split("/") | last) else "" end)
     | any(. == $stack)' <<<"$1" >/dev/null
+}
+
+# print_stack_settings prints the two lines `pulumi stack init` has just written
+# into the stack's settings file — the secrets provider URL and the stack's
+# encrypted secrets key — between settings-begin/settings-end markers, and says
+# the file is committed state.
+#
+# Printing them is what this script is for in a first release. The pre-release
+# rehearsal of 2026-10-08 ran it in a throwaway checkout, so the lines the
+# operator needed went with the checkout: the app repo's Pulumi.<env>.yaml never
+# got them, and every pulumi command in the flow afterwards failed with
+# "passphrase must be set with PULUMI_CONFIG_PASSPHRASE". A block in the log is
+# a block the operator can paste into the file they commit (lib.sh,
+# require_stack_settings, refuses the release until it is there).
+#
+# encryptedkey is printed here and nowhere else. It is the stack's secrets key
+# in exactly the encrypted form Pulumi documents as committable state, and the
+# file it belongs in is the one this script just created.
+print_stack_settings() {
+  local file=$STACK_DIR/Pulumi.$STACK.yaml provider key
+  provider=$(grep -m1 '^secretsprovider:' "$file" 2>/dev/null || true)
+  key=$(grep -m1 '^encryptedkey:' "$file" 2>/dev/null || true)
+
+  if [[ -z $provider || -z $key ]]; then
+    warn "$file does not hold both the secretsprovider and encryptedkey lines Pulumi writes; commit them from that file before the next release, or every pulumi command will fail with \"passphrase must be set with PULUMI_CONFIG_PASSPHRASE\""
+    return 0
+  fi
+
+  note "commit these two lines to $file: a stack's settings are committed state, and a checkout without them falls back to a passphrase provider"
+  printf 'settings-begin %s\n%s\n%s\nsettings-end %s\n' "$ENV_NAME" "$provider" "$key" "$ENV_NAME"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -113,7 +151,9 @@ fi
 run pulumi stack init "$STACK" --cwd "$STACK_DIR" --secrets-provider "$(secrets_provider)"
 
 if dry_run; then
+  note "would print the stack's settings lines from $STACK_DIR/Pulumi.$STACK.yaml for committing"
   printf 'stack=%s created=unknown\n' "$STACK"
 else
+  print_stack_settings
   printf 'stack=%s created=yes\n' "$STACK"
 fi

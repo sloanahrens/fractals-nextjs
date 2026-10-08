@@ -8,6 +8,11 @@
 # plan. It deploys the digest it was given and nothing else; the digest is the
 # release's identity and it is pinned in stack config before the up.
 #
+# It refuses a stack whose committed Pulumi.<env>.yaml does not name this
+# project's gcpkms secrets provider, before it touches Pulumi at all: a stack
+# without those settings falls back to a passphrase provider, and then no
+# command in this flow can open it (lib.sh, require_stack_settings).
+#
 # Usage:
 #   up.sh --app APP --digest <registry>@sha256:<64hex> --token-file FILE
 #         [--env staging|prod] [--init-stack] [--dry-run]
@@ -84,6 +89,11 @@ done
 # input that is wrong, whatever else the caller got wrong too.
 require_digest "$DIGEST" "digest"
 release_target
+# The stack's committed settings are required before Pulumi is given anything:
+# a stack whose settings file does not name this project's secrets provider
+# cannot be applied, and saying so here needs no credentials (lib.sh,
+# require_stack_settings).
+require_stack_settings
 pulumi_env "$TOKEN_FILE"
 
 step "Applying $APP $ENV_NAME (stack $STACK)"
