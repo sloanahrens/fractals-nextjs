@@ -65,6 +65,8 @@ env:
   # explicitly if the repository is not named after the app; release_target in
   # scripts/release/lib.sh refuses anything that is not ^[a-z][a-z0-9-]{1,28}$.
   GT_APP: ${{ github.event.repository.name }}
+  # The cloud project the app lives in (not the Pulumi project name).
+  GT_PROJECT: gt-fractals
   # The app's Pulumi program. A release changes one value in it, imageDigest,
   # and the rest of the Spec stays in Pulumi.<env>.yaml (bead B4.5).
   GT_STACK_DIR: deploy
