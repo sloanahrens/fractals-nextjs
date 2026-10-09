@@ -1,7 +1,7 @@
 # The prod stack's configuration. It is the staging stack's, with the one
 # value that differs: the environment the service is deployed as
 # (deploy/Pulumi.staging.yaml has the rest, and scripts/release/README.md says
-# why a release changes only imageDigest).
+# why a release changes only imageDigest and deployedAt).
 secretsprovider: gcpkms://projects/gt-fractals-m4xq/locations/us-central1/keyRings/pulumi/cryptoKeys/secrets
 encryptedkey: CiQAIy+lRzrFWyqo4YgLYKHftmp5jg0YfngaRnZYA1YqsHzFnFASSQBd6seRHWGfLH5KZ5a3Ows7hGucM+MLjWijTsNt6NZvfsen76AX1+CCDlZf3x1owZhCwSOd32zKophIr69+aHWk3yKOQlb5ZA8=
 config:

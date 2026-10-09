@@ -17,11 +17,29 @@ validates it, applies the deploy policy and creates the service
 ## How it is run
 
 The release flow runs it, never a person: `scripts/release/preview.sh` and
-`up.sh` run `pulumi` in this directory at a release tag, and the only value a
-release changes is `imageDigest` (the digest `build_push.sh` printed). The
-deployer service account token reaches the Pulumi process through the
-environment, and nothing here holds a credential
-(`scripts/release/README.md`).
+`up.sh` run `pulumi` in this directory at a release tag, and the values a
+release writes are `imageDigest` (the digest `build_push.sh` printed) and
+`deployedAt` (the time it applied that digest). The deployer service account
+token reaches the Pulumi process through the environment, and nothing here
+holds a credential (`scripts/release/README.md`).
+
+## The deploy time the page shows
+
+`deployedAt` is optional and the program reads it as `DEPLOYED_AT`, the
+variable `src/lib/version.ts` shows as "Deployed <time>". Two rules come with
+it, both tested in `main_test.go`:
+
+- **Absent means no variable at all.** A stack that holds no `deployedAt` has
+  never recorded a deploy — it has not been released, or the release found the
+  digest unchanged and recorded nothing — and the app then says nothing about
+  a deploy time rather than showing an empty one.
+- **A present value has to be an RFC 3339 timestamp in UTC**, such as
+  `2026-10-09T00:14:07Z`, which is what `lib.sh`'s `set_deployed_at_config`
+  writes and checks before writing. Anything else fails the deploy with a
+  message naming `deployedAt`, before the provider is asked to create
+  anything: a config set by hand is a value no release stands behind, and a
+  page claiming a deploy that did not happen is worse than one claiming
+  none.
 
 Two names are settled elsewhere and both are load-bearing:
 
@@ -79,10 +97,16 @@ are the human's steps; "What an app repo needs before its first release" and
 "The human must configure in Forgejo" in the devops repo's `workflows/README.md`
 list them.
 
-Two disagreements on the devops side decide whether a release deploys the
-service this program describes, and neither is fixed from this repository:
+Three disagreements on the devops side decide whether a release deploys the
+service this program describes, and none is fixed from this repository:
 `manifests/fractals.yaml` names the app `fractals` where the release path and
 this program use `fractals-nextjs` (bootstrap would create
-`runtime-fractals`, and the service asks for `runtime-fractals-nextjs`), and
+`runtime-fractals`, and the service asks for `runtime-fractals-nextjs`);
 `scripts/release/lib.sh` names the stack `<app>-<env>` where the patrol reads
-`<app>/<env>`. Both are filed as beads in the devops rig.
+`<app>/<env>`; and a release whose digest is the one the stack already runs
+records no `deployedAt`, so the apply it goes on to make is not the no-op it
+means to be — this program renders no `DEPLOYED_AT` for it, the container spec
+differs from the live revision, and Cloud Run creates a revision the release
+did not intend (that one is decided here and filed as `dv-iuqp`, since no
+rule this program could follow would fix it). The first two are filed as beads
+in the devops rig.
