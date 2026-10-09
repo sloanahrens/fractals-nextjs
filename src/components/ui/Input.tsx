@@ -8,6 +8,8 @@ interface InputProps {
   onChange: (value: string) => void;
   type?: "text" | "number";
   step?: string;
+  min?: number;
+  max?: number;
   disabled?: boolean;
   placeholder?: string;
   error?: string;
@@ -19,6 +21,8 @@ export function Input({
   onChange,
   type = "text",
   step,
+  min,
+  max,
   disabled = false,
   placeholder,
   error,
@@ -38,6 +42,8 @@ export function Input({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         step={step}
+        min={min}
+        max={max}
         disabled={disabled}
         placeholder={placeholder}
         className={`w-full px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${

@@ -44,6 +44,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, and the choice-to-kind and choice-to-default-view resolvers
 - **Julia sets** (`src/lib/julia.ts`): The four named Julia constants and the factory that turns one into a fractal kind
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
+- **Wander step** (`src/lib/wander.ts`): One random-walk step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
+- **Wander controller** (`src/lib/wanderController.ts`): The walk's clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
@@ -164,6 +166,40 @@ _Last updated: 2026-10-08_
 - The footer is a client component (`src/components/ui/VersionFooter.tsx`) that
   fetches the route after the page is up, so `/` stays a static prerender, and
   it renders nothing if the fetch fails.
+
+### Random walk (2026-10-08)
+
+- The Navigation panel carries a "Random walk" checkbox, off on load and not
+  remembered, and a "Seconds between steps" box (1-120, 5 by default) whose
+  entry only takes effect when it is a whole number in range: anything else,
+  an empty box included, is shown as typed and leaves the last good interval in
+  force. While the mode is on a line under the controls reads "Next step in
+  about N s". A step moves the view and nothing else — the fractal, its Julia
+  constant, the colour scheme, the iteration settings and the canvas size are
+  the walk's context, not its subject — and it goes through `applyView`, so it
+  clears the preset and updates the sliders like any other move.
+- `WanderController` (`src/lib/wanderController.ts`) owns the clock and
+  `nextWanderView` (`src/lib/wander.ts`, the previous landing) owns the step.
+  The controller knows four things — the mode is on, the tab is visible, a
+  render is in flight, how much of the wait is left — and one rule: the
+  countdown runs only when mode, tab and render all allow a step. Every method
+  changes one of those and re-settles, so there is no transition table to keep
+  right, and no timer can outlive the state that justifies it.
+- A full render suspends the wait rather than racing it. The page tells the
+  controller when a full-quality draw starts and finishes (`notifyRenderStart`
+  and `notifyRenderDone` in `drawCanvas`), and the countdown starts when one
+  finishes: a slow machine gets a step one interval after the picture, never
+  during it. A step is not the end of the wait but the start of one — the walk
+  re-arms when that step's own render reports done — which is what ties the
+  cadence to finished pictures rather than to wall time.
+- Every manual move restarts the interval without switching the mode off. The
+  gesture and key paths restart it through `applyView`, which they all share
+  with the walk's own step, and the sliders, Zoom In/Out, Reset View, Apply, a
+  preset and a fractal or Julia constant change restart it where they are.
+  `document.hidden` pauses the walk and a fresh countdown runs when the tab
+  comes back; unticking the box stops it at once. The controller takes its
+  timers as an argument, so the vitest suite drives the whole thing on fake
+  ones.
 
 ### The fractal picker (2026-10-08)
 
