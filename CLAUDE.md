@@ -40,6 +40,11 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 
 - **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
+- **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
+- **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, and the choice-to-kind and choice-to-default-view resolvers
+- **Julia sets** (`src/lib/julia.ts`): The four named Julia constants and the factory that turns one into a fractal kind
+- **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
+- **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -100,6 +105,11 @@ the build. The `deploy/` program has its own target, `make deploy-check`, which
 is deliberately not part of `gate` (see the Version Notes below).
 
 ## Deployment
+
+The app runs at two Cloud Run URLs:
+
+- **Production** — https://fractals-nextjs-prod-robymk5mfq-uc.a.run.app — updated when the human tags a release (`v*`).
+- **Staging** — https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app — holds the same release as production today.
 
 ### Docker Configuration
 
