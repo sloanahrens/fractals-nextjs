@@ -816,7 +816,7 @@ export default function Home() {
                 currentCanvasHeight={canvasHeight}
                 onPresetsChange={handlePresetsChange}
                 saveDisabledReason={
-                  fractalType === "julia"
+                  fractalType !== "mandelbrot"
                     ? "Saving is available for Mandelbrot views"
                     : undefined
                 }

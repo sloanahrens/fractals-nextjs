@@ -16,7 +16,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 ### 🎨 Interactive Visualization
 
-- **Fractal Types**: Draw the Mandelbrot set or a Julia set, and pick the Julia constant from four named ones
+- **Fractal Types**: Draw the Mandelbrot set, the Burning Ship or a Julia set, and pick the Julia constant from four named ones
 - **Real-time Rendering**: Smooth fractal generation with optimized performance
 - **Zoom Controls**: Zoom with the mouse wheel, the Zoom In/Out buttons and the Zoom Level slider
 - **Pan Navigation**: Click and drag to explore different regions, or drag with one finger on a touch screen

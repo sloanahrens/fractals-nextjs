@@ -18,6 +18,9 @@ describe("downloadFileName", () => {
     // save keeps the name it had before the picker existed.
     expect(downloadFileName(0, 0, 1)).toBe("mandelbrot_0_0_1x.png");
     expect(downloadFileName(0, 0, 1, "julia")).toBe("julia_0_0_1x.png");
+    expect(downloadFileName(-0.45, -0.5, 1, "burning-ship")).toBe(
+      "burning-ship_-0.45_-0.5_1x.png",
+    );
   });
 
   it("keeps the sign of a negative coordinate", () => {

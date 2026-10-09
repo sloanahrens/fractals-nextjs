@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ComplexNumber } from "../../types/fractal";
+import { burningShipKind } from "../burningShip";
 import {
   FRACTAL_TYPES,
   defaultViewFor,
@@ -26,12 +27,13 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers Mandelbrot first and Julia second, each once", () => {
+  it("offers the three fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
       { id: "mandelbrot", label: "Mandelbrot" },
       { id: "julia", label: "Julia" },
+      { id: "burning-ship", label: "Burning Ship" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -56,10 +58,19 @@ describe("resolveFractalKind", () => {
     expect(resolveFractalKind("mandelbrot", "Dendrite")).toBe(mandelbrotKind);
   });
 
+  it("draws the ship for its own id, whatever constant is beside it", () => {
+    // The ship takes no constant, so a Julia constant left over in the picker
+    // state does not reach its formula.
+    expect(resolveFractalKind("burning-ship", "Dendrite")).toBe(
+      burningShipKind,
+    );
+    expect(resolveFractalKind("burning-ship", "")).toBe(burningShipKind);
+  });
+
   it("falls back to the Mandelbrot set for an unknown id", () => {
     // A picker choice from a version that knows a fractal this build does not
     // renders the familiar set rather than a blank canvas.
-    expect(resolveFractalKind("burning-ship", "Dendrite")).toBe(mandelbrotKind);
+    expect(resolveFractalKind("newton", "Dendrite")).toBe(mandelbrotKind);
     expect(resolveFractalKind("", "")).toBe(mandelbrotKind);
   });
 
@@ -91,8 +102,19 @@ describe("defaultViewFor", () => {
     expect(defaultViewFor("julia")).toEqual({ centerX: 0, centerY: 0, zoom: 1 });
   });
 
-  it("falls back to the Mandelbrot view for an unknown id", () => {
+  it("frames the ship where the whole of it sits", () => {
+    // The ship lies below and to the left of the origin. At zoom 1 the base
+    // view is 4 x 3, so this centre spans -2.45..1.55 by -2..1, which holds
+    // the hull and the masts without the axis being turned over.
     expect(defaultViewFor("burning-ship")).toEqual({
+      centerX: -0.45,
+      centerY: -0.5,
+      zoom: 1,
+    });
+  });
+
+  it("falls back to the Mandelbrot view for an unknown id", () => {
+    expect(defaultViewFor("newton")).toEqual({
       centerX: -0.75,
       centerY: 0,
       zoom: 1,

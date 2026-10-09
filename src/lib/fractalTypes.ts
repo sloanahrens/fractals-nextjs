@@ -1,4 +1,5 @@
 import type { FractalKind } from "../types/fractal";
+import { burningShipKind } from "./burningShip";
 import { JULIA_CONSTANTS, createJuliaKind } from "./julia";
 import { mandelbrotKind } from "./mandelbrot";
 
@@ -20,15 +21,17 @@ export interface FractalType {
 export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "mandelbrot", label: "Mandelbrot" },
   { id: "julia", label: "Julia" },
+  { id: "burning-ship", label: "Burning Ship" },
 ];
 
 /**
  * The formula a picker choice draws.
  *
  * The picker names a fractal and the renderer wants a {@link FractalKind}. For
- * the Mandelbrot set those are the same thing. Julia is a family rather than a
- * picture, so the choice carries a constant as well, and a name this build
- * does not know falls back to the first constant instead of to a blank canvas.
+ * the Mandelbrot set and the Burning Ship those are the same thing. Julia is a
+ * family rather than a picture, so the choice carries a constant as well, and
+ * a name this build does not know falls back to the first constant instead of
+ * to a blank canvas.
  * @param typeId - Id of the fractal the picker selected
  * @param juliaConstantName - Name of the Julia constant; ignored unless typeId is "julia"
  * @returns The kind to draw
@@ -37,6 +40,7 @@ export function resolveFractalKind(
   typeId: string,
   juliaConstantName: string,
 ): FractalKind {
+  if (typeId === "burning-ship") return burningShipKind;
   if (typeId !== "julia") return mandelbrotKind;
 
   const named = JULIA_CONSTANTS.find(
@@ -56,14 +60,19 @@ export interface FractalDefaultView {
 /**
  * The view a fractal opens on.
  *
- * The two fractals are pictures of different points, so neither can inherit
- * the other's view: the Mandelbrot set is framed around -0.75, while a Julia
- * set is symmetric about the origin whatever its constant.
+ * The fractals are pictures of different points, so none can inherit another's
+ * view: the Mandelbrot set is framed around -0.75, a Julia set is symmetric
+ * about the origin whatever its constant, and the ship sits below and left of
+ * the origin, around -0.45 by -0.5, at the size that holds the whole of it.
  * @param typeId - Id of the fractal to frame
  * @returns The centre and zoom that fractal opens on
  */
 export function defaultViewFor(typeId: string): FractalDefaultView {
   if (typeId === "julia") return { centerX: 0, centerY: 0, zoom: 1 };
+
+  if (typeId === "burning-ship") {
+    return { centerX: -0.45, centerY: -0.5, zoom: 1 };
+  }
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }
