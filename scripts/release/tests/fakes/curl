@@ -1,21 +1,62 @@
 #!/usr/bin/env bash
 #
-# Fake curl for the release script tests (bead B5.2). health.sh calls curl for
-# one thing only: the HTTP status of the app's health path. The fake prints a
-# status and records the URL it was asked about, so a test can make the health
-# check succeed, fail, or fail and then succeed.
+# Fake curl for the release script tests (bead B5.2). Two scripts ask curl
+# different things: health.sh only wants the HTTP status of the app's health
+# path, and wait_version.sh (bead dv-5jrh) wants the status *and* the body of
+# the app's version endpoint. The fake answers both. It records the URL it was
+# asked about, writes the body where curl would write it (the file --output
+# names), and prints the status, so a test can make a check succeed, fail, or
+# fail and then succeed, and can hand the version endpoint any body it likes.
 #
 # Fake-specific environment:
-#   FAKE_LOG           where invocations are recorded (default /dev/null)
-#   FAKE_HTTP_STATUS   status to print, default 200
-#   FAKE_HTTP_STATUSES statuses to hand out in order, one per call, the last
-#                      one repeating; overrides FAKE_HTTP_STATUS
+#   FAKE_LOG            where invocations are recorded (default /dev/null)
+#   FAKE_HTTP_STATUS    status to print, default 200
+#   FAKE_HTTP_STATUSES  statuses to hand out in order, one per call, the last
+#                       one repeating; overrides FAKE_HTTP_STATUS
+#   FAKE_HTTP_BODY      the body to hand back, default empty; written to the
+#                       file --output names, or to stdout when there is none
+#   FAKE_HTTP_FAIL      when set, no body and no status are printed and curl's
+#                       "couldn't connect" status (7) is returned. A service
+#                       that is not there usually makes curl report the status
+#                       000, which a test sets FAKE_HTTP_STATUS to; this is the
+#                       other shape of the same failure, a curl that reported
+#                       nothing at all, and the two are retried alike.
 
 set -euo pipefail
 # shellcheck source=scripts/release/tests/fakes/_fake.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
 
 fake_log "curl $*"
+
+# Where the body goes: the file --output names, in either spelling curl accepts,
+# or stdout when the caller named none.
+output=''
+while [[ $# -gt 0 ]]; do
+  case $1 in
+  -o | --output)
+    output=${2:-}
+    shift
+    if [[ $# -gt 0 ]]; then shift; fi
+    ;;
+  --output=*)
+    output=${1#*=}
+    shift
+    ;;
+  *) shift ;;
+  esac
+done
+
+if [[ -z ${FAKE_HTTP_FAIL:-} ]]; then
+  if [[ -n $output ]]; then
+    # Writing to /dev/null is what a check that only wants the status asks for,
+    # and there is nothing to write there.
+    [[ $output == /dev/null ]] || printf '%s' "${FAKE_HTTP_BODY:-}" >"$output"
+  else
+    printf '%s' "${FAKE_HTTP_BODY:-}"
+  fi
+else
+  exit 7
+fi
 
 statuses=${FAKE_HTTP_STATUSES:-}
 if [[ -z $statuses ]]; then

@@ -32,8 +32,11 @@ var forbidden = []string{"/Users/" + "sloan", "claude-" + "501"}
 
 // commands are every script in this directory that is a command, in the order a
 // first release uses them: the one-time stack creation init_stack.sh (bead
-// dv-dw4), then the six steps of the flow, and staged_digest.sh, the read the
-// prod job makes of the staging stack before it promotes (bead dv-yf4).
+// dv-dw4), then the six steps of the flow, then the two reads a job makes of
+// what a step left behind -- staged_digest.sh, the digest the prod job reads out
+// of the staging stack's state before it promotes (bead dv-yf4), and
+// wait_version.sh, the commit the integration job reads out of the deployed
+// service (bead dv-5jrh).
 //
 // build_push_staging.sh is not one of the flow's steps: it is the landing
 // build, the script workflows/staging.yml runs on every push to main, and it
@@ -51,6 +54,7 @@ var commands = []string{
 	"promote.sh",
 	"staged_digest.sh",
 	"health.sh",
+	"wait_version.sh",
 }
 
 // bashFiles returns every shell file in the package that bash itself can parse:

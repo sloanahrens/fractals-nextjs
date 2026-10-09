@@ -15,6 +15,15 @@
 # image is published under differs, and here it is derived from the commit
 # rather than from a tag, because there is no tag to publish a landing under.
 #
+# The commit is the image's other half, and both halves come from the one read
+# of it: it names the image (main-<12 hex>) and it travels to the build as
+# --build-arg GIT_SHA=<commit>, so the deployed service can report the commit it
+# was built from — the integration tier reads /api/version and fails when it
+# does not name the commit just built
+# (~/gt/docs/plans/2026-10-08-automated-release-design.md, section 2). An app
+# whose Dockerfile declares no ARG GIT_SHA still builds: docker only warns that
+# the build-arg went unconsumed (README, "The commit an image carries").
+#
 # This script never publishes a release and never touches one. What it refuses
 # is the whole of that claim:
 #
@@ -142,9 +151,15 @@ step "Verifying $SOURCE is a clean checkout of a commit on main"
 [[ -z $(git -C "$SOURCE" status --porcelain) ]] ||
   die "working tree of $SOURCE is not clean; a landing build publishes the commit, not local edits"
 
-head_commit=$(git -C "$SOURCE" rev-parse HEAD)
+# The commit is read once here and used twice below: it names the image
+# (main-<12 hex>) and it is the GIT_SHA the image is built with. A checkout
+# whose HEAD cannot be read has nothing to publish under and nothing to record,
+# so the read is allowed to fail and the refusal below is the one that speaks: a
+# raw "fatal: ambiguous argument 'HEAD'" from git under `set -e` names neither
+# the source directory nor what was wanted.
+head_commit=$(git -C "$SOURCE" rev-parse HEAD || true)
 [[ $head_commit =~ ^[0-9a-f]{40}$ ]] ||
-  die "could not read the commit at HEAD of $SOURCE with git: $head_commit"
+  die "could not read the commit at HEAD of $SOURCE with git: ${head_commit:-nothing}"
 
 # The commit has to be one main carries. origin/main is the checkout's own
 # remote-tracking ref, as the workflow's checkout left it, and the check is a
@@ -178,7 +193,8 @@ if [[ -n $TOKEN_FILE ]]; then
 fi
 
 step "Building $IMAGE:$TAG"
-run docker build --file "$SOURCE/Dockerfile" --tag "$IMAGE:$TAG" "$SOURCE"
+run docker build --file "$SOURCE/Dockerfile" --tag "$IMAGE:$TAG" \
+  --build-arg "GIT_SHA=$head_commit" "$SOURCE"
 
 step "Pushing $IMAGE:$TAG"
 run docker push "$IMAGE:$TAG"

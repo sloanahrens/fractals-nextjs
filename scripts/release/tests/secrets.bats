@@ -49,6 +49,8 @@ setup() {
     --app "$APP" --env staging --token-file "$TOKEN_FILE"
   assert_clean "health.sh" "$RELEASE_DIR/health.sh" \
     --url "$FAKE_SERVICE_URL" --health-path /api/health --timeout 5 --interval 1
+  assert_clean "wait_version.sh" "$RELEASE_DIR/wait_version.sh" \
+    --url "$VERSION_URL" --sha "$DEPLOYED_SHA" --timeout 5 --interval 1
   assert_clean "init_stack.sh" "$RELEASE_DIR/init_stack.sh" \
     --app "$APP" --project "$PROJECT" --env staging --token-file "$TOKEN_FILE"
 }
@@ -70,6 +72,8 @@ setup() {
     --app "$APP" --env staging --token-file "$TOKEN_FILE" --dry-run
   assert_clean "health.sh" "$RELEASE_DIR/health.sh" \
     --url "$FAKE_SERVICE_URL" --health-path /api/health --dry-run
+  assert_clean "wait_version.sh" "$RELEASE_DIR/wait_version.sh" \
+    --url "$VERSION_URL" --sha "$DEPLOYED_SHA" --dry-run
   assert_clean "init_stack.sh" "$RELEASE_DIR/init_stack.sh" \
     --app "$APP" --project "$PROJECT" --env staging --token-file "$TOKEN_FILE" --dry-run
 }

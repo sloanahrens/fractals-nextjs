@@ -8,8 +8,10 @@
 # not carry — a worker's branch, which is the commit a landing run must never
 # put in staging — and it can be pointed at the release path's ref, which is a
 # tag the human pushes and the release flow owns. Everything else here is the
-# shape the workflow reads: the tag is main-<12 hex of the commit>, and the
-# digest is the registry's answer rather than a value the script made up.
+# shape the workflow reads: the tag is main-<12 hex of the commit>, the digest
+# is the registry's answer rather than a value the script made up, and the
+# commit itself travels to the build as GIT_SHA (bead dv-lh6), which the
+# assertions on the build line pin to the commit the name was made from.
 #
 # The checkout fixtures are real repositories: make_checkout commits once and
 # tags the commit, and point_origin_main writes the origin/main ref the ancestry
@@ -44,7 +46,9 @@ commit_after_main() {
   [[ $output == *"tag=main-$SHORT_COMMIT"* ]]
   [[ $output == *"digest=$IMAGE@sha256:$DIGEST_HEX"* ]]
 
-  grep -q "docker build --file $CHECKOUT/Dockerfile --tag $IMAGE:main-$SHORT_COMMIT $CHECKOUT" "$FAKE_LOG"
+  # The exact build line: the commit the image is named after is the commit the
+  # image carries, so a service reporting GIT_SHA reports the landing's commit.
+  grep -q "docker build --file $CHECKOUT/Dockerfile --tag $IMAGE:main-$SHORT_COMMIT --build-arg GIT_SHA=$HEAD_COMMIT $CHECKOUT" "$FAKE_LOG"
   grep -q "docker push $IMAGE:main-$SHORT_COMMIT" "$FAKE_LOG"
 }
 
@@ -143,6 +147,28 @@ commit_after_main() {
   [[ $output == *"no Dockerfile"* ]]
 }
 
+@test "refuses a HEAD that is not a commit, before docker runs" {
+  # The commit is what the image is named after and what it carries, so a source
+  # with no commit to read is refused (bead dv-lh6). A repository with nothing
+  # committed is exactly that: `git rev-parse HEAD` prints the literal `HEAD`
+  # and fails, and the file it would commit is excluded so the tree is clean and
+  # this is the check under test rather than the clean-tree one. --ref is passed
+  # because the ref read is not the subject here.
+  local unborn=$BATS_TEST_TMPDIR/unborn
+  mkdir -p "$unborn"
+  git -c init.defaultBranch=main -C "$unborn" init -q
+  printf 'FROM scratch\n' >"$unborn/Dockerfile"
+  printf 'Dockerfile\n' >"$unborn/.git/info/exclude"
+
+  run "$RELEASE_DIR/build_push_staging.sh" --app "$APP" --project "$PROJECT" --source "$unborn" \
+    --ref refs/heads/main
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"could not read the commit at HEAD"* ]]
+  [[ $output != *"not clean"* ]]
+  [ ! -s "$FAKE_LOG" ]
+}
+
 @test "writes the digest to --digest-file as well" {
   local digest_file=$BATS_TEST_TMPDIR/digest.txt
 
@@ -174,6 +200,7 @@ commit_after_main() {
 
   [ "$status" -eq 0 ]
   [[ $output == *"[dry-run] docker build"* ]]
+  [[ $output == *"--build-arg GIT_SHA=$HEAD_COMMIT"* ]]
   [[ $output == *"[dry-run] docker push"* ]]
   [ ! -s "$FAKE_LOG" ]
 }

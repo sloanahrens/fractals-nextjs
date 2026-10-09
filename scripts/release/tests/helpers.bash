@@ -5,8 +5,9 @@
 #
 # Each test gets a fresh temporary directory holding:
 #
-#   bin/     the fake docker, gcloud, pulumi and curl, first on PATH, so a
-#            script under test cannot reach a real tool even by accident
+#   bin/     the fake docker, gcloud, pulumi, curl and date, first on PATH, so a
+#            script under test cannot reach a real tool even by accident (date
+#            is only ever the real one unless a test sets FAKE_DATE_BAD)
 #   fake.log every fake invocation, recorded verbatim
 #   fake-state  the fake cloud's serving/latest revision
 #   base-key.json  a key file containing a marker string that must never
@@ -37,7 +38,7 @@ setup_release_env() {
   FAKE_BIN=$BATS_TEST_TMPDIR/bin
   mkdir -p "$FAKE_BIN"
   cp -R "$BATS_TEST_DIRNAME/fakes/." "$FAKE_BIN/"
-  chmod +x "$FAKE_BIN"/docker "$FAKE_BIN"/gcloud "$FAKE_BIN"/pulumi "$FAKE_BIN"/curl
+  chmod +x "$FAKE_BIN"/docker "$FAKE_BIN"/gcloud "$FAKE_BIN"/pulumi "$FAKE_BIN"/curl "$FAKE_BIN"/date
   PATH="$FAKE_BIN:$PATH"
   export PATH
 
@@ -50,6 +51,29 @@ setup_release_env() {
 
   FAKE_SERVICE_URL='https://fractals-nextjs-staging-abc123.us-central1.run.app'
   export FAKE_SERVICE_URL
+
+  # VERSION_URL is where wait_version.sh polls for the commit serving (bead
+  # dv-5jrh). It is http on localhost on purpose: that is the one place the
+  # script accepts a plain-http URL, because everywhere else the answer would
+  # cross the network in clear text. Its port is not used by anything.
+  VERSION_URL='http://localhost:8080'
+  export VERSION_URL
+
+  # DEPLOYED_SHA is the commit a release would be checking for, and OTHER_SHA
+  # the commit a service running another revision reports back -- an older one,
+  # or a newer landing that superseded this deploy. Both are well-formed 40
+  # character hex git object names, which is what the script accepts.
+  DEPLOYED_SHA='0123456789abcdef0123456789abcdef01234567'
+  OTHER_SHA='fedcba9876543210fedcba9876543210fedcba98'
+  export DEPLOYED_SHA OTHER_SHA
+
+  # FAKE_HTTP_BODY is the body the fake curl hands back: the version endpoint's
+  # answer, which is the deploy's own commit. The extra field is there because a
+  # real endpoint answers with more than the commit it is asked about. A test
+  # that wants another answer sets its own; secrets.bats, which runs every
+  # script and expects each to succeed, gets this one.
+  FAKE_HTTP_BODY=$(printf '{"commit":"%s","deployedAt":"2026-10-08T21:22:00Z"}' "$DEPLOYED_SHA")
+  export FAKE_HTTP_BODY
 
   KEY_FILE=$BATS_TEST_TMPDIR/base-key.json
   printf '{"type":"service_account","private_key":"%s"}\n' "$KEY_MARKER" >"$KEY_FILE"
