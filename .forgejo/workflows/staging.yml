@@ -1,0 +1,192 @@
+# Staging-on-landing workflow template for an app repo (bead dv-pj9).
+#
+# Copy this file into an app repo as .forgejo/workflows/staging.yml, next to
+# deploy.yml and teardown.yml. It deploys the app's main to its staging stack
+# after every landing, so a change that landed can be watched where it landed
+# instead of waiting for the next release: build the commit main is at, apply
+# that digest to staging, check its health. Nothing else. Two jobs, and there is
+# no third: the later half of the release flow belongs to deploy.yml and to a
+# protected `v*` tag the human pushes, and nothing in this file names, reaches
+# or rebuilds for it.
+#
+# What authorizes a run here is main itself, and that is why this template
+# carries no ref guard where deploy.yml carries one. main only ever moves
+# through the gated landing worker (the ci gate and om review), so a commit that
+# is on main has passed that gate, and one that is not is refused by the build
+# itself: build_push_staging.sh checks that HEAD is on main before it builds
+# anything. A run started at a branch of a worker's own -- a dispatch names any
+# ref, and the copy of the file that runs is the copy at that ref (beads dv-csz
+# and dv-x3a) -- therefore has nothing to deploy, because the branch's commit is
+# not on main. The skip step below closes the other half of it: a run whose
+# commit main has moved past deploys nothing either.
+#
+# It runs on `runs-on: deploy` for the same reason deploy.yml does: that label
+# is the only runner with the base key, and Forgejo restricts it to the app
+# repos (bead B5.4). No file here holds a credential, and each checkout sets
+# persist-credentials: false so the runner's own repository token is not left in
+# .git/config for a later step to pick up (deploy.yml says why at length).
+
+name: staging
+
+# A landing on main, and nothing else: one branch, no path filter, no second
+# event. The landing worker is the only account that pushes main.
+on:
+  push:
+    branches: [main]
+
+# The group deploy.yml and teardown.yml declare, and deliberately the same one.
+# On this Forgejo a concurrency group is shared across every workflow in the
+# repository, so one group is one queue for all three flows whether or not they
+# name each other (the reference is quoted in workflows/README.md). A landing
+# waits behind a release and behind another landing, and no run here cancels
+# anything.
+#
+# cancel-in-progress: false is why the group is shared rather than separate.
+# With `true`, an arriving landing would cancel the previous invocation in the
+# group -- which, on this instance, can be a running release, stopped half-way
+# through a stack it was writing. A queued landing costs a wait; a cancelled
+# release costs a stack nobody can read.
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  # The five settings deploy.yml states, for the reasons it gives there: the
+  # app's name is its repository's, its project was fixed when bootstrap created
+  # it and is not derived from that name, and the stack directory, health path
+  # and base key path are the app's own.
+  GT_APP: ${{ github.event.repository.name }}
+  GT_PROJECT: gt-fractals-m4xq
+  GT_STACK_DIR: deploy
+  GT_HEALTH_PATH: /api/health
+  GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+
+jobs:
+  # Build the commit main is at and push it. The digest this prints is the
+  # landing's identity for the job below; nothing between the two rebuilds it.
+  build:
+    runs-on: deploy
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # build_push_staging.sh reads origin/main to check that HEAD is on
+          # main, and a shallow clone does not carry the remote-tracking ref.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Each job mints its own token: a token is good for an hour and one job,
+      # and separate jobs do not share a filesystem. The scripts print notes and
+      # a final block of key=value lines on stdout, so the machine lines are
+      # taken by matching their shape rather than by reprinting every line into
+      # $GITHUB_OUTPUT.
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Build main's commit and push it
+        id: push
+        env:
+          # The ref the run is at. The build refuses one that looks like a
+          # release tag, because a dispatch names any ref it likes and a `v*`
+          # tag is the release flow's to build.
+          REF: ${{ github.ref }}
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/build_push_staging.sh --ref "$REF" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+  # Apply the build's digest to staging and check that it answers. This job
+  # changes something, and what it changes is staging and only staging.
+  staging:
+    runs-on: deploy
+    needs: build
+    steps:
+      # First, before the checkout and before any call that touches the cloud: a
+      # run whose commit main has already moved past deploys nothing. Without it
+      # a backlog of queued landings replays old commits in order, and each one
+      # rolls staging back behind the landing that came after it.
+      #
+      # Both ways this read can fail deploy rather than skip. A wrong skip is
+      # invisible -- staging quietly stops tracking main and nothing says so --
+      # while a wrong deploy publishes a commit that is on main and passed the
+      # gate, which is what a landing run is for.
+      - name: Skip a landing main has moved past
+        id: stale
+        run: |
+          set -euo pipefail
+
+          # Read from the repository, not from this run's checkout: the checkout
+          # is the ref the run started at, which is the value in question. It is
+          # read by URL rather than as `origin` because this step runs before
+          # the checkout that would create that remote.
+          if [[ -z ${GITHUB_SERVER_URL:-} || -z ${GITHUB_REPOSITORY:-} ]]; then
+            printf '::notice::the runner names no server or repository, so main cannot be read\n'
+            printf 'deploying %s rather than skipping it silently\n' "$GITHUB_SHA"
+            exit 0
+          fi
+          remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+
+          if ! out=$(git ls-remote "$remote" refs/heads/main 2>/dev/null); then
+            printf '::notice::could not read main from %s\n' "$remote"
+            printf 'deploying %s rather than skipping it silently\n' "$GITHUB_SHA"
+            exit 0
+          fi
+
+          main=${out%%[[:space:]]*}
+          if [[ -n $main && $main != "$GITHUB_SHA" ]]; then
+            printf '::notice::main is at %s and this run is for %s\n' "$main" "$GITHUB_SHA"
+            printf 'a newer landing is queued behind this one; nothing is deployed\n'
+            printf 'stale=true\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+
+          printf 'main is still at %s; this run deploys it\n' "$GITHUB_SHA"
+          printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+
+      - uses: actions/checkout@v4
+        if: steps.stale.outputs.stale != 'true'
+        with:
+          # This job needs the tree the scripts and the committed stack settings
+          # live in, not the history: nothing here reads a commit.
+          persist-credentials: false
+
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        if: steps.stale.outputs.stale != 'true'
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      # No preview and no approval: a release writes a plan for a human to read
+      # before staging changes, and a landing has nothing of the kind to show --
+      # the digest it applies is one main already carries, and nobody is waiting
+      # to approve it. up.sh applies with --skip-preview, which here means no
+      # preview happens at all, and it applies the digest the build job printed
+      # and never a name.
+      - name: Apply the landing's digest to staging
+        id: up
+        if: steps.stale.outputs.stale != 'true'
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Check the staging service answers on its health path
+        if: steps.stale.outputs.stale != 'true'
+        env:
+          URL: ${{ steps.up.outputs.url }}
+        run: scripts/release/health.sh --url "$URL" --health-path "$GT_HEALTH_PATH"
