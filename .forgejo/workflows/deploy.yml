@@ -266,27 +266,32 @@ jobs:
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
-      # The digest staging actually runs, read back out of its stack rather than
-      # assumed from the job output. promote.sh refuses a digest that differs
-      # from this one, so "prod gets the image staging proved" is a check against
-      # the stack itself and not against a value both jobs happen to share.
+      # The digest staging actually runs, read back out of what Pulumi recorded
+      # for its stack rather than assumed from the job output. promote.sh
+      # refuses a digest that differs from this one, so "prod gets the image
+      # staging proved" is a check against the stack itself and not against a
+      # value both jobs happen to share.
+      #
+      # It has to be the stack's *state* and not its config: the staging job
+      # pins the digest with `pulumi config set imageDigest`, which writes a file
+      # in that job's own checkout — a job's workspace, which this job does not
+      # share and which is never committed — so the first real release
+      # (fractals-nextjs, 2026-10-08) failed here with `configuration key
+      # 'imageDigest' not found for stack 'staging'`. Stack state lives in the
+      # backend every job of a release can read, and the Cloud Run service the
+      # stack applied records the image it is running; staged_digest.sh reads
+      # that, and refuses a stack with no service, more than one, or an image
+      # that is a tag — an empty read would leave promote.sh's --staging-digest
+      # unset, and promote.sh skips the comparison when it is empty.
       - name: Read the digest the staging stack is running
         id: staged
         env:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          . scripts/release/lib.sh
-          ENV_NAME=staging
-          release_target
-          pulumi_env "$TOKEN_FILE"
-          digest="$(pulumi config get imageDigest --stack "$STACK" --cwd "$STACK_DIR")"
-          # An empty read would leave promote.sh's --staging-digest unset, and
-          # promote.sh skips the comparison when it is empty — so prod would
-          # deploy with no cross-check at all rather than fail.
-          [[ -n $digest ]] ||
-            die "the staging stack has no imageDigest, so there is nothing to compare a promotion against"
-          printf 'digest=%s\n' "$digest" >>"$GITHUB_OUTPUT"
+          out="$(scripts/release/staged_digest.sh --env staging --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
       - name: Promote the staging digest to prod
         id: promote
