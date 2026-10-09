@@ -20,6 +20,14 @@
 # refuses anything that differs from what staging proved — so nothing between
 # staging and prod can rebuild or re-tag the image.
 #
+# The ref the run is at decides the release, and the build job decides that ref
+# twice before it builds anything: the ref has to be a protected release tag,
+# and the commit that tag points at has to be one main carries. The tag name
+# alone cannot decide the second — a token allowed to push tags can put a `v*`
+# tag on any commit — so a release is only ever a commit main has landed, which
+# is the same rule build_push_staging.sh enforces for a landing. The build job
+# states both checks where they run.
+#
 # Each checkout sets persist-credentials: false. The checkout is the one thing
 # that needs the runner's own repository token, and this keeps it from writing
 # that token into .git/config where a later step could use it without naming it.
@@ -61,11 +69,20 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # The app name is the repository name (pkg/appdeploy Spec.Name). Set GT_APP
-  # explicitly if the repository is not named after the app; release_target in
+  # The app's name, which is its repository's name (pkg/appdeploy Spec.Name, and
+  # the manifest's app field: manifests/fractals.yaml states the rule and why the
+  # two sides of the deploy system have to agree on one name — this job can read
+  # nothing but the repository it runs in, and bootstrap names the app's service
+  # accounts from the manifest). Set GT_APP explicitly when the repository is not
+  # named after the app, which is the case a repository name too long for a GCP
+  # account id forces (manifests/abc.yaml); release_target in
   # scripts/release/lib.sh refuses anything that is not ^[a-z][a-z0-9-]{1,28}$.
   GT_APP: ${{ github.event.repository.name }}
-  # The cloud project the app lives in (not the Pulumi project name).
+  # The app's GCP project. It is not derived from the app's name: the project ID
+  # is fixed when bootstrap creates it, and the first app's is gt-fractals-m4xq where
+  # its name is fractals-nextjs (manifests/fractals.yaml). A release that guessed
+  # gt-<GT_APP> would push an image to a project that does not exist and mint a
+  # token for an account in it.
   GT_PROJECT: gt-fractals-m4xq
   # The app's Pulumi program. A release changes one value in it, imageDigest,
   # and the rest of the Spec stays in Pulumi.<env>.yaml (bead B4.5).
@@ -103,6 +120,10 @@ jobs:
       # no push can put another copy of this file on a branch. That is the
       # branch protection rule scripts/verify_forgejo_protection.sh verifies
       # under workflow.protection (docs/design.md, section 6.1).
+      #
+      # This is the first of the two ref checks the build makes. It reads the
+      # tag's name; the step after the checkout reads the commit that name
+      # points at.
       - name: Refuse anything but a protected release tag
         run: |
           set -euo pipefail
@@ -115,9 +136,47 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # build_push.sh refuses a checkout that is not exactly at the tag, and
-          # that check wants the tag's own ref rather than a shallow clone.
+          # that check wants the tag's own ref rather than a shallow clone. The
+          # step after this one compares the tag's commit with main, which is a
+          # read of origin/main: only a full-history checkout carries it.
           fetch-depth: 0
           persist-credentials: false
+
+      # And the commit the tag points at has to be one main carries.
+      #
+      # The step above reads the tag's name, and a name is a string: an account
+      # allowed to push tags can put `v1.2.3` on any commit it can reach, and
+      # this file is the code the deploy runner executes with a cloud
+      # credential in scope. Requiring the commit to be one main carries is what
+      # ties a release to the commits that passed the landing gate, and
+      # build_push_staging.sh applies the same rule, through the same git read,
+      # to a landing.
+      #
+      # origin/main here is the checkout's own remote-tracking ref: the checkout
+      # above fetches the full history, so main is a local ref and this step
+      # makes no network call and needs no credential. A checkout without it
+      # fails the run instead of skipping the check, because a release whose
+      # ancestry could not be read is exactly the release this step exists to
+      # stop; the message says which part is missing.
+      #
+      # The step runs before the token is minted and before anything is built or
+      # pushed, so a run it refuses reads no credential and changes nothing.
+      - name: Refuse a release tag whose commit is not on main
+        run: |
+          set -euo pipefail
+          if ! git rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+            printf 'refusing the release tag %s: this checkout has no origin/main, so its commit cannot be\n' \
+              "$GITHUB_REF_NAME" >&2
+            printf 'checked against main, and a release tag must point at a commit on main\n' >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            printf 'refusing a release tag whose commit is not on main: %s at %s\n' \
+              "$GITHUB_SHA" "$GITHUB_REF_NAME" >&2
+            printf 'a release tag must point at a commit on main, and this one is not an ancestor of origin/main\n' >&2
+            exit 1
+          fi
+          printf 'release tag %s points at %s, which is on main\n' "$GITHUB_REF_NAME" "$GITHUB_SHA"
 
       # Each job mints its own token: a token is good for an hour and one job,
       # and separate jobs do not share a filesystem. The scripts print notes and

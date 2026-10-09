@@ -4,10 +4,41 @@
 # deploy.yml and teardown.yml. It deploys the app's main to its staging stack
 # after every landing, so a change that landed can be watched where it landed
 # instead of waiting for the next release: build the commit main is at, apply
-# that digest to staging, check its health. Nothing else. Two jobs, and there is
-# no third: the later half of the release flow belongs to deploy.yml and to a
-# protected `v*` tag the human pushes, and nothing in this file names, reaches
-# or rebuilds for it.
+# that digest to staging, check its health, and test that service. Nothing else.
+# Four jobs, and there is no fifth: the later half of the release flow belongs
+# to deploy.yml and to a protected `v*` tag the human pushes, and nothing in
+# this file names, reaches or rebuilds for it.
+#
+# The first of the four is `fresh`, and it is its own job rather than a step
+# inside the others (bead dv-7gsb). Landings arrive every few minutes, so a
+# queued run is usually superseded before it starts; a job that skips its own
+# steps still ends with status success, and the release bot and the dashboard's
+# Deploys block both read a run's *job statuses* to decide whether a commit was
+# deployed and tested. A superseded run whose jobs all read success therefore
+# says a commit reached staging and passed the integration tier when it reached
+# neither. So the read that compares main with the run's commit is the first job,
+# the three jobs that do the work depend on it, and each carries the same answer
+# as a job-level condition: a superseded run's jobs are skipped, which is not
+# success.
+#
+# The last job is the integration tier (bead dv-sdpq; the design is
+# docs/plans/2026-10-08-automated-release-design.md, section 2). "Green" for a
+# commit has to mean one thing — the deploy of that commit answered — and only a
+# test tied to the deploy can say it: a periodic sweep would run against
+# whichever commit staging happens to serve when it fires, so "tested" and
+# "live" would be two facts that never coincide. So the integration job waits
+# for the service to report the commit the run deployed and then runs the app's
+# own `make integration` against it, and its result is what the release reads as
+# "this commit is green on staging".
+#
+# That job runs on `runs-on: ci-base`, and that is the point of it: an app's
+# integration tests need no cloud credential to do their work, so the runner
+# that holds none is the runner that runs them. The job therefore holds no key
+# path and calls no script that mints a token. The base key in this file is
+# declared on the two jobs that run on the deploy runner rather than at the top
+# of the file, because a workflow-level variable is inherited by every job, the
+# `fresh` and `integration` ones included: an inherited variable is a key path
+# the job holds.
 #
 # What authorizes a run here is main itself, and that is why this template
 # carries no ref guard where deploy.yml carries one. main only ever moves
@@ -17,14 +48,16 @@
 # anything. A run started at a branch of a worker's own -- a dispatch names any
 # ref, and the copy of the file that runs is the copy at that ref (beads dv-csz
 # and dv-x3a) -- therefore has nothing to deploy, because the branch's commit is
-# not on main. The skip step below closes the other half of it: a run whose
-# commit main has moved past deploys nothing either.
+# not on main. The `fresh` job below closes the other half of it: a run whose
+# commit main has moved past is skipped, and every job that would deploy or test
+# depends on it.
 #
-# It runs on `runs-on: deploy` for the same reason deploy.yml does: that label
-# is the only runner with the base key, and Forgejo restricts it to the app
-# repos (bead B5.4). No file here holds a credential, and each checkout sets
-# persist-credentials: false so the runner's own repository token is not left in
-# .git/config for a later step to pick up (deploy.yml says why at length).
+# The jobs that build and deploy run on `runs-on: deploy` for the same reason
+# deploy.yml does: that label is the only runner with the base key, and Forgejo
+# restricts it to the app repos (bead B5.4). No file here holds a credential, and
+# each checkout sets persist-credentials: false so the runner's own repository
+# token is not left in .git/config for a later step to pick up (deploy.yml says
+# why at length).
 
 name: staging
 
@@ -51,21 +84,92 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # The five settings deploy.yml states, for the reasons it gives there: the
-  # app's name is its repository's, its project was fixed when bootstrap created
-  # it and is not derived from that name, and the stack directory, health path
-  # and base key path are the app's own.
+  # Four of the five settings deploy.yml states, for the reasons it gives there:
+  # the app's name is its repository's, its project was fixed when bootstrap
+  # created it and is not derived from that name, and the stack directory and
+  # health path are the app's own. The fifth, GT_BASE_KEY_FILE, is declared on
+  # the jobs below that run on the deploy runner: it is a key path, and the
+  # `fresh` and `integration` jobs are jobs that must hold none, so the
+  # declaration sits where the key is mounted rather than where every job would
+  # inherit it.
   GT_APP: ${{ github.event.repository.name }}
   GT_PROJECT: gt-fractals-m4xq
   GT_STACK_DIR: deploy
   GT_HEALTH_PATH: /api/health
-  GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
 
 jobs:
+  # Whether this run is still the run main is at, decided once, before anything
+  # else. It is a job of its own and the first one, and that is the whole point
+  # of it (bead dv-7gsb): the answer has to be the *run's* status, not a step
+  # inside a job. A job that gates its own steps on a read still ends with
+  # status success, and a superseded run whose three jobs each report success
+  # is a commit the release bot reads as deployed and tested.
+  #
+  # It runs on the CI runner and holds nothing: the read is `git ls-remote`
+  # against the repository over HTTP, so it needs no checkout, no token and no
+  # key path. It reads nothing and changes nothing, which is what lets it be the
+  # job every other job waits on.
+  fresh:
+    runs-on: ci-base
+    outputs:
+      # "true" when main has moved past the commit this run was started for.
+      # Every job below carries the same value as a job-level if, so the run's
+      # jobs are skipped rather than successful-and-empty.
+      stale: ${{ steps.stale.outputs.stale }}
+    steps:
+      # Both ways this read can fail deploy-and-test rather than skip. A wrong
+      # skip is invisible -- staging quietly stops tracking main and nothing
+      # says so -- while a wrong deploy publishes a commit that is on main and
+      # passed the gate, which is what a landing run is for.
+      - name: Check whether main has moved past this run's commit
+        id: stale
+        run: |
+          set -euo pipefail
+
+          # Read from the repository, not from a checkout: this job makes none,
+          # and the ref in question is the remote's main, not the ref the run
+          # started at. It is read by URL for that reason.
+          if [[ -z ${GITHUB_SERVER_URL:-} || -z ${GITHUB_REPOSITORY:-} ]]; then
+            printf '::notice::the runner names no server or repository, so main cannot be read\n'
+            printf 'deploying and testing %s rather than skipping it silently\n' "$GITHUB_SHA"
+            printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+          remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+
+          if ! out=$(git ls-remote "$remote" refs/heads/main 2>/dev/null); then
+            printf '::notice::could not read main from %s\n' "$remote"
+            printf 'deploying and testing %s rather than skipping it silently\n' "$GITHUB_SHA"
+            printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+
+          main=${out%%[[:space:]]*}
+          if [[ -n $main && $main != "$GITHUB_SHA" ]]; then
+            printf '::notice::main is at %s and this run is for %s\n' "$main" "$GITHUB_SHA"
+            printf 'a newer landing has superseded this run; nothing is deployed and nothing is tested\n'
+            printf 'stale=true\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+
+          printf 'main is still at %s; this run deploys and tests it\n' "$GITHUB_SHA"
+          printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+
   # Build the commit main is at and push it. The digest this prints is the
   # landing's identity for the job below; nothing between the two rebuilds it.
   build:
     runs-on: deploy
+    needs: fresh
+    # A superseded run does nothing at all, and this is the condition that says
+    # so: at the job level, so the job's status is skipped rather than success.
+    if: needs.fresh.outputs.stale != 'true'
+    # The base key, as a path the deploy runner mounts, mode 600, inside a home
+    # only gt-cloud can read (deploy.yml states why it is a path and never a
+    # Forgejo secret). It is a job variable here and not a workflow one so that
+    # the `fresh` and `integration` jobs — which run on the runner that mounts
+    # nothing — do not inherit it.
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     steps:
@@ -107,52 +211,24 @@ jobs:
   # changes something, and what it changes is staging and only staging.
   staging:
     runs-on: deploy
-    needs: build
+    # Both, and each for its own reason: `fresh` carries the job-level condition
+    # that a superseded run deploys nothing, and `build` carries the digest this
+    # job applies. A backlog of queued landings would otherwise replay old
+    # commits in order, and each one would roll staging back behind the landing
+    # that came after it.
+    needs: [build, fresh]
+    if: needs.fresh.outputs.stale != 'true'
+    # The same mount the build job states, for the same reason: this job mints a
+    # token and applies a digest, and both need the base key.
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+    outputs:
+      # The URL of the service this run's apply wrote, for the integration job
+      # below: it tests the service the run deployed, and it does not look one up
+      # for itself. A run that never reaches this job exports nothing.
+      url: ${{ steps.up.outputs.url }}
     steps:
-      # First, before the checkout and before any call that touches the cloud: a
-      # run whose commit main has already moved past deploys nothing. Without it
-      # a backlog of queued landings replays old commits in order, and each one
-      # rolls staging back behind the landing that came after it.
-      #
-      # Both ways this read can fail deploy rather than skip. A wrong skip is
-      # invisible -- staging quietly stops tracking main and nothing says so --
-      # while a wrong deploy publishes a commit that is on main and passed the
-      # gate, which is what a landing run is for.
-      - name: Skip a landing main has moved past
-        id: stale
-        run: |
-          set -euo pipefail
-
-          # Read from the repository, not from this run's checkout: the checkout
-          # is the ref the run started at, which is the value in question. It is
-          # read by URL rather than as `origin` because this step runs before
-          # the checkout that would create that remote.
-          if [[ -z ${GITHUB_SERVER_URL:-} || -z ${GITHUB_REPOSITORY:-} ]]; then
-            printf '::notice::the runner names no server or repository, so main cannot be read\n'
-            printf 'deploying %s rather than skipping it silently\n' "$GITHUB_SHA"
-            exit 0
-          fi
-          remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
-
-          if ! out=$(git ls-remote "$remote" refs/heads/main 2>/dev/null); then
-            printf '::notice::could not read main from %s\n' "$remote"
-            printf 'deploying %s rather than skipping it silently\n' "$GITHUB_SHA"
-            exit 0
-          fi
-
-          main=${out%%[[:space:]]*}
-          if [[ -n $main && $main != "$GITHUB_SHA" ]]; then
-            printf '::notice::main is at %s and this run is for %s\n' "$main" "$GITHUB_SHA"
-            printf 'a newer landing is queued behind this one; nothing is deployed\n'
-            printf 'stale=true\n' >>"${GITHUB_OUTPUT:-/dev/null}"
-            exit 0
-          fi
-
-          printf 'main is still at %s; this run deploys it\n' "$GITHUB_SHA"
-          printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
-
       - uses: actions/checkout@v4
-        if: steps.stale.outputs.stale != 'true'
         with:
           # This job needs the tree the scripts and the committed stack settings
           # live in, not the history: nothing here reads a commit.
@@ -160,7 +236,6 @@ jobs:
 
       - name: Mint a one-hour token for the app's deployer service account
         id: token
-        if: steps.stale.outputs.stale != 'true'
         run: |
           set -euo pipefail
           out="$(scripts/release/mint_token.sh)"
@@ -175,7 +250,6 @@ jobs:
       # and never a name.
       - name: Apply the landing's digest to staging
         id: up
-        if: steps.stale.outputs.stale != 'true'
         env:
           DIGEST: ${{ needs.build.outputs.digest }}
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
@@ -186,7 +260,74 @@ jobs:
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
       - name: Check the staging service answers on its health path
-        if: steps.stale.outputs.stale != 'true'
         env:
           URL: ${{ steps.up.outputs.url }}
         run: scripts/release/health.sh --url "$URL" --health-path "$GT_HEALTH_PATH"
+
+  # The integration tier (bead dv-sdpq): test the service the run above deployed,
+  # so that "this commit is green on staging" is a fact about one commit rather
+  # than about whatever staging happened to serve when a sweep fired.
+  #
+  # This job is on the CI runner and holds nothing: no key path, no token, no
+  # cloud call. Everything it does is a read of the deployed service over HTTP —
+  # the version wait, and the app's own suite — and what it writes is a job
+  # result. That is what makes it the job a release can read: it cannot change
+  # anything, so its answer cannot be one a broken run gave before it changed
+  # something.
+  integration:
+    runs-on: ci-base
+    # As the staging job: `staging` is the deploy whose commit this job tests,
+    # and `fresh` is the job-level condition that keeps a superseded run from
+    # testing a service some newer landing owns.
+    needs: [staging, fresh]
+    if: needs.fresh.outputs.stale != 'true'
+    # The version wait polls for up to 300s by default and the app's suite is the
+    # app's own; the job names a bound of its own so that a service that never
+    # settles cannot hold a runner past it.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The app's own integration suite, and the Makefile that runs it, live
+          # in this repository; this job reads no commit, so the checkout carries
+          # no history and leaves no token in .git/config behind it.
+          persist-credentials: false
+
+      # A health check is not this fact. A revision that answers on its health
+      # path can still be the one before it, so this step polls until the
+      # service reports the commit the run deployed: wait_version.sh exits 1 when
+      # the service reports another commit and 2 when it never gives an answer,
+      # and both fail the job. The commit is what ties the tests below to this
+      # run; without it they would pass against whatever is up.
+      - name: Wait for the service to report the commit this run deployed
+        env:
+          STAGING_URL: ${{ needs.staging.outputs.url }}
+        run: |
+          set -euo pipefail
+          scripts/release/wait_version.sh --url "$STAGING_URL" --sha "$GITHUB_SHA"
+
+      # The app's own tests against the deployed service. Both values reach make
+      # as command-line variables and through the environment, never as text
+      # interpolated into this script: STAGING_URL is where to test, EXPECT_SHA
+      # is the commit the service has to report, so a suite cannot pass by
+      # testing whatever happens to be up.
+      - name: Run the app's integration tests against the deployed service
+        env:
+          STAGING_URL: ${{ needs.staging.outputs.url }}
+        run: |
+          set -euo pipefail
+
+          # An app that has not written its integration tier yet is a failure
+          # here, and it has to say which contract is missing rather than leave
+          # the job's reader with make's own "No rule to make target": an app
+          # with no tests and an app whose tests failed are different findings.
+          if ! target_err=$(make --dry-run integration 2>&1 >/dev/null); then
+            printf '::error::%s has no `make integration` target, so this run cannot say whether\n' "$GT_APP"
+            printf 'the commit it deployed is green. Define one: `make integration\n'
+            printf 'STAGING_URL=<url> EXPECT_SHA=<commit>` must test the service at %s and exit\n' "$STAGING_URL"
+            printf 'non-zero unless it reports commit %s\n' "$GITHUB_SHA"
+            printf '%s\n' "$target_err"
+            exit 1
+          fi
+
+          make integration STAGING_URL="$STAGING_URL" EXPECT_SHA="$GITHUB_SHA"
