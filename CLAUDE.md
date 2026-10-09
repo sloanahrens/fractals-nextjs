@@ -136,6 +136,35 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-08_
 
+### Which build is running (2026-10-08)
+
+- The page ends in a footer saying which build is being served and how long ago
+  it went live, and `GET /api/version` answers with the same facts as JSON:
+  `{ builtAt, deployedAt, commit, revision }`, each null when the app has no
+  value for it or the value is not shaped like what it claims to be.
+- The four values come from the environment, one variable each:
+  `NEXT_PUBLIC_BUILD_TIME` (baked in by `next.config.js` at `next build`),
+  `DEPLOYED_AT` and `GIT_SHA` (a deploy-time pair the devops side will set, not
+  set today) and `K_REVISION` (Cloud Run's own). The route answers
+  `force-dynamic` so the last three are read per request.
+- Turbopack is why the route spells its four reads out as literal
+  `process.env.NAME` expressions. That expression is what the build replaces
+  with the constant it baked in; a value reached through `readVersionInfo`'s
+  own `process.env` default is a lookup in the server's environment, where a
+  build constant does not exist, and it comes back null — which is what this
+  route did until the reads were written out. The webpack build also had a
+  post-pass that rewrote aliased reads; it is skipped under Turbopack. A
+  build-time constant read in server code has to name itself.
+- `src/lib/version.ts` holds the reading and the wording: `readVersionInfo`
+  validates (the two times must parse, `GIT_SHA` is 7-40 hex characters,
+  `K_REVISION` matches `[a-z0-9-]{1,100}`) and `describeVersion(info, now,
+  timeZone?)` returns `{ text, title }`, preferring the deploy time so a
+  rollback does not read as "Built", and returning empty text when it has
+  neither — which is the footer's cue to render nothing.
+- The footer is a client component (`src/components/ui/VersionFooter.tsx`) that
+  fetches the route after the page is up, so `/` stays a static prerender, and
+  it renders nothing if the fetch fails.
+
 ### The fractal picker (2026-10-08)
 
 - `src/lib/fractalTypes.ts` is the picker's half of the chain: `FRACTAL_TYPES`
