@@ -154,6 +154,38 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-09_
 
+### Saved views belong to their fractal (2026-10-09)
+
+- `FractalPreset` gains two optional fields, `fractal` (a `FRACTAL_TYPES` id)
+  and `juliaConstant` (a `JULIA_CONSTANTS` name, written only for a Julia
+  view), so a saved view can say what it is a picture of. The storage key and
+  the shape of existing entries are unchanged: absent means the Mandelbrot set,
+  which is what the app could draw when those entries were saved. The writer's
+  half is `presetFractalFields`, which gives a Julia view both fields and any
+  other fractal only the id — no `juliaConstant` key at all — so the stored JSON
+  for every other fractal stays what it was.
+- `presetFractal` reads that field and answers `null` for an id this build does
+  not know — deliberately not the Mandelbrot fallback `getFractalKind` gives. A
+  preset naming a fractal this build cannot draw is left out of every listing
+  rather than shown as another fractal's picture, and `presetsForFractal` is
+  the filter behind the dropdown, the built-in buttons and the saved list.
+  `presetJuliaConstant` answers a name the picker offers, falling back to the
+  first constant — the picture `resolveFractalKind` already draws for a name it
+  cannot resolve, so the select and the canvas agree.
+- Reading storage is not a write. The parser passes entries through as they
+  were stored — a field this build has never heard of is carried, not dropped —
+  and discards only a value that could not be a preset at all. A view for an
+  unknown fractal therefore stays in storage, unlisted and undeletable from the
+  UI, for a build that knows the fractal.
+- `handlePresetSelect` sets the fractal, and the Julia constant for a Julia
+  view, before applying the preset's view, so loading one puts the picker on the
+  picture the bounds were framed on. `CustomPresetManager` takes
+  `currentFractal` and `currentJuliaConstant` in place of `saveDisabledReason`,
+  and Save Current is offered for every fractal.
+- `src/__tests__/single-save-button.test.ts` grew a guard on the removed hint's
+  text, in the style of the one it already had on the label: the walk reads
+  sources, so the disabled wording cannot come back unnoticed.
+
 ### make integration installs its own dependencies (2026-10-09)
 
 - `integration` takes `ci-install` as a prerequisite, so `make integration`
@@ -299,9 +331,10 @@ _Last updated: 2026-10-09_
   rows is a torn image.
 - `downloadFileName` takes an optional prefix, defaulting to `mandelbrot`, so
   the name of a Mandelbrot save is byte for byte what it was and a Julia save
-  starts `julia_`. `CustomPresetManager` takes an optional
-  `saveDisabledReason`: the page sets it on Julia, since a saved preset has no
-  fractal field and this bead does not add one.
+  starts `julia_`. `CustomPresetManager` used to take an optional
+  `saveDisabledReason`, which the page set on Julia because a saved preset had
+  no fractal field; the format gained one and the prop is gone — see the
+  saved-views section above.
 
 ### Controls stay usable during a render (2026-10-08)
 

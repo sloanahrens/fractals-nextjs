@@ -8,6 +8,8 @@ import {
   deleteCustomPreset,
   getCustomPresetsSnapshot,
   getServerCustomPresetsSnapshot,
+  presetFractalFields,
+  presetsForFractal,
   subscribeToCustomPresets,
 } from "../../lib/presets";
 import { Button } from "./Button";
@@ -19,13 +21,11 @@ interface CustomPresetManagerProps {
   currentColorScheme: ColorScheme;
   currentCanvasWidth: number;
   currentCanvasHeight: number;
+  /** Id of the fractal on the canvas now, saved with the view. */
+  currentFractal: string;
+  /** Julia constant on the canvas now; saved only for a Julia view. */
+  currentJuliaConstant: string;
   onPresetsChange: () => void;
-  /**
-   * Why saving is unavailable right now. The saved-preset format describes a
-   * Mandelbrot view, so the page sets this while something else is on the
-   * canvas; unset means saving is offered.
-   */
-  saveDisabledReason?: string;
   className?: string;
 }
 
@@ -35,8 +35,9 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
   currentColorScheme,
   currentCanvasWidth,
   currentCanvasHeight,
+  currentFractal,
+  currentJuliaConstant,
   onPresetsChange,
-  saveDisabledReason,
   className = "",
 }) => {
   const [showSaveDialog, setShowSaveDialog] = React.useState(false);
@@ -49,6 +50,12 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
     getCustomPresetsSnapshot,
     getServerCustomPresetsSnapshot,
   );
+
+  // The list shows the views saved for the fractal on the canvas, which is the
+  // one the dropdown and the buttons offer. A view for another fractal — or for
+  // one this build does not know — is left in storage, so switching the Fractal
+  // select brings it back rather than it being lost or deleted here.
+  const savedForFractal = presetsForFractal(customPresets, currentFractal);
 
   const handleSavePreset = () => {
     if (!presetName.trim()) {
@@ -65,6 +72,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
       colorScheme: currentColorScheme,
       canvasWidth: currentCanvasWidth,
       canvasHeight: currentCanvasHeight,
+      ...presetFractalFields(currentFractal, currentJuliaConstant),
     };
 
     try {
@@ -97,7 +105,6 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
         <div className="text-sm font-medium text-gray-700">Custom Presets</div>
         <Button
           onClick={() => setShowSaveDialog(true)}
-          disabled={saveDisabledReason !== undefined}
           variant="outline"
           size="sm"
         >
@@ -105,14 +112,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
         </Button>
       </div>
 
-      {saveDisabledReason !== undefined && (
-        <p className="text-xs text-gray-500">{saveDisabledReason}</p>
-      )}
-
-      {/* The dialog opens only from Save Current, which is itself disabled
-          while saving is unavailable, but the canvas can change under an open
-          dialog and a preset saved then would describe the wrong fractal. */}
-      {showSaveDialog && saveDisabledReason === undefined && (
+      {showSaveDialog && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
           <Input
             label="Preset Name"
@@ -144,9 +144,9 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
         </div>
       )}
 
-      {customPresets.length > 0 && (
+      {savedForFractal.length > 0 && (
         <div className="space-y-2">
-          {customPresets.map((preset) => (
+          {savedForFractal.map((preset) => (
             <div
               key={preset.id}
               className="flex items-center justify-between bg-gray-50 rounded p-2 border"
@@ -172,9 +172,9 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
         </div>
       )}
 
-      {customPresets.length === 0 && (
+      {savedForFractal.length === 0 && (
         <div className="text-center text-sm text-gray-500 py-4">
-          No custom presets saved yet
+          No saved views for this fractal yet
         </div>
       )}
     </div>

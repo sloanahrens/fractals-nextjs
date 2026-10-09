@@ -8,6 +8,9 @@
  * dialog. The suite runs in Node with no DOM to render into, so this reads the
  * sources instead: a dead event name or a second copy of the label fails here
  * rather than in a browser.
+ *
+ * The same walk guards the hint that disabled the control on a Julia or Burning
+ * Ship view, which is gone now that a saved view remembers its fractal.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -21,6 +24,13 @@ const THIS_FILE = fileURLToPath(import.meta.url);
 
 /** The event the removed button dispatched to nobody. */
 const DEAD_EVENT = "save-preset";
+
+/**
+ * The hint that used to sit under a disabled Save Current, before the saved
+ * format could describe anything but a Mandelbrot view. Saving is offered for
+ * every fractal now, so the text and the prop that carried it are gone.
+ */
+const DISABLED_SAVE_HINT = "Saving is available for Mandelbrot views";
 
 /** The label as a component would render it: JSX text or a string literal. */
 const SAVE_LABEL = /(["']Save Current["']|>\s*Save Current\s*<)/;
@@ -65,5 +75,9 @@ describe("the save-current control", () => {
 
   it("renders the label in exactly one component", () => {
     expect(matching(SAVE_LABEL)).toEqual([SAVE_COMPONENT]);
+  });
+
+  it("explains no fractal as unsaveable", () => {
+    expect(matching(DISABLED_SAVE_HINT)).toEqual([]);
   });
 });

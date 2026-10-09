@@ -40,7 +40,12 @@ import {
   ZoomState,
 } from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
-import { FractalPreset, formatZoom } from "../lib/presets";
+import {
+  FractalPreset,
+  formatZoom,
+  presetFractal,
+  presetJuliaConstant,
+} from "../lib/presets";
 import { downloadFileName } from "../lib/download";
 import {
   FRACTAL_TYPES,
@@ -539,9 +544,13 @@ export default function Home() {
     // Calculate center and zoom from preset bounds
     const view = boundsToView(preset.bounds);
 
-    // A preset is a Mandelbrot view: the saved format has no field for the
-    // fractal, so loading one puts the picker back where its bounds belong.
-    setFractalType("mandelbrot");
+    // A view belongs to a fractal, and loading it puts the picker back on that
+    // fractal — for a Julia view, on its constant too — before the view itself.
+    // The bounds mean nothing without the picture they were framed on.
+    const fractal = presetFractal(preset) ?? "mandelbrot";
+    setFractalType(fractal);
+    if (fractal === "julia") setJuliaConstant(presetJuliaConstant(preset));
+
     setCenterX(view.centerX);
     setCenterY(view.centerY);
     setZoomLevel(view.scale);
@@ -676,6 +685,7 @@ export default function Home() {
               <h3 className="text-lg font-semibold mb-4">Presets</h3>
               <PresetSelector
                 currentPreset={currentPreset}
+                fractal={fractalType}
                 onPresetSelect={handlePresetSelect}
               />
             </div>
@@ -976,12 +986,9 @@ export default function Home() {
                 currentColorScheme={colorScheme}
                 currentCanvasWidth={canvasWidth}
                 currentCanvasHeight={canvasHeight}
+                currentFractal={fractalType}
+                currentJuliaConstant={juliaConstant}
                 onPresetsChange={handlePresetsChange}
-                saveDisabledReason={
-                  fractalType !== "mandelbrot"
-                    ? "Saving is available for Mandelbrot views"
-                    : undefined
-                }
               />
             </div>
           </div>
