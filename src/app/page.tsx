@@ -61,6 +61,12 @@ import {
   MIN_WANDER_INTERVAL_SECONDS,
   WanderController,
 } from "../lib/wanderController";
+import {
+  MANUAL_FITTED_MESSAGE,
+  checkManualBounds,
+  hasBaseAspect,
+  readManualCoordinate,
+} from "../lib/manualBounds";
 import { Slider } from "../components/ui/Slider";
 import { Checkbox } from "../components/ui/Checkbox";
 import { Select } from "../components/ui/Select";
@@ -75,6 +81,10 @@ import { VersionFooter } from "../components/ui/VersionFooter";
 // The four manual coordinate boxes. A field is present only once the user has
 // typed in it; while it is absent the box shows the current view.
 type ManualField = "minReal" | "maxReal" | "minImaginary" | "maxImaginary";
+
+// What the coordinate panel has to say after an Apply: why it could not run, or
+// what it did with a box of another shape than the view.
+type ManualMessage = { kind: "error" | "note"; text: string };
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -170,6 +180,14 @@ export default function Home() {
   const [manualDraft, setManualDraft] = useState<
     Partial<Record<ManualField, string>>
   >({});
+  // The message belongs to a draft: typing in a box replaces what the last
+  // Apply said, and Apply itself always says something, so there is no third
+  // event to clear it on. A view that moves underneath an untouched panel
+  // leaves the text alone until the next Apply, which is the earliest moment
+  // the message can describe the boxes again.
+  const [manualMessage, setManualMessage] = useState<ManualMessage | null>(
+    null,
+  );
 
   // The boxes mirror the current view until the user edits them, so they
   // resync whenever the view moves (zoom/pan, preset, reset). Adjusting the
@@ -189,11 +207,12 @@ export default function Home() {
   // value when the box still shows the view.
   const manualValue = (field: ManualField, fallback: number): number => {
     const typed = manualDraft[field];
-    return typed === undefined ? fallback : parseFloat(typed);
+    return typed === undefined ? fallback : readManualCoordinate(typed);
   };
 
   const editManualCoordinate = (field: ManualField, value: string) => {
     setManualDraft((draft) => ({ ...draft, [field]: value }));
+    setManualMessage(null);
     setCurrentPreset("");
   };
 
@@ -449,34 +468,34 @@ export default function Home() {
 
   // Helper functions for manual coordinate input
   const applyManualCoordinates = () => {
-    const minReal = manualValue("minReal", bounds.minReal);
-    const maxReal = manualValue("maxReal", bounds.maxReal);
-    const minImaginary = manualValue("minImaginary", bounds.minImaginary);
-    const maxImaginary = manualValue("maxImaginary", bounds.maxImaginary);
+    const checked = checkManualBounds({
+      minReal: manualValue("minReal", bounds.minReal),
+      maxReal: manualValue("maxReal", bounds.maxReal),
+      minImaginary: manualValue("minImaginary", bounds.minImaginary),
+      maxImaginary: manualValue("maxImaginary", bounds.maxImaginary),
+    });
 
-    // Validate bounds
-    if (
-      !isNaN(minReal) &&
-      !isNaN(maxReal) &&
-      !isNaN(minImaginary) &&
-      !isNaN(maxImaginary) &&
-      minReal < maxReal &&
-      minImaginary < maxImaginary
-    ) {
-      // Calculate center and zoom from manual bounds
-      const view = boundsToView({
-        minReal,
-        maxReal,
-        minImaginary,
-        maxImaginary,
-      });
-
-      setCenterX(view.centerX);
-      setCenterY(view.centerY);
-      setZoomLevel(view.scale);
-      setCurrentPreset("");
-      wander.notifyActivity();
+    if (!checked.ok) {
+      setManualMessage({ kind: "error", text: checked.messages.join(" ") });
+      return;
     }
+
+    // Calculate center and zoom from manual bounds
+    const view = boundsToView(checked.bounds);
+
+    setCenterX(view.centerX);
+    setCenterY(view.centerY);
+    setZoomLevel(view.scale);
+    setCurrentPreset("");
+    // A box of another shape is fitted to the view rather than refused — the
+    // width is what survives, around the box's own centre — and the panel says
+    // so, because nothing on screen would show what happened to the rest.
+    setManualMessage(
+      hasBaseAspect(checked.bounds)
+        ? null
+        : { kind: "note", text: MANUAL_FITTED_MESSAGE },
+    );
+    wander.notifyActivity();
   };
 
   // Put a view on screen without touching anything else. Both ways of choosing
@@ -967,6 +986,21 @@ export default function Home() {
                       editManualCoordinate("maxImaginary", value)
                     }
                   />
+                </div>
+                {/* Under the four boxes, in a box of its own so the row below
+                    does not move as a message comes and goes. An error is
+                    announced as it appears; a fitted note is only reported. */}
+                <div className="min-h-5">
+                  {manualMessage?.kind === "error" && (
+                    <p role="alert" className="text-xs text-red-600">
+                      {manualMessage.text}
+                    </p>
+                  )}
+                  {manualMessage?.kind === "note" && (
+                    <p role="status" className="text-xs text-gray-600">
+                      {manualMessage.text}
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={applyManualCoordinates}>
