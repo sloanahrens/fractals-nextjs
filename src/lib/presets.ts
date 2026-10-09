@@ -12,6 +12,11 @@ export interface FractalPreset {
   canvasHeight: number;
 }
 
+// The built-in views. A preset is six numbers and no fractal, so each view is a
+// centre and a zoom written out as bounds. Elephant Valley and Seahorse Valley
+// hold the 4:3 shape of the canvas (`calculateZoomBounds`), so loading one fills
+// it rather than stretching it, and `presets.test.ts` measures every preset with
+// the real iteration function — a frame the set fills is a blank button.
 export const BUILTIN_PRESETS: FractalPreset[] = [
   {
     id: "overview",
@@ -32,13 +37,17 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     id: "seahorse-valley",
     name: "Seahorse Valley",
     description: "Beautiful seahorse-like structures",
+    // Centre (-0.7453, 0.1127) at zoom 400: one seahorse spiral with the
+    // surroundings that make it read as one. The frame it replaced sat over the
+    // valley's left edge, which pushed the spiral against the right of the
+    // picture and left half the canvas flat.
     bounds: {
-      minReal: -0.76,
-      maxReal: -0.74,
-      minImaginary: 0.09,
-      maxImaginary: 0.11,
+      minReal: -0.7503,
+      maxReal: -0.7403,
+      minImaginary: 0.10895,
+      maxImaginary: 0.11645,
     },
-    maxIterations: 200,
+    maxIterations: 300,
     colorScheme: "ocean",
     canvasWidth: 800,
     canvasHeight: 600,
@@ -77,11 +86,14 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     id: "elephant-valley",
     name: "Elephant Valley",
     description: "Elephant-like bulbous structures",
+    // Centre (0.29, 0.01) at zoom 200, where the trunk spirals are. The older
+    // frame sat on the cardioid's edge at (0.25, 0): 95% of it was set
+    // interior, which the renderer paints as one flat colour.
     bounds: {
-      minReal: 0.24,
-      maxReal: 0.26,
-      minImaginary: -0.01,
-      maxImaginary: 0.01,
+      minReal: 0.28,
+      maxReal: 0.3,
+      minImaginary: 0.0025,
+      maxImaginary: 0.0175,
     },
     maxIterations: 150,
     colorScheme: "fire",
