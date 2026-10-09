@@ -63,7 +63,7 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
-- Preset system: Built-in and custom fractal configurations
+- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship) and custom fractal configurations
 
 ### Component Structure
 
@@ -155,6 +155,44 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### Built-in views for every fractal (2026-10-09)
+
+- Julia and Burning Ship offered no built-in views, so once the preset list
+  followed the selected fractal they showed an empty panel: the seven views
+  added to `BUILTIN_PRESETS` (`src/lib/presets.ts`) are five Julia ones — the
+  whole Classic set, its spirals at zoom 3, Dendrite, Douady rabbit and Siegel
+  disk — and two for the ship, the whole of it and the armada at zoom 40. The
+  six Mandelbrot views keep their ids, order and values, and the new ones
+  follow them.
+- A built-in view now carries the fractal it was framed on, the field saved
+  views have had since fr-hah; the built-ins were the last views without one.
+  Each Julia view names a `JULIA_CONSTANTS` constant, and the ship views name
+  none — the shape `presetFractalFields` writes for a saved ship view.
+  `handlePresetSelect` already reads both fields, so loading a new view puts
+  the Fractal and Julia constant selects on the picture the bounds were framed
+  on.
+- The guard in `src/lib/__tests__/presets.test.ts` measures each of the seven
+  with **its own fractal's** orbit: `measurePreset` takes a kind (defaulting to
+  `mandelbrotKind`, so every existing Mandelbrot assertion is unchanged) and
+  the new views are measured on 96x72 samples — the grid they were framed on —
+  through `resolveFractalKind`, the same lookup the page loads a view by.
+  Judging a Julia frame with the Mandelbrot orbit would judge a picture it is
+  not; the `distinct` floor of 20 needs that finer grid, since the Dendrite's
+  thin filaments give 18 counts at 64x48.
+- The four whole-set Julia views share one frame, `JULIA_WHOLE_VIEW` (±2 by
+  ±1.5), which is what a Julia set is: symmetric about the origin whatever its
+  constant. The spirals view is the same view at zoom 3, and its frame is
+  written `±2/3` rather than the bead's rounded `±0.66667`: the guard asserts
+  4:3 within 1e-9 and the rounded number misses by 6.7e-6. Same centre and
+  zoom either way — the printed precision, not the view. At 96x72 the seven
+  measure 1.7%, 9.5%, 0%, 10.6%, 13.9%, 14.5% and 10.9% inside, all well under
+  the 60% ceiling.
+- `presetsForFractal(BUILTIN_PRESETS, …)` now returns 6, 5 and 2 views, and a
+  second guard fails if any built-in ends up listed under no fractal at all —
+  a view the picker can never reach. `PresetSelector`'s comment about the empty
+  grid is reworded: only a fractal this build does not know lists no built-ins
+  now, not Julia and the ship.
 
 ### A fragment pasted into an open page is read too (2026-10-09)
 

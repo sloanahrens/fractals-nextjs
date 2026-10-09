@@ -181,7 +181,7 @@ dependencies and needs nothing else.
 
 ### Advanced Features
 
-- **Custom Presets**: Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant; loading it puts the Fractal and Julia constant selects back on that picture. The preset dropdown, the built-in buttons and the saved list show the views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
+- **Custom Presets**: A view belongs to the fractal it was framed on, so each fractal in the Fractal select offers its own built-in views — six for the Mandelbrot set, five for Julia (one per named constant) and two for the Burning Ship — as buttons under the dropdown. Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant; loading it puts the Fractal and Julia constant selects back on that picture. The preset dropdown, the built-in buttons and the saved list show the views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead

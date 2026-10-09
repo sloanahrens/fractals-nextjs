@@ -15,9 +15,9 @@ import { Select } from "./Select";
 interface PresetSelectorProps {
   currentPreset?: string;
   /**
-   * Id of the fractal selected now. Only its views are offered: the built-in
-   * presets belong to the Mandelbrot set, and a saved view belongs to the
-   * fractal it was saved on.
+   * Id of the fractal selected now. Only its views are offered: each built-in
+   * view is framed on a fractal, and a saved view belongs to the fractal it was
+   * saved on.
    */
   fractal: string;
   onPresetSelect: (preset: FractalPreset) => void;
@@ -74,8 +74,9 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
         />
       </div>
 
-      {/* Burning Ship and Julia ship no built-in views, so the grid is absent
-          rather than an empty row above the list of saved ones. */}
+      {/* Every fractal the picker offers has built-in views, but a fractal a
+          preset names and this build does not know lists none, and the grid is
+          absent then rather than an empty row above the list of saved ones. */}
       {builtins.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {builtins.map((preset) => (
