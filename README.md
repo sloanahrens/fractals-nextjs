@@ -8,6 +8,11 @@ A modern, interactive web application for exploring the infinite beauty of the M
 `.forgejo/workflows/` are described under [Deployment](#deployment); an actual
 release is done only by the human, through the devops system.
 
+## Live app
+
+- **Production** — https://fractals-nextjs-prod-robymk5mfq-uc.a.run.app — updated when the human tags a release (`v*`).
+- **Staging** — https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app — holds the same release as production today.
+
 ## Overview
 
 Next Fractals is a real-time fractal generator that allows users to explore the Mandelbrot set with smooth zoom controls, customizable parameters, and preset configurations. The application uses optimized Canvas API rendering with progressive calculation techniques for smooth performance and provides an intuitive interface for mathematical visualization.
@@ -18,13 +23,16 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 - **Fractal Types**: Draw the Mandelbrot set, the Burning Ship or a Julia set, and pick the Julia constant from four named ones
 - **Real-time Rendering**: Smooth fractal generation with optimized performance
-- **Zoom Controls**: Zoom with the mouse wheel, the Zoom In/Out buttons and the Zoom Level slider
+- **Zoom Controls**: Zoom with the mouse wheel, the Zoom In/Out buttons and the Zoom Level slider, which is logarithmic — equal slider steps are equal zoom ratios from 1x to 10000x
 - **Pan Navigation**: Click and drag to explore different regions, or drag with one finger on a touch screen
+- **Keyboard Navigation**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
 - **Center Controls**: Precise positioning with coordinate input
+- **Download PNG**: Save the canvas at its full resolution, named from the fractal and the view it shows
 
 ### ⚙️ Customizable Parameters
 
 - **Iteration Control**: Adjust detail level with iteration sliders
+- **Auto Iterations**: Iterations follow the zoom level; unticking the checkbox takes manual control, and loading a preset turns it off because that preset was framed at its own count
 - **Color Mapping**: Dynamic color schemes for enhanced visualization
 - **Parameter Presets**: Quick access to interesting fractal configurations
 - **Custom Presets**: Save and manage your own configurations
@@ -35,6 +43,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Progressive Rendering**: Rows are computed in chunks with a yield to the event loop between them, so the UI stays responsive
 - **Responsive Design**: Works seamlessly across desktop and mobile devices
 - **TypeScript**: Full type safety and enhanced developer experience
+- **Controls Stay Usable**: Every control but Download PNG works while a render is running, and using one cancels the render in flight and starts the new one
 
 ### 🔧 Build, Test and Deploy
 
@@ -106,12 +115,15 @@ The production container will be available at [http://localhost:8080](http://loc
 
 - **Zoom In/Out**: Use the mouse wheel, the Zoom In/Out buttons, or the Zoom Level slider
 - **Pan**: Click and drag to move around the fractal, or drag with one finger on a touch screen
+- **Keyboard**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
 - **Reset View**: Return to the default view with the Reset View button
 
 ### Advanced Features
 
 - **Custom Presets**: Create and save your own fractal configurations (stored in browser localStorage)
-- **Parameter Adjustment**: Fine-tune iterations and other settings
+- **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
+- **Saving an Image**: The Download PNG button saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
+- **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
 
 ## Project Structure
 
