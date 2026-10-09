@@ -1,4 +1,9 @@
-import { ComplexNumber, FractalBounds, ZoomState } from "../types/fractal";
+import {
+  ComplexNumber,
+  FractalBounds,
+  FractalKind,
+  ZoomState,
+} from "../types/fractal";
 
 /**
  * Calculate the number of iterations for a point in the Mandelbrot set
@@ -59,6 +64,23 @@ export function smoothMandelbrotIterations(
 
   return maxIterations;
 }
+
+/**
+ * The Mandelbrot set as a {@link FractalKind}: the orbit starts at z = 0, so
+ * the point the renderer hands over is the constant c it is added to.
+ *
+ * A delegation, not a rewrite: the two functions above stay the definition of
+ * the formula, and this is what puts them behind the interface the renderer
+ * calls.
+ */
+export const mandelbrotKind: FractalKind = {
+  id: "mandelbrot",
+  iterations(point, maxIterations, smooth) {
+    return smooth
+      ? smoothMandelbrotIterations(point, maxIterations)
+      : mandelbrotIterations(point, maxIterations);
+  },
+};
 
 /**
  * Convert pixel coordinates to complex plane coordinates

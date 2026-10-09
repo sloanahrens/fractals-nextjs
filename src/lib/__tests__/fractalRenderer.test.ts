@@ -1,7 +1,30 @@
 import { describe, expect, it } from "vitest";
 
-import type { FractalConfig } from "../../types/fractal";
+import type {
+  ComplexNumber,
+  FractalConfig,
+  FractalKind,
+} from "../../types/fractal";
+import { mapIterationsToColor } from "../colorMapping";
 import { FractalRenderer } from "../fractalRenderer";
+import { mandelbrotIterations, pixelToComplex } from "../mandelbrot";
+
+interface KindCall {
+  point: ComplexNumber;
+  maxIterations: number;
+  smooth: boolean;
+}
+
+/** A kind that records its calls and returns whatever count it was built with. */
+function constantKind(value: number, calls: KindCall[]): FractalKind {
+  return {
+    id: "constant",
+    iterations(point, maxIterations, smooth) {
+      calls.push({ point, maxIterations, smooth });
+      return value;
+    },
+  };
+}
 
 const CLASSIC_BOUNDS = {
   minReal: -2,
@@ -194,4 +217,105 @@ describe("FractalRenderer", () => {
     // 1/100 of the grayscale ramp.
     expect(pixelAt(1, 1)).toEqual([2, 2, 2, 255]);
   }, 2000);
+});
+
+describe("FractalRenderer fractal kind", () => {
+  it("asks the kind it was given for every pixel's iteration count", async () => {
+    const { element } = createFakeCanvas(4, 3);
+    const calls: KindCall[] = [];
+    const renderer = new FractalRenderer(element, constantKind(50, calls));
+
+    await renderer.renderFractal(
+      renderConfig({ width: 4, height: 3 }),
+      undefined,
+      false,
+    );
+
+    // Every pixel of the canvas, each with the complex point it maps to and
+    // the cap the config asked for. The chunks of a row are rendered
+    // concurrently, so the calls are matched by the point, not by their order.
+    expect(calls).toHaveLength(12);
+    expect(calls.every((call) => call.maxIterations === 100)).toBe(true);
+    expect(calls.every((call) => call.smooth === false)).toBe(true);
+
+    const expected: string[] = [];
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 4; x++) {
+        const point = pixelToComplex(x, y, 4, 3, CLASSIC_BOUNDS);
+        expected.push(`${point.real},${point.imaginary}`);
+      }
+    }
+
+    const points = calls
+      .map((call) => `${call.point.real},${call.point.imaginary}`)
+      .sort();
+    expect(points).toEqual(expected.sort());
+  });
+
+  it("paints what the kind returns", async () => {
+    const { element, pixelAt } = createFakeCanvas(4, 3);
+    const renderer = new FractalRenderer(element, constantKind(50, []));
+
+    await renderer.renderFractal(
+      renderConfig({ width: 4, height: 3 }),
+      undefined,
+      false,
+    );
+
+    // 50 of 100 on the grayscale ramp, the same shade in every pixel because
+    // the kind answered the same count for every one of them.
+    const expected = mapIterationsToColor(50, 100, "grayscale");
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 4; x++) {
+        expect(pixelAt(x, y)).toEqual([
+          expected.r,
+          expected.g,
+          expected.b,
+          255,
+        ]);
+      }
+    }
+  });
+
+  it("hands the smooth flag through to the kind", async () => {
+    const { element } = createFakeCanvas(4, 3);
+    const calls: KindCall[] = [];
+    const renderer = new FractalRenderer(element, constantKind(50, calls));
+
+    await renderer.renderFractal(
+      renderConfig({ width: 4, height: 3 }),
+      undefined,
+      true,
+    );
+
+    expect(calls).toHaveLength(12);
+    expect(calls.every((call) => call.smooth === true)).toBe(true);
+  });
+
+  it("draws what the Mandelbrot functions draw when no kind is given", async () => {
+    const { element, pixelAt } = createFakeCanvas(8, 8);
+    const config = renderConfig();
+    const renderer = new FractalRenderer(element);
+
+    await renderer.renderFractal(config, undefined, false);
+
+    // The same canvas, coloured from the iteration counts the Mandelbrot
+    // functions give directly: reaching them through a kind moves no pixel.
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        const point = pixelToComplex(x, y, 8, 8, CLASSIC_BOUNDS);
+        const expected = mapIterationsToColor(
+          mandelbrotIterations(point, config.maxIterations),
+          config.maxIterations,
+          config.colorScheme,
+        );
+        expect(pixelAt(x, y)).toEqual([
+          expected.r,
+          expected.g,
+          expected.b,
+          255,
+        ]);
+      }
+    }
+  });
 });

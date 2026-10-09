@@ -124,6 +124,24 @@ the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-08_
 
+### The renderer draws a fractal kind (2026-10-08)
+
+- The formula is no longer inside the rendering loop. `FractalKind`
+  (`src/types/fractal.ts`) is `{ id, iterations(point, maxIterations, smooth) }`,
+  `mandelbrotKind` (`src/lib/mandelbrot.ts`) is the Mandelbrot set behind it, and
+  `FractalRenderer` takes a kind in its constructor, defaulting to that one.
+  `renderRowChunk` calls `kind.iterations`, so a second fractal is a module plus
+  an entry in `FRACTAL_KINDS` (`src/lib/fractalKinds.ts`) and nothing in the
+  loop changes. Previews carry the renderer's kind rather than falling back to
+  the default.
+- `mandelbrotIterations` and `smoothMandelbrotIterations` are unchanged and
+  still the definition of the formula; `mandelbrotKind.iterations` delegates to
+  them and the two functions keep their exports. Nothing in the app passes a
+  kind yet, so this commit draws the same pixels as the one before it.
+- `getFractalKind(id)` returns `mandelbrotKind` for an unknown id rather than
+  undefined, so an id from a version that knows a fractal this build does not
+  renders the familiar set instead of a blank canvas.
+
 ### Log-scale zoom slider (2026-10-08)
 
 - The Zoom Level slider is logarithmic: its position `t` in 0..1 maps to
