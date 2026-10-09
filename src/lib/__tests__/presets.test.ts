@@ -10,6 +10,7 @@ import {
 } from "../mandelbrot";
 import {
   BUILTIN_PRESETS,
+  DEFAULT_PRESET_FRACTAL,
   calculateCenter,
   calculateZoomLevel,
   deleteCustomPreset,
@@ -345,7 +346,8 @@ describe("calculateCenter", () => {
 
 describe("the fractal a saved view belongs to", () => {
   it("reads an entry with no fractal field as a Mandelbrot view", () => {
-    expect(presetFractal(CUSTOM_PRESET)).toBe("mandelbrot");
+    expect(presetFractal(CUSTOM_PRESET)).toBe(DEFAULT_PRESET_FRACTAL);
+    expect(DEFAULT_PRESET_FRACTAL).toBe("mandelbrot");
   });
 
   it("names each fractal the picker offers", () => {

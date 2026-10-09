@@ -41,6 +41,7 @@ import {
 } from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
 import {
+  DEFAULT_PRESET_FRACTAL,
   FractalPreset,
   formatZoom,
   presetFractal,
@@ -547,7 +548,7 @@ export default function Home() {
     // A view belongs to a fractal, and loading it puts the picker back on that
     // fractal — for a Julia view, on its constant too — before the view itself.
     // The bounds mean nothing without the picture they were framed on.
-    const fractal = presetFractal(preset) ?? "mandelbrot";
+    const fractal = presetFractal(preset) ?? DEFAULT_PRESET_FRACTAL;
     setFractalType(fractal);
     if (fractal === "julia") setJuliaConstant(presetJuliaConstant(preset));
 
