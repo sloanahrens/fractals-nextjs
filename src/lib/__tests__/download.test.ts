@@ -13,6 +13,13 @@ describe("downloadFileName", () => {
     );
   });
 
+  it("names the file after the fractal that was drawn", () => {
+    // The default prefix is the one this app has always used, so a Mandelbrot
+    // save keeps the name it had before the picker existed.
+    expect(downloadFileName(0, 0, 1)).toBe("mandelbrot_0_0_1x.png");
+    expect(downloadFileName(0, 0, 1, "julia")).toBe("julia_0_0_1x.png");
+  });
+
   it("keeps the sign of a negative coordinate", () => {
     expect(downloadFileName(-1.25, -0.0001, 1)).toBe(
       "mandelbrot_-1.25_-0.0001_1x.png",

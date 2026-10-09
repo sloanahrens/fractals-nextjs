@@ -124,6 +124,25 @@ the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-08_
 
+### The fractal picker (2026-10-08)
+
+- `src/lib/fractalTypes.ts` is the picker's half of the chain: `FRACTAL_TYPES`
+  is the list a `Select` renders, `resolveFractalKind(typeId, constantName)`
+  turns a choice into the `FractalKind` the renderer takes, and
+  `defaultViewFor(typeId)` is the view that choice opens on — (-0.75, 0) at 1x
+  for the Mandelbrot set, the origin for a Julia set. Both resolvers fall back
+  to the Mandelbrot side for an id or a constant name they do not know.
+- The page now passes a kind: the fractal is state, the renderer effect is
+  keyed on it, and the draw effect lists it, so a new kind means a new
+  renderer and a render. The effect cancels the outgoing renderer's render
+  first — the old kind paints the same canvas, and two renderers interleaving
+  rows is a torn image.
+- `downloadFileName` takes an optional prefix, defaulting to `mandelbrot`, so
+  the name of a Mandelbrot save is byte for byte what it was and a Julia save
+  starts `julia_`. `CustomPresetManager` takes an optional
+  `saveDisabledReason`: the page sets it on Julia, since a saved preset has no
+  fractal field and this bead does not add one.
+
 ### The renderer draws a fractal kind (2026-10-08)
 
 - The formula is no longer inside the rendering loop. `FractalKind`

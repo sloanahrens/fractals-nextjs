@@ -15,15 +15,25 @@ function formatCoordinate(value: number): string {
   return Number(value.toPrecision(COORDINATE_PRECISION)).toString();
 }
 
-// The name a downloaded render is saved under: the view it shows, so a folder
-// full of them stays legible. The zoom is formatted the way the Zoom Level
-// readout formats it, so 175 saves as 175x, 1.5 as 1.5x and 2000 as 2.0Kx.
+/**
+ * The name a downloaded render is saved under: what was drawn and the view it
+ * shows, so a folder full of them stays legible. The zoom is formatted the way
+ * the Zoom Level readout formats it, so 175 saves as 175x, 1.5 as 1.5x and
+ * 2000 as 2.0Kx.
+ * @param centerX - Centre of the rendered view
+ * @param centerY - Centre of the rendered view
+ * @param zoom - Zoom of the rendered view
+ * @param prefix - What was drawn, as the first word of the name
+ * @returns The filename for the download
+ */
 export function downloadFileName(
   centerX: number,
   centerY: number,
   zoom: number,
+  prefix: string = "mandelbrot",
 ): string {
-  const view = [
+  const name = [
+    prefix,
     formatCoordinate(centerX),
     formatCoordinate(centerY),
     `${formatZoom(zoom)}x`,
@@ -34,5 +44,5 @@ export function downloadFileName(
     // can reach, so the last step is the one that guarantees it.
     .replace(UNSAFE_FILENAME_CHARACTERS, "-");
 
-  return `mandelbrot_${view}.png`;
+  return `${name}.png`;
 }
