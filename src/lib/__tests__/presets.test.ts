@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ColorScheme } from "../../types/fractal";
+import type { ColorScheme, FractalKind } from "../../types/fractal";
 import {
   BASE_HEIGHT,
   BASE_WIDTH,
@@ -28,7 +28,7 @@ import {
   subscribeToCustomPresets,
   type FractalPreset,
 } from "../presets";
-import { FRACTAL_TYPES } from "../fractalTypes";
+import { FRACTAL_TYPES, resolveFractalKind } from "../fractalTypes";
 import { JULIA_CONSTANTS } from "../julia";
 
 const STORAGE_KEY = "fractal-custom-presets";
@@ -127,47 +127,60 @@ function createStorageStub() {
   };
 }
 
+// The Mandelbrot guard's grid, kept at the resolution its thresholds were
+// chosen on.
 const GRID_WIDTH = 64;
 const GRID_HEIGHT = 48;
 
+// The other fractals' views are measured on the finer grid they were framed
+// against, so the thresholds below judge the same samples the frames were
+// picked from.
+const FRACTAL_GRID_WIDTH = 96;
+const FRACTAL_GRID_HEIGHT = 72;
+
 /**
- * What a preset's own frame holds, measured with the app's Mandelbrot orbit on
- * a coarse grid of the preset's bounds at the preset's own iteration cap:
+ * What a preset's own frame holds, measured with a fractal's orbit on a coarse
+ * grid of the preset's bounds at the preset's own iteration cap:
  *
- * - `inside`: share of points the orbit never escaped. The set's interior,
+ * - `inside`: share of points the orbit never escaped. The fractal's interior,
  *   which the renderer paints as one flat colour.
  * - `early`: share of points that escaped within the first quarter of the cap.
  *   An orbit that dies at once says little about where the point sits.
  * - `distinct`: how many different iteration counts the grid produced, which is
  *   the detail a colour scheme has to work with.
  *
- * A frame the set fills is a nearly blank button, and one with a handful of
- * counts is banded rather than detailed.
+ * A frame the fractal fills is a nearly blank button, and one with a handful of
+ * counts is banded rather than detailed. The orbit defaults to the Mandelbrot
+ * set, which is the fractal the built-ins that predate the fractal field are
+ * all views of.
  */
-function measurePreset(preset: FractalPreset): {
+function measurePreset(
+  preset: FractalPreset,
+  kind: FractalKind = mandelbrotKind,
+  columns = GRID_WIDTH,
+  rows = GRID_HEIGHT,
+): {
   inside: number;
   early: number;
   distinct: number;
 } {
   const counts: number[] = [];
 
-  for (let row = 0; row < GRID_HEIGHT; row++) {
-    for (let column = 0; column < GRID_WIDTH; column++) {
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
       // Cell centres, so the grid samples the frame rather than its corners.
       const point = {
         real:
           preset.bounds.minReal +
-          ((column + 0.5) / GRID_WIDTH) *
+          ((column + 0.5) / columns) *
             (preset.bounds.maxReal - preset.bounds.minReal),
         imaginary:
           preset.bounds.minImaginary +
-          ((row + 0.5) / GRID_HEIGHT) *
+          ((row + 0.5) / rows) *
             (preset.bounds.maxImaginary - preset.bounds.minImaginary),
       };
 
-      counts.push(
-        mandelbrotKind.iterations(point, preset.maxIterations, false),
-      );
+      counts.push(kind.iterations(point, preset.maxIterations, false));
     }
   }
 
@@ -183,6 +196,21 @@ function measurePreset(preset: FractalPreset): {
 }
 
 /**
+ * The orbit a preset's own fractal iterates.
+ *
+ * The same chain the page takes when it loads a view: the id the preset names
+ * read through the picker, and the constant read through the resolver that
+ * falls back the way `handlePresetSelect` does. Measuring a Julia frame with
+ * the Mandelbrot orbit would judge it against a picture it is not.
+ */
+function kindForPreset(preset: FractalPreset): FractalKind {
+  return resolveFractalKind(
+    presetFractal(preset) ?? DEFAULT_PRESET_FRACTAL,
+    presetJuliaConstant(preset),
+  );
+}
+
+/**
  * The magnified built-in presets with their measurements, taken once: the grid
  * is 3072 orbits per preset and every guard below reads the same numbers.
  *
@@ -192,6 +220,24 @@ function measurePreset(preset: FractalPreset): {
 const MAGNIFIED_PRESETS = BUILTIN_PRESETS.filter(
   (preset) => calculateZoomLevel(preset.bounds) >= 100,
 ).map((preset) => ({ preset, measurement: measurePreset(preset) }));
+
+/**
+ * The built-in views framed on a fractal other than the Mandelbrot set, each
+ * measured with its own fractal's orbit. Magnification does not separate these
+ * — the whole-set views are at zoom 1 — so the fractal is what the filter is
+ * on, and it is the same `presetFractal` the page loads a view by.
+ */
+const FRACTAL_OWNED_PRESETS = BUILTIN_PRESETS.filter(
+  (preset) => presetFractal(preset) !== DEFAULT_PRESET_FRACTAL,
+).map((preset) => ({
+  preset,
+  measurement: measurePreset(
+    preset,
+    kindForPreset(preset),
+    FRACTAL_GRID_WIDTH,
+    FRACTAL_GRID_HEIGHT,
+  ),
+}));
 
 describe("built-in preset framing", () => {
   it("has magnified presets to measure, so the guards below cannot pass vacuously", () => {
@@ -230,17 +276,79 @@ describe("built-in preset framing", () => {
   });
 });
 
+describe("built-in views for the other fractals", () => {
+  it("has presets to measure, so the guards below cannot pass vacuously", () => {
+    expect(FRACTAL_OWNED_PRESETS).toHaveLength(7);
+  });
+
+  it("frames each one at the canvas's 4:3 shape", () => {
+    for (const { preset } of FRACTAL_OWNED_PRESETS) {
+      const width = preset.bounds.maxReal - preset.bounds.minReal;
+      const height = preset.bounds.maxImaginary - preset.bounds.minImaginary;
+      expect(width / height, preset.id).toBeCloseTo(
+        BASE_WIDTH / BASE_HEIGHT,
+        9,
+      );
+    }
+  });
+
+  it("frames none of them on the fractal's interior", () => {
+    for (const { preset, measurement } of FRACTAL_OWNED_PRESETS) {
+      expect(measurement.inside, preset.id).toBeLessThanOrEqual(0.6);
+    }
+  });
+
+  it("gives each one detail to colour", () => {
+    for (const { preset, measurement } of FRACTAL_OWNED_PRESETS) {
+      expect(measurement.distinct, preset.id).toBeGreaterThanOrEqual(20);
+    }
+  });
+
+  it("names a fractal this build draws and a constant it offers", () => {
+    const fractalIds = FRACTAL_TYPES.map((type) => type.id);
+    const constantNames = JULIA_CONSTANTS.map((constant) => constant.name);
+
+    for (const { preset } of FRACTAL_OWNED_PRESETS) {
+      const fractalId = presetFractal(preset);
+      expect(fractalId, preset.id).not.toBeNull();
+      expect(fractalIds, preset.id).toContain(fractalId);
+
+      if (preset.juliaConstant !== undefined) {
+        expect(constantNames, preset.id).toContain(preset.juliaConstant);
+      }
+    }
+  });
+
+  it("gives a constant to a Julia view and none to another fractal's", () => {
+    for (const { preset } of FRACTAL_OWNED_PRESETS) {
+      if (presetFractal(preset) === "julia") {
+        expect(preset.juliaConstant, preset.id).toBeTypeOf("string");
+      } else {
+        // No key at all: a Burning Ship view carries no constant, the way a
+        // saved one is written.
+        expect(preset.juliaConstant, preset.id).toBeUndefined();
+      }
+    }
+  });
+});
+
 describe("BUILTIN_PRESETS", () => {
-  it("ships six presets with unique ids", () => {
-    expect(BUILTIN_PRESETS).toHaveLength(6);
+  it("ships thirteen presets with unique ids and names", () => {
+    expect(BUILTIN_PRESETS).toHaveLength(13);
+
     const ids = BUILTIN_PRESETS.map((preset) => preset.id);
     expect(new Set(ids).size).toBe(ids.length);
+
+    const names = BUILTIN_PRESETS.map((preset) => preset.name);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it("keeps every preset renderable", () => {
     for (const preset of BUILTIN_PRESETS) {
       expect(preset.bounds.minReal).toBeLessThan(preset.bounds.maxReal);
-      expect(preset.bounds.minImaginary).toBeLessThan(preset.bounds.maxImaginary);
+      expect(preset.bounds.minImaginary).toBeLessThan(
+        preset.bounds.maxImaginary,
+      );
       expect(preset.maxIterations).toBeGreaterThan(0);
       expect(preset.canvasWidth).toBeGreaterThan(0);
       expect(preset.canvasHeight).toBeGreaterThan(0);
@@ -397,6 +505,27 @@ describe("the fractal a saved view belongs to", () => {
     listed.push(JULIA_PRESET);
 
     expect(presetsForFractal(views, "mandelbrot")).toEqual([CUSTOM_PRESET]);
+  });
+});
+
+describe("the built-in views each fractal lists", () => {
+  it("offers six Mandelbrot views, five Julia and two Burning Ship", () => {
+    expect(presetsForFractal(BUILTIN_PRESETS, "mandelbrot")).toHaveLength(6);
+    expect(presetsForFractal(BUILTIN_PRESETS, "julia")).toHaveLength(5);
+    expect(presetsForFractal(BUILTIN_PRESETS, "burning-ship")).toHaveLength(2);
+  });
+
+  it("lists every built-in view under exactly one fractal", () => {
+    const listed = FRACTAL_TYPES.flatMap((type) =>
+      presetsForFractal(BUILTIN_PRESETS, type.id),
+    );
+
+    // The picker shows only the selected fractal's views, so a view listed
+    // under none is one no button can ever reach.
+    expect(listed).toHaveLength(BUILTIN_PRESETS.length);
+    expect(new Set(listed.map((preset) => preset.id)).size).toBe(
+      BUILTIN_PRESETS.length,
+    );
   });
 });
 

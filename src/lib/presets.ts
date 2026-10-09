@@ -25,11 +25,24 @@ export interface FractalPreset {
 /** The fractal a view with no `fractal` field was saved for. */
 export const DEFAULT_PRESET_FRACTAL = "mandelbrot";
 
-// The built-in views. A preset is six numbers and no fractal, so each view is a
-// centre and a zoom written out as bounds. Elephant Valley and Seahorse Valley
-// hold the 4:3 shape of the canvas (`calculateZoomBounds`), so loading one fills
-// it rather than stretching it, and `presets.test.ts` measures every preset with
-// the real iteration function — a frame the set fills is a blank button.
+/**
+ * Every Julia set is symmetric and fits in the same box about the origin
+ * whatever its constant, so the four named views below all open on this frame
+ * — the whole set at zoom 1. Only the spirals view magnifies it.
+ */
+const JULIA_WHOLE_VIEW: FractalBounds = {
+  minReal: -2,
+  maxReal: 2,
+  minImaginary: -1.5,
+  maxImaginary: 1.5,
+};
+
+// The built-in views. A preset is a centre and a zoom written out as bounds and,
+// since a view belongs to the fractal it was framed on, the fractal — and for a
+// Julia view the constant. Every frame holds the 4:3 shape of the canvas
+// (`calculateZoomBounds`), so loading one fills it rather than stretching it,
+// and `presets.test.ts` measures each with its own fractal's iteration function
+// — a frame the fractal fills is a blank button.
 export const BUILTIN_PRESETS: FractalPreset[] = [
   {
     id: "overview",
@@ -127,6 +140,105 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     colorScheme: "classic",
     canvasWidth: 800,
     canvasHeight: 600,
+  },
+  {
+    id: "julia-classic",
+    name: "Julia: Classic",
+    description: "The whole Classic Julia set",
+    bounds: { ...JULIA_WHOLE_VIEW },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "julia",
+    juliaConstant: "Classic",
+  },
+  {
+    id: "julia-classic-spirals",
+    name: "Julia: Classic spirals",
+    description: "Spirals around the Classic Julia set",
+    // The whole-set view at zoom 3, framed about the origin: the spirals that
+    // give the constant its name.
+    bounds: {
+      minReal: -2 / 3,
+      maxReal: 2 / 3,
+      minImaginary: -0.5,
+      maxImaginary: 0.5,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "julia",
+    juliaConstant: "Classic",
+  },
+  {
+    id: "julia-dendrite",
+    name: "Julia: Dendrite",
+    description: "The Dendrite's branching filaments",
+    bounds: { ...JULIA_WHOLE_VIEW },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "julia",
+    juliaConstant: "Dendrite",
+  },
+  {
+    id: "julia-douady-rabbit",
+    name: "Julia: Douady rabbit",
+    description: "The Douady rabbit's three-lobed body",
+    bounds: { ...JULIA_WHOLE_VIEW },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "julia",
+    juliaConstant: "Douady rabbit",
+  },
+  {
+    id: "julia-siegel-disk",
+    name: "Julia: Siegel disk",
+    description: "The Siegel disk's rotation domain",
+    bounds: { ...JULIA_WHOLE_VIEW },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "julia",
+    juliaConstant: "Siegel disk",
+  },
+  {
+    id: "ship-overview",
+    name: "Burning Ship",
+    description: "The whole Burning Ship",
+    bounds: {
+      minReal: -2.5,
+      maxReal: 1.5,
+      minImaginary: -2,
+      maxImaginary: 1,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "burning-ship",
+  },
+  {
+    id: "ship-armada",
+    name: "Ship armada",
+    description: "The Burning Ship's armada of masts",
+    bounds: {
+      minReal: -1.805,
+      maxReal: -1.705,
+      minImaginary: -0.0675,
+      maxImaginary: 0.0075,
+    },
+    maxIterations: 400,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "burning-ship",
   },
 ];
 
