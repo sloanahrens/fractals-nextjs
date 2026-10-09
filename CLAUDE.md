@@ -43,6 +43,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
 - **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, and the choice-to-kind and choice-to-default-view resolvers
 - **Julia sets** (`src/lib/julia.ts`): The four named Julia constants and the factory that turns one into a fractal kind
+- **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
@@ -109,7 +110,7 @@ is deliberately not part of `gate` (see the Version Notes below).
 The app runs at two Cloud Run URLs:
 
 - **Production** — https://fractals-nextjs-prod-robymk5mfq-uc.a.run.app — updated when the human tags a release (`v*`).
-- **Staging** — https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app — holds the same release as production today.
+- **Staging** — https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app — redeployed from `main` after every landing.
 
 ### Docker Configuration
 
@@ -120,15 +121,16 @@ The app runs at two Cloud Run URLs:
 
 ### CI/CD Pipeline
 
-No push to this repo deploys anything. The landing gate
-(`.forgejo/workflows/gate.yml`) runs `make gate` on a `land/**` branch; it needs
-no cloud credentials. Build and deploy happen on the deploy runner, through the
-devops system, run by the human. The program that deploys the app is `deploy/`,
-which that runner executes at a release tag and no CI here runs
-(`deploy/README.md`). That runner also reads the app's release workflows,
-`.forgejo/workflows/deploy.yml` and `teardown.yml`, which no push here starts:
-a protected `v*` or `teardown-v*` tag does, and only the human may push one. See
-the Gas Town rules at the end of this file.
+A push to a `land/**` branch starts the landing gate
+(`.forgejo/workflows/gate.yml`), which runs `make gate` and needs no cloud
+credentials. A push to `main`, which only the landing worker makes, starts
+`.forgejo/workflows/staging.yml`: it builds that commit and rolls the staging
+service onto it. Neither workflow touches production — a release is run by the
+human, through the devops system. The program that deploys the app is `deploy/`
+(`deploy/README.md`), executed at a release tag. The human's tag also starts the
+app's release workflows, `.forgejo/workflows/deploy.yml` and `teardown.yml`,
+which no push here starts: a protected `v*` or `teardown-v*` tag does, and only
+the human may push one. See the Gas Town rules at the end of this file.
 
 ## Version Notes
 
