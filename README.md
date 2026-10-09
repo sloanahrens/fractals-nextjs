@@ -1,21 +1,22 @@
-# Next Fractals - Interactive Mandelbrot Set Generator
+# Next Fractals - Interactive Fractal Explorer
 
-A modern, interactive web application for exploring the infinite beauty of the Mandelbrot set, built with Next.js 16, React 19 and TypeScript.
+A modern, interactive web application for exploring the infinite beauty of the Mandelbrot set, Julia sets and the Burning Ship, built with Next.js 16, React 19 and TypeScript.
 
 ![Next Fractals Preview](public/fractal-preview.png)
 
-**Deployment:** No push to this repo deploys anything. The workflows under
-`.forgejo/workflows/` are described under [Deployment](#deployment); an actual
-release is done only by the human, through the devops system.
+**Deployment:** A landing on `main` redeploys the staging service by itself.
+Production changes only when the human tags a release, through the devops
+system. The workflows under `.forgejo/workflows/` are described under
+[Deployment](#deployment).
 
 ## Live app
 
 - **Production** — https://fractals-nextjs-prod-robymk5mfq-uc.a.run.app — updated when the human tags a release (`v*`).
-- **Staging** — https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app — holds the same release as production today.
+- **Staging** — https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app — redeployed from `main` after every landing.
 
 ## Overview
 
-Next Fractals is a real-time fractal generator that allows users to explore the Mandelbrot set with smooth zoom controls, customizable parameters, and preset configurations. The application uses optimized Canvas API rendering with progressive calculation techniques for smooth performance and provides an intuitive interface for mathematical visualization.
+Next Fractals is a real-time fractal generator that allows users to explore the Mandelbrot set, Julia sets and the Burning Ship with smooth zoom controls, customizable parameters, and preset configurations. The application uses optimized Canvas API rendering with progressive calculation techniques for smooth performance and provides an intuitive interface for mathematical visualization.
 
 ## Features
 
@@ -129,11 +130,12 @@ The production container will be available at [http://localhost:8080](http://loc
 
 ```
 ├── .forgejo/workflows/     # gate.yml (landing gate, `make gate` on land/**);
+│                           #   staging.yml (main to staging on a landing),
 │                           #   deploy.yml and teardown.yml (release and teardown)
 ├── deploy/                 # Pulumi program that deploys the app to Cloud Run
 ├── docs/                   # Design notes
 ├── public/                 # Static assets
-├── scripts/release/        # Release scripts the deploy runner executes
+├── scripts/release/        # Release scripts a release runs
 ├── src/
 │   ├── app/                # Next.js App Router pages
 │   │   ├── layout.tsx      # Root layout with meta tags
@@ -142,6 +144,7 @@ The production container will be available at [http://localhost:8080](http://loc
 │   │   └── api/health/route.ts # Health check endpoint
 │   ├── components/ui/      # Reusable UI components
 │   ├── lib/                # Core logic and utilities
+│   │   ├── burningShip.ts      # Burning Ship iteration
 │   │   ├── canvasNavigation.ts # Wheel, drag and touch listeners
 │   │   ├── colorMapping.ts     # Color schemes
 │   │   ├── fractalRenderer.ts  # Canvas rendering engine
@@ -192,17 +195,20 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## Deployment
 
-This repo does not deploy itself, and no workflow here holds a cloud
-credential. Deployment is done only by the human, through the devops system.
-Three workflows live in `.forgejo/workflows/`:
+This repo holds no cloud credential, and nothing here updates production.
+Staging follows `main` by itself; a release is done only by the human, through
+the devops system. Four workflows live in `.forgejo/workflows/`:
 
 - **`gate.yml`** — the landing gate. A push to a `land/**` branch starts it, and
-  it runs `make gate`. That is the only workflow a push to this repo starts.
+  it runs `make gate`.
+- **`staging.yml`** — a push to `main` starts it. The landing worker is the only
+  account that pushes `main`, so it runs once per landing: it builds that commit
+  and rolls the staging service onto it, and never touches production.
 - **`deploy.yml`** — the release flow. A protected `v*` tag pushed by the human
-  starts it, on the `deploy` runner; it builds and pushes the image, deploys it
-  to staging, and promotes that same digest to prod.
+  starts it; it builds and pushes the image, deploys it to staging, and promotes
+  that same digest to prod.
 - **`teardown.yml`** — destroys the app's two stacks. A protected `teardown-v*`
-  tag pushed by the human starts it, on the same runner.
+  tag pushed by the human starts it.
 
 The image contract the deploy system relies on is a root `Dockerfile`, a server
 that listens on `$PORT` (8080), the `/api/health` route, and no baked secrets.
