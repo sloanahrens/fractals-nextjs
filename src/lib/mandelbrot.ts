@@ -5,6 +5,57 @@ import {
   ZoomState,
 } from "../types/fractal";
 
+// Where the Mandelbrot orbit starts: z = 0, the point the set is defined from.
+// A Julia kind swaps the roles around -- it starts at the point the renderer
+// handed it and adds its own constant -- which is the whole difference between
+// the two.
+const ORIGIN: ComplexNumber = { real: 0, imaginary: 0 };
+
+/**
+ * Walk one escape-time orbit, z -> z^2 + c, and count the steps it survives.
+ *
+ * The one loop behind the Mandelbrot functions and every Julia kind, so the
+ * escape test, the iteration counting and the smoothing are the same for all
+ * of them and colour schemes read consistently across kinds.
+ * @param start - Point the orbit starts from (z0)
+ * @param constant - Constant added at every step (c)
+ * @param maxIterations - Maximum number of iterations to perform
+ * @param smooth - Whether to return the fractional (smooth) count
+ * @returns Number of iterations before the point escapes (or maxIterations if it doesn't escape)
+ */
+export function escapeTimeIterations(
+  start: ComplexNumber,
+  constant: ComplexNumber,
+  maxIterations: number,
+  smooth: boolean,
+): number {
+  let real = start.real;
+  let imaginary = start.imaginary;
+
+  for (let iterations = 0; iterations < maxIterations; iterations++) {
+    // Calculate z^2 + c
+    const squaredReal = real * real - imaginary * imaginary;
+    const squaredImaginary = 2 * real * imaginary;
+    real = squaredReal + constant.real;
+    imaginary = squaredImaginary + constant.imaginary;
+
+    // Check if point has escaped (magnitude > 2)
+    const magnitudeSquared = real * real + imaginary * imaginary;
+    if (magnitudeSquared > 4) {
+      if (!smooth) {
+        return iterations;
+      }
+
+      // Smooth iteration calculation for better color gradients
+      const smoothIterations =
+        iterations + 1 - Math.log2(Math.log2(Math.sqrt(magnitudeSquared)));
+      return smoothIterations;
+    }
+  }
+
+  return maxIterations;
+}
+
 /**
  * Calculate the number of iterations for a point in the Mandelbrot set
  * @param c - Complex number representing the point to test
@@ -15,23 +66,7 @@ export function mandelbrotIterations(
   c: ComplexNumber,
   maxIterations: number,
 ): number {
-  let z: ComplexNumber = { real: 0, imaginary: 0 };
-  let iterations = 0;
-
-  while (iterations < maxIterations) {
-    // Calculate z^2 + c
-    const zSquared = complexSquare(z);
-    z = complexAdd(zSquared, c);
-
-    // Check if point has escaped (magnitude > 2)
-    if (complexMagnitudeSquared(z) > 4) {
-      break;
-    }
-
-    iterations++;
-  }
-
-  return iterations;
+  return escapeTimeIterations(ORIGIN, c, maxIterations, false);
 }
 
 /**
@@ -44,25 +79,7 @@ export function smoothMandelbrotIterations(
   c: ComplexNumber,
   maxIterations: number,
 ): number {
-  let z: ComplexNumber = { real: 0, imaginary: 0 };
-  let iterations = 0;
-
-  while (iterations < maxIterations) {
-    const zSquared = complexSquare(z);
-    z = complexAdd(zSquared, c);
-
-    const magnitudeSquared = complexMagnitudeSquared(z);
-    if (magnitudeSquared > 4) {
-      // Smooth iteration calculation for better color gradients
-      const smoothIterations =
-        iterations + 1 - Math.log2(Math.log2(Math.sqrt(magnitudeSquared)));
-      return smoothIterations;
-    }
-
-    iterations++;
-  }
-
-  return maxIterations;
+  return escapeTimeIterations(ORIGIN, c, maxIterations, true);
 }
 
 /**
@@ -130,25 +147,6 @@ export function complexToPixel(
     height;
 
   return { x, y };
-}
-
-// Complex number utility functions
-function complexSquare(z: ComplexNumber): ComplexNumber {
-  return {
-    real: z.real * z.real - z.imaginary * z.imaginary,
-    imaginary: 2 * z.real * z.imaginary,
-  };
-}
-
-function complexAdd(z1: ComplexNumber, z2: ComplexNumber): ComplexNumber {
-  return {
-    real: z1.real + z2.real,
-    imaginary: z1.imaginary + z2.imaginary,
-  };
-}
-
-function complexMagnitudeSquared(z: ComplexNumber): number {
-  return z.real * z.real + z.imaginary * z.imaginary;
 }
 
 // Size of the un-zoomed Mandelbrot view in the complex plane: 4 x 3, the
