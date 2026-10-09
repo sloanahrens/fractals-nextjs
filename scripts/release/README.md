@@ -12,9 +12,10 @@ a Forgejo job running as `gt-cloud` (bead B5.4) and are wired together by
 | `build_push_staging.sh` | — | The landing build: builds the commit main is at, pushes it as `<image>:main-<12 hex of the commit>`, prints the digest |
 | `mint_token.sh` | 3 | Mints a one-hour token for the app's deployer SA from the base key |
 | `preview.sh` | 4 | Pins the digest in the stack config and writes the `pulumi preview` diff the release is read from |
-| `up.sh` | 5 | Applies the previewed digest; prints the service URL |
+| `up.sh` | 5 | Applies the previewed digest and records the deploy time; prints the service URL |
 | `health.sh` | 5 | Polls the declared health path on that URL; fails the job if it never answers |
-| `promote.sh` | 6 | Deploys the staging digest to prod, refusing anything that is not a digest |
+| `wait_version.sh` | integration | Polls the app's version endpoint until it reports the commit that was just deployed; exits 1 on another commit, 2 on no usable answer |
+| `promote.sh` | 6 | Deploys the staging digest to prod and records the deploy time, refusing anything that is not a digest |
 | `staged_digest.sh` | 6 | Reads the image a stack is running out of `pulumi stack export`, which is what prod checks its promotion against |
 | `init_stack.sh` | — | Creates an app's stack for one environment, with the project's `gcpkms` secrets provider; idempotent |
 | `lib.sh` | — | The names and rules every script shares; sourced, never run |
@@ -42,6 +43,11 @@ buildable; the workflow is what skips that run, and it skips it before the
 checkout (`workflows/README.md`). It reads `origin/main` out of the checkout it
 is given, with plain `git` and no fetch, so the check needs no network beyond the
 checkout itself.
+
+`--allow-non-checkout` waives `build_push.sh`'s tag check and nothing more. Both
+builds hand the commit they built to `docker` (below), and a directory that is
+not a git checkout has no commit to read, so it is refused before the build: a
+rehearsal that waives the tag check still needs a checkout of it.
 
 `init_stack.sh` is the one script of the flow that no release runs; it is run
 once per environment, by hand, before the first one (`workflows/README.md`, "The
@@ -85,8 +91,53 @@ service, more than one, or an image that is a tag: an empty or tag-shaped read
 would leave `promote.sh` with nothing to compare against. It never reads the
 export with `--show-secrets`.
 
+## The commit an image carries
+
+Both builds hand the commit they built to `docker build` as `--build-arg
+GIT_SHA=<40 hex commit>`: the tag's own commit for `build_push.sh`, and HEAD for
+`build_push_staging.sh` — the same commit the landing image is named
+`main-<12 hex>` after. The image therefore carries the identity of the commit it
+was built from, and the service it becomes can report it: the integration tier
+reads `/api/version` and fails when it does not name the commit just built
+(`~/gt/docs/plans/2026-10-08-automated-release-design.md`, section 2). The value
+is checked against `^[0-9a-f]{40}$` before it reaches `docker`, so a build that
+cannot read a commit stops with that message instead of publishing an image
+whose identity no service could confirm.
+
+**An app repo has to declare it to receive it.** A build-arg reaches the image
+only through the Dockerfile that consumes it, so the app's Dockerfile declares
+`ARG GIT_SHA` (and passes it on to the serving process, e.g. `ENV GIT_SHA`). An
+app whose Dockerfile declares nothing of the sort still builds: docker warns
+that a build-arg was not consumed and builds the image without it, which is why
+this half of the contract is the app repo's (bead `fr-k1c` for fractals,
+`bv-ptr` for beaver).
+
 The run summary (step 7) is the workflow's job: it records the tag, commit and
 digest from the outputs below.
+
+`wait_version.sh` is the check the integration job of `staging.yml` runs
+(`docs/plans/2026-10-08-automated-release-design.md`, section 2). It polls the
+app's version endpoint on the deployed service URL until the commit it reports
+is the one the job deployed. Its three exit codes are the three answers a job
+log has to tell apart: 0 the service reports the deployed commit, 1 the timeout
+ran out while it reports another one — a deploy that did not take, or a landing
+that superseded this one — and 2 no usable answer at all. It is `health.sh`'s
+sibling, and it exists for the same reason health.sh does: the integration
+result is what the release bot reads as "this commit is green on staging", and a
+health check cannot say which commit is serving.
+
+What it will not do is take a body's word for anything. Only a 200 counts,
+because a 4xx or 5xx from a service still coming up is something to retry and
+its body is an error page; the body is read as JSON by `jq` and never
+evaluated; and only a value that looks like a commit (`^[0-9a-f]{7,64}$`) is
+reported as a different commit, so an error page or a proxy's HTML is "no
+answer" rather than a wrong commit. Both the body and the value are bounded
+before either can reach a line (64 KiB of body is read, 80 characters of the
+value can be printed), and control characters are dropped, so a service
+answering with something huge or malformed cannot put it in the job log. The URL
+must be `https`, or `http` on localhost, which is where the tests point it: this
+check deploys nothing and holds no credential, and that is what lets the
+integration job run against a service the deploy job has just changed.
 
 ## Interfaces
 
@@ -103,6 +154,7 @@ workflow can pass whatever is convenient. `--help` prints the full list.
 | the `settings-begin`/`settings-end` block | `init_stack.sh` | the operator, who commits it into `Pulumi.<env>.yaml` |
 | `url=` | `up.sh`, `promote.sh` | `health.sh` |
 | `digest=` (the image the stack is running) | `staged_digest.sh` | the prod job's `--staging-digest` check |
+| `observed=`, `attempts=` | `wait_version.sh` | the integration job's own result, and the run record |
 
 Names are derived from `--app`, `--env`, `--project` and `--region` in one place
 (`release_target` in `lib.sh`), and they follow what bootstrap creates:
@@ -117,10 +169,33 @@ the app's Pulumi project is the name its manifest states as `pulumiProject`
 `.pulumi/stacks/<pulumiProject>/<env>.json` -- the path the patrol reads an
 app's state under (cmd/patrol's `readState`, beads dv-iou and dv-4fu).
 
-A release changes one value per stack: `imageDigest`. The rest of the app's
+A release writes two values into a stack's config, and the rest of the app's
 `Spec` (`name`, `env`, `project`, `region`, `port`, `healthPath`) stays with the
 app repo, in `Pulumi.<env>.yaml`, which is what the app's Pulumi program reads
 (`examples/app/main.go`).
+
+- `imageDigest` is the released image, pinned by `preview.sh` before its preview
+  and again by `up.sh`/`promote.sh` before their apply.
+- `deployedAt` is when the apply happened, written only by the script that
+  applies: `up.sh` for staging, `promote.sh` for prod. The app's own Pulumi
+  program reads it and passes it to the container as its `DEPLOYED_AT`
+  environment variable, which is how a page can say truthfully when it was
+  deployed. `preview.sh` does not write it — a preview applies nothing, so the
+  preview diff does not show the key — and nothing else in this flow reads it.
+
+`deployedAt` is set only when the apply changes the image the stack runs. The
+script compares the digest it was given with the image the live stack currently
+runs, read out of `pulumi stack export` (the same read `staged_digest.sh` makes
+from the state backend, bead dv-yf4). When the two are equal the release writes
+nothing: Cloud Run creates no new revision, and a fresh `deployedAt` would have
+the app claim a deployment that did not happen, so whatever the stack's config
+holds for the key is left as it is. A first apply, where the stack holds no
+service yet, sets it. The value
+is the script's own reading of the clock in RFC 3339 UTC — `2026-10-09T00:14:07Z`
+— and never an argument the caller passes or an environment variable it sets:
+the time a release reports has to be the time the release ran. The format is
+checked before it is set, so a clock that answers with anything else stops the
+release instead of deploying without a time to report.
 
 ## Credentials
 
@@ -159,10 +234,22 @@ built from one — and it builds the file. The deploy image installs it
 - **Never a tag where a digest belongs.** `preview.sh`, `up.sh` and
   `promote.sh` refuse `app:latest` and every other tag-shaped input; the digest
   `build_push.sh` printed is the release identity from step 2 onwards.
+- **Never an image without the commit it was built from.** Both builds pass
+  their commit as `--build-arg GIT_SHA`, and refuse anything that is not a full
+  40 hex commit before `docker` runs, so a service asked what it is running
+  answers with a commit that can be found in the repository.
 - **Never a rebuild for prod.** `promote.sh` deploys the digest it is given, and
   refuses one that differs from `--staging-digest`. Prod gets the image staging
   proved, and `staged_digest.sh` reads that digest out of the stack's own state
   rather than out of a config file only the job that wrote it has.
+- **Never a deploy time for a deployment that did not happen.** `up.sh` and
+  `promote.sh` write `deployedAt` only when the apply changes the image the
+  stack runs, by comparing the digest they were given with the image the live
+  stack runs (`pulumi stack export`, the read `staged_digest.sh` makes). A no-op
+  apply creates no new revision and leaves `deployedAt` as it was; a first apply
+  sets it. The value is the script's own clock, and a clock that does not answer
+  with an RFC 3339 UTC timestamp stops the release rather than being written
+  (`lib.sh`, `set_deployed_at_config`).
 - **Never a commit that did not land.** `build_push_staging.sh` refuses a HEAD
   that is not on main, and a ref that looks like a release tag, so the landing
   path publishes what the gate let onto main and nothing else. It is also the one
@@ -192,7 +279,15 @@ built from one — and it builds the file. The deploy image installs it
   `init_stack.sh` print their plan without reading the key or the token.
 - **Never a mutation in `health.sh`.** It only curls. That is what makes "a
   failed health check leaves the environment as it was, with no automatic
-  rollback" true rather than aspirational.
+  rollback" true rather than aspirational. `wait_version.sh` is the same kind of
+  script: it reads the version endpoint and writes nothing but its own output.
+- **Never a body's word for a commit.** `wait_version.sh` counts only a 200,
+  reads the body as JSON and never evaluates it, and reports `observed=` only
+  for a value shaped like a commit — so an error page, a proxy's HTML or
+  anything else answering on that URL is exit 2, "no answer", rather than a
+  commit the service is not running. A commit-shaped value that is not the
+  expected one is exit 1, and the excerpt the refusal quotes is the evidence for
+  whoever reads the job.
 - **Nothing is installed.** No script writes outside the working directory
   except `mint_token.sh`'s token file, `build_push.sh`'s optional
   `--digest-file`, and the ADC file `lib.sh` writes into a private temporary
@@ -205,8 +300,8 @@ run would.
 
 ## Tests
 
-`tests/` holds a bats suite with fake `docker`, `gcloud`, `pulumi` and `curl` on
-`PATH` (see `tests/fakes/`). Nothing in it touches a cloud, a registry or the
+`tests/` holds a bats suite with fake `docker`, `gcloud`, `pulumi`, `curl` and
+`date` on `PATH` (see `tests/fakes/`). Nothing in it touches a cloud, a registry or the
 network, and every file it writes is inside the bats temporary directory.
 
 ```sh
@@ -274,7 +369,18 @@ Bead dv-yf4, the digest the prod job reads back, is the last:
   service that records no image, a failed export, and a stack whose committed
   settings lack this project's provider.
 
-Bead dv-pj9, the landing build, is the last:
+Bead dv-5jrh, the commit the integration job checks for:
+
+- `wait_version.bats`: the three answers, one test each — the service already
+  reports the deployed commit; the commit arrives on the third attempt while the
+  first two answer 503; another commit (exit 1, with `observed=` carrying it);
+  and no answer (exit 2) for a service that is unreachable, a 500 whose body
+  happens to hold the commit, a body that is not JSON, and JSON with no commit
+  in it. What the body cannot do is tested too: a commit field holding
+  `$(touch ...)` runs nothing, and twenty thousand characters of it leave
+  neither stream longer than the refusal.
+
+Bead dv-pj9, the landing build:
 
 - `build_push_staging.bats`: the name a landing is published under is the
   commit's (`main-<12 hex>`), a commit *behind* main builds — the workflow is
@@ -287,3 +393,30 @@ Bead dv-pj9, the landing build, is the last:
   exercised rather than described: `helpers.bash`'s `point_origin_main` writes
   the `origin/main` ref the check reads. `secrets.bats` runs this script with the
   rest.
+
+Bead dv-lh6, the commit an image carries, is the last:
+
+- `build_push.bats` and `build_push_staging.bats`: the build line the fake
+  `docker` recorded names the exact `--build-arg GIT_SHA=<commit>` — the tag's
+  commit for `build_push.sh`, and for `build_push_staging.sh` the HEAD commit
+  its `main-<12 hex>` name is made from — and a dry run prints that same
+  build-arg.
+- `build_push.bats`: "refuses a source with no commit to record, before docker
+  runs" — the plain directory `--allow-non-checkout` exists for has no commit
+  to pass, so no `docker` is called at all.
+- `build_push_staging.bats`: "refuses a HEAD that is not a commit, before docker
+  runs", a repository with nothing committed: real git answers that one with the
+  literal `HEAD` and a non-zero status, which is the malformed value the shape
+  check is for, since a repository cannot hold a commit that is not 40 hex.
+
+Bead dv-bte, the deploy time a release records:
+
+- `deployed_at.bats`: `up.sh` and `promote.sh` set `deployedAt` when the digest
+  they are applying differs from the image the live stack runs, leave an
+  existing value alone when it does not (the apply still runs — it is the
+  deployment that did not happen), and set it on a first apply, with the fake's
+  export fixture standing in for the stack's state. Then the two ways it refuses
+  rather than guess: a state with more than one Cloud Run service, and a clock
+  that is not an RFC 3339 UTC timestamp — the fake `date` with `FAKE_DATE_BAD=1`
+  — after which nothing is written and nothing is applied. A dry run reads no
+  state and plans no config set at all.

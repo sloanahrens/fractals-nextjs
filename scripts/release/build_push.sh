@@ -7,6 +7,15 @@
 # deploy that digest, never a tag, so the image the preview was read against is
 # the image that runs (bead B5.2).
 #
+# The image is built with --build-arg GIT_SHA=<the tag's commit>, so the image
+# carries the identity of the commit it was built from and the service it
+# becomes can report it: the integration tier reads /api/version and fails when
+# it does not name the commit just built
+# (~/gt/docs/plans/2026-10-08-automated-release-design.md, section 2). An app
+# whose Dockerfile declares no ARG GIT_SHA still builds — docker only warns that
+# a build-arg nothing consumed went unused (README, "The commit an image
+# carries").
+#
 # Usage:
 #   build_push.sh --app APP --tag vX.Y.Z [--project gt-APP] [--region us-central1]
 #                 [--source DIR] [--token-file FILE] [--digest-file FILE]
@@ -103,6 +112,11 @@ require_release_tag "$TAG"
 # The build must be the tag's commit, not whatever happened to be checked out.
 # A branch that moved between the tag push and this run would otherwise publish
 # an image labelled v1.2.3 that is not v1.2.3.
+#
+# GIT_SHA is that same commit, and it is taken from the one read that this check
+# already makes, so the commit the tag was verified against is the commit the
+# image carries.
+GIT_SHA=''
 if git -C "$SOURCE" rev-parse --git-dir >/dev/null 2>&1; then
   step "Verifying $SOURCE is at tag $TAG"
   [[ -z $(git -C "$SOURCE" status --porcelain) ]] ||
@@ -112,12 +126,22 @@ if git -C "$SOURCE" rev-parse --git-dir >/dev/null 2>&1; then
   head_commit=$(git -C "$SOURCE" rev-parse HEAD)
   [[ $head_commit == "$tag_commit" ]] ||
     die "HEAD of $SOURCE is $head_commit, not tag $TAG ($tag_commit)"
-  note "HEAD is $TAG ($head_commit)"
+  GIT_SHA=$tag_commit
+  note "HEAD is $TAG ($GIT_SHA)"
 elif [[ $ALLOW_NON_CHECKOUT != 1 ]]; then
   die "$SOURCE is not a git checkout; pass --allow-non-checkout only if the tag was verified some other way"
 else
   note "$SOURCE is not a git checkout; the tag check is waived by --allow-non-checkout"
 fi
+
+# A source that is not a git checkout has no commit to read, and
+# --allow-non-checkout waives the tag check and not this one: the image is built
+# to carry the commit, so a build that cannot name it is refused before docker
+# runs. The shape is checked rather than trusted too, because this value is the
+# only thing that says which commit the image is, and a truncated or empty one
+# would put an image in the registry under a claim no service could verify.
+[[ $GIT_SHA =~ ^[0-9a-f]{40}$ ]] ||
+  die "cannot read the commit to build in $SOURCE (got: ${GIT_SHA:-nothing}): the image records it as GIT_SHA, and only a full 40 hex commit may reach the build. Build from a git checkout of tag $TAG"
 
 if [[ -n $TOKEN_FILE ]]; then
   step "Logging in to $REGISTRY_HOST"
@@ -128,7 +152,8 @@ if [[ -n $TOKEN_FILE ]]; then
 fi
 
 step "Building $IMAGE:$TAG"
-run docker build --file "$SOURCE/Dockerfile" --tag "$IMAGE:$TAG" "$SOURCE"
+run docker build --file "$SOURCE/Dockerfile" --tag "$IMAGE:$TAG" \
+  --build-arg "GIT_SHA=$GIT_SHA" "$SOURCE"
 
 step "Pushing $IMAGE:$TAG"
 run docker push "$IMAGE:$TAG"

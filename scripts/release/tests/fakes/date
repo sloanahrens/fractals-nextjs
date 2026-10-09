@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# Fake date for the release script tests (bead dv-bte). up.sh and promote.sh
+# stamp the stack's `deployedAt` config with the time they apply, and the one
+# thing a test cannot otherwise make happen is a clock that answers with
+# something that is not a timestamp. FAKE_DATE_BAD=1 is that clock; without it
+# this fake is the real date, so every other caller sees what it expects.
+#
+# It follows the fakes' two rules (_fake.sh): every call is recorded, and no
+# credential value is ever read or printed.
+#
+# Fake-specific environment:
+#   FAKE_DATE_BAD  set to 1 to answer with text that is not an RFC 3339
+#                  timestamp, so a test can watch a release refuse to deploy
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+fake_log "date $*"
+
+if [[ ${FAKE_DATE_BAD:-0} == 1 ]]; then
+  printf 'a moment ago\n'
+  exit 0
+fi
+
+exec /bin/date "$@"

@@ -8,6 +8,11 @@
 # plan. It deploys the digest it was given and nothing else; the digest is the
 # release's identity and it is pinned in stack config before the up.
 #
+# It also records the apply time as the stack's `deployedAt` config, so a
+# deployed app can show when it was deployed -- and only when this apply changes
+# the image the stack runs, so a no-op apply creates no new revision and claims
+# no new deployment (lib.sh, set_deployed_at_config).
+#
 # It refuses a stack whose committed Pulumi.<env>.yaml does not name this
 # project's gcpkms secrets provider, before it touches Pulumi at all: a stack
 # without those settings falls back to a passphrase provider, and then no
@@ -102,4 +107,5 @@ note "backend: $BACKEND_URL"
 
 ensure_stack
 set_digest_config "$DIGEST"
+set_deployed_at_config "$DIGEST"
 up_stack

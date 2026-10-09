@@ -4,6 +4,11 @@
 # digest. The tests care most about the two mistakes this script can make:
 # publishing an image that is not the tag, and putting a credential where a
 # process listing or a job log can read it.
+#
+# The build also carries the commit it built, as GIT_SHA (bead dv-lh6): the
+# assertions on the build line name that build-arg with the tag's own commit, so
+# a build that passed some other commit, or none, fails here rather than in the
+# integration tier that reads it back off /api/version.
 
 load helpers.bash
 
@@ -11,6 +16,7 @@ setup() {
   setup_release_env
   CHECKOUT=$BATS_TEST_TMPDIR/app
   make_checkout "$CHECKOUT" v1.0.0
+  HEAD_COMMIT=$(git -C "$CHECKOUT" rev-parse HEAD)
 }
 
 @test "builds the tagged commit and prints its digest" {
@@ -21,7 +27,9 @@ setup() {
   [[ $output == *"tag=v1.0.0"* ]]
   [[ $output == *"digest=$IMAGE@sha256:$DIGEST_HEX"* ]]
 
-  grep -q "docker build --file $CHECKOUT/Dockerfile --tag $IMAGE:v1.0.0 $CHECKOUT" "$FAKE_LOG"
+  # The exact build line: the tag's commit is the build-arg, so the image cannot
+  # say it came from a commit it did not.
+  grep -q "docker build --file $CHECKOUT/Dockerfile --tag $IMAGE:v1.0.0 --build-arg GIT_SHA=$HEAD_COMMIT $CHECKOUT" "$FAKE_LOG"
   grep -q "docker push $IMAGE:v1.0.0" "$FAKE_LOG"
 }
 
@@ -61,6 +69,22 @@ setup() {
   [[ $output == *"no Dockerfile"* ]]
 }
 
+@test "refuses a source with no commit to record, before docker runs" {
+  # The commit can only be missing, not malformed: `git rev-parse HEAD` either
+  # answers 40 hex or fails, which is why the refusal is tested here. A plain
+  # directory is what --allow-non-checkout is for, and it waives the tag check
+  # and not this one — an image with no commit to carry is not built (dv-lh6).
+  local plain=$BATS_TEST_TMPDIR/plain
+  mkdir -p "$plain"
+  printf 'FROM scratch\n' >"$plain/Dockerfile"
+
+  run "$RELEASE_DIR/build_push.sh" --app "$APP" --tag v1.0.0 --source "$plain" --allow-non-checkout
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"cannot read the commit to build"* ]]
+  [ ! -s "$FAKE_LOG" ]
+}
+
 @test "writes the digest to --digest-file as well" {
   local digest_file=$BATS_TEST_TMPDIR/digest.txt
 
@@ -93,6 +117,7 @@ setup() {
 
   [ "$status" -eq 0 ]
   [[ $output == *"[dry-run] docker build"* ]]
+  [[ $output == *"--build-arg GIT_SHA=$HEAD_COMMIT"* ]]
   [[ $output == *"[dry-run] docker push"* ]]
   [ ! -s "$FAKE_LOG" ]
 }

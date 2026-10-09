@@ -12,6 +12,11 @@
 #
 # The environment is always prod. Promotion means prod.
 #
+# Like up.sh it records the apply time as the stack's `deployedAt` config, and
+# only when the promotion changes the image prod runs (lib.sh,
+# set_deployed_at_config): a promotion that changes nothing is not a deployment
+# and must not claim one.
+#
 # It refuses a prod stack whose committed Pulumi.prod.yaml does not name this
 # project's gcpkms secrets provider, before it touches Pulumi at all: a stack
 # without those settings falls back to a passphrase provider, and then no
@@ -130,4 +135,5 @@ note "backend: $BACKEND_URL"
 
 ensure_stack
 set_digest_config "$DIGEST"
+set_deployed_at_config "$DIGEST"
 up_stack

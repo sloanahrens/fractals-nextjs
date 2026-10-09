@@ -513,6 +513,132 @@ set_digest_config() {
   run pulumi config set imageDigest "$digest" --stack "$STACK" --cwd "$STACK_DIR" --plaintext
 }
 
+# set_deployed_at_config TARGET_DIGEST records when a release deploys, in the
+# stack's config, so a deployed app can show a truthful "deployed <time>". The
+# app's own Pulumi program reads the key (the apps are beads of their own), and
+# nothing else in this flow does.
+#
+# It sets the value only when this apply will change the image the stack runs.
+# What the stack runs now is read out of `pulumi stack export` -- the read
+# staged_digest.sh makes for the prod job's --staging-digest check, from the
+# state backend rather than from a config file only the job that wrote it has
+# (bead dv-yf4). When the target digest is the image the stack already runs the
+# apply changes nothing, Cloud Run creates no new revision, and a fresh
+# timestamp would make the app claim a deployment that did not happen: an
+# existing deployedAt is left alone. A first apply, where the stack holds no
+# service yet, sets it.
+#
+# The value is the script's own reading of the clock, never an argument the
+# caller passes or an environment variable it sets: the time a release reports
+# has to be the time the release ran. It is RFC 3339 UTC, which is what the
+# example the apps were asked for is -- 2026-10-09T00:14:07Z. The format is
+# checked before anything is set, so a clock that answers with something else
+# stops the release instead of writing a value an app would fail to read.
+#
+# It is plaintext, like imageDigest and for the same reason: a deploy time is
+# public. set_digest_config must have run first -- this is the second half of
+# what a release writes into the stack's config.
+set_deployed_at_config() {
+  local target=$1
+  require_digest "$target" "digest"
+
+  # A dry run reads no state, so it cannot know whether this apply changes the
+  # image; it says what a real run would do with the answer rather than
+  # inventing one. Nothing is read and nothing is planned as run.
+  if dry_run; then
+    note "would set deployedAt to now only if the image the $STACK stack runs differs from $target (a dry run reads no state)"
+    return 0
+  fi
+
+  # The read refuses by dying, which ends the subshell the command substitution
+  # runs in rather than this shell. `|| exit 1` is what turns that into the
+  # script stopping: without it a caller that ever ran without `set -e` would
+  # take the empty output of a failed read for "the stack has applied nothing"
+  # and stamp a fresh deployedAt on it, which is the one thing this function
+  # exists not to do.
+  local live
+  live=$(stack_running_image) || exit 1
+
+  if [[ $live == "$target" ]]; then
+    note "deployedAt unchanged: the $STACK stack already runs $target"
+    return 0
+  fi
+
+  local now
+  now=$(capture date -u +%Y-%m-%dT%H:%M:%SZ) ||
+    die "could not read the current time, so deployedAt was not set and $STACK was not applied"
+  is_rfc3339_utc "$now" ||
+    die "the clock answered '$now', which is not an RFC 3339 UTC timestamp like 2026-10-09T00:14:07Z: deployedAt was not set and $STACK was not applied"
+
+  run pulumi config set deployedAt "$now" --stack "$STACK" --cwd "$STACK_DIR" --plaintext
+}
+
+# is_rfc3339_utc is true for a timestamp with the shape a deploy time has to
+# have: the date and time of RFC 3339 section 5.6 in UTC, to the second, with
+# the Z designator -- 2026-10-09T00:14:07Z. The fields are range-checked, not
+# just counted, so "2026-13-45T99:99:99Z" is refused too. A leap second (:60) is
+# the one value RFC 3339 allows outside 0-59 and is accepted.
+is_rfc3339_utc() {
+  [[ ${1:-} =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)Z$ ]]
+}
+
+# stack_running_image prints the image the stack currently runs, read out of
+# `pulumi stack export`. It prints nothing when the export holds no Cloud Run
+# service, which is the state of a stack that has never been applied; its one
+# caller treats that as a first apply.
+#
+# Every other state it cannot answer for is a refusal rather than a guess: the
+# export failed, it is not the JSON pulumi prints, it holds more than one
+# service, or the service records no image. A caller that guessed "the image
+# changed" there would write a fresh deployedAt on every no-op apply, and a
+# timestamp with no new revision is the lie set_deployed_at_config exists to
+# avoid.
+#
+# It reads state, so it must not be called under --dry-run (capture would print
+# the command and return nothing, and the empty export is not a value); its one
+# caller returns before this, and says why.
+stack_running_image() {
+  # The one resource type in a stack's export whose image is the container the
+  # stack is running, and the path that image sits at inside it. staged_digest.sh
+  # selects the same resource from the same export for the digest the prod job
+  # compares its promotion against; the two exist apart because "the stack has
+  # applied nothing" means a refusal there (prod would have nothing to compare
+  # against) and a first apply here.
+  local type='gcp:cloudrunv2/service:Service'
+  local image_path='.outputs.template.containers[0].image'
+
+  local export_json services image
+  export_json=$(capture pulumi stack export --stack "$STACK" --cwd "$STACK_DIR") ||
+    die "pulumi stack export failed for stack $STACK, so the image it is running could not be read from $BACKEND_URL"
+
+  services=$(jq -r --arg type "$type" \
+    '[.deployment.resources[]? | select(.type == $type)] | length' \
+    <<<"$export_json" 2>/dev/null) ||
+    die "stack $STACK's export is not the JSON pulumi stack export prints, so the image it is running could not be read"
+
+  case $services in
+  0)
+    # A first apply: nothing is running, so there is no image to compare
+    # against and this apply is a change by definition.
+    return 0
+    ;;
+  1) ;;
+  *)
+    die "stack $STACK's export holds $services resources of type $type, and exactly one is needed to tell whether this apply changes the image it runs: more than one is a state this check cannot choose between"
+    ;;
+  esac
+
+  image=$(jq -r --arg type "$type" \
+    ".deployment.resources[]? | select(.type == \$type) | (${image_path} // \"\")" \
+    <<<"$export_json" 2>/dev/null) ||
+    die "stack $STACK's export could not be read for the image at ${image_path#.}"
+
+  [[ -n $image ]] ||
+    die "stack $STACK's $type resource records no image at ${image_path#.}, so whether this apply changes the image it runs cannot be told"
+
+  printf '%s' "$image"
+}
+
 # ensure_stack creates the stack when --init-stack was given and the stack does
 # not exist yet, so the first release of an app works. It is opt-in: a typo in
 # the app or env must fail loudly rather than silently create a second stack. It
