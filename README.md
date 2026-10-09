@@ -30,6 +30,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Center Controls**: Precise positioning with coordinate input, and four boxes under Manual Coordinates that apply a view you type in: Apply says so when a box cannot be read or runs the wrong way, and notes when a box of another shape is fitted around its centre to the view's 4:3
 - **Random Walk**: Tick Random walk in the Navigation panel and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose
 - **Download PNG**: Save the canvas at its full resolution, named from the fractal and the view it shows
+- **Shareable Links**: The address bar follows the view once a render settles, and the Copy link button in the Navigation panel puts that URL — fractal, Julia constant, centre, zoom, colour scheme, iterations and canvas size — on the clipboard
 
 ### ⚙️ Customizable Parameters
 
@@ -184,6 +185,7 @@ dependencies and needs nothing else.
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
+- **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Navigation panel copies the current URL and says "Link copied" for two seconds; a browser that will not take a clipboard write shows the URL in a read-only field with the text already selected. Opening a link shows the view it names — applying the fields it carries and leaving the page's defaults for the rest — once, as the page loads, and a link names no preset
 - **Random Walk**: Tick Random walk in the Navigation panel and set the seconds between steps (1 to 120, 5 by default). Once each render finishes the walk waits that long and then moves the view one step, staying on the selected fractal; the line under the controls counts the wait down. Untick the box to stop, and move the view by hand — drag, wheel, key, button or preset — to start the interval again. The walk pauses while the tab is in the background
 
 ## Project Structure
