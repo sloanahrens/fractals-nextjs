@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ColorScheme } from "../../types/fractal";
-import { BASE_WIDTH, MAX_ZOOM, MIN_ZOOM } from "../mandelbrot";
+import {
+  BASE_HEIGHT,
+  BASE_WIDTH,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  mandelbrotKind,
+} from "../mandelbrot";
 import {
   BUILTIN_PRESETS,
   calculateCenter,
@@ -65,6 +71,109 @@ function createStorageStub() {
   };
 }
 
+const GRID_WIDTH = 64;
+const GRID_HEIGHT = 48;
+
+/**
+ * What a preset's own frame holds, measured with the app's Mandelbrot orbit on
+ * a coarse grid of the preset's bounds at the preset's own iteration cap:
+ *
+ * - `inside`: share of points the orbit never escaped. The set's interior,
+ *   which the renderer paints as one flat colour.
+ * - `early`: share of points that escaped within the first quarter of the cap.
+ *   An orbit that dies at once says little about where the point sits.
+ * - `distinct`: how many different iteration counts the grid produced, which is
+ *   the detail a colour scheme has to work with.
+ *
+ * A frame the set fills is a nearly blank button, and one with a handful of
+ * counts is banded rather than detailed.
+ */
+function measurePreset(preset: FractalPreset): {
+  inside: number;
+  early: number;
+  distinct: number;
+} {
+  const counts: number[] = [];
+
+  for (let row = 0; row < GRID_HEIGHT; row++) {
+    for (let column = 0; column < GRID_WIDTH; column++) {
+      // Cell centres, so the grid samples the frame rather than its corners.
+      const point = {
+        real:
+          preset.bounds.minReal +
+          ((column + 0.5) / GRID_WIDTH) *
+            (preset.bounds.maxReal - preset.bounds.minReal),
+        imaginary:
+          preset.bounds.minImaginary +
+          ((row + 0.5) / GRID_HEIGHT) *
+            (preset.bounds.maxImaginary - preset.bounds.minImaginary),
+      };
+
+      counts.push(
+        mandelbrotKind.iterations(point, preset.maxIterations, false),
+      );
+    }
+  }
+
+  return {
+    inside:
+      counts.filter((count) => count >= preset.maxIterations).length /
+      counts.length,
+    early:
+      counts.filter((count) => count < preset.maxIterations / 4).length /
+      counts.length,
+    distinct: new Set(counts).size,
+  };
+}
+
+/**
+ * The magnified built-in presets with their measurements, taken once: the grid
+ * is 3072 orbits per preset and every guard below reads the same numbers.
+ *
+ * Magnified is where a frame can be wrong. At zoom 1 the set leaves the frame
+ * on its own, so the overview preset is not one of these.
+ */
+const MAGNIFIED_PRESETS = BUILTIN_PRESETS.filter(
+  (preset) => calculateZoomLevel(preset.bounds) >= 100,
+).map((preset) => ({ preset, measurement: measurePreset(preset) }));
+
+describe("built-in preset framing", () => {
+  it("has magnified presets to measure, so the guards below cannot pass vacuously", () => {
+    expect(MAGNIFIED_PRESETS.length).toBeGreaterThan(0);
+  });
+
+  it("frames no magnified preset on the set's interior", () => {
+    for (const { preset, measurement } of MAGNIFIED_PRESETS) {
+      expect(measurement.inside, preset.id).toBeLessThanOrEqual(0.6);
+    }
+  });
+
+  it("gives every magnified preset detail to colour", () => {
+    for (const { preset, measurement } of MAGNIFIED_PRESETS) {
+      expect(measurement.distinct, preset.id).toBeGreaterThanOrEqual(60);
+    }
+  });
+
+  it("lets the seahorse spiral have its valley", () => {
+    // The frame this preset replaced was mostly escape-early: two thirds of the
+    // grid escaped inside the first quarter of the cap, the left half was one
+    // flat colour, and the seahorses sat against the right edge.
+    const seahorse = getPresetById("seahorse-valley")!;
+    expect(measurePreset(seahorse).early).toBeLessThanOrEqual(0.5);
+  });
+
+  it("keeps the reframed presets at the base view's shape", () => {
+    // The canvas is 4:3 and the renderer maps each axis of the bounds onto its
+    // own side of it, so a frame of any other shape is stretched to fill.
+    for (const id of ["elephant-valley", "seahorse-valley"]) {
+      const { bounds } = getPresetById(id)!;
+      const width = bounds.maxReal - bounds.minReal;
+      const height = bounds.maxImaginary - bounds.minImaginary;
+      expect(width / height, id).toBeCloseTo(BASE_WIDTH / BASE_HEIGHT, 6);
+    }
+  });
+});
+
 describe("BUILTIN_PRESETS", () => {
   it("ships six presets with unique ids", () => {
     expect(BUILTIN_PRESETS).toHaveLength(6);
@@ -116,7 +225,7 @@ describe("calculateZoomLevel", () => {
     );
     expect(
       calculateZoomLevel(getPresetById("seahorse-valley")!.bounds),
-    ).toBeCloseTo(200, 9);
+    ).toBeCloseTo(400, 9);
     expect(calculateZoomLevel(getPresetById("lightning")!.bounds)).toBeCloseTo(
       2000,
       9,
@@ -162,7 +271,7 @@ describe("formatZoom", () => {
     ).toBe("2.0K");
     expect(
       formatZoom(calculateZoomLevel(getPresetById("seahorse-valley")!.bounds)),
-    ).toBe("200");
+    ).toBe("400");
   });
 });
 
