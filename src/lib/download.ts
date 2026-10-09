@@ -1,5 +1,3 @@
-import { formatZoom } from "./presets";
-
 // A filename is a label the user reads in a downloads folder, so the
 // coordinates carry enough digits to tell two nearby views apart without
 // dragging a double's worth of digits into the name.
@@ -15,11 +13,22 @@ function formatCoordinate(value: number): string {
   return Number(value.toPrecision(COORDINATE_PRECISION)).toString();
 }
 
+// The zoom a file name carries is a number, not the Zoom Level readout's
+// abbreviation of one: a name that says 10.0Kx makes the user work out what
+// was saved, where the canvas label next to it already says 10000x. Whole
+// numbers are kept whole from 100 up; below that a decimal place or two still
+// says something, and the zeros a double leaves behind do not.
+function formatFileNameZoom(zoom: number): string {
+  if (zoom >= 100) return zoom.toFixed(0);
+
+  return Number(zoom.toFixed(2)).toString();
+}
+
 /**
  * The name a downloaded render is saved under: what was drawn and the view it
- * shows, so a folder full of them stays legible. The zoom is formatted the way
- * the Zoom Level readout formats it, so 175 saves as 175x, 1.5 as 1.5x and
- * 2000 as 2.0Kx.
+ * shows, so a folder full of them stays legible. The zoom is the plain number
+ * the canvas label gives, so 10000 saves as 10000x, 175 as 175x, 2.59 as 2.59x
+ * and 1.5 as 1.5x.
  * @param centerX - Centre of the rendered view
  * @param centerY - Centre of the rendered view
  * @param zoom - Zoom of the rendered view
@@ -36,7 +45,7 @@ export function downloadFileName(
     prefix,
     formatCoordinate(centerX),
     formatCoordinate(centerY),
-    `${formatZoom(zoom)}x`,
+    `${formatFileNameZoom(zoom)}x`,
   ]
     .join("_")
     // Nothing above is expected to produce a space, a slash or anything else

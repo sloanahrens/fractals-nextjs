@@ -209,12 +209,20 @@ export function keyNavigationBounds(
 /**
  * Describe a view the way a screen reader should hear it
  *
+ * The explorer draws more than one fractal, so the label has to name the one
+ * on screen: a listener told "Mandelbrot" over a Julia set has been handed the
+ * wrong picture, and the canvas is the only place that picture is described.
+ *
  * @param bounds - The view on screen
- * @returns Label text naming the centre in the complex plane and the zoom
+ * @param fractalName - Display name of the fractal drawn, as the picker lists it
+ * @returns Label text naming the fractal, the centre in the complex plane and the zoom
  */
-export function describeBounds(bounds: FractalBounds): string {
+export function describeBounds(
+  bounds: FractalBounds,
+  fractalName: string = "Mandelbrot",
+): string {
   const { centerX, centerY, scale } = boundsToView(bounds);
   const coordinate = (value: number) => Number(value.toFixed(3));
 
-  return `Mandelbrot set view, centre real ${coordinate(centerX)}, imaginary ${coordinate(centerY)}, zoom ${Number(scale.toFixed(2))}x`;
+  return `${fractalName} view, centre real ${coordinate(centerX)}, imaginary ${coordinate(centerY)}, zoom ${Number(scale.toFixed(2))}x`;
 }
