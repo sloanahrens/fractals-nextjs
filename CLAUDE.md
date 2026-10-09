@@ -45,7 +45,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
 - **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, and the choice-to-kind and choice-to-default-view resolvers
-- **Julia sets** (`src/lib/julia.ts`): The four named Julia constants and the factory that turns one into a fractal kind
+- **Julia sets** (`src/lib/julia.ts`): The four named Julia constants, the `custom:<re>,<im>` spelling that names any other point, and the factory that turns one into a fractal kind
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
 - **Wander step** (`src/lib/wander.ts`): One random-walk step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Wander controller** (`src/lib/wanderController.ts`): The walk's clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
@@ -157,6 +157,40 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### A constant can be any point, written out (2026-10-09)
+
+- A Julia constant is a point of the plane and the app carries one as a string
+  everywhere — the page's state, a preset's `juliaConstant`, a link's `k=` — so
+  the four named ones are four of those strings and a fifth spelling names any
+  other point: `custom:<re>,<im>`, for example `custom:-0.8,0.156`. Nothing on
+  screen changes yet and no control can produce one; this landing is the format
+  and the readers, and a later bead adds the controls.
+- `src/lib/julia.ts` owns the spelling: `CUSTOM_CONSTANT_PREFIX`,
+  `customConstantName(real, imaginary)` (each part rounded to six decimals and
+  written as plain decimal digits with the trailing zeros dropped, at most 26
+  characters), `parseJuliaConstant(value)` (`ComplexNumber | null`: a named
+  constant, a well-formed in-range custom name, or null) and
+  `isJuliaConstantName(value)`, a narrowing predicate. Both parts are limited
+  to ±2, inclusive, which is the box every named constant and every point of
+  the Mandelbrot set sits in; a part outside it, a part that is not finite, and
+  a whole string past `MAX_CUSTOM_CONSTANT_LENGTH` (40) have no name and no
+  parse. The pattern is anchored, so `custom:0.5,0.5x` is no name rather than
+  the point at the front of it, and the prefix is case-sensitive.
+- `parseJuliaConstant` never throws and never guesses, which is what lets each
+  caller keep the fallback it already had: `resolveFractalKind`
+  (`src/lib/fractalTypes.ts`) draws the first named constant for a name it
+  cannot read, `presetJuliaConstant` (`src/lib/presets.ts`) names that constant
+  so the select and the canvas agree, the `k=` reader
+  (`src/lib/viewLink.ts`, `constantNamed`) drops the field, and
+  `viewLinkToUpdates` (`src/lib/viewLinkState.ts`) asks again and leaves the
+  page's own constant standing. A custom name that *is* readable survives a
+  link round trip and a save/load byte for byte, because a name is stored and
+  carried as text and is never re-rendered from its numbers.
+- The page's own preset format is unchanged: a custom constant is another value
+  in the `juliaConstant` string it already had. The Julia `Select` still offers
+  the four, so a view loaded from a custom name leaves it showing no option —
+  which is what the follow-up bead's controls are for.
 
 ### Help overlay (2026-10-09)
 

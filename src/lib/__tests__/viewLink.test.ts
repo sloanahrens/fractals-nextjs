@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { getAvailableColorSchemes } from "../colorMapping";
 import { FRACTAL_TYPES } from "../fractalTypes";
-import { JULIA_CONSTANTS } from "../julia";
+import {
+  JULIA_CONSTANTS,
+  MAX_CUSTOM_CONSTANT_LENGTH,
+  isJuliaConstantName,
+} from "../julia";
 import {
   ITERATION_STEP,
   MAX_ITERATIONS,
@@ -160,6 +164,23 @@ describe("encodeView", () => {
     );
   });
 
+  it("carries a custom constant as the name it already is", () => {
+    // A constant is a string wherever the app holds one, and a custom one is
+    // that string written as a point, so a link has only to carry it: the
+    // fragment's own escaping is the whole of the translation, and the name
+    // comes back as the identical string rather than as a re-rendering of the
+    // number it names.
+    const link = encodeView({
+      ...EXAMPLE,
+      juliaConstant: "custom:-0.8,0.156",
+    });
+
+    expect(link).toBe(
+      "v=1&f=julia&k=custom%3A-0.8%2C0.156&x=-0.644&y=-0.094&z=2.56&s=fire&i=auto&w=800&h=600",
+    );
+    expect(decodeView(link).juliaConstant).toBe("custom:-0.8,0.156");
+  });
+
   it("leaves out every field the format cannot carry", () => {
     // The mirror of the decoder: what cannot be read is not written, so the two
     // halves agree about what a link holds. The version is always written.
@@ -227,6 +248,34 @@ describe("decodeView", () => {
     expect(decodeView(`#${EXAMPLE_LINK}`)).toEqual(decodeView(EXAMPLE_LINK));
   });
 
+  it("reads a custom constant out of a link", () => {
+    expect(decodeView("v=1&f=julia&k=custom%3A-0.8%2C0.156")).toEqual({
+      fractalType: "julia",
+      juliaConstant: "custom:-0.8,0.156",
+    });
+  });
+
+  it("drops a custom constant it cannot read and keeps the rest of the view", () => {
+    // A name is judged as suspiciously as any other field, and by the one rule
+    // in `julia.ts`: out of range, misspelled, in the wrong case or longer
+    // than a name can be, it is dropped and the page keeps its own constant.
+    const unreadable = [
+      "custom:0.5,0.5x",
+      "custom:3,0",
+      "custom:0,-3",
+      "custom:1e3,0",
+      "Custom:0,0",
+      `custom:0,${"0".repeat(MAX_CUSTOM_CONSTANT_LENGTH)}`,
+    ];
+
+    for (const name of unreadable) {
+      expect(
+        decodeView(`v=1&f=julia&k=${encodeURIComponent(name)}&z=2.5`),
+        name,
+      ).toEqual({ fractalType: "julia", zoomLevel: 2.5 });
+    }
+  });
+
   it("ignores a key it has never heard of", () => {
     // A later build may add a key; this one reads the fields it knows and
     // leaves the rest, rather than refusing the whole link.
@@ -290,9 +339,9 @@ describe("decodeView against a fragment it should not trust", () => {
       expect(FRACTAL_TYPES.map((type) => type.id)).toContain(state.fractalType);
     }
     if (state.juliaConstant !== undefined) {
-      expect(JULIA_CONSTANTS.map((constant) => constant.name)).toContain(
-        state.juliaConstant,
-      );
+      // A constant that came back is a name this build reads: one of the four
+      // the picker offers, or a custom spelling of a point.
+      expect(isJuliaConstantName(state.juliaConstant)).toBe(true);
     }
     if (state.colorScheme !== undefined) {
       expect(
@@ -351,6 +400,9 @@ describe("decodeView against a fragment it should not trust", () => {
     "v=1&y=-100",
     "v=1&f=nope",
     "v=1&k=Nope",
+    "v=1&f=julia&k=custom:0.5,0.5x",
+    "v=1&f=julia&k=custom:9,9",
+    "v=1&f=julia&k=Custom:0,0",
     "v=1&s=nope",
     "v=1&i=7",
     "v=1&i=auto2",
@@ -406,6 +458,24 @@ describe("the round trip", () => {
     for (const state of states) {
       expectSameState(decodeView(encodeView(state)), state);
     }
+  });
+
+  it("returns a view whose constant is a custom name", () => {
+    // The member of the sweep that is not one of the four named constants: a
+    // name the link carries as text, compared as text, so the string is what
+    // has to come back and not merely the point it names.
+    const state: ViewLinkState = {
+      fractalType: "julia",
+      juliaConstant: "custom:0.285,0.01",
+      ...VIEWS[2],
+      colorScheme: "fire",
+      autoIterationsOn: false,
+      maxIterations: 430,
+      canvasWidth: 800,
+      canvasHeight: 600,
+    };
+
+    expectSameState(decodeView(encodeView(state)), state);
   });
 
   it("keeps a deep view's centre to within the precision the link promises", () => {

@@ -573,6 +573,34 @@ describe("the Julia constant a saved view names", () => {
     ).toBe(JULIA_CONSTANTS[0].name);
   });
 
+  it("keeps a custom constant, which is a name and not a lookup", () => {
+    // A custom name is a point written out, so it is read on its own terms
+    // rather than looked up among the four: a view framed on a point the
+    // picker has no option for still loads as the picture it was saved on.
+    expect(
+      presetJuliaConstant({
+        ...JULIA_PRESET,
+        juliaConstant: "custom:-0.8,0.156",
+      }),
+    ).toBe("custom:-0.8,0.156");
+  });
+
+  it("falls back for a custom name it cannot read", () => {
+    // The same suspicion the link reader applies: a name that is not a point
+    // is no more loadable than a name this build has never heard of.
+    for (const juliaConstant of [
+      "custom:0.5,0.5x",
+      "custom:9,9",
+      "custom:",
+      "Custom:0,0",
+    ]) {
+      expect(
+        presetJuliaConstant({ ...JULIA_PRESET, juliaConstant }),
+        juliaConstant,
+      ).toBe(JULIA_CONSTANTS[0].name);
+    }
+  });
+
   it("only ever names a constant the picker offers", () => {
     const names = JULIA_CONSTANTS.map((constant) => constant.name);
 
@@ -616,6 +644,38 @@ describe("reading views out of storage", () => {
     expect(presetJuliaConstant(stored)).toBe("Dendrite");
     expect(presetsForFractal(getCustomPresets(), "julia")).toEqual([stored]);
     expect(presetsForFractal(getCustomPresets(), "mandelbrot")).toEqual([]);
+  });
+
+  it("round-trips a custom constant through storage and back to its picture", () => {
+    // The constant is stored as the string it is, so a saved view of a point
+    // the picker has no option for loads as that point: the stored name reads
+    // back unchanged and the orbit it resolves to is the one it was saved on.
+    saveCustomPreset({
+      ...CUSTOM_PRESET,
+      ...presetFractalFields("julia", "custom:-0.8,0.156"),
+    });
+
+    const [stored] = getCustomPresets();
+    const resolved = kindForPreset(stored);
+    // The named spelling of the same point, which is what says the saved name
+    // was read as its numbers: the two draw the same picture.
+    const namedClassic = resolveFractalKind("julia", JULIA_CONSTANTS[0].name);
+    const points = [
+      { real: 0, imaginary: 0 },
+      { real: -1, imaginary: 0 },
+      { real: 0.5, imaginary: 0.5 },
+      { real: 1.5, imaginary: -1 },
+    ];
+
+    expect(stored.juliaConstant).toBe("custom:-0.8,0.156");
+    expect(presetJuliaConstant(stored)).toBe("custom:-0.8,0.156");
+    expect(presetsForFractal(getCustomPresets(), "julia")).toEqual([stored]);
+
+    for (const point of points) {
+      expect(resolved.iterations(point, 200, true)).toBe(
+        namedClassic.iterations(point, 200, true),
+      );
+    }
   });
 
   it("carries unknown fields through a read and writes nothing back", () => {

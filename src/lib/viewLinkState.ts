@@ -30,7 +30,7 @@
 
 import type { ColorScheme } from "../types/fractal";
 import { defaultViewFor } from "./fractalTypes";
-import { JULIA_CONSTANTS } from "./julia";
+import { JULIA_CONSTANTS, isJuliaConstantName } from "./julia";
 import { decodeView, type ViewLinkState } from "./viewLink";
 
 /**
@@ -42,7 +42,7 @@ import { decodeView, type ViewLinkState } from "./viewLink";
 export interface ViewLinkUpdates {
   /** Id of the fractal to draw, from {@link FRACTAL_TYPES} */
   fractalType: string;
-  /** Name of the Julia constant, from {@link JULIA_CONSTANTS} */
+  /** Name of the Julia constant: a named one, or a custom spelling of a point */
   juliaConstant: string;
   /** Real part of the centre of the view */
   centerX: number;
@@ -91,16 +91,19 @@ export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
  * What a decoded link means for the page.
  *
  * A field the link did not carry keeps the value the page opens on. Nothing
- * that arrives here can be invalid — the codec judges each value on its own
- * and leaves out what it cannot read — so there is nothing to refuse: a
- * fragment from another build, or from nowhere at all, decodes to no fields
- * and leaves every default standing.
+ * arriving here has to be refused: the codec judges each value on its own and
+ * leaves out what it cannot read, so a fragment from another build, or from
+ * nowhere at all, decodes to no fields and leaves every default standing.
  *
  * The Julia constant is only applied to a Julia view, which is the codec's own
  * rule seen from this side: it writes `k` only beside `f=julia`, because the
  * fractal and its constant are one choice. A link naming the Mandelbrot set
  * and a constant is a link about the Mandelbrot set, with a field in it that
- * means nothing.
+ * means nothing. The name is judged once more on the way in, because of all
+ * these fields it is the one whose shape is a spelling rather than a range:
+ * asking the codec's own question again costs a call and leaves this
+ * function's answer about the constant a function of its argument rather than
+ * of its caller.
  *
  * @param decoded - The fields a link carried, as `decodeView` read them
  * @returns The ten values to set, defaults included
@@ -114,8 +117,8 @@ export function viewLinkToUpdates(
   return {
     fractalType,
     juliaConstant:
-      fractalType === "julia"
-        ? (decoded.juliaConstant ?? defaults.juliaConstant)
+      fractalType === "julia" && isJuliaConstantName(decoded.juliaConstant)
+        ? decoded.juliaConstant
         : defaults.juliaConstant,
     centerX: decoded.centerX ?? defaults.centerX,
     centerY: decoded.centerY ?? defaults.centerY,
