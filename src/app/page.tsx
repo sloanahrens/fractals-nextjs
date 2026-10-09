@@ -42,6 +42,12 @@ import {
 import { getAvailableColorSchemes } from "../lib/colorMapping";
 import { FractalPreset, formatZoom } from "../lib/presets";
 import { downloadFileName } from "../lib/download";
+import {
+  FRACTAL_TYPES,
+  defaultViewFor,
+  resolveFractalKind,
+} from "../lib/fractalTypes";
+import { JULIA_CONSTANTS } from "../lib/julia";
 import { Slider } from "../components/ui/Slider";
 import { Checkbox } from "../components/ui/Checkbox";
 import { Select } from "../components/ui/Select";
@@ -91,6 +97,17 @@ export default function Home() {
   const [colorScheme, setColorScheme] = useState<ColorScheme>("classic");
   const [canvasWidth, setCanvasWidth] = useState(800);
   const [canvasHeight, setCanvasHeight] = useState(600);
+
+  // Which fractal is drawn, and — when it is the Julia one — which named
+  // constant it iterates against. The two are a single choice as far as the
+  // renderer is concerned: it is rebuilt whenever either moves.
+  const [fractalType, setFractalType] = useState("mandelbrot");
+  const [juliaConstant, setJuliaConstant] = useState(JULIA_CONSTANTS[0].name);
+
+  const fractalKind = useMemo(
+    () => resolveFractalKind(fractalType, juliaConstant),
+    [fractalType, juliaConstant],
+  );
 
   const effectiveMaxIterations = autoIterationsOn
     ? autoIterations(zoomLevel)
@@ -198,17 +215,23 @@ export default function Home() {
     [bounds, effectiveMaxIterations, colorScheme],
   );
 
-  // Initialize canvas and renderer. The renderer is rebuilt only when the
-  // canvas is resized, because it owns the image buffer that goes with those
-  // dimensions; the draw effect below paints the canvas either way.
+  // Initialize canvas and renderer. The renderer is rebuilt when the canvas is
+  // resized, because it owns the image buffer that goes with those dimensions,
+  // and when the kind changes, because the formula is fixed at construction.
+  // The draw effect below paints the canvas either way.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // A render still running belongs to the kind being replaced and paints the
+    // same canvas, so stop it the way a parameter change stops the render it
+    // supersedes; otherwise the old fractal's rows land on top of the new one.
+    rendererRef.current?.cancelRender();
+
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
-    rendererRef.current = new FractalRenderer(canvas);
-  }, [canvasWidth, canvasHeight]);
+    rendererRef.current = new FractalRenderer(canvas, fractalKind);
+  }, [canvasWidth, canvasHeight, fractalKind]);
 
   // Wheel, drag and touch navigation on the canvas. The listeners are attached
   // once and read the live bounds through a ref, so a drag keeps working while
@@ -289,16 +312,24 @@ export default function Home() {
     );
   }, [canvasWidth, canvasHeight, renderPolicy, applyView]);
 
-  // Redraw whenever the view, the rendering parameters or the canvas size
-  // change, at whatever quality the policy decides. A gesture's steps come back
-  // as previews, so dragging or wheeling never runs a full-resolution pass per
-  // pointer move; the nonce brings back one full-quality render of the view the
-  // gesture settled on.
+  // Redraw whenever the view, the rendering parameters, the fractal or the
+  // canvas size change, at whatever quality the policy decides. A gesture's
+  // steps come back as previews, so dragging or wheeling never runs a
+  // full-resolution pass per pointer move; the nonce brings back one
+  // full-quality render of the view the gesture settled on.
   useEffect(() => {
     drawCanvas(renderPolicy.requestRender());
     // fullRenderNonce is the trigger for the render a finished gesture owes,
-    // not a value the draw itself reads.
-  }, [drawCanvas, renderPolicy, canvasWidth, canvasHeight, fullRenderNonce]);
+    // and fractalKind for the render a new kind needs, not values the draw
+    // itself reads: the draw reaches the renderer the effect above rebuilt.
+  }, [
+    drawCanvas,
+    renderPolicy,
+    canvasWidth,
+    canvasHeight,
+    fullRenderNonce,
+    fractalKind,
+  ]);
 
   // Helper functions for manual coordinate input
   const applyManualCoordinates = () => {
@@ -331,14 +362,35 @@ export default function Home() {
     }
   };
 
+  // Put a view on screen without touching anything else. Both ways of choosing
+  // a fractal go through here, so neither can leave the sliders showing a view
+  // the canvas is not on.
+  const applyDefaultView = (typeId: string) => {
+    const view = defaultViewFor(typeId);
+
+    setCenterX(view.centerX);
+    setCenterY(view.centerY);
+    setZoomLevel(view.zoom);
+    setCurrentPreset("");
+  };
+
+  const handleFractalTypeChange = (typeId: string) => {
+    setFractalType(typeId);
+    applyDefaultView(typeId);
+  };
+
+  // Another constant is another picture, framed the same way: a Julia set is
+  // symmetric about the origin whatever its c.
+  const handleJuliaConstantChange = (name: string) => {
+    setJuliaConstant(name);
+    applyDefaultView("julia");
+  };
+
   const resetToDefault = () => {
-    setCenterX(-0.75);
-    setCenterY(0);
-    setZoomLevel(1);
+    applyDefaultView(fractalType);
     setMaxIterations(100);
     setAutoIterationsOn(true);
     setColorScheme("classic");
-    setCurrentPreset("");
   };
 
   // Save what is on the canvas. The canvas holds the render at its full pixel
@@ -356,7 +408,7 @@ export default function Home() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = downloadFileName(centerX, centerY, zoomLevel);
+      link.download = downloadFileName(centerX, centerY, zoomLevel, fractalType);
       // Firefox only follows a click on an anchor that is in the document.
       document.body.appendChild(link);
       link.click();
@@ -365,13 +417,16 @@ export default function Home() {
       // releasing it in this same tick can cancel the save before it begins.
       setTimeout(() => URL.revokeObjectURL(url), 0);
     }, "image/png");
-  }, [centerX, centerY, zoomLevel]);
+  }, [centerX, centerY, zoomLevel, fractalType]);
 
   // Preset handlers
   const handlePresetSelect = (preset: FractalPreset) => {
     // Calculate center and zoom from preset bounds
     const view = boundsToView(preset.bounds);
 
+    // A preset is a Mandelbrot view: the saved format has no field for the
+    // fractal, so loading one puts the picker back where its bounds belong.
+    setFractalType("mandelbrot");
     setCenterX(view.centerX);
     setCenterY(view.centerY);
     setZoomLevel(view.scale);
@@ -417,7 +472,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="container mx-auto px-4">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">Mandelbrot Set Explorer</h1>
+          <h1 className="text-4xl font-bold mb-4">Fractal Explorer</h1>
           <p className="text-lg text-gray-600">
             Scroll to zoom, drag to pan, or use the sliders. Focus the image to
             pan with the arrow keys and zoom with + and −.
@@ -566,6 +621,33 @@ export default function Home() {
                 Rendering Parameters
               </h3>
               <div className="space-y-4">
+                <Select
+                  label="Fractal"
+                  value={fractalType}
+                  options={FRACTAL_TYPES.map((type) => ({
+                    value: type.id,
+                    label: type.label,
+                  }))}
+                  onChange={handleFractalTypeChange}
+                  disabled={isRendering}
+                />
+
+                {/* A Julia set is a family, so the kind alone does not say
+                    which picture to draw; the Mandelbrot set has no such
+                    parameter, and the picker offers nothing to choose. */}
+                {fractalType === "julia" && (
+                  <Select
+                    label="Julia constant"
+                    value={juliaConstant}
+                    options={JULIA_CONSTANTS.map((constant) => ({
+                      value: constant.name,
+                      label: constant.name,
+                    }))}
+                    onChange={handleJuliaConstantChange}
+                    disabled={isRendering}
+                  />
+                )}
+
                 <Checkbox
                   label="Auto iterations"
                   checked={autoIterationsOn}
@@ -741,6 +823,11 @@ export default function Home() {
                 currentCanvasWidth={canvasWidth}
                 currentCanvasHeight={canvasHeight}
                 onPresetsChange={handlePresetsChange}
+                saveDisabledReason={
+                  fractalType === "julia"
+                    ? "Saving is available for Mandelbrot views"
+                    : undefined
+                }
               />
             </div>
           </div>

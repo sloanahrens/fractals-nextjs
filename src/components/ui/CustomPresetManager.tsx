@@ -20,6 +20,12 @@ interface CustomPresetManagerProps {
   currentCanvasWidth: number;
   currentCanvasHeight: number;
   onPresetsChange: () => void;
+  /**
+   * Why saving is unavailable right now. The saved-preset format describes a
+   * Mandelbrot view, so the page sets this while something else is on the
+   * canvas; unset means saving is offered.
+   */
+  saveDisabledReason?: string;
   className?: string;
 }
 
@@ -30,6 +36,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
   currentCanvasWidth,
   currentCanvasHeight,
   onPresetsChange,
+  saveDisabledReason,
   className = "",
 }) => {
   const [showSaveDialog, setShowSaveDialog] = React.useState(false);
@@ -90,6 +97,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
         <div className="text-sm font-medium text-gray-700">Custom Presets</div>
         <Button
           onClick={() => setShowSaveDialog(true)}
+          disabled={saveDisabledReason !== undefined}
           variant="outline"
           size="sm"
         >
@@ -97,7 +105,14 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
         </Button>
       </div>
 
-      {showSaveDialog && (
+      {saveDisabledReason !== undefined && (
+        <p className="text-xs text-gray-500">{saveDisabledReason}</p>
+      )}
+
+      {/* The dialog opens only from Save Current, which is itself disabled
+          while saving is unavailable, but the canvas can change under an open
+          dialog and a preset saved then would describe the wrong fractal. */}
+      {showSaveDialog && saveDisabledReason === undefined && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
           <Input
             label="Preset Name"
