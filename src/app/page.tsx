@@ -57,6 +57,7 @@ import { PresetSelector } from "../components/ui/PresetSelector";
 import { ZoomDisplay } from "../components/ui/ZoomDisplay";
 import { CenterControls } from "../components/ui/CenterControls";
 import { CustomPresetManager } from "../components/ui/CustomPresetManager";
+import { VersionFooter } from "../components/ui/VersionFooter";
 
 // The four manual coordinate boxes. A field is present only once the user has
 // typed in it; while it is absent the box shows the current view.
@@ -835,6 +836,8 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        <VersionFooter />
       </div>
     </div>
   );
