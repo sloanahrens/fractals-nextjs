@@ -27,6 +27,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Zoom Controls**: Zoom with the mouse wheel, the Zoom In/Out buttons and the Zoom Level slider, which is logarithmic — equal slider steps are equal zoom ratios from 1x to 10000x
 - **Pan Navigation**: Click and drag to explore different regions, or drag with one finger on a touch screen
 - **Keyboard Navigation**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
+- **Help Overlay**: A Help button under the heading, or the `?` key from anywhere on the page, opens a dialog listing every way to drive the explorer — mouse and touch, keyboard, the random walk, and the views and links
 - **Center Controls**: Precise positioning with coordinate input, and four boxes under Manual Coordinates that apply a view you type in: Apply says so when a box cannot be read or runs the wrong way, and notes when a box of another shape is fitted around its centre to the view's 4:3
 - **Random Walk**: Tick Random walk in the Navigation panel and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose
 - **Download PNG**: Save the canvas at its full resolution, named from the fractal and the view it shows
