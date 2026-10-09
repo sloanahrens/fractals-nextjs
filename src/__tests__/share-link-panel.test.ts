@@ -1,13 +1,15 @@
 /**
  * Sharing a view: the parts of it that live in the page
  *
- * Three things about a shareable link are decided in `page.tsx` and nowhere
+ * Four things about a shareable link are decided in `page.tsx` and nowhere
  * else: the fragment is read from `window.location.hash` in an effect rather
- * than during render, the address bar is moved with `replaceState` rather than
- * an assignment to it, and the Copy link button falls back to a field the user
- * can select from when the clipboard will not take the URL. The suite runs in
- * Node with no DOM to render into, so this reads the page source instead, the
- * way the manual coordinates and version tests here do.
+ * than during render, a fragment that changes while the page is open is read by
+ * the same effect path through a `hashchange` listener, the address bar is
+ * moved with `replaceState` rather than an assignment to it, and the Copy link
+ * button falls back to a field the user can select from when the clipboard will
+ * not take the URL. The suite runs in Node with no DOM to render into, so this
+ * reads the page source instead, the way the manual coordinates and version
+ * tests here do.
  *
  * What a link means once it is decoded is `viewLinkState`'s own test's
  * business, and what the codec writes is `viewLink`'s.
@@ -119,9 +121,14 @@ describe("the address bar", () => {
     // renders, and it moves the view through the setters every other control
     // uses. Reading `window` while rendering would be markup that differs from
     // the server's.
-    const applied = effectBody(page, "decodeView(window.location.hash)");
+    const applied = effectBody(page, "linkAppliedRef.current = true;");
 
     expect(applied).toContain("if (linkAppliedRef.current) return;");
+    expect(applied).toContain("applyViewLink(window.location.hash)");
+
+    // The setters are not in this effect: they are in the one function both
+    // reads of a fragment share.
+    const apply = functionBody(page, "applyViewLink");
 
     for (const setter of [
       "setFractalType(",
@@ -135,8 +142,26 @@ describe("the address bar", () => {
       "setCanvasWidth(",
       "setCanvasHeight(",
     ]) {
-      expect(applied).toContain(setter);
+      expect(apply).toContain(setter);
     }
+    // And what it reads a fragment through is the pure half, not a second
+    // reading kept beside it.
+    expect(apply).toContain("viewLinkUpdatesFrom(fragment)");
+  });
+
+  it("applies a fragment edited into it on a page already open", () => {
+    // A fragment can change without the document reloading — a paste into the
+    // address bar, a same-document link — and the mount read has already had
+    // its turn by then. The event is the only notice, and it has to reach the
+    // same apply path, or the page keeps its view and the follower writes that
+    // view back over the fragment.
+    const listener = effectBody(page, 'window.addEventListener("hashchange"');
+
+    expect(listener).toContain("applyViewLink(window.location.hash)");
+    // A listener an effect adds is a listener the effect takes away.
+    expect(listener).toContain(
+      'window.removeEventListener("hashchange", handleHashChange)',
+    );
   });
 
   it("is moved with replaceState, so a view is not a place to go back to", () => {

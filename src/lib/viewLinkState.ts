@@ -14,6 +14,12 @@
  * its state from it. A link's defaults are therefore the page's defaults by
  * construction, instead of two lists that have to be kept in step by hand.
  *
+ * `viewLinkUpdatesFrom` is that reading and that filling in one call, because
+ * the page asks the question twice with the same answer wanted both times: once
+ * for the fragment the document loaded with, and again for every fragment that
+ * arrives afterwards through `hashchange`. A paste is a load, so there is one
+ * function.
+ *
  * The rest is the throttle. The address bar follows the view, but a view moves
  * many times a second — a drag, a wheel burst, a step of the random walk — and
  * a `replaceState` per settled view is work the browser does for a string
@@ -25,7 +31,7 @@
 import type { ColorScheme } from "../types/fractal";
 import { defaultViewFor } from "./fractalTypes";
 import { JULIA_CONSTANTS } from "./julia";
-import type { ViewLinkState } from "./viewLink";
+import { decodeView, type ViewLinkState } from "./viewLink";
 
 /**
  * A view as the page holds it: one value per piece of state a link can move.
@@ -120,6 +126,35 @@ export function viewLinkToUpdates(
     canvasWidth: decoded.canvasWidth ?? defaults.canvasWidth,
     canvasHeight: decoded.canvasHeight ?? defaults.canvasHeight,
   };
+}
+
+/**
+ * The view a fragment means, read and filled in one call.
+ *
+ * The page asks this of two fragments, and wants the same answer for both: the
+ * one the document loaded with, and every one that arrives afterwards because
+ * the fragment was edited in the address bar of a page already open (which is a
+ * `hashchange`, and never a reload). A paste is a load — the fragment names the
+ * view the page is to be in, and the page is to be in it whole.
+ *
+ * That is also the whole answer to a fragment this build cannot read in full. A
+ * link from another version, a coordinate with a typo in it, a fragment that is
+ * not a link at all: none is refused and none is half-applied. What the
+ * fragment does carry is applied and the page's opening view stands for the
+ * rest (see {@link viewLinkToUpdates}), so the page settles on the view that
+ * URL describes. Ignoring such a fragment instead was rejected: the
+ * address-bar follower writes only the view a render settled on, so a fragment
+ * nobody read would sit in the bar contradicting the canvas until the user
+ * moved something else. Read, it is written back, and bar and canvas agree
+ * whether or not every field arrived.
+ *
+ * @param fragment - The fragment, as `window.location.hash` gives it: with its
+ *   leading `#` when the address bar has one
+ * @returns The ten values to set, the page's opening view for anything the
+ *   fragment did not say
+ */
+export function viewLinkUpdatesFrom(fragment: string): ViewLinkUpdates {
+  return viewLinkToUpdates(decodeView(fragment));
 }
 
 /**

@@ -51,7 +51,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Wander controller** (`src/lib/wanderController.ts`): The walk's clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, and a decoder that judges every value on its own and leaves out what it cannot read
-- **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, and the throttle that limits how often the address bar is written
+- **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
@@ -155,6 +155,42 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### A fragment pasted into an open page is read too (2026-10-09)
+
+- The fragment was read once, by the effect that runs at mount, so a
+  same-document navigation — editing the fragment in the address bar, or
+  following a link on the page with a different one — did nothing: the page kept
+  the view it had, and the address-bar follower wrote that view back over what
+  was pasted. Found while verifying `fr-9k0` in headless Chrome, where going
+  from `#...z=2.56` to `#...z=200` left the page at 2.56.
+- `page.tsx` now puts a fragment into effect in one function, `applyViewLink`,
+  which both reads call: the mount effect passes `window.location.hash` to it,
+  and so does a `hashchange` listener the page adds in an effect of its own. The
+  listener is the only notice a page gets of a fragment it did not load with,
+  since neither an address-bar edit nor a same-document link reloads the
+  document. It goes through the same ten setters every control uses, so the
+  canvas, the sliders and the manual coordinate boxes move together, and the
+  follower then writes the settled view back — which is why the paste survives.
+- It cannot feed itself: the follower moves the address bar with
+  `history.replaceState`, which fires no `hashchange`.
+- `src/lib/viewLinkState.ts` gained `viewLinkUpdatesFrom`, the decode and the
+  fill-in as one call, which is where the decision about an unreadable fragment
+  lives. The two effects answer that question the same way, because there is one
+  function and not two policies: what the fragment does carry is applied and the
+  page's opening view stands for the rest. Ignoring a fragment this build cannot
+  read in full was the alternative and was rejected — the follower writes only
+  the view a render settled on, so a fragment nobody read would sit in the bar
+  contradicting the canvas until the user moved something else. Read instead,
+  the page settles on the view that URL describes, the follower writes it back,
+  and bar and canvas agree whether or not every field arrived. It is also what a
+  fresh load of the same URL does, so a paste is a load.
+- `src/lib/__tests__/viewLinkState.test.ts` drives the new function over the
+  `#`-prefixed form `window.location.hash` gives, a partial fragment, and a
+  fragment that names no readable field; `src/__tests__/share-link-panel.test.ts`
+  grew the source walk for the listener — added in an effect, removed in its
+  cleanup, calling the shared apply — and now reads the setters in
+  `applyViewLink` rather than in the mount effect, which no longer holds them.
 
 ### A view is a link you can share (2026-10-09)
 
