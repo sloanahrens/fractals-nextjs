@@ -57,7 +57,43 @@ export function escapeTimeIterations(
 }
 
 /**
+ * Whether a point lies inside the two components of the set whose orbits are
+ * known in closed form: the main cardioid and the period-2 bulb.
+ *
+ * A point in either is in the set, so its orbit never escapes and the loop
+ * would run the entire cap only to report `maxIterations`. Interior pixels are
+ * the whole cost of a view framed on the set — the live example is a deep zoom
+ * into the cardioid taking minutes — and this is the answer those pixels were
+ * already getting, reached without the orbit.
+ *
+ * The inequalities are strict on purpose: a point on a boundary is not claimed
+ * here, so it goes to the loop and gets whatever count it always got.
+ * @param c - Complex number representing the point to test
+ * @returns True when the point is strictly inside the cardioid or the bulb
+ */
+export function isInMainBulbs(c: ComplexNumber): boolean {
+  const x = c.real;
+  const y = c.imaginary;
+
+  // Main cardioid: q = (x - 1/4)^2 + y^2, and the point is inside when
+  // q * (q + (x - 1/4)) < y^2 / 4.
+  const offsetReal = x - 0.25;
+  const q = offsetReal * offsetReal + y * y;
+  if (q * (q + offsetReal) < (y * y) / 4) {
+    return true;
+  }
+
+  // Period-2 bulb: the disk of radius 1/4 around -1.
+  const bulbReal = x + 1;
+  return bulbReal * bulbReal + y * y < 1 / 16;
+}
+
+/**
  * Calculate the number of iterations for a point in the Mandelbrot set
+ *
+ * The interior shortcut belongs here rather than in the loop: the orbit this
+ * covers starts at z = 0, and that is the one thing about the point the
+ * Mandelbrot set is defined from that a Julia kind changes.
  * @param c - Complex number representing the point to test
  * @param maxIterations - Maximum number of iterations to perform
  * @returns Number of iterations before the point escapes (or maxIterations if it doesn't escape)
@@ -66,11 +102,19 @@ export function mandelbrotIterations(
   c: ComplexNumber,
   maxIterations: number,
 ): number {
+  if (isInMainBulbs(c)) {
+    return maxIterations;
+  }
+
   return escapeTimeIterations(ORIGIN, c, maxIterations, false);
 }
 
 /**
  * Calculate the smooth iteration count for better color gradients
+ *
+ * The interior shortcut returns `maxIterations` here too: an orbit that never
+ * escapes is the one case the smoothing has nothing to add to, and it reports
+ * the cap unchanged, so the shortcut is the same number.
  * @param c - Complex number representing the point to test
  * @param maxIterations - Maximum number of iterations to perform
  * @returns Smooth iteration count as a float
@@ -79,6 +123,10 @@ export function smoothMandelbrotIterations(
   c: ComplexNumber,
   maxIterations: number,
 ): number {
+  if (isInMainBulbs(c)) {
+    return maxIterations;
+  }
+
   return escapeTimeIterations(ORIGIN, c, maxIterations, true);
 }
 
