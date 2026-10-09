@@ -319,3 +319,150 @@ describe("FractalRenderer fractal kind", () => {
     }
   });
 });
+
+/**
+ * A kind that counts the pixels it has been asked about and calls back on the
+ * one the caller names. An 8x8 canvas is under one chunk, so the renderer asks
+ * about one pixel at a time and the count says exactly how far a run has got:
+ * row n of an 8-wide canvas is calls 8n+1 to 8n+8.
+ */
+function countedKind(
+  value: number,
+  onCall?: (call: number) => void,
+): FractalKind {
+  let calls = 0;
+  return {
+    id: "counted",
+    iterations() {
+      calls += 1;
+      onCall?.(calls);
+      return value;
+    },
+  };
+}
+
+/**
+ * The first pixel of the last row of the 8x8 canvas, which is where these
+ * tests interrupt a run. Only the first and the last row reach the canvas
+ * through a progress report, so only this one can surface as a report from a
+ * run that should have stopped: a superseded run that paints one more row
+ * before it notices would be painting a row that reports nothing if the
+ * takeover came any earlier.
+ */
+const LAST_ROW_FIRST_PIXEL = 7 * 8 + 1;
+
+/** A promise that settles the first time the render asks about that pixel. */
+function whenLastRowStarts(): { signal: Promise<void>; kind: FractalKind } {
+  let markReached = () => {};
+  const signal = new Promise<void>((resolve) => {
+    markReached = resolve;
+  });
+
+  return {
+    signal,
+    kind: countedKind(50, (call) => {
+      if (call === LAST_ROW_FIRST_PIXEL) markReached();
+    }),
+  };
+}
+
+describe("FractalRenderer cancellation", () => {
+  it("hands the canvas to a render started while another is running", async () => {
+    const { element, pixelAt } = createFakeCanvas(8, 8);
+    const { signal, kind } = whenLastRowStarts();
+    const renderer = new FractalRenderer(element, kind);
+
+    const supersededProgress: number[] = [];
+    const supersedingProgress: number[] = [];
+
+    const superseded = renderer.renderFractal(renderConfig(), (value) =>
+      supersededProgress.push(value),
+    );
+
+    // The first render has painted seven of its eight rows and reported the
+    // first, so the second one starts on a run that is part-way through its
+    // work rather than on one that has not begun.
+    await signal;
+    expect(supersededProgress).toEqual([1 / 8]);
+    const reportedBeforeTakeover = supersededProgress.length;
+
+    // Only the colour scheme differs, so the row the first render is holding
+    // when the second one starts would show as the wrong shade if it reached
+    // the canvas.
+    const superseding = renderer.renderFractal(
+      renderConfig({ colorScheme: "classic" }),
+      (value) => supersedingProgress.push(value),
+    );
+
+    await Promise.all([superseded, superseding]);
+
+    // The first render stopped where it was left: no further row reached the
+    // canvas through it and it never reported the image complete.
+    expect(supersededProgress).toHaveLength(reportedBeforeTakeover);
+    expect(supersededProgress).not.toContain(1);
+
+    // The second render is the only one whose rows are on the canvas.
+    const expected = mapIterationsToColor(50, 100, "classic");
+    expect(mapIterationsToColor(50, 100, "grayscale")).not.toEqual(expected);
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        expect(pixelAt(x, y)).toEqual([
+          expected.r,
+          expected.g,
+          expected.b,
+          255,
+        ]);
+      }
+    }
+
+    expect(supersedingProgress[supersedingProgress.length - 1]).toBe(1);
+    expect(renderer.isCurrentlyRendering()).toBe(false);
+  });
+
+  it("stops a render cancelRender is called on", async () => {
+    const { element } = createFakeCanvas(8, 8);
+    const { signal, kind } = whenLastRowStarts();
+    const renderer = new FractalRenderer(element, kind);
+
+    const progress: number[] = [];
+    const render = renderer.renderFractal(renderConfig(), (value) =>
+      progress.push(value),
+    );
+
+    await signal;
+    expect(progress).toEqual([1 / 8]);
+    const reportedBeforeCancel = progress.length;
+
+    renderer.cancelRender();
+
+    // Nothing is drawing once it has been cancelled, even though the run it
+    // stopped has not yet noticed and finished.
+    expect(renderer.isCurrentlyRendering()).toBe(false);
+
+    await render;
+
+    expect(progress).toHaveLength(reportedBeforeCancel);
+    expect(progress).not.toContain(1);
+  });
+
+  it("reports rendering until the newest render finishes, not the one it replaced", async () => {
+    const { element } = createFakeCanvas(8, 8);
+    const { signal, kind } = whenLastRowStarts();
+    const renderer = new FractalRenderer(element, kind);
+
+    const superseded = renderer.renderFractal(renderConfig());
+    await signal;
+
+    const superseding = renderer.renderFractal(
+      renderConfig({ colorScheme: "classic" }),
+    );
+
+    // The render that lost the canvas finishes first. Its completion must not
+    // take the flag down while the render that replaced it is still drawing.
+    await superseded;
+    expect(renderer.isCurrentlyRendering()).toBe(true);
+
+    await superseding;
+    expect(renderer.isCurrentlyRendering()).toBe(false);
+  });
+});

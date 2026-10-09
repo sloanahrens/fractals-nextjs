@@ -143,6 +143,32 @@ _Last updated: 2026-10-08_
   `saveDisabledReason`: the page sets it on Julia, since a saved preset has no
   fractal field and this bead does not add one.
 
+### Controls stay usable during a render (2026-10-08)
+
+- Every control but Download PNG is live while the canvas is rendering. It used
+  to sit behind `isRendering`, so on staging at 10000x a two-minute render left
+  Reset View and twenty other controls greyed out and a drag was the only way
+  back. Using a control now does exactly what a wheel or a drag does: it starts
+  a render of the new view. Download PNG keeps the lock, because the canvas it
+  reads may be half drawn.
+- `FractalRenderer` cancels the run it replaces with a run token (`runToken`),
+  a counter, where a single `shouldCancel` flag served both of the two states it
+  has to tell apart. The older run checks the token at the top of each row and
+  after the row's chunks resolve — the point where it could otherwise colour and
+  paint one more row of a view the user has left — and then stops without
+  clearing `isRendering`, which belongs to the run that superseded it. A
+  superseded run also never reports progress again, so the bar only ever
+  follows the newest render.
+- The page keeps the same promise for React state with `drawTokenRef`: an
+  overtaken draw ignores its own progress callbacks and does not clear
+  `isRendering` in its `finally`, which would otherwise blank the bar while the
+  newer draw was still going.
+- Changing the canvas size mid-render needs the explicit cancel the new-kind
+  path already had: a resize builds a *new* `FractalRenderer`, two renderers
+  share no run token, and the replaced one would have gone on painting its
+  old-sized image over the newly sized canvas. The resolution controls are
+  usable mid-render now, which is what makes that reachable.
+
 ### The renderer draws a fractal kind (2026-10-08)
 
 - The formula is no longer inside the rendering loop. `FractalKind`
