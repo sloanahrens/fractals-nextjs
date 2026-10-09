@@ -66,6 +66,14 @@ RUN chown -R nextjs:nodejs /app
 # All subsequent commands will run as this user
 USER nextjs
 
+# GIT_SHA: the commit this image was built from, passed by the release build as
+# --build-arg GIT_SHA=<commit> and read back per request by /api/version. It is
+# declared after the copies so a new commit does not invalidate them, and it
+# defaults to empty so a plain `docker build` leaves the app exactly as it was
+# (the version route reports null for an unset or malformed value).
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
+
 # Expose port 8080 (Cloud Run's default port)
 # This is documentation only - actual port binding is handled by Docker
 EXPOSE 8080
