@@ -98,11 +98,15 @@ node environment, so a test must not need a browser, canvas or network.
 The integration tier is separate on purpose. `tests/integration/**` calls a
 deployed app and runs under `vitest.integration.config.mts` via
 `make integration STAGING_URL=<url> [EXPECT_SHA=<commit>]` (or
-`npm run test:integration`). Neither config sees the other's tests, so `npm
-test` cannot reach the network and the tier cannot run without a deployment to
-call. `src/lib/integrationTarget.ts` reads the two variables and builds the
-URLs, and it is unit-tested in the gate. See the README's Integration Tests
-section for what each check asserts.
+`npm run test:integration`). `make integration` installs dependencies itself
+(`ci-install`), because the staging workflow runs that one command in a fresh
+checkout, and it checks `STAGING_URL` before the install, so a run without it
+fails at once rather than after `npm ci` — `src/__tests__/make-targets.test.ts`
+pins both. Neither config sees the other's tests, so `npm test` cannot reach the
+network and the tier cannot run without a deployment to call.
+`src/lib/integrationTarget.ts` reads the two variables and builds the URLs, and
+it is unit-tested in the gate. See the README's Integration Tests section for
+what each check asserts.
 
 The landing gate (`.forgejo/workflows/gate.yml`) runs `make gate` on a
 `land/**` branch, and that is the whole of what CI runs here:
@@ -148,7 +152,27 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 ## Version Notes
 
-_Last updated: 2026-10-08_
+_Last updated: 2026-10-09_
+
+### make integration installs its own dependencies (2026-10-09)
+
+- `integration` takes `ci-install` as a prerequisite, so `make integration`
+  works in the fresh checkout the staging workflow runs it in. It failed on the
+  first real run (Forgejo run 442) with `sh: 1: vitest: not found`: `make gate`
+  installs first, the integration target did not, and the workflow runs exactly
+  one command. Nothing was added to the workflow — a protected path, and the
+  template has to stay app-agnostic.
+- `check-staging-url` is the first prerequisite, ahead of the install, and
+  echoes the message `src/lib/integrationTarget.ts` gives for a missing
+  STAGING_URL. Two copies of one message, because the guard has to answer
+  before `node_modules` exists and so cannot read the TypeScript;
+  `src/__tests__/make-targets.test.ts` fails if they stop saying the same thing.
+  A run without STAGING_URL fails in a second instead of at the end of `npm ci`.
+- That test reads the Makefile rather than shelling out to `make -n`, in the
+  style of the other source-reading tests here: it asserts `integration`'s
+  prerequisites in order, that its recipe runs `npm run test:integration`, and
+  that no path through `gate` reaches the integration tier. `gate`'s own
+  prerequisites are unchanged.
 
 ### The deploy program reads the deploy time (2026-10-08)
 

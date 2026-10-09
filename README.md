@@ -120,11 +120,17 @@ half. It calls a deployment that is already up — staging, or a container on
 `localhost` — over the network, so it is deliberately not part of `make gate` or
 `npm test`, which have to keep passing with no network at all.
 
+`make integration` installs the dependencies it needs (`ci-install`) before it
+runs them. The staging workflow checks the repository out fresh and runs this
+one command, and a fresh checkout has no `node_modules` for `vitest` to be found
+in. It checks `STAGING_URL` before that install rather than after, so a run that
+forgot it says so in a second, not at the end of an `npm ci`.
+
 ```bash
 # By hand, against staging:
 make integration STAGING_URL=https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app
 
-# Or with npm, which is what the `make` target runs:
+# Or with npm, which is the command the `make` target ends with:
 STAGING_URL=https://... npm run test:integration
 
 # Against a container of your own, or a check of a specific commit:
@@ -159,8 +165,9 @@ The tier answers "is the commit we just built the app that is answering, and are
 its four endpoints up", and a browser smoke test is a later tier of its own.
 
 The staging workflow runs `make integration STAGING_URL=<url> EXPECT_SHA=<commit>`
-after it rolls staging onto a landing's commit, once that wiring lands on the
-devops side; nothing in this repository's workflows runs it today.
+after it rolls staging onto a landing's commit. Its runner checks the repository
+out fresh and holds no cloud credential, so the target installs its own
+dependencies and needs nothing else.
 
 ## Usage
 
