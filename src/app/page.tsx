@@ -67,6 +67,13 @@ import {
   hasBaseAspect,
   readManualCoordinate,
 } from "../lib/manualBounds";
+import { decodeView, encodeView } from "../lib/viewLink";
+import {
+  DEFAULT_VIEW_LINK_UPDATES,
+  linkWriteDelayMs,
+  shouldWriteLink,
+  viewLinkToUpdates,
+} from "../lib/viewLinkState";
 import { Slider } from "../components/ui/Slider";
 import { Checkbox } from "../components/ui/Checkbox";
 import { Select } from "../components/ui/Select";
@@ -86,6 +93,27 @@ type ManualField = "minReal" | "maxReal" | "minImaginary" | "maxImaginary";
 // what it did with a box of another shape than the view.
 type ManualMessage = { kind: "error" | "note"; text: string };
 
+// What the Copy link button has to say. Idle is empty rather than absent, so
+// the status region is in the page before it speaks — a screen reader announces
+// a region that goes from empty to text, and misses one that arrives with the
+// text already in it.
+const COPY_MESSAGES = {
+  idle: "",
+  copied: "Link copied",
+  manual: "Press Ctrl+C to copy",
+} as const;
+
+// What the Copy link button last did, and — for the manual case, where the
+// clipboard would not take the URL — the URL to copy by hand and the view it
+// is of, so a view that moves on takes the offer away with it.
+type CopyState =
+  | { kind: "idle" }
+  | { kind: "copied" }
+  | { kind: "manual"; link: string; url: string };
+
+/** How long the "Link copied" confirmation stays up, in milliseconds. */
+const LINK_COPIED_MS = 2000;
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<FractalRenderer | null>(null);
@@ -101,10 +129,16 @@ export default function Home() {
   // report progress or clear the rendering flag on its behalf.
   const drawTokenRef = useRef(0);
 
-  // Navigation state - sliders control these directly
-  const [centerX, setCenterX] = useState(-0.75); // Center of classic Mandelbrot view
-  const [centerY, setCenterY] = useState(0);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  // Navigation state - sliders control these directly. Every field a link can
+  // carry opens on DEFAULT_VIEW_LINK_UPDATES, which is the same object a link's
+  // missing fields are filled from: what the page shows before anything is
+  // touched and what a link leaves alone are one view, not two.
+  // Center of the classic Mandelbrot view, which is where the app opens.
+  const [centerX, setCenterX] = useState(DEFAULT_VIEW_LINK_UPDATES.centerX);
+  const [centerY, setCenterY] = useState(DEFAULT_VIEW_LINK_UPDATES.centerY);
+  const [zoomLevel, setZoomLevel] = useState(
+    DEFAULT_VIEW_LINK_UPDATES.zoomLevel,
+  );
 
   // Derive bounds from navigation state
   const bounds = useMemo<FractalBounds>(() => {
@@ -119,17 +153,31 @@ export default function Home() {
   // somebody set by hand; with auto on, the zoom picks the count instead and
   // the slider follows it. Everything downstream draws and reports the
   // effective one, so the slider, the canvas and a saved preset agree.
-  const [maxIterations, setMaxIterations] = useState(100);
-  const [autoIterationsOn, setAutoIterationsOn] = useState(true);
-  const [colorScheme, setColorScheme] = useState<ColorScheme>("classic");
-  const [canvasWidth, setCanvasWidth] = useState(800);
-  const [canvasHeight, setCanvasHeight] = useState(600);
+  const [maxIterations, setMaxIterations] = useState(
+    DEFAULT_VIEW_LINK_UPDATES.maxIterations,
+  );
+  const [autoIterationsOn, setAutoIterationsOn] = useState(
+    DEFAULT_VIEW_LINK_UPDATES.autoIterationsOn,
+  );
+  const [colorScheme, setColorScheme] = useState<ColorScheme>(
+    DEFAULT_VIEW_LINK_UPDATES.colorScheme,
+  );
+  const [canvasWidth, setCanvasWidth] = useState(
+    DEFAULT_VIEW_LINK_UPDATES.canvasWidth,
+  );
+  const [canvasHeight, setCanvasHeight] = useState(
+    DEFAULT_VIEW_LINK_UPDATES.canvasHeight,
+  );
 
   // Which fractal is drawn, and — when it is the Julia one — which named
   // constant it iterates against. The two are a single choice as far as the
   // renderer is concerned: it is rebuilt whenever either moves.
-  const [fractalType, setFractalType] = useState("mandelbrot");
-  const [juliaConstant, setJuliaConstant] = useState(JULIA_CONSTANTS[0].name);
+  const [fractalType, setFractalType] = useState(
+    DEFAULT_VIEW_LINK_UPDATES.fractalType,
+  );
+  const [juliaConstant, setJuliaConstant] = useState(
+    DEFAULT_VIEW_LINK_UPDATES.juliaConstant,
+  );
 
   const fractalKind = useMemo(
     () => resolveFractalKind(fractalType, juliaConstant),
@@ -216,12 +264,29 @@ export default function Home() {
     setCurrentPreset("");
   };
 
+  /**
+   * The link of the view the last finished full render left on the canvas,
+   * empty until there has been one.
+   *
+   * A fragment describes a picture, so the address bar may only name a view the
+   * canvas has actually been drawn on. The blank start is what makes a fresh
+   * page write nothing until its first render finishes: the view in state is
+   * not one that has been drawn yet, and the link a load applied is the address
+   * bar's own text, which the writer below will not write again.
+   */
+  const [renderedLink, setRenderedLink] = useState("");
+
   // Draw the canvas at the quality the render policy asks for: the cheap
   // low-resolution pass while a gesture is moving the view, the full image
   // otherwise. A preview leaves the progress bar alone so that a drag does not
   // flash "Rendering..." at every pointer move.
+  //
+  // The view as a link comes in with the quality, because a finished full
+  // render is what makes a view the one the address bar may name. It is a
+  // parameter rather than something read here so that the link this draw
+  // settles is the link of the view it was asked to draw.
   const drawCanvas = useCallback(
-    async (quality: RenderQuality) => {
+    async (quality: RenderQuality, link: string) => {
       const canvas = canvasRef.current;
       const renderer = rendererRef.current;
       if (!canvas || !renderer) return;
@@ -291,9 +356,12 @@ export default function Home() {
         .finally(() => {
           // Only the newest draw clears the flag; an older one clearing it
           // would hide the bar while the drawing it has handed over to is
-          // still running.
+          // still running. A superseded draw is not the one that settled the
+          // canvas either, so it does not say which view the address bar may
+          // name.
           if (token === drawTokenRef.current) {
             setIsRendering(false);
+            setRenderedLink(link);
             wander.notifyRenderDone();
           }
         });
@@ -395,6 +463,190 @@ export default function Home() {
     };
   }, [wander]);
 
+  // A link is read once, after mount. It is read from the fragment in an effect
+  // rather than during render because the first markup is the server's and has
+  // no fragment in it; reading `window` while rendering would be a difference
+  // between the two that React reports as a hydration mismatch. The guard ref
+  // is what makes it *once*: the deps below cannot change, and the ref says so
+  // rather than depending on that.
+  const linkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (linkAppliedRef.current) return;
+    linkAppliedRef.current = true;
+
+    const updates = viewLinkToUpdates(decodeView(window.location.hash));
+
+    // The same setters every control uses, so the canvas, the sliders and the
+    // manual coordinate boxes move to the link's view together. The coordinate
+    // boxes need no attention here: they resync on the bounds the setters
+    // produce, like they do for a preset or a Reset View.
+    setFractalType(updates.fractalType);
+    setJuliaConstant(updates.juliaConstant);
+    setCenterX(updates.centerX);
+    setCenterY(updates.centerY);
+    setZoomLevel(updates.zoomLevel);
+    setColorScheme(updates.colorScheme);
+    setAutoIterationsOn(updates.autoIterationsOn);
+    setMaxIterations(updates.maxIterations);
+    setCanvasWidth(updates.canvasWidth);
+    setCanvasHeight(updates.canvasHeight);
+    // Settings, not views, are what a preset names: a link is a view, so no
+    // preset is selected in the page it opens.
+    setCurrentPreset("");
+    wander.notifyActivity();
+  }, [wander]);
+
+  // The view as a link, rebuilt whenever anything a link carries moves. Both
+  // halves of the feature read it: the effect below writes it to the address
+  // bar and the Copy link button hands it over as the URL.
+  const currentLink = useMemo(
+    () =>
+      encodeView({
+        fractalType,
+        juliaConstant,
+        centerX,
+        centerY,
+        zoomLevel,
+        colorScheme,
+        autoIterationsOn,
+        maxIterations,
+        canvasWidth,
+        canvasHeight,
+      }),
+    [
+      fractalType,
+      juliaConstant,
+      centerX,
+      centerY,
+      zoomLevel,
+      colorScheme,
+      autoIterationsOn,
+      maxIterations,
+      canvasWidth,
+      canvasHeight,
+    ],
+  );
+
+  // When this page last wrote the address bar, in the clock linkWriteDelayMs
+  // reads. Zero is "never", which is a first write nothing holds back.
+  const lastLinkWriteRef = useRef(0);
+
+  const writeViewLink = useCallback((fragment: string, nowMs: number) => {
+    // replaceState, not an assignment to location.hash: the address bar is
+    // recording where the user already is, so it is not a place to go back to,
+    // and a fragment assignment would reload the page.
+    window.history.replaceState(null, "", fragment);
+    lastLinkWriteRef.current = nowMs;
+  }, []);
+
+  // The address bar follows the view — a random walk step, a control, a wheel,
+  // a preset, a link — but only once that view has been drawn, which is also
+  // what keeps a drag from rewriting it while the gesture is still moving.
+  useEffect(() => {
+    if (currentLink !== renderedLink) return;
+
+    const next = `#${currentLink}`;
+    const now = Date.now();
+
+    if (
+      shouldWriteLink(window.location.hash, next, now, lastLinkWriteRef.current)
+    ) {
+      writeViewLink(next, now);
+      return;
+    }
+
+    // Held back by the interval rather than having nothing to say, so the write
+    // waits: a view that moves again first clears this timer and starts a new
+    // one, which is what leaves a gesture's own view in the address bar.
+    if (window.location.hash !== next) {
+      const timer = window.setTimeout(
+        () => {
+          const at = Date.now();
+
+          // The address bar may have caught up by itself by now — Copy link
+          // writes it the moment it is clicked — so the question is asked again.
+          if (
+            shouldWriteLink(
+              window.location.hash,
+              next,
+              at,
+              lastLinkWriteRef.current,
+            )
+          ) {
+            writeViewLink(next, at);
+          }
+        },
+        linkWriteDelayMs(now, lastLinkWriteRef.current),
+      );
+
+      return () => window.clearTimeout(timer);
+    }
+  }, [currentLink, renderedLink, writeViewLink]);
+
+  // What the Copy link button last did: the confirmation a clipboard gave, or
+  // the field a browser without one gets instead. The manual half carries the
+  // URL it offers along with the view that URL is of.
+  const [copy, setCopy] = useState<CopyState>({ kind: "idle" });
+  const copyFieldRef = useRef<HTMLInputElement>(null);
+  const copyTimerRef = useRef<number | null>(null);
+
+  // The offer belongs to the view it names. The address bar moves on while the
+  // field sits there — a wheel, a drag, a step of the walk — and a URL left
+  // behind by a view that is no longer on screen is a link to the wrong place.
+  // Taking it away in the render that sees the new view is the documented
+  // alternative to a sync effect:
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  if (copy.kind === "manual" && copy.link !== currentLink) {
+    setCopy({ kind: "idle" });
+  }
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  // A field that appears because somebody asked to copy is no use unless the
+  // URL is already selected, so it selects itself as it arrives. Selecting an
+  // input focuses it.
+  useEffect(() => {
+    if (copy.kind === "manual") copyFieldRef.current?.select();
+  }, [copy]);
+
+  const handleCopyLink = useCallback(() => {
+    // The link is the view on screen, however far behind it the follower above
+    // happens to be, so the address bar is brought up to date first and then
+    // read back: what is copied is the full URL, fragment and all.
+    writeViewLink(`#${currentLink}`, Date.now());
+    const url = window.location.href;
+
+    // Nothing selected by hand is needed when the clipboard takes the URL; a
+    // browser without the API, or one that refuses the write, gets the URL in a
+    // field to copy from instead of a button that did nothing.
+    const offerToSelect = () =>
+      setCopy({ kind: "manual", link: currentLink, url });
+
+    const clipboard = navigator.clipboard;
+    if (!clipboard) {
+      offerToSelect();
+      return;
+    }
+
+    clipboard.writeText(url).then(() => {
+      setCopy({ kind: "copied" });
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(
+        () => setCopy({ kind: "idle" }),
+        LINK_COPIED_MS,
+      );
+    }, offerToSelect);
+  }, [currentLink, writeViewLink]);
+
   // Arrow keys pan the view and `+`/`-` zoom it, for a user who cannot use a
   // pointer. The keys are read off the canvas itself, so they only move the
   // view while the canvas has focus and Tab still reaches every control.
@@ -453,10 +705,13 @@ export default function Home() {
   // full-resolution pass per pointer move; the nonce brings back one
   // full-quality render of the view the gesture settled on.
   useEffect(() => {
-    drawCanvas(renderPolicy.requestRender());
+    drawCanvas(renderPolicy.requestRender(), currentLink);
     // fullRenderNonce is the trigger for the render a finished gesture owes,
     // and fractalKind for the render a new kind needs, not values the draw
     // itself reads: the draw reaches the renderer the effect above rebuilt.
+    // currentLink is the view spelled as a link, which the draw hands back when
+    // it finishes; a view whose link has moved on since is one this draw is no
+    // longer about.
   }, [
     drawCanvas,
     renderPolicy,
@@ -464,6 +719,7 @@ export default function Home() {
     canvasHeight,
     fullRenderNonce,
     fractalKind,
+    currentLink,
   ]);
 
   // Helper functions for manual coordinate input
@@ -548,7 +804,12 @@ export default function Home() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = downloadFileName(centerX, centerY, zoomLevel, fractalType);
+      link.download = downloadFileName(
+        centerX,
+        centerY,
+        zoomLevel,
+        fractalType,
+      );
       // Firefox only follows a click on an anchor that is in the document.
       document.body.appendChild(link);
       link.click();
@@ -782,6 +1043,33 @@ export default function Home() {
                     Reset View
                   </Button>
                 </div>
+
+                {/* Copy link sits under the buttons that move the view, since
+                    what it copies is that view. The status line is in the page
+                    when it is empty so a screen reader hears it fill in, and
+                    the fallback field appears under it for a browser that will
+                    not take a clipboard write. */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleCopyLink}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Copy link
+                  </Button>
+                  <p role="status" className="text-xs text-gray-600">
+                    {COPY_MESSAGES[copy.kind]}
+                  </p>
+                </div>
+                {copy.kind === "manual" && (
+                  <input
+                    ref={copyFieldRef}
+                    readOnly
+                    aria-label="View link"
+                    value={copy.url}
+                    className="w-full px-3 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-lg bg-gray-50"
+                  />
+                )}
 
                 <Checkbox
                   label="Random walk"

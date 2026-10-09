@@ -50,6 +50,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Wander step** (`src/lib/wander.ts`): One random-walk step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Wander controller** (`src/lib/wanderController.ts`): The walk's clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
+- **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, and a decoder that judges every value on its own and leaves out what it cannot read
+- **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, and the throttle that limits how often the address bar is written
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
@@ -153,6 +155,53 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### A view is a link you can share (2026-10-09)
+
+- `src/lib/viewLink.ts` (the previous landing) is the format and this one is
+  its two uses. `encodeView` writes the view on screen as a fragment —
+  `#v=1&f=julia&k=Classic&x=-0.644&y=-0.094&z=2.56&s=fire&i=auto&w=800&h=600` —
+  and `decodeView` reads a fragment back into the fields it can, judging every
+  value on its own and leaving out what it cannot read. Nothing in it throws,
+  so a fragment from anywhere is a page that looks the way it did, never an
+  error screen.
+- `src/lib/viewLinkState.ts` is the page's half, and it is a module rather than
+  page code because both halves of it are pure. `viewLinkToUpdates` turns the
+  codec's partial view into all ten values the page holds, filling what the
+  link did not carry from `DEFAULT_VIEW_LINK_UPDATES` — and the page takes its
+  *initial* state from that same object, so a link's defaults and a fresh visit
+  are one view rather than two lists kept in step. A Julia constant is applied
+  only to a Julia view, mirroring the codec's rule about writing `k` only
+  beside `f=julia`. `shouldWriteLink` and `linkWriteDelayMs` are the throttle.
+- The page reads the fragment once, in an effect after mount, and applies it
+  through the same setters every control uses, so the canvas, the sliders and
+  the manual coordinate boxes move together. It never reads `window` while
+  rendering, which is what keeps the static prerender and the first client
+  markup the same.
+- The address bar follows the view, but only a view that has been drawn. What
+  gates it is `renderedLink`: `drawCanvas` takes the link it is drawing and
+  hands it back in its `finally`, inside the run-token check, so the state holds
+  the link of the view the last finished full render left on the canvas. The
+  writer returns unless the state's link is that one, which is what makes a
+  fresh page write nothing until its first render, what keeps a drag from
+  rewriting the URL on every step, and what makes `Copy link` worth writing the
+  address bar itself. It writes at most once per 500 ms, and a write the
+  interval holds back is scheduled rather than dropped — a view that moves again
+  first clears that timer and starts another.
+- `replaceState`, never an assignment to `location.hash` (which reloads) and
+  never `pushState` (a view is not a place the user went). Copy link writes the
+  address bar itself before reading `href`, because the follower is a render and
+  half a second behind at the best of times, so it copies the view on screen;
+  `navigator.clipboard` failing, or not being there at all, shows the URL in a
+  read-only field and selects it. That offer is taken away by the render that
+  sees a new view, the way the coordinate boxes resync. There is no cloud, no
+  server and no new dependency in any of this: a link is the page's own state
+  written down.
+- Whether the fragment is read in an effect, whether the button falls back,
+  and where the copy control sits are checked by
+  `src/__tests__/share-link-panel.test.ts`, which reads `page.tsx` the way the
+  manual coordinates test here does; what a link *means* is
+  `src/lib/__tests__/viewLinkState.test.ts`'s business.
 
 ### Manual coordinates say what Apply did (2026-10-09)
 
