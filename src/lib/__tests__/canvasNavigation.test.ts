@@ -524,7 +524,7 @@ describe("keyNavigationBounds", () => {
 describe("describeBounds", () => {
   it("names the centre and the zoom of the default view", () => {
     expect(describeBounds(BOUNDS)).toBe(
-      "Mandelbrot set view, centre real -0.75, imaginary 0, zoom 1x",
+      "Mandelbrot view, centre real -0.75, imaginary 0, zoom 1x",
     );
   });
 
@@ -532,7 +532,20 @@ describe("describeBounds", () => {
     const deeper = calculateZoomBounds(-0.743643887, 0.131825904, 1234.5678);
 
     expect(describeBounds(deeper)).toBe(
-      "Mandelbrot set view, centre real -0.744, imaginary 0.132, zoom 1234.57x",
+      "Mandelbrot view, centre real -0.744, imaginary 0.132, zoom 1234.57x",
+    );
+  });
+
+  it("defaults to the Mandelbrot set when no name is given", () => {
+    expect(describeBounds(BOUNDS)).toContain("Mandelbrot");
+  });
+
+  it("names whatever fractal is on screen", () => {
+    // A listener hearing "Mandelbrot" over a Julia set has been told the
+    // wrong picture, and the canvas label is the only description there is.
+    expect(describeBounds(BOUNDS, "Julia")).toMatch(/^Julia view, centre real/);
+    expect(describeBounds(BOUNDS, "Burning Ship")).toBe(
+      "Burning Ship view, centre real -0.75, imaginary 0, zoom 1x",
     );
   });
 });

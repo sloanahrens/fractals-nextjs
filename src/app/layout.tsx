@@ -13,9 +13,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL || "https://fractals.team.trabian.ai",
   ),
-  title: "Next Fractals - Interactive Mandelbrot Set Generator",
+  title: "Next Fractals - Interactive Fractal Explorer",
   description:
-    "Generate beautiful Mandelbrot set fractals with real-time parameter adjustment. Explore the infinite complexity of the Mandelbrot set with customizable parameters, zoom controls, and preset configurations.",
+    "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets and the Burning Ship with customizable parameters, zoom controls, and preset configurations.",
   keywords: [
     "fractals",
     "mandelbrot",
@@ -34,9 +34,9 @@ export const metadata: Metadata = {
       (process.env.NODE_ENV === "production"
         ? "https://next-fractals-app.run.app"
         : "http://localhost:3000"),
-    title: "Nextjs Fractals - Interactive Mandelbrot Set Generator",
+    title: "Nextjs Fractals - Interactive Fractal Explorer",
     description:
-      "Generate beautiful Mandelbrot set fractals with real-time parameter adjustment. Explore the infinite complexity of the Mandelbrot set with customizable parameters, zoom controls, and preset configurations.",
+      "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets and the Burning Ship with customizable parameters, zoom controls, and preset configurations.",
     images: [
       {
         url: "/fractal-preview.png",
@@ -50,9 +50,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Next Fractals - Interactive Mandelbrot Set Generator",
+    title: "Next Fractals - Interactive Fractal Explorer",
     description:
-      "Generate beautiful Mandelbrot set fractals with real-time parameter adjustment. Explore infinite mathematical beauty.",
+      "Generate beautiful fractals with real-time parameter adjustment. Explore infinite mathematical beauty.",
     images: ["/fractal-preview.png"],
     creator: "@sloanahrens",
   },

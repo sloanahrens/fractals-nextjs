@@ -29,17 +29,29 @@ describe("downloadFileName", () => {
     );
   });
 
-  it("rounds the zoom to a readable number", () => {
-    expect(downloadFileName(0, 0, 1.5)).toContain("_1.5x.png");
+  it("writes the zoom as the plain number the canvas label gives", () => {
+    // A download name is read next to the canvas label, which says 10000x, so
+    // the Zoom Level readout's abbreviation (10.0Kx) stays out of it.
+    expect(downloadFileName(-0.769, -0.01, 10000)).toBe(
+      "mandelbrot_-0.769_-0.01_10000x.png",
+    );
     expect(downloadFileName(0, 0, 175)).toContain("_175x.png");
     expect(downloadFileName(0, 0, 1)).toContain("_1x.png");
+  });
+
+  it("keeps a decimal place or two below 100 and drops the zeros", () => {
+    expect(downloadFileName(0, 0, 1.5)).toContain("_1.5x.png");
+    expect(downloadFileName(0, 0, 2.59)).toContain("_2.59x.png");
+    // A gesture can leave the zoom at full double precision; two decimals are
+    // enough to tell two nearby views apart and short enough to read.
+    expect(downloadFileName(0, 0, 2.5938471)).toContain("_2.59x.png");
   });
 
   it("shortens coordinates to six significant digits", () => {
     // A pan can leave the center at full double precision; six digits are
     // enough to tell one view from the next and short enough to read.
     expect(downloadFileName(-0.743643887037151, 0.13182590420533, 2000)).toBe(
-      "mandelbrot_-0.743644_0.131826_2.0Kx.png",
+      "mandelbrot_-0.743644_0.131826_2000x.png",
     );
   });
 

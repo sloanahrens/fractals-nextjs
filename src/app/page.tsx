@@ -112,6 +112,17 @@ export default function Home() {
     [fractalType, juliaConstant],
   );
 
+  // What to call that fractal out loud. The picker's label is the one the user
+  // read to choose it; the id the choice is keyed by is not a word a listener
+  // wants to hear, and the canvas label is the only description of the picture
+  // a screen reader gets.
+  const fractalLabel = useMemo(
+    () =>
+      FRACTAL_TYPES.find((type) => type.id === fractalType)?.label ??
+      "Mandelbrot",
+    [fractalType],
+  );
+
   const effectiveMaxIterations = autoIterationsOn
     ? autoIterations(zoomLevel)
     : maxIterations;
@@ -501,7 +512,7 @@ export default function Home() {
             <canvas
               ref={canvasRef}
               role="img"
-              aria-label={describeBounds(bounds)}
+              aria-label={describeBounds(bounds, fractalLabel)}
               tabIndex={0}
               onKeyDown={handleCanvasKeyDown}
               className="fractal-canvas border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
