@@ -154,6 +154,38 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-09_
 
+### Manual coordinates say what Apply did (2026-10-09)
+
+- Apply used to swallow both of its failures: a box it could not read was
+  skipped in silence, and a box of another shape than the view was fitted to it
+  with nothing to say so. The panel now shows one short message under the four
+  boxes, in a container of its own so the row below does not move as it comes
+  and goes.
+- `src/lib/manualBounds.ts` holds the half that can be tested without a
+  browser. `readManualCoordinate` reads a box as `Number` rather than
+  `parseFloat`, so `1abc` is no number rather than 1, and `checkManualBounds`
+  answers `{ ok: true, bounds }` or `{ ok: false, messages }`: an unreadable box
+  is reported alone (`Enter all four coordinates as numbers.`, one sentence for
+  the four), and each reversed pair is named separately so a box reversed on
+  both axes is corrected in one pass. `hasBaseAspect` is the other question —
+  is the box 4:3 within `ASPECT_TOLERANCE` (1e-6 relative) — asked by the page,
+  because a box of another shape is fitted rather than refused.
+- A box the user never touched still hands Apply the view's own float64 rather
+  than the six-digit text on screen, which is what the draft pattern is for; the
+  reading moved from `parseFloat` to `readManualCoordinate` and nothing else
+  about a valid apply changed (same centre, same zoom, `wander.notifyActivity()`,
+  and the note cleared). The zoom is still not clamped: a hand-typed box beyond
+  `MAX_ZOOM` applies as it always did.
+- The message clears on typing in any box and on every Apply, and those are its
+  only two triggers: a view that moves underneath an untouched panel leaves the
+  text alone, because the note a successful non-4:3 apply shows would be cleared
+  by the bounds change that apply itself causes.
+- `src/__tests__/manual-coordinates-panel.test.ts` reads `page.tsx` the way the
+  other source-reading tests here do, for the parts a Node suite cannot render:
+  the message sits under the last box and above the Apply button, the refusal
+  branch runs before the setters that move the view, and editing a box clears
+  the message.
+
 ### Saved views belong to their fractal (2026-10-09)
 
 - `FractalPreset` gains two optional fields, `fractal` (a `FRACTAL_TYPES` id)
