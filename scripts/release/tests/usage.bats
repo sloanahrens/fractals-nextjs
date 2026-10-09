@@ -78,9 +78,17 @@ setup() {
   done < <(release_scripts)
 }
 
-@test "the directory holds the scripts of the release flow, the read prod makes of staging, and init_stack.sh" {
+@test "the directory holds the flow's scripts, the landing build, the read prod makes of staging, and init_stack.sh" {
   local got
-  got=$(while read -r script; do printf '%s ' "${script##*/}"; done < <(release_scripts))
+  # Sorted under LC_ALL=C because the order is a character-set question, not a
+  # human one. A glob expands in the shell's collation order, and build_push.sh
+  # and build_push_staging.sh are the one pair in this list that the order
+  # decides: '.' collates before '_' in C, and after it in a UTF-8 locale, so
+  # the same directory lists build_push.sh first in the gate container (no
+  # UTF-8 locale) and build_push_staging.sh first in a developer's shell. The
+  # listing is a set, and naming the order takes the locale out of it (bead
+  # dv-pj9; the landing gate rejected the locale-dependent spelling).
+  got=$(while read -r script; do printf '%s\n' "${script##*/}"; done < <(release_scripts) | LC_ALL=C sort | tr '\n' ' ')
 
-  [ "$got" = 'build_push.sh health.sh init_stack.sh mint_token.sh preview.sh promote.sh staged_digest.sh up.sh ' ]
+  [ "$got" = 'build_push.sh build_push_staging.sh health.sh init_stack.sh mint_token.sh preview.sh promote.sh staged_digest.sh up.sh ' ]
 }

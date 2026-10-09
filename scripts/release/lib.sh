@@ -261,6 +261,26 @@ require_release_tag() {
     die "release tag must look like v1.2.3, got: $tag"
 }
 
+# require_staging_ref REF refuses a ref that looks like a release tag. The
+# landing build (build_push_staging.sh, workflows/staging.yml) publishes what
+# landed on main, and a protected `v*` tag is the release path's ref: a release
+# builds the tag and owns it, so a landing run must not be the thing that builds
+# a commit under a release's name (bead dv-pj9).
+#
+# The check is the tag-shape require_release_tag matches, applied to the last
+# segment of the ref, because the ref arrives in whichever form the caller has
+# it: `refs/heads/main` from a workflow, `main` from a checkout. Matching the
+# shape rather than a `refs/tags/` prefix is the point -- a *branch* named
+# `v1.2.3` is a ref a worker can push, and it is refused here for the same
+# reason `deploy.yml` refuses a run at any ref that is not a protected release
+# tag (docs/design.md, section 6.1; bead dv-csz).
+require_staging_ref() {
+  local ref=${1:-} name
+  name=${ref##*/}
+  [[ $name =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]] || return 0
+  die "ref looks like a release tag, which the release path owns and a landing build must not publish: $ref"
+}
+
 # ──────────────────────────────────────────────────────────────────────────
 # Credentials
 # ──────────────────────────────────────────────────────────────────────────
