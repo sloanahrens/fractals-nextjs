@@ -9,6 +9,7 @@ a Forgejo job running as `gt-cloud` (bead B5.4) and are wired together by
 | Script | Step | What it does |
 |---|---|---|
 | `build_push.sh` | 2 | Builds the app's Dockerfile at the release tag, pushes it, prints `<registry>@sha256:<64hex>` |
+| `build_push_staging.sh` | — | The landing build: builds the commit main is at, pushes it as `<image>:main-<12 hex of the commit>`, prints the digest |
 | `mint_token.sh` | 3 | Mints a one-hour token for the app's deployer SA from the base key |
 | `preview.sh` | 4 | Pins the digest in the stack config and writes the `pulumi preview` diff the release is read from |
 | `up.sh` | 5 | Applies the previewed digest; prints the service URL |
@@ -18,8 +19,32 @@ a Forgejo job running as `gt-cloud` (bead B5.4) and are wired together by
 | `init_stack.sh` | — | Creates an app's stack for one environment, with the project's `gcpkms` secrets provider; idempotent |
 | `lib.sh` | — | The names and rules every script shares; sourced, never run |
 
-`init_stack.sh` is the one script that is not part of a release; it is run once
-per environment, by hand, before the first one (`workflows/README.md`, "The
+`build_push_staging.sh` is `build_push.sh`'s sibling on the other half of the
+model. Staging is deployed on every landing as well as on every release
+(`workflows/staging.yml`): a change someone lands can be watched where it landed
+instead of waiting for the next release. It builds the same app the same way and
+publishes it under a name derived from the commit it built —
+`<image>:main-<first 12 hex characters of HEAD>` — then prints the digest the
+registry hands back, which is what the staging job applies. Between the two, the
+only difference in what is affected is the name the image goes out under, and
+here that name cannot be moved: a landing is published under a name only its own
+commit can have.
+
+Three refusals are the whole of what keeps a landing build from publishing
+something nobody landed: a tree that is not clean, a ref that looks like a
+release tag, and a HEAD that is not on main. The last one matters most, and it is
+why this script has no `--allow-non-checkout`, which `build_push.sh` does have:
+`main` only ever moves through the gated landing worker (the ci gate and `om`
+review), so a commit that is on main is one that passed that gate, and a worker's
+own branch — the one commit a landing run must never publish — is not. The check
+is ancestry and not equality, so a queued run whose main has moved on is still
+buildable; the workflow is what skips that run, and it skips it before the
+checkout (`workflows/README.md`). It reads `origin/main` out of the checkout it
+is given, with plain `git` and no fetch, so the check needs no network beyond the
+checkout itself.
+
+`init_stack.sh` is the one script of the flow that no release runs; it is run
+once per environment, by hand, before the first one (`workflows/README.md`, "The
 first release"). It prints `stack=` and `created=yes|no`, and it exits 0 whether
 it created the stack or found it already there. Under `--dry-run` it prints
 `created=unknown`, which is the honest answer: a dry run does not read the
@@ -71,6 +96,7 @@ workflow can pass whatever is convenient. `--help` prints the full list.
 | Output on stdout | From | Used by |
 |---|---|---|
 | `image=`, `tag=`, `digest=` | `build_push.sh` | the job outputs, and every later step |
+| `image=`, `tag=` (`main-<12 hex>`), `digest=` | `build_push_staging.sh` | the staging job's outputs in `workflows/staging.yml` |
 | `token_file=`, `deployer_sa=` | `mint_token.sh` | `preview.sh`, `up.sh`, `promote.sh` |
 | `preview_file=`, `stack=` | `preview.sh` | the run record's preview attachment |
 | `stack=`, `created=` | `init_stack.sh` | the operator creating the stacks for a first release |
@@ -137,6 +163,12 @@ built from one — and it builds the file. The deploy image installs it
   refuses one that differs from `--staging-digest`. Prod gets the image staging
   proved, and `staged_digest.sh` reads that digest out of the stack's own state
   rather than out of a config file only the job that wrote it has.
+- **Never a commit that did not land.** `build_push_staging.sh` refuses a HEAD
+  that is not on main, and a ref that looks like a release tag, so the landing
+  path publishes what the gate let onto main and nothing else. It is also the one
+  script with no `--allow-non-checkout`: on this path the git checks are not a
+  convenience on top of the build, they are the check, so a source directory
+  without a checkout is refused rather than waived.
 - **Never a digest read out of a job's workspace.** `staged_digest.sh` reads the
   image a stack is running out of `pulumi stack export`, from the state backend,
   not with `pulumi config get imageDigest` — a stack's config is `pulumi config
@@ -241,3 +273,17 @@ Bead dv-yf4, the digest the prod job reads back, is the last:
   to `$GITHUB_OUTPUT`: no service, two services, an image that is a tag, a
   service that records no image, a failed export, and a stack whose committed
   settings lack this project's provider.
+
+Bead dv-pj9, the landing build, is the last:
+
+- `build_push_staging.bats`: the name a landing is published under is the
+  commit's (`main-<12 hex>`), a commit *behind* main builds — the workflow is
+  what skips that run, not this script — a commit main does not carry is refused
+  without a single `docker` call, a release-shaped ref is refused in both the
+  forms it arrives in (`refs/tags/v1.0.0` from a run and the branch
+  `refs/heads/v1.0.0`), a checkout with no `origin/main` or no checkout at all is
+  refused, and a dry run builds nothing while refusing exactly what a real run
+  refuses. Its checkout fixtures are real repositories, so the ancestry check is
+  exercised rather than described: `helpers.bash`'s `point_origin_main` writes
+  the `origin/main` ref the check reads. `secrets.bats` runs this script with the
+  rest.

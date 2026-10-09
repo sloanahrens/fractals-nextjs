@@ -159,6 +159,19 @@ make_checkout() {
   "${git[@]}" tag "$tag"
 }
 
+# point_origin_main DIR [REV] points DIR's origin/main remote-tracking ref at
+# REV, which defaults to HEAD. It is what makes a checkout from make_checkout
+# look like the checkout a landing build runs in: build_push_staging.sh reads
+# refs/remotes/origin/main to check that the commit it is about to publish is one
+# main carries, and a local repository has no such ref until something creates
+# it. No remote is configured, so the ref is written directly rather than
+# fetched.
+point_origin_main() {
+  local dir=$1 rev=${2:-HEAD} sha
+  sha=$(git -C "$dir" rev-parse "$rev")
+  git -c core.hooksPath=/dev/null -C "$dir" update-ref refs/remotes/origin/main "$sha"
+}
+
 # assert_no_key_material TEXT fails when TEXT contains the key tripwire. It is
 # the one assertion the bead names by hand: no script prints the contents of the
 # key file (acceptance 2 of dv-cgu).

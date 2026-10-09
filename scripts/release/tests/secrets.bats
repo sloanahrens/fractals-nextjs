@@ -26,11 +26,17 @@ setup() {
   setup_release_env
   CHECKOUT=$BATS_TEST_TMPDIR/app
   make_checkout "$CHECKOUT" v1.0.0
+  # The landing build reads origin/main to check that the commit it publishes is
+  # one main carries (build_push_staging.sh), so the fixture has to be a
+  # checkout that looks like the one a landing run gets.
+  point_origin_main "$CHECKOUT"
 }
 
 @test "no script prints the contents of the key file" {
   assert_clean "build_push.sh" "$RELEASE_DIR/build_push.sh" \
     --app "$APP" --tag v1.0.0 --source "$CHECKOUT" --token-file "$TOKEN_FILE"
+  assert_clean "build_push_staging.sh" "$RELEASE_DIR/build_push_staging.sh" \
+    --app "$APP" --source "$CHECKOUT" --token-file "$TOKEN_FILE"
   assert_clean "mint_token.sh" "$RELEASE_DIR/mint_token.sh" \
     --app "$APP" --key-file "$KEY_FILE" --token-file "$BATS_TEST_TMPDIR/minted.token"
   assert_clean "preview.sh" "$RELEASE_DIR/preview.sh" \
@@ -50,6 +56,8 @@ setup() {
 @test "no script prints the contents of the key file in a dry run" {
   assert_clean "build_push.sh" "$RELEASE_DIR/build_push.sh" \
     --app "$APP" --tag v1.0.0 --source "$CHECKOUT" --token-file "$TOKEN_FILE" --dry-run
+  assert_clean "build_push_staging.sh" "$RELEASE_DIR/build_push_staging.sh" \
+    --app "$APP" --source "$CHECKOUT" --token-file "$TOKEN_FILE" --dry-run
   assert_clean "mint_token.sh" "$RELEASE_DIR/mint_token.sh" \
     --app "$APP" --key-file "$KEY_FILE" --token-file "$BATS_TEST_TMPDIR/minted.token" --dry-run
   assert_clean "preview.sh" "$RELEASE_DIR/preview.sh" \

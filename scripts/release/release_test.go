@@ -34,9 +34,17 @@ var forbidden = []string{"/Users/" + "sloan", "claude-" + "501"}
 // first release uses them: the one-time stack creation init_stack.sh (bead
 // dv-dw4), then the six steps of the flow, and staged_digest.sh, the read the
 // prod job makes of the staging stack before it promotes (bead dv-yf4).
+//
+// build_push_staging.sh is not one of the flow's steps: it is the landing
+// build, the script workflows/staging.yml runs on every push to main, and it
+// sits beside build_push.sh rather than in the release that script starts (bead
+// dv-pj9). It is on this list because everything here is about being a command
+// in this directory -- present, executable, parsing and clean under shellcheck
+// -- and it is a command.
 var commands = []string{
 	"init_stack.sh",
 	"build_push.sh",
+	"build_push_staging.sh",
 	"mint_token.sh",
 	"preview.sh",
 	"up.sh",
