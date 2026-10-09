@@ -77,7 +77,7 @@ clean:
 	@echo "Build artifacts cleaned"
 
 # ── Gas Town landing gate (no cloud access, no secrets) ──────────────────
-.PHONY: ci-install test presubmit gate
+.PHONY: ci-install test presubmit gate check-staging-url
 
 ci-install:
 	npm ci
@@ -95,10 +95,34 @@ gate: ci-install check build test
 # network. It is deliberately not in `gate`: the gate runs with no network and
 # no deployment to call, and it must keep passing on a machine that has neither.
 # Run by hand against staging, or by the staging workflow after a deploy
-# (`make integration STAGING_URL=<url> EXPECT_SHA=<commit>`); a run without
-# STAGING_URL fails with the command to type.
-integration:
+# (`make integration STAGING_URL=<url> EXPECT_SHA=<commit>`).
+#
+# The target installs its own dependencies (`ci-install`), because the staging
+# workflow checks the repository out fresh and runs this one command: that
+# checkout has no node_modules, and `npm run test:integration` died on
+# `vitest: not found` before it could say anything about the deployment.
+#
+# `check-staging-url` is a prerequisite ahead of the install, so a run that
+# forgot STAGING_URL still fails with the command to type (the message
+# src/lib/integrationTarget.ts gives) in a second, rather than after npm ci.
+integration: check-staging-url ci-install
 	npm run test:integration
+
+# The same message integrationTarget.ts gives for a missing STAGING_URL. It is
+# written out twice on purpose: this one has to answer before node_modules
+# exists, so it cannot come from the TypeScript. `make-targets.test.ts` fails
+# if the two stop naming different commands.
+check-staging-url:
+	@if [ -z "$(STAGING_URL)" ]; then \
+		echo "STAGING_URL is not set."; \
+		echo ""; \
+		echo "Set STAGING_URL to the deployment to test, for example:"; \
+		echo "  make integration STAGING_URL=https://fractals-nextjs-staging-example.run.app"; \
+		echo "  STAGING_URL=https://... npm run test:integration"; \
+		echo ""; \
+		echo "EXPECT_SHA=<commit> is optional, and makes the version check exact."; \
+		exit 1; \
+	fi
 
 # ── The deploy program (deploy/, a Go module of its own) ──────────────────
 # The Pulumi program the release flow runs, and the mock test that covers it
