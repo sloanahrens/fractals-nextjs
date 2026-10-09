@@ -85,6 +85,62 @@ describe("resolveFractalKind", () => {
       );
     }
   });
+
+  it("draws a custom constant as the point it names", () => {
+    // The custom spelling of the Classic constant beside the named one: the
+    // same picture twice, which is what says the name is read as its numbers
+    // rather than matched as a label. Judged on the counts, so the kind is
+    // compared on what it draws and not on how it was built.
+    const custom = resolveFractalKind("julia", "custom:-0.8,0.156");
+    const named = resolveFractalKind("julia", JULIA_CONSTANTS[0].name);
+    const points = sampledPoints();
+
+    for (const point of points) {
+      expect(custom.iterations(point, CAP, true)).toBe(
+        named.iterations(point, CAP, true),
+      );
+      expect(custom.iterations(point, CAP, false)).toBe(
+        named.iterations(point, CAP, false),
+      );
+    }
+  });
+
+  it("draws a custom constant that is no named one at all", () => {
+    // A point none of the four constants is, so a fallback would show up as
+    // different counts rather than as the same picture by coincidence.
+    const custom = resolveFractalKind("julia", "custom:0.285,0.01");
+    const expected = createJuliaKind({ real: 0.285, imaginary: 0.01 });
+    const points = sampledPoints();
+
+    for (const point of points) {
+      expect(custom.iterations(point, CAP, true)).toBe(
+        expected.iterations(point, CAP, true),
+      );
+    }
+  });
+
+  it("falls back to the first constant for a custom name it cannot read", () => {
+    // A name written in a way that is not a point is no more readable than a
+    // name this build has never heard of: both leave the canvas showing the
+    // first constant rather than a blank one.
+    const expected = createJuliaKind(JULIA_CONSTANTS[0].constant);
+    const points = sampledPoints();
+
+    for (const name of [
+      "custom:0.5,0.5x",
+      "custom:9,9",
+      "custom:",
+      "Custom:0,0",
+    ]) {
+      const resolved = resolveFractalKind("julia", name);
+
+      for (const point of points) {
+        expect(resolved.iterations(point, CAP, true), name).toBe(
+          expected.iterations(point, CAP, true),
+        );
+      }
+    }
+  });
 });
 
 describe("defaultViewFor", () => {

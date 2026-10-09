@@ -1,6 +1,6 @@
 import { FractalBounds, ColorScheme } from "../types/fractal";
 import { FRACTAL_TYPES } from "./fractalTypes";
-import { JULIA_CONSTANTS } from "./julia";
+import { JULIA_CONSTANTS, isJuliaConstantName } from "./julia";
 import { boundsToView } from "./mandelbrot";
 
 export interface FractalPreset {
@@ -342,17 +342,18 @@ export function presetFractalFields(
 /**
  * The Julia constant a view names.
  *
- * A preset that names a constant this build no longer offers cannot be loaded
- * as written: the picker would sit on a name it has no option for. The first
- * constant is what `resolveFractalKind` draws for such a name, so naming it
- * here keeps the select and the canvas describing the same picture.
+ * A preset that names a constant this build cannot read cannot be loaded as
+ * written: the picker would sit on a name it has no option for. A custom name
+ * is read on its own terms rather than looked up, because it is a point rather
+ * than one of the four; only a name that is neither keeps the view from being
+ * loaded. The first constant is what `resolveFractalKind` draws for such a
+ * name, so naming it here keeps the select and the canvas describing the same
+ * picture.
  */
 export function presetJuliaConstant(preset: FractalPreset): string {
-  const named = JULIA_CONSTANTS.some(
-    (constant) => constant.name === preset.juliaConstant,
-  );
-
-  return named ? (preset.juliaConstant as string) : JULIA_CONSTANTS[0].name;
+  return isJuliaConstantName(preset.juliaConstant)
+    ? preset.juliaConstant
+    : JULIA_CONSTANTS[0].name;
 }
 
 // Custom presets live in localStorage: an external store that the components

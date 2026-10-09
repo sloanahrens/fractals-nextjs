@@ -15,7 +15,9 @@
  *
  * `v` is the version, so a link from a build that means something else by these
  * keys is refused rather than half-read. `f` names the fractal and `k`, written
- * only beside a Julia fractal, names its constant. `x` and `y` are the centre,
+ * only beside a Julia fractal, names its constant — one of the four the picker
+ * offers, or a custom name that is a point of the plane written out (see
+ * `julia.ts`). `x` and `y` are the centre,
  * `z` the zoom, `s` the colour scheme — colour is part of the picture, so all
  * five travel — `i` the iteration setting, `auto` or the count when the slider
  * is in charge, and `w`/`h` the canvas size as a pair. Short keys, because a
@@ -39,7 +41,7 @@
 import type { ColorScheme } from "../types/fractal";
 import { getAvailableColorSchemes } from "./colorMapping";
 import { FRACTAL_TYPES } from "./fractalTypes";
-import { JULIA_CONSTANTS } from "./julia";
+import { isJuliaConstantName } from "./julia";
 import {
   ITERATION_STEP,
   MAX_ITERATIONS,
@@ -57,7 +59,8 @@ export interface ViewLinkState {
   /** Id of the fractal drawn, from {@link FRACTAL_TYPES} */
   fractalType: string;
   /**
-   * Name of the Julia constant, from {@link JULIA_CONSTANTS}.
+   * Name of the Julia constant: one of the named four, or a custom name that
+   * spells out a point (`julia.ts` has both spellings).
    *
    * Written only beside a Julia fractal, because the fractal and its constant
    * are one choice; a state that names a constant for another fractal is not
@@ -190,12 +193,9 @@ function fractalNamed(id: string | null | undefined): string | null {
   return id != null && FRACTAL_TYPES.some((type) => type.id === id) ? id : null;
 }
 
-/** A Julia constant name this build offers, or null. */
+/** A Julia constant name this build reads, or null. */
 function constantNamed(name: string | null | undefined): string | null {
-  return name != null &&
-    JULIA_CONSTANTS.some((constant) => constant.name === name)
-    ? name
-    : null;
+  return isJuliaConstantName(name) ? name : null;
 }
 
 /** A colour scheme this build draws in, or null. */

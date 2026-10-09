@@ -1,6 +1,6 @@
 import type { FractalKind } from "../types/fractal";
 import { burningShipKind } from "./burningShip";
-import { JULIA_CONSTANTS, createJuliaKind } from "./julia";
+import { JULIA_CONSTANTS, createJuliaKind, parseJuliaConstant } from "./julia";
 import { mandelbrotKind } from "./mandelbrot";
 
 /**
@@ -29,9 +29,10 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
  *
  * The picker names a fractal and the renderer wants a {@link FractalKind}. For
  * the Mandelbrot set and the Burning Ship those are the same thing. Julia is a
- * family rather than a picture, so the choice carries a constant as well, and
- * a name this build does not know falls back to the first constant instead of
- * to a blank canvas.
+ * family rather than a picture, so the choice carries a constant as well — one
+ * of the named four, or a custom spelling of any other point — and a name this
+ * build cannot read falls back to the first named constant instead of to a
+ * blank canvas.
  * @param typeId - Id of the fractal the picker selected
  * @param juliaConstantName - Name of the Julia constant; ignored unless typeId is "julia"
  * @returns The kind to draw
@@ -43,11 +44,9 @@ export function resolveFractalKind(
   if (typeId === "burning-ship") return burningShipKind;
   if (typeId !== "julia") return mandelbrotKind;
 
-  const named = JULIA_CONSTANTS.find(
-    (constant) => constant.name === juliaConstantName,
-  );
+  const constant = parseJuliaConstant(juliaConstantName);
 
-  return createJuliaKind(named?.constant ?? JULIA_CONSTANTS[0].constant);
+  return createJuliaKind(constant ?? JULIA_CONSTANTS[0].constant);
 }
 
 /** Where a fractal's default view sits, in the plane and in zoom. */
