@@ -67,12 +67,12 @@ import {
   hasBaseAspect,
   readManualCoordinate,
 } from "../lib/manualBounds";
-import { decodeView, encodeView } from "../lib/viewLink";
+import { encodeView } from "../lib/viewLink";
 import {
   DEFAULT_VIEW_LINK_UPDATES,
   linkWriteDelayMs,
   shouldWriteLink,
-  viewLinkToUpdates,
+  viewLinkUpdatesFrom,
 } from "../lib/viewLinkState";
 import { Slider } from "../components/ui/Slider";
 import { Checkbox } from "../components/ui/Checkbox";
@@ -463,6 +463,34 @@ export default function Home() {
     };
   }, [wander]);
 
+  // Putting a fragment into effect is one path, taken by both the read at mount
+  // and the read on every later change of the fragment. It moves the view
+  // through the same setters every control uses, so the canvas, the sliders and
+  // the manual coordinate boxes move to the link's view together. The
+  // coordinate boxes need no attention here: they resync on the bounds the
+  // setters produce, like they do for a preset or a Reset View.
+  const applyViewLink = useCallback(
+    (fragment: string) => {
+      const updates = viewLinkUpdatesFrom(fragment);
+
+      setFractalType(updates.fractalType);
+      setJuliaConstant(updates.juliaConstant);
+      setCenterX(updates.centerX);
+      setCenterY(updates.centerY);
+      setZoomLevel(updates.zoomLevel);
+      setColorScheme(updates.colorScheme);
+      setAutoIterationsOn(updates.autoIterationsOn);
+      setMaxIterations(updates.maxIterations);
+      setCanvasWidth(updates.canvasWidth);
+      setCanvasHeight(updates.canvasHeight);
+      // Settings, not views, are what a preset names: a link is a view, so no
+      // preset is selected in the page it opens.
+      setCurrentPreset("");
+      wander.notifyActivity();
+    },
+    [wander],
+  );
+
   // A link is read once, after mount. It is read from the fragment in an effect
   // rather than during render because the first markup is the server's and has
   // no fragment in it; reading `window` while rendering would be a difference
@@ -474,27 +502,32 @@ export default function Home() {
     if (linkAppliedRef.current) return;
     linkAppliedRef.current = true;
 
-    const updates = viewLinkToUpdates(decodeView(window.location.hash));
+    applyViewLink(window.location.hash);
+  }, [applyViewLink]);
 
-    // The same setters every control uses, so the canvas, the sliders and the
-    // manual coordinate boxes move to the link's view together. The coordinate
-    // boxes need no attention here: they resync on the bounds the setters
-    // produce, like they do for a preset or a Reset View.
-    setFractalType(updates.fractalType);
-    setJuliaConstant(updates.juliaConstant);
-    setCenterX(updates.centerX);
-    setCenterY(updates.centerY);
-    setZoomLevel(updates.zoomLevel);
-    setColorScheme(updates.colorScheme);
-    setAutoIterationsOn(updates.autoIterationsOn);
-    setMaxIterations(updates.maxIterations);
-    setCanvasWidth(updates.canvasWidth);
-    setCanvasHeight(updates.canvasHeight);
-    // Settings, not views, are what a preset names: a link is a view, so no
-    // preset is selected in the page it opens.
-    setCurrentPreset("");
-    wander.notifyActivity();
-  }, [wander]);
+  // A fragment can also arrive at a page that is already open — a link pasted
+  // into the address bar, or a same-document link followed to a different
+  // fragment — and neither reloads the document, so the mount effect above
+  // never sees it. This event is the only notice, and without it the page keeps
+  // the view it has and the next settled render writes that view back over the
+  // fragment that was pasted.
+  //
+  // The fragment is read exactly as a load reads one, `viewLinkUpdatesFrom`,
+  // which is the documented answer for a fragment this build cannot read in
+  // full: what it carries is applied and the page's opening view stands for the
+  // rest, rather than the fragment being ignored and the bar left describing a
+  // picture that is not on screen.
+  //
+  // The address-bar follower cannot feed this: it moves the bar with
+  // `history.replaceState`, which fires no `hashchange`, so the only events
+  // here are the user's own.
+  useEffect(() => {
+    const handleHashChange = () => applyViewLink(window.location.hash);
+
+    window.addEventListener("hashchange", handleHashChange);
+
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [applyViewLink]);
 
   // The view as a link, rebuilt whenever anything a link carries moves. Both
   // halves of the feature read it: the effect below writes it to the address

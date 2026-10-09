@@ -1,12 +1,14 @@
 /**
  * What the page makes of a link, and when it writes the address bar
  *
- * Two halves of the share feature that have nothing to do with the DOM: the
- * mapping from a decoded link to the page's state, and the throttle that keeps
- * a gesture from rewriting the URL on every settled view. Both are pure, so
- * both are driven here; the effect that reads the fragment at mount and the
- * button that copies the URL are left to the page's own source-reading test,
- * because Node has no window to give them.
+ * Two halves of the share feature that have nothing to do with the DOM: what a
+ * fragment means for the page's state — both when the page loads with one and
+ * when one arrives afterwards, since `viewLinkUpdatesFrom` is the one answer to
+ * both — and the throttle that keeps a gesture from rewriting the URL on every
+ * settled view. Both are pure, so both are driven here; the effects that read
+ * the fragment at mount and on `hashchange`, and the button that copies the
+ * URL, are left to the page's own source-reading test, because Node has no
+ * window to give them.
  */
 import { describe, expect, it } from "vitest";
 
@@ -19,6 +21,7 @@ import {
   linkWriteDelayMs,
   shouldWriteLink,
   viewLinkToUpdates,
+  viewLinkUpdatesFrom,
 } from "../viewLinkState";
 
 /** The example link the feature is described with. */
@@ -157,6 +160,40 @@ describe("viewLinkToUpdates", () => {
     expect(
       encodeView({ ...state, ...viewLinkToUpdates(decodeView(link)) }),
     ).toBe(link);
+  });
+});
+
+describe("viewLinkUpdatesFrom", () => {
+  it("reads a fragment with its `#`, which is how a paste arrives", () => {
+    // The mount read and the hashchange read both pass `window.location.hash`,
+    // which keeps the leading `#` the codec's Copy link output does not carry.
+    // The link has to mean the same view either way.
+    const expected = viewLinkUpdatesFrom(EXAMPLE_LINK);
+
+    expect(expected.fractalType).toBe("julia");
+    expect(expected.centerX).toBe(-0.644);
+    expect(expected.zoomLevel).toBe(2.56);
+    expect(viewLinkUpdatesFrom(EXAMPLE_LINK.slice(1))).toEqual(expected);
+  });
+
+  it("settles on the view the URL describes when it cannot be read in full", () => {
+    // The documented answer for a fragment this build cannot read in full:
+    // nothing is refused and nothing is half-applied, so the fields it does
+    // carry are applied and the page's opening view stands for the rest. The
+    // follower then writes that view back, which is what leaves the bar and the
+    // canvas agreeing.
+    const partial = viewLinkUpdatesFrom("#v=1&x=0.25&s=nonsense&z=typo");
+
+    expect(partial.centerX).toBe(0.25);
+    expect(partial.colorScheme).toBe(DEFAULT_VIEW_LINK_UPDATES.colorScheme);
+    expect(partial.zoomLevel).toBe(DEFAULT_VIEW_LINK_UPDATES.zoomLevel);
+
+    // A fragment that names no field this build reads at all — another
+    // version, or something that is not a link — means the page's opening
+    // view, exactly as an empty address bar does.
+    for (const fragment of ["#v=2&x=0.25&z=8", "#", "not a link at all"]) {
+      expect(viewLinkUpdatesFrom(fragment)).toEqual(DEFAULT_VIEW_LINK_UPDATES);
+    }
   });
 });
 
