@@ -52,6 +52,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Containerized Deployment**: Docker-based deployment with multi-stage builds
 - **Deploy Contract**: Root `Dockerfile`, server on `$PORT` (8080), `/api/health` route for probes
 - **Quality Gate**: `make gate` runs install, lint, typecheck, build and the test suite
+- **Integration Tier**: `make integration STAGING_URL=<url>` checks a deployment that is already up (see [Integration Tests](#integration-tests))
 - **ESLint + TypeScript**: `make check` runs ESLint and `tsc --noEmit`
 
 ## Technology Stack
@@ -60,7 +61,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **UI**: [React 19](https://react.dev/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **Tests**: [Vitest](https://vitest.dev/) (`make test`)
+- **Tests**: [Vitest](https://vitest.dev/) (`make test`), plus an integration tier against a deployed app (`make integration STAGING_URL=<url>`)
 - **Performance**: Optimized Canvas API rendering
 
 ## Getting Started
@@ -111,6 +112,56 @@ docker run --rm -p 8080:8080 fractals-nextjs:latest
 
 The production container will be available at [http://localhost:8080](http://localhost:8080).
 
+## Integration Tests
+
+`make test` is the unit suite: it covers the pure logic in `src/lib` and the
+routes, and it never leaves this machine. The integration tier is the other
+half. It calls a deployment that is already up — staging, or a container on
+`localhost` — over the network, so it is deliberately not part of `make gate` or
+`npm test`, which have to keep passing with no network at all.
+
+```bash
+# By hand, against staging:
+make integration STAGING_URL=https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app
+
+# Or with npm, which is what the `make` target runs:
+STAGING_URL=https://... npm run test:integration
+
+# Against a container of your own, or a check of a specific commit:
+docker run --rm -p 8080:8080 fractals-nextjs:latest
+make integration STAGING_URL=http://localhost:8080 EXPECT_SHA=abc1234
+```
+
+Two environment variables, and no others:
+
+- **`STAGING_URL`** (required) — the deployment to test. There is no default:
+  the tier has nothing to call without it, and a run without it fails with the
+  command to type. A trailing slash is fine.
+- **`EXPECT_SHA`** (optional) — the commit the deployment should be serving.
+  When it is set, `/api/version` must report exactly it, which is what makes the
+  tier evidence that the commit just built is the commit live. Without it, the
+  check only asks that the endpoint answers with a `commit` field at all.
+
+Four checks, one `GET` each, read-only, 15 s per request and one retry:
+
+- `GET /api/health` is 200 and `{"status":"healthy"}`.
+- `GET /` is 200 and carries the `<h1>Fractal Explorer</h1>` and the document
+  title `Next Fractals - Interactive Fractal Explorer`.
+- `GET /api/version` is 200 JSON with a `commit` field, equal to `EXPECT_SHA`
+  when that is set.
+- `GET /fractal-preview.png` is 200 and a PNG. It is the social preview
+  `src/app/layout.tsx` points its metadata at, so it is a static asset the page
+  needs, and it is served out of `public/` by the `Dockerfile`.
+
+What no check here asserts is anything that changes between deployments: not
+what the canvas draws, not the fractal list, not the version footer's wording.
+The tier answers "is the commit we just built the app that is answering, and are
+its four endpoints up", and a browser smoke test is a later tier of its own.
+
+The staging workflow runs `make integration STAGING_URL=<url> EXPECT_SHA=<commit>`
+after it rolls staging onto a landing's commit, once that wiring lands on the
+devops side; nothing in this repository's workflows runs it today.
+
 ## Usage
 
 ### Basic Navigation
@@ -154,13 +205,15 @@ The production container will be available at [http://localhost:8080](http://loc
 │   │   ├── presets.ts          # Built-in and saved presets
 │   │   ├── renderQuality.ts    # Preview vs full-resolution decisions
 │   │   └── zoomPan.ts          # Zoom and pan manager
-│   ├── __tests__/          # Test for the health route
+│   ├── __tests__/          # Tests for the routes
 │   └── types/              # TypeScript type definitions
+├── tests/integration/      # Integration tier: checks against a deployed app
 ├── Dockerfile              # Multi-stage container build
-├── Makefile                # install, dev, build, check, test, gate, docker-*
+├── Makefile                # install, dev, build, check, test, integration, gate, docker-*
 ├── next.config.js          # Next.js configuration
 ├── package.json            # Scripts and dependencies
-├── vitest.config.mts       # Vitest configuration
+├── vitest.config.mts       # Vitest configuration (the unit suite)
+├── vitest.integration.config.mts # Vitest configuration (the integration tier)
 └── tailwind.config.js      # Tailwind configuration
 ```
 

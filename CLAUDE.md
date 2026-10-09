@@ -24,6 +24,9 @@ npx tsc --noEmit
 # Unit tests (Vitest, node environment, no browser or network)
 npm test
 
+# Integration tier: checks a deployed app over the network (needs STAGING_URL)
+make integration STAGING_URL=https://... EXPECT_SHA=<commit>
+
 # Run the gate's checks in a container (`make test-docker` runs this)
 docker run --rm -v $(pwd):/app -w /app node:20-alpine sh -c "npm ci && npm run build && npm run lint && npx tsc --noEmit"
 
@@ -92,6 +95,15 @@ ESLint for code quality and Vitest for unit tests. Tests live in
 `/api/health` route; `vitest.config.mts` aliases `@/*` to `src/*` and pins the
 node environment, so a test must not need a browser, canvas or network.
 
+The integration tier is separate on purpose. `tests/integration/**` calls a
+deployed app and runs under `vitest.integration.config.mts` via
+`make integration STAGING_URL=<url> [EXPECT_SHA=<commit>]` (or
+`npm run test:integration`). Neither config sees the other's tests, so `npm
+test` cannot reach the network and the tier cannot run without a deployment to
+call. `src/lib/integrationTarget.ts` reads the two variables and builds the
+URLs, and it is unit-tested in the gate. See the README's Integration Tests
+section for what each check asserts.
+
 The landing gate (`.forgejo/workflows/gate.yml`) runs `make gate` on a
 `land/**` branch, and that is the whole of what CI runs here:
 
@@ -137,6 +149,29 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-08_
+
+### Integration tier (2026-10-08)
+
+- Added `tests/integration/`, the checks that call a deployed app rather than
+  the route handlers directly: `/api/health`, `/` (its `<h1>` and document
+  title), `/api/version` (its `commit`, and equality with `EXPECT_SHA` when that
+  is set) and `/fractal-preview.png`, the social preview `src/app/layout.tsx`
+  points its metadata at. What they need is a deployment, so the staging
+  workflow can run `make integration STAGING_URL=<url> EXPECT_SHA=<commit>`
+  after it rolls staging onto a commit; that wiring is the devops side's
+  (dv-sdpq), and nothing in this repository runs the tier today.
+- It is a second vitest config, `vitest.integration.config.mts` over
+  `tests/integration/**`, rather than a directory inside the gate's config:
+  `make gate` and `npm test` must pass with no network, and neither config's
+  `include` can see the other's tests. `make integration` and
+  `npm run test:integration` run it, and both fail with the command to type when
+  `STAGING_URL` is unset.
+- `src/lib/integrationTarget.ts` is the tier's whole environment: an http(s)
+  `STAGING_URL` with no default, an optional `EXPECT_SHA`, and the request URL
+  builder, unit-tested in the gate. `REQUEST_TIMEOUT_MS` (15 s) lives there too,
+  and the config raises vitest's 5 s test timeout past the two attempts one
+  request gets — the attempt and its single retry — because a slow deployment is
+  not a hung test.
 
 ### Which build is running (2026-10-08)
 
