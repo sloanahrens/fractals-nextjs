@@ -1,4 +1,4 @@
-.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker deploy-check
+.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration deploy-check
 
 # Default target
 help:
@@ -18,6 +18,9 @@ help:
 	@echo "  make typecheck     Run TypeScript type checking"
 	@echo "  make test          Run the Vitest suite"
 	@echo "  make check         Run all quality checks (lint + typecheck)"
+	@echo ""
+	@echo "Integration (calls a deployed app over the network; not part of the gate):"
+	@echo "  make integration STAGING_URL=<url> [EXPECT_SHA=<commit>]"
 	@echo ""
 	@echo "Deploy:"
 	@echo "  make deploy-check  Test and vet the deploy program (deploy/, Go)"
@@ -86,6 +89,16 @@ test:
 presubmit: check
 
 gate: ci-install check build test
+
+# ── Integration tier (the deployed app) ─────────────────────────────────
+# The checks that call a deployed app, and the one suite here that needs the
+# network. It is deliberately not in `gate`: the gate runs with no network and
+# no deployment to call, and it must keep passing on a machine that has neither.
+# Run by hand against staging, or by the staging workflow after a deploy
+# (`make integration STAGING_URL=<url> EXPECT_SHA=<commit>`); a run without
+# STAGING_URL fails with the command to type.
+integration:
+	npm run test:integration
 
 # ── The deploy program (deploy/, a Go module of its own) ──────────────────
 # The Pulumi program the release flow runs, and the mock test that covers it
