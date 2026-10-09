@@ -1,16 +1,21 @@
 #!/usr/bin/env bats
 #
-# The deploy time a release records (bead dv-bte): up.sh and promote.sh write
-# the stack's `deployedAt` config just before they apply, so a deployed app can
-# show a truthful "deployed <time>".
+# What a release does when it applies a digest, and the deploy time it records
+# (beads dv-bte and dv-iuqp): up.sh and promote.sh compare the digest they are
+# about to apply with the image the live stack runs, read out of `pulumi stack
+# export` -- the same read staged_digest.sh makes (staged_digest.bats).
 #
-# The tests are about when it is written and when it is not. The bead's whole
-# point is that a timestamp is a claim: an apply that changes nothing creates no
-# new Cloud Run revision, so it must not stamp a new deployment on the app
-# either. So the scripts compare the digest they are about to apply with the
-# image the live stack runs, read out of `pulumi stack export` -- the same read
-# staged_digest.sh makes (staged_digest.bats) -- and set deployedAt only when
-# the two differ. A first apply, where the stack holds no service, sets it.
+# When the two differ the release writes the stack's `deployedAt` config and
+# applies the digest, so a deployed app can show a truthful "deployed <time>"
+# (dv-bte). When they are equal it applies nothing at all, and writes no
+# deployedAt either (dv-iuqp). dv-bte's point is that a timestamp is a claim: an
+# apply that changes nothing creates no new Cloud Run revision, so it must not
+# stamp a new deployment on the app. dv-iuqp is the other half of it: the only
+# way a release keeps that promise is by not applying, because the deployedAt it
+# would write lives in this job's stack config alone (dv-yf4) -- so the apply
+# renders a container spec with no DEPLOYED_AT in it, which differs from the
+# revision Cloud Run runs, creates exactly the revision dv-bte exists to
+# prevent, and drops the deploy time the app was showing.
 #
 # The other half is where the value comes from: the script's own clock, never an
 # argument or an environment variable. `date` is on the fake PATH with the rest
@@ -22,12 +27,6 @@ load helpers.bash
 
 setup() {
   setup_release_env
-
-  # The image the stack was running before this release. The fake's export
-  # fixture records $DIGEST, so pointing it at this digest is what makes the
-  # apply a change; a test that does not point it there is the no-op case.
-  PREVIOUS_DIGEST="$IMAGE@sha256:$(printf 'ab%.0s' {1..32})"
-  export PREVIOUS_DIGEST
 }
 
 # set_export writes a stack export from stdin into the bats temporary directory
@@ -94,18 +93,28 @@ assert_deployed_at_set() {
   assert_deployed_at_set staging
 }
 
-@test "up leaves an existing deployedAt alone when the stack already runs the digest" {
+@test "up applies nothing when the stack already runs the digest" {
   # The fake's built-in export records $DIGEST, which is what up.sh is applying:
-  # this apply changes no image, so it is not a deployment.
+  # there is no image to change and so no deployment to make. The release skips
+  # the apply, which is the one way to be sure it creates no new revision: an
+  # apply here would render the container spec this job's config can produce,
+  # which has no deployedAt in it -- the key does not survive from job to job
+  # (dv-yf4) -- and Cloud Run would create a revision for the difference, taking
+  # the app's deploy time with it (bead dv-iuqp).
   run "$RELEASE_DIR/up.sh" --app "$APP" --project "$PROJECT" --digest "$DIGEST" --token-file "$TOKEN_FILE"
 
   [ "$status" -eq 0 ]
   # Without this the test would pass for a script that never looked at all.
   assert_in_log "pulumi stack export --stack staging --cwd $STACK_DIR"
+  [[ $output == *"nothing to apply: the staging stack already runs $DIGEST"* ]]
+  # No apply reached the fake, so no new revision was made; and no deploy time
+  # was written, because this release is not a deployment.
+  refute_in_log '^pulumi up '
   refute_in_log 'config set deployedAt'
-  [[ $output == *"deployedAt unchanged"* ]]
-  # The apply still ran: the app is deployed, it just is not a new deployment.
-  assert_in_log "pulumi up --yes --skip-preview --stack staging --cwd $STACK_DIR"
+  # The digest is still pinned and the URL still printed: the stack's config
+  # goes on naming the image it runs, and health.sh has a service to check.
+  assert_in_log "pulumi config set imageDigest $DIGEST --stack staging --cwd $STACK_DIR --plaintext"
+  [[ $output == *"url=$FAKE_SERVICE_URL"* ]]
 }
 
 @test "up sets deployedAt on a first apply, when the stack has applied no service" {
@@ -176,13 +185,17 @@ JSON
   assert_deployed_at_set prod
 }
 
-@test "promote leaves an existing deployedAt alone when prod already runs the digest" {
+@test "promote applies nothing when prod already runs the digest" {
+  # A promotion of the digest prod already runs: no image changes, so nothing is
+  # promoted and nothing is applied (bead dv-iuqp; the same reasoning as up's).
   run "$RELEASE_DIR/promote.sh" "$DIGEST" --app "$APP" --project "$PROJECT" --token-file "$TOKEN_FILE"
 
   [ "$status" -eq 0 ]
   assert_in_log "pulumi stack export --stack prod --cwd $STACK_DIR"
+  [[ $output == *"nothing to apply: the prod stack already runs $DIGEST"* ]]
+  refute_in_log '^pulumi up '
   refute_in_log 'config set deployedAt'
-  [[ $output == *"deployedAt unchanged"* ]]
+  [[ $output == *"url=$FAKE_SERVICE_URL"* ]]
 }
 
 @test "promote refuses a clock that is not an RFC 3339 UTC timestamp" {
@@ -197,16 +210,21 @@ JSON
   refute_in_log '^pulumi up '
 }
 
-@test "a dry run reads no state and plans no deployedAt set" {
+@test "a dry run reads no state and plans both halves of the decision" {
   run "$RELEASE_DIR/up.sh" --app "$APP" --digest "$DIGEST" --token-file "$TOKEN_FILE" --dry-run
   [ "$status" -eq 0 ]
   [[ $output == *"would set deployedAt"* ]]
+  [[ $output == *"only, if the image the staging stack runs differs"* ]]
+  [[ $output == *"[dry-run] pulumi up --yes --skip-preview"* ]]
 
   run "$RELEASE_DIR/promote.sh" "$DIGEST" --app "$APP" --token-file "$TOKEN_FILE" --dry-run
   [ "$status" -eq 0 ]
   [[ $output == *"would set deployedAt"* ]]
+  [[ $output == *"only, if the image the prod stack runs differs"* ]]
+  [[ $output == *"[dry-run] pulumi up --yes --skip-preview"* ]]
 
-  # A dry run reads nothing, so it cannot know whether the image changes and it
-  # plans no config set: nothing reached the fake tools at all.
+  # A dry run reads nothing, so it cannot know which branch a real run would
+  # take: it prints the deploy time and the apply that branch would make, and
+  # reaches no tool at all.
   [ ! -s "$FAKE_LOG" ]
 }

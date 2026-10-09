@@ -113,6 +113,15 @@ setup_release_env() {
   DIGEST="$IMAGE@sha256:$DIGEST_HEX"
   export APP PROJECT IMAGE DIGEST
 
+  # PREVIOUS_DIGEST is a second well-formed digest: the image a stack was
+  # running before the release a test is about. The pulumi fake's export fixture
+  # records $DIGEST -- the image that builds -- so a test that wants the release
+  # to be a change points FAKE_PULUMI_EXPORT_IMAGE at this one, and a test that
+  # leaves the fixture alone is the release whose digest the stack already runs,
+  # which applies nothing (deployed_at.bats, bead dv-iuqp).
+  PREVIOUS_DIGEST="$IMAGE@sha256:$(printf 'ab%.0s' {1..32})"
+  export PREVIOUS_DIGEST
+
   # The scripts read their inputs from GT_* variables and flags, never from bare
   # APP/PROJECT names, so that a stray variable in a runner cannot change what a
   # release deploys. The tests set the GT_* spellings for the scripts.

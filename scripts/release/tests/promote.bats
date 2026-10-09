@@ -71,6 +71,11 @@ setup() {
 }
 
 @test "promote deploys the digest to prod and rebuilds nothing" {
+  # Another image in the fixture than the one being promoted, so this is a
+  # promotion that changes what prod runs and not the apply-nothing case
+  # (deployed_at.bats).
+  export FAKE_PULUMI_EXPORT_IMAGE="$PREVIOUS_DIGEST"
+
   run "$RELEASE_DIR/promote.sh" "$IMAGE@sha256:$DIGEST_HEX" --app "$APP" --project "$PROJECT" --token-file "$TOKEN_FILE" --init-stack
 
   [ "$status" -eq 0 ]
