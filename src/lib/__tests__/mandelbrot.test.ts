@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ComplexNumber } from "../../types/fractal";
 import {
   ITERATION_STEP,
   MAX_ITERATIONS,
@@ -12,6 +13,7 @@ import {
   clampZoom,
   complexToPixel,
   getDefaultBounds,
+  isInMainBulbs,
   mandelbrotIterations,
   mandelbrotKind,
   pixelToComplex,
@@ -73,6 +75,123 @@ describe("smoothMandelbrotIterations", () => {
     expect(smooth).toBeLessThan(5);
     expect(smooth).toBeCloseTo(4.2717, 3);
     expect(Number.isInteger(smooth)).toBe(false);
+  });
+});
+
+describe("isInMainBulbs", () => {
+  it("recognises points in the cardioid and the bulb", () => {
+    for (const c of [
+      { real: 0, imaginary: 0 },
+      { real: -1, imaginary: 0 },
+      { real: 0.2, imaginary: 0.2 },
+      { real: -1.05, imaginary: 0.1 },
+    ]) {
+      expect(isInMainBulbs(c)).toBe(true);
+    }
+  });
+
+  it("leaves the boundaries and the outside to the loop", () => {
+    // 0.25 is the cardioid's cusp and -0.75 is where the bulb meets it, so
+    // both sit exactly on an edge; the inequalities are strict in order to
+    // leave them, and every other point outside, to the full orbit.
+    for (const c of [
+      { real: 0.3, imaginary: 0.5 },
+      { real: -2, imaginary: 0 },
+      { real: 0.25, imaginary: 0 },
+      { real: -0.75, imaginary: 0 },
+      { real: 1, imaginary: 1 },
+    ]) {
+      expect(isInMainBulbs(c)).toBe(false);
+    }
+  });
+});
+
+/** The orbit the shortcut skips, written out here so the comparison below is
+ * against the formula rather than against the code the shortcut lives in. */
+function plainIterations(
+  c: ComplexNumber,
+  maxIterations: number,
+  smooth: boolean,
+): number {
+  let real = 0;
+  let imaginary = 0;
+
+  for (let iterations = 0; iterations < maxIterations; iterations++) {
+    const squaredReal = real * real - imaginary * imaginary;
+    const squaredImaginary = 2 * real * imaginary;
+    real = squaredReal + c.real;
+    imaginary = squaredImaginary + c.imaginary;
+
+    const magnitudeSquared = real * real + imaginary * imaginary;
+    if (magnitudeSquared > 4) {
+      if (!smooth) {
+        return iterations;
+      }
+
+      return iterations + 1 - Math.log2(Math.log2(Math.sqrt(magnitudeSquared)));
+    }
+  }
+
+  return maxIterations;
+}
+
+describe("the interior shortcut", () => {
+  it("changes no count on a grid covering the set and the outside", () => {
+    // The pixels the renderer would sample for a view of the whole set, at
+    // both ends of the iteration slider's range, and through both the integer
+    // and the smooth path.
+    const bounds = {
+      minReal: -2.5,
+      maxReal: 1.5,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    };
+    const differences: string[] = [];
+    let interior = 0;
+
+    for (const cap of [50, 300]) {
+      for (let column = 0; column < 400; column++) {
+        for (let row = 0; row < 300; row++) {
+          const c = pixelToComplex(column, row, 400, 300, bounds);
+          if (isInMainBulbs(c)) {
+            interior++;
+          }
+
+          for (const smooth of [false, true]) {
+            const counted = smooth
+              ? smoothMandelbrotIterations(c, cap)
+              : mandelbrotIterations(c, cap);
+            const plain = plainIterations(c, cap, smooth);
+
+            if (counted !== plain) {
+              differences.push(
+                `${c.real},${c.imaginary} at cap ${cap}, smooth ${smooth}: ${counted} != ${plain}`,
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // The grid has to reach the interior, or the comparison only ever watches
+    // orbits that were never at risk of being shortcut.
+    expect(interior).toBeGreaterThan(0);
+
+    // And no differences at all: the shortcut is a faster way to the number
+    // the orbit was already reaching, not a different number. Only the first
+    // few are reported, so a broken shortcut fails with a readable diff.
+    expect(differences.slice(0, 5)).toEqual([]);
+  });
+
+  it("answers a point in the cardioid without running the orbit", () => {
+    // A cap nothing can iterate through: the count comes straight back, which
+    // is only possible because the point never reaches the loop.
+    const cap = 1_000_000;
+    const c = { real: 0, imaginary: 0 };
+
+    expect(isInMainBulbs(c)).toBe(true);
+    expect(mandelbrotIterations(c, cap)).toBe(cap);
+    expect(smoothMandelbrotIterations(c, cap)).toBe(cap);
   });
 });
 

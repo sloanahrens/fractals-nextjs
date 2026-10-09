@@ -169,6 +169,23 @@ _Last updated: 2026-10-08_
   old-sized image over the newly sized canvas. The resolution controls are
   usable mid-render now, which is what makes that reachable.
 
+### The set's interior skips the loop (2026-10-08)
+
+- `isInMainBulbs` (`src/lib/mandelbrot.ts`) tests the two components of the set
+  that have a closed form: the main cardioid and the period-2 bulb, with strict
+  inequalities so a boundary point still goes to the orbit.
+  `mandelbrotIterations` and `smoothMandelbrotIterations` return the cap for
+  such a point instead of iterating an orbit that cannot escape, which is what
+  took a view framed on the interior minutes on staging — a 10000x zoom into
+  the cardioid is nearly all interior pixels, each one running the whole cap.
+- The check lives in those two entry points rather than in
+  `escapeTimeIterations`, because it holds only for an orbit that starts at
+  z = 0. The Julia kinds share the loop and start at the point, so a Julia
+  orbit beginning inside the cardioid still runs.
+- No count changes, only how fast it arrives. The grid equivalence test in
+  `mandelbrot.test.ts` compares both functions against a copy of the plain loop
+  written out in the test, over a 400x300 view at caps 50 and 300.
+
 ### The renderer draws a fractal kind (2026-10-08)
 
 - The formula is no longer inside the rendering loop. `FractalKind`

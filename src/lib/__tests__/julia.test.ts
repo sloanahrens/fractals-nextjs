@@ -75,6 +75,19 @@ describe("createJuliaKind", () => {
       julia.iterations({ real: 0, imaginary: -2.5 }, CAP, false),
     ).toBeLessThan(3);
   });
+
+  it("runs the orbit from a point inside the Mandelbrot cardioid", () => {
+    // 0 is in the main cardioid, so the Mandelbrot functions answer it with
+    // the cap without running anything. A Julia orbit from that point is a
+    // different orbit -- it starts at the point rather than at 0 -- and with a
+    // constant outside the set it escapes on its first step, so the count is
+    // small. A kind that took the Mandelbrot shortcut would report the cap.
+    const julia = createJuliaKind({ real: 1, imaginary: 1 });
+    const origin = { real: 0, imaginary: 0 };
+
+    expect(julia.iterations(origin, CAP, false)).toBe(1);
+    expect(mandelbrotKind.iterations(origin, CAP, false)).toBe(CAP);
+  });
 });
 
 describe("JULIA_CONSTANTS", () => {
