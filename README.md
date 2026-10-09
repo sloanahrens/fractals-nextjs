@@ -36,8 +36,8 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Iteration Control**: Adjust detail level with iteration sliders
 - **Auto Iterations**: Iterations follow the zoom level; unticking the checkbox takes manual control, and loading a preset turns it off because that preset was framed at its own count
 - **Color Mapping**: Dynamic color schemes for enhanced visualization
-- **Parameter Presets**: Quick access to interesting fractal configurations
-- **Custom Presets**: Save and manage your own configurations
+- **Parameter Presets**: Quick access to interesting fractal configurations, listing the views saved for the fractal selected now
+- **Custom Presets**: Save and manage your own configurations; a saved view remembers its fractal and, for a Julia set, its constant
 
 ### 🚀 Technical Features
 
@@ -180,7 +180,7 @@ dependencies and needs nothing else.
 
 ### Advanced Features
 
-- **Custom Presets**: Create and save your own fractal configurations (stored in browser localStorage)
+- **Custom Presets**: Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant; loading it puts the Fractal and Julia constant selects back on that picture. The preset dropdown, the built-in buttons and the saved list show the views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead

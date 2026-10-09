@@ -1,4 +1,6 @@
 import { FractalBounds, ColorScheme } from "../types/fractal";
+import { FRACTAL_TYPES } from "./fractalTypes";
+import { JULIA_CONSTANTS } from "./julia";
 import { boundsToView } from "./mandelbrot";
 
 export interface FractalPreset {
@@ -10,7 +12,18 @@ export interface FractalPreset {
   colorScheme: ColorScheme;
   canvasWidth: number;
   canvasHeight: number;
+  /**
+   * Fractal this view was saved for, as a {@link FRACTAL_TYPES} id. Absent
+   * means the Mandelbrot set: a view saved before the format had this field was
+   * a Mandelbrot view, because that is the only thing the app could draw then.
+   */
+  fractal?: string;
+  /** Julia constant this view was saved against; read only for a Julia view. */
+  juliaConstant?: string;
 }
+
+/** The fractal a view with no `fractal` field was saved for. */
+export const DEFAULT_PRESET_FRACTAL = "mandelbrot";
 
 // The built-in views. A preset is six numbers and no fractal, so each view is a
 // centre and a zoom written out as bounds. Elephant Valley and Seahorse Valley
@@ -162,6 +175,74 @@ export function getPresetById(id: string): FractalPreset | undefined {
   return BUILTIN_PRESETS.find((preset) => preset.id === id);
 }
 
+/**
+ * Which fractal a view belongs to.
+ *
+ * A preset with no `fractal` field is a Mandelbrot view, and so is one that
+ * names the Mandelbrot set. An id this build does not know is `null`: nothing
+ * here can draw or list that view, so it is skipped — but it stays in storage,
+ * because a build that knows the fractal may yet read it back.
+ */
+export function presetFractal(preset: FractalPreset): string | null {
+  const id = preset.fractal ?? DEFAULT_PRESET_FRACTAL;
+
+  return FRACTAL_TYPES.some((type) => type.id === id) ? id : null;
+}
+
+/**
+ * The views in a list that belong to one fractal.
+ *
+ * This is the filter behind the preset dropdown and the built-in buttons, and
+ * it is also why a view for a fractal this build does not know is never listed:
+ * it has no fractal to be listed under. A fresh array, so callers may build on
+ * it.
+ * @param presets - Views to choose from
+ * @param fractalId - Id of the fractal to list views for
+ * @returns The views belonging to that fractal, in the order given
+ */
+export function presetsForFractal(
+  presets: readonly FractalPreset[],
+  fractalId: string,
+): FractalPreset[] {
+  return presets.filter((preset) => presetFractal(preset) === fractalId);
+}
+
+/**
+ * The fractal fields a view saved right now should carry.
+ *
+ * A view belongs to the fractal on the canvas when it is saved, and the
+ * constant belongs to a Julia view and to nothing else: a Mandelbrot or Burning
+ * Ship entry gets no `juliaConstant` key at all, so its stored JSON stays the
+ * shape it had before this field existed.
+ * @param fractalId - Id of the fractal on the canvas
+ * @param juliaConstantName - Constant on the canvas; written only for Julia
+ * @returns The fields to merge into the saved preset
+ */
+export function presetFractalFields(
+  fractalId: string,
+  juliaConstantName: string,
+): { fractal: string; juliaConstant?: string } {
+  return fractalId === "julia"
+    ? { fractal: fractalId, juliaConstant: juliaConstantName }
+    : { fractal: fractalId };
+}
+
+/**
+ * The Julia constant a view names.
+ *
+ * A preset that names a constant this build no longer offers cannot be loaded
+ * as written: the picker would sit on a name it has no option for. The first
+ * constant is what `resolveFractalKind` draws for such a name, so naming it
+ * here keeps the select and the canvas describing the same picture.
+ */
+export function presetJuliaConstant(preset: FractalPreset): string {
+  const named = JULIA_CONSTANTS.some(
+    (constant) => constant.name === preset.juliaConstant,
+  );
+
+  return named ? (preset.juliaConstant as string) : JULIA_CONSTANTS[0].name;
+}
+
 // Custom presets live in localStorage: an external store that the components
 // read through useSyncExternalStore. Reads go through the helpers below so the
 // snapshot keeps a stable identity between changes, and writes notify the
@@ -187,9 +268,28 @@ function readCustomPresetsSource(): string | null {
   }
 }
 
+/**
+ * The stored list, as presets.
+ *
+ * Entries pass through as they were stored. A field this build does not know —
+ * a fractal id from a newer one, or anything a later format adds — is carried
+ * rather than dropped, and storage is never written back on a read, so opening
+ * the page cannot lose a view or a field it did not understand. Only a value
+ * that could not be a preset at all is discarded: a stored array holding
+ * something other than objects.
+ */
+function normaliseCustomPresets(value: unknown): FractalPreset[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.filter(
+    (entry): entry is FractalPreset =>
+      typeof entry === "object" && entry !== null,
+  );
+}
+
 function parseCustomPresets(source: string): FractalPreset[] {
   try {
-    return JSON.parse(source);
+    return normaliseCustomPresets(JSON.parse(source));
   } catch (error) {
     console.error("Error loading custom presets:", error);
     return [];

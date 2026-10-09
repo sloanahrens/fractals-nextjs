@@ -10,6 +10,7 @@ import {
 } from "../mandelbrot";
 import {
   BUILTIN_PRESETS,
+  DEFAULT_PRESET_FRACTAL,
   calculateCenter,
   calculateZoomLevel,
   deleteCustomPreset,
@@ -19,10 +20,16 @@ import {
   getCustomPresetsSnapshot,
   getPresetById,
   getServerCustomPresetsSnapshot,
+  presetFractal,
+  presetFractalFields,
+  presetJuliaConstant,
+  presetsForFractal,
   saveCustomPreset,
   subscribeToCustomPresets,
   type FractalPreset,
 } from "../presets";
+import { FRACTAL_TYPES } from "../fractalTypes";
+import { JULIA_CONSTANTS } from "../julia";
 
 const STORAGE_KEY = "fractal-custom-presets";
 
@@ -49,6 +56,55 @@ const CUSTOM_PRESET: FractalPreset = {
   canvasWidth: 800,
   canvasHeight: 600,
 };
+
+/** The same view, saved while the Julia "Dendrite" was selected. */
+const JULIA_PRESET: FractalPreset = {
+  ...CUSTOM_PRESET,
+  id: "custom-julia",
+  name: "Dendrite View",
+  fractal: "julia",
+  juliaConstant: "Dendrite",
+};
+
+/** A view saved for the Burning Ship, which has no constant of its own. */
+const SHIP_PRESET: FractalPreset = {
+  ...CUSTOM_PRESET,
+  id: "custom-ship",
+  name: "Ship View",
+  fractal: "burning-ship",
+};
+
+/** A view saved for a fractal a later build knows and this one does not. */
+const UNKNOWN_FRACTAL_PRESET: FractalPreset & { palette: string } = {
+  ...CUSTOM_PRESET,
+  id: "custom-unknown",
+  name: "Some Other Picture",
+  fractal: "koch-snowflake",
+  // A field this build has never heard of, which a read must carry through.
+  palette: "solarized",
+};
+
+/**
+ * What storage held before the format had a fractal field: the shape today's
+ * entries still have, written without `fractal` and `juliaConstant`.
+ */
+const LEGACY_PRESETS_JSON = JSON.stringify([
+  {
+    id: "custom-legacy",
+    name: "Old View",
+    description: "Saved before presets knew about fractals",
+    bounds: {
+      minReal: -0.8,
+      maxReal: -0.7,
+      minImaginary: 0.05,
+      maxImaginary: 0.15,
+    },
+    maxIterations: 500,
+    colorScheme: "ocean",
+    canvasWidth: 800,
+    canvasHeight: 600,
+  },
+]);
 
 /** In-memory stand-in for the browser's localStorage, which Node lacks. */
 function createStorageStub() {
@@ -285,6 +341,222 @@ describe("calculateCenter", () => {
         maxImaginary: 1.5,
       }),
     ).toEqual({ x: -0.5, y: 0 });
+  });
+});
+
+describe("the fractal a saved view belongs to", () => {
+  it("reads an entry with no fractal field as a Mandelbrot view", () => {
+    expect(presetFractal(CUSTOM_PRESET)).toBe(DEFAULT_PRESET_FRACTAL);
+    expect(DEFAULT_PRESET_FRACTAL).toBe("mandelbrot");
+  });
+
+  it("names each fractal the picker offers", () => {
+    for (const type of FRACTAL_TYPES) {
+      expect(presetFractal({ ...CUSTOM_PRESET, fractal: type.id })).toBe(
+        type.id,
+      );
+    }
+  });
+
+  it("answers null for a fractal id this build does not know", () => {
+    // Null rather than the Mandelbrot fallback the kind resolver gives: this
+    // view cannot be drawn or listed here, and it must not be shown as some
+    // other fractal's picture either.
+    expect(
+      presetFractal({ ...CUSTOM_PRESET, fractal: "koch-snowflake" }),
+    ).toBeNull();
+  });
+
+  it("lists one fractal's views and no others", () => {
+    const views = [
+      CUSTOM_PRESET,
+      JULIA_PRESET,
+      SHIP_PRESET,
+      UNKNOWN_FRACTAL_PRESET,
+    ];
+
+    expect(presetsForFractal(views, "mandelbrot")).toEqual([CUSTOM_PRESET]);
+    expect(presetsForFractal(views, "julia")).toEqual([JULIA_PRESET]);
+    expect(presetsForFractal(views, "burning-ship")).toEqual([SHIP_PRESET]);
+  });
+
+  it("lists a view for an unknown fractal under no fractal at all", () => {
+    const views = [CUSTOM_PRESET, UNKNOWN_FRACTAL_PRESET];
+
+    for (const type of FRACTAL_TYPES) {
+      expect(presetsForFractal(views, type.id), type.id).not.toContain(
+        UNKNOWN_FRACTAL_PRESET,
+      );
+    }
+  });
+
+  it("returns a fresh list a caller may build on", () => {
+    const views = [CUSTOM_PRESET];
+
+    const listed = presetsForFractal(views, "mandelbrot");
+    listed.push(JULIA_PRESET);
+
+    expect(presetsForFractal(views, "mandelbrot")).toEqual([CUSTOM_PRESET]);
+  });
+});
+
+describe("the fractal fields a view is saved with", () => {
+  it("names the fractal that is on the canvas", () => {
+    for (const type of FRACTAL_TYPES) {
+      expect(presetFractalFields(type.id, "Classic").fractal).toBe(type.id);
+    }
+  });
+
+  it("writes the Julia constant only for a Julia view", () => {
+    expect(presetFractalFields("julia", "Dendrite")).toEqual({
+      fractal: "julia",
+      juliaConstant: "Dendrite",
+    });
+
+    // No key at all, rather than a key holding undefined: a Mandelbrot or
+    // Burning Ship entry keeps the stored shape it had before this field.
+    expect(presetFractalFields("mandelbrot", "Dendrite")).toEqual({
+      fractal: "mandelbrot",
+    });
+    expect(presetFractalFields("burning-ship", "Dendrite")).toEqual({
+      fractal: "burning-ship",
+    });
+  });
+});
+
+describe("the Julia constant a saved view names", () => {
+  it("names the constant the view was saved against", () => {
+    expect(presetJuliaConstant(JULIA_PRESET)).toBe("Dendrite");
+  });
+
+  it("falls back to the first constant for a name this build does not know", () => {
+    // The renderer draws the first constant for a name it cannot resolve, so
+    // the picker has to sit on the same one or the select and the canvas
+    // describe different pictures.
+    expect(
+      presetJuliaConstant({ ...JULIA_PRESET, juliaConstant: "Newton" }),
+    ).toBe(JULIA_CONSTANTS[0].name);
+  });
+
+  it("falls back for a Julia view that names no constant at all", () => {
+    expect(
+      presetJuliaConstant({ ...JULIA_PRESET, juliaConstant: undefined }),
+    ).toBe(JULIA_CONSTANTS[0].name);
+  });
+
+  it("only ever names a constant the picker offers", () => {
+    const names = JULIA_CONSTANTS.map((constant) => constant.name);
+
+    for (const named of ["Dendrite", "Newton", undefined]) {
+      expect(names).toContain(
+        presetJuliaConstant({ ...JULIA_PRESET, juliaConstant: named }),
+      );
+    }
+  });
+});
+
+describe("reading views out of storage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", createStorageStub());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("loads a legacy entry unchanged, as a Mandelbrot view", () => {
+    localStorage.setItem(STORAGE_KEY, LEGACY_PRESETS_JSON);
+
+    const [legacy] = getCustomPresets();
+    expect(legacy).toEqual(JSON.parse(LEGACY_PRESETS_JSON)[0]);
+    expect(presetFractal(legacy)).toBe("mandelbrot");
+    expect(presetsForFractal(getCustomPresets(), "mandelbrot")).toEqual([
+      legacy,
+    ]);
+  });
+
+  it("round-trips a Julia view saved now back to its fractal and constant", () => {
+    saveCustomPreset({
+      ...CUSTOM_PRESET,
+      ...presetFractalFields("julia", "Dendrite"),
+    });
+
+    const [stored] = getCustomPresets();
+
+    expect(presetFractal(stored)).toBe("julia");
+    expect(presetJuliaConstant(stored)).toBe("Dendrite");
+    expect(presetsForFractal(getCustomPresets(), "julia")).toEqual([stored]);
+    expect(presetsForFractal(getCustomPresets(), "mandelbrot")).toEqual([]);
+  });
+
+  it("carries unknown fields through a read and writes nothing back", () => {
+    const stored = JSON.stringify([
+      CUSTOM_PRESET,
+      JULIA_PRESET,
+      SHIP_PRESET,
+      UNKNOWN_FRACTAL_PRESET,
+    ]);
+    localStorage.setItem(STORAGE_KEY, stored);
+
+    const read = getCustomPresets();
+
+    // The field this build never heard of survives, in the order it was
+    // stored...
+    expect(read).toEqual([
+      CUSTOM_PRESET,
+      JULIA_PRESET,
+      SHIP_PRESET,
+      UNKNOWN_FRACTAL_PRESET,
+    ]);
+    // ...and reading them back is not a write: the bytes are what they were.
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(stored);
+    expect(getCustomPresetsSnapshot()).toEqual(read);
+  });
+
+  it("lists stored views under their own fractal and the unknown one nowhere", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        CUSTOM_PRESET,
+        JULIA_PRESET,
+        SHIP_PRESET,
+        UNKNOWN_FRACTAL_PRESET,
+      ]),
+    );
+
+    const stored = getCustomPresets();
+    expect(presetsForFractal(stored, "julia")).toEqual([JULIA_PRESET]);
+
+    for (const type of FRACTAL_TYPES) {
+      expect(
+        presetsForFractal(stored, type.id).map((preset) => preset.id),
+        type.id,
+      ).not.toContain("custom-unknown");
+    }
+
+    // Never listed here, and never dropped either: a build that knows the
+    // fractal still finds it.
+    expect(getCustomPresets().map((preset) => preset.id)).toContain(
+      "custom-unknown",
+    );
+  });
+
+  it("drops only a stored value that could not be a preset", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([null, "nope", 7, CUSTOM_PRESET]),
+    );
+
+    expect(getCustomPresets()).toEqual([CUSTOM_PRESET]);
+  });
+
+  it("reads a stored value that is not a list as no views at all", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ presets: [CUSTOM_PRESET] }),
+    );
+
+    expect(getCustomPresets()).toEqual([]);
   });
 });
 
