@@ -36,6 +36,21 @@ describe("GET /api/version", () => {
     });
   });
 
+  it("reports the commit of a full 40-character GIT_SHA", async () => {
+    vi.stubEnv("GIT_SHA", "0123456789abcdef0123456789abcdef01234567");
+
+    expect((await versionBody()).commit).toBe(
+      "0123456789abcdef0123456789abcdef01234567",
+    );
+  });
+
+  it("has no commit when GIT_SHA is the empty build-arg default", async () => {
+    // What the Dockerfile leaves when the release build passes no --build-arg.
+    vi.stubEnv("GIT_SHA", "");
+
+    expect((await versionBody()).commit).toBeNull();
+  });
+
   it("is null for a value the environment does not have", async () => {
     vi.stubEnv("NEXT_PUBLIC_BUILD_TIME", undefined);
     vi.stubEnv("DEPLOYED_AT", undefined);
