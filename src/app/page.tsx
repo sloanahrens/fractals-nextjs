@@ -48,6 +48,13 @@ import {
   resolveFractalKind,
 } from "../lib/fractalTypes";
 import { JULIA_CONSTANTS } from "../lib/julia";
+import { createRng, nextWanderView } from "../lib/wander";
+import {
+  DEFAULT_WANDER_INTERVAL_SECONDS,
+  MAX_WANDER_INTERVAL_SECONDS,
+  MIN_WANDER_INTERVAL_SECONDS,
+  WanderController,
+} from "../lib/wanderController";
 import { Slider } from "../components/ui/Slider";
 import { Checkbox } from "../components/ui/Checkbox";
 import { Select } from "../components/ui/Select";
@@ -130,6 +137,26 @@ export default function Home() {
 
   // Preset system
   const [currentPreset, setCurrentPreset] = useState<string>("");
+
+  // Random walk. The controller owns the clock — when a step is due, and when
+  // it must wait — and this page owns what a step does and tells the controller
+  // when a render starts and finishes. The mode is deliberately not remembered
+  // between visits.
+  const [wanderOn, setWanderOn] = useState(false);
+  const [wanderCountdown, setWanderCountdown] = useState<number | null>(null);
+  const [wanderInterval, setWanderInterval] = useState(
+    DEFAULT_WANDER_INTERVAL_SECONDS,
+  );
+  // Only text the user typed is held here, so an untouched box shows the
+  // interval in force while an out-of-range entry can be shown without being
+  // used. Same draft pattern as the manual coordinate inputs.
+  const [wanderIntervalDraft, setWanderIntervalDraft] = useState<string | null>(
+    null,
+  );
+  const [rng] = useState(() => createRng(Date.now()));
+  const [wander] = useState(
+    () => new WanderController({ onCountdown: setWanderCountdown }),
+  );
 
   // Manual coordinate inputs. Only text the user typed is held here, so a box
   // that has not been touched reads straight off the view and Apply reuses the
@@ -226,6 +253,11 @@ export default function Home() {
         setProgress(value);
       };
 
+      // A full render suspends the walk for its whole length, whatever asked
+      // for it, so a step is never issued at a canvas that is still drawing.
+      // The walk then waits out its interval from the finished picture.
+      wander.notifyRenderStart();
+
       await renderer
         .renderFractal(config, onProgress)
         .catch((error) => {
@@ -235,10 +267,13 @@ export default function Home() {
           // Only the newest draw clears the flag; an older one clearing it
           // would hide the bar while the drawing it has handed over to is
           // still running.
-          if (token === drawTokenRef.current) setIsRendering(false);
+          if (token === drawTokenRef.current) {
+            setIsRendering(false);
+            wander.notifyRenderDone();
+          }
         });
     },
-    [bounds, effectiveMaxIterations, colorScheme],
+    [bounds, effectiveMaxIterations, colorScheme, wander],
   );
 
   // Initialize canvas and renderer. The renderer is rebuilt when the canvas is
@@ -273,20 +308,67 @@ export default function Home() {
   // read. Both sources of a view (a pointer gesture, a keypress) go through
   // here, so neither can leave the sliders showing a view the canvas is not on.
   // The zoom is clamped because both can ask to go past the sliders' range.
-  const applyView = useCallback((view: ZoomState) => {
-    const zoom = clampZoom(view.scale);
+  const applyView = useCallback(
+    (view: ZoomState) => {
+      const zoom = clampZoom(view.scale);
 
-    // Hand the next step of the gesture the view this one produced, rather
-    // than leaving it to the ref the render below would set: a burst of wheel
-    // notches arrives faster than React commits, and a step that reads the
-    // pre-burst bounds again is a notch the gesture loses.
-    boundsRef.current = calculateZoomBounds(view.centerX, view.centerY, zoom);
+      // Hand the next step of the gesture the view this one produced, rather
+      // than leaving it to the ref the render below would set: a burst of wheel
+      // notches arrives faster than React commits, and a step that reads the
+      // pre-burst bounds again is a notch the gesture loses.
+      boundsRef.current = calculateZoomBounds(view.centerX, view.centerY, zoom);
 
-    setCenterX(view.centerX);
-    setCenterY(view.centerY);
-    setZoomLevel(zoom);
-    setCurrentPreset("");
-  }, []);
+      setCenterX(view.centerX);
+      setCenterY(view.centerY);
+      setZoomLevel(zoom);
+      setCurrentPreset("");
+
+      // Every view the canvas moves to by hand goes through here — a wheel, a
+      // drag, a touch, an arrow key — so each of those restarts the walk's
+      // countdown. The walk's own steps come through here too, which is what
+      // keeps the cadence going even if a step lands on the view it is already
+      // on and draws nothing new.
+      wander.notifyActivity();
+    },
+    [wander],
+  );
+
+  // What one step of the walk does: from the view on screen now, take a step
+  // with the fractal on screen now, and put it up the way any other view change
+  // does. It is handed to the controller after every render, because the
+  // controller is built once and the kind and the view move under it.
+  useEffect(() => {
+    wander.setStepHandler(() => {
+      const view = boundsToView(boundsRef.current);
+      const next = nextWanderView(
+        { centerX: view.centerX, centerY: view.centerY, zoom: view.scale },
+        fractalKind,
+        fractalType,
+        rng,
+      );
+
+      applyView({
+        centerX: next.centerX,
+        centerY: next.centerY,
+        scale: next.zoom,
+      });
+    });
+  });
+
+  // The walk counts down only while the tab is on screen: a background tab has
+  // nobody watching the view move, and a browser throttles its timers anyway.
+  // Leaving the page stops the walk, so a stray timer cannot outlive it.
+  useEffect(() => {
+    const handleVisibilityChange = () => wander.setHidden(document.hidden);
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    wander.setHidden(document.hidden);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      wander.stop();
+    };
+  }, [wander]);
 
   // Arrow keys pan the view and `+`/`-` zoom it, for a user who cannot use a
   // pointer. The keys are read off the canvas itself, so they only move the
@@ -387,6 +469,7 @@ export default function Home() {
       setCenterY(view.centerY);
       setZoomLevel(view.scale);
       setCurrentPreset("");
+      wander.notifyActivity();
     }
   };
 
@@ -400,6 +483,10 @@ export default function Home() {
     setCenterY(view.centerY);
     setZoomLevel(view.zoom);
     setCurrentPreset("");
+
+    // Choosing another fractal is also a manual move: the walk carries on from
+    // the new fractal's own default view rather than stopping.
+    wander.notifyActivity();
   };
 
   const handleFractalTypeChange = (typeId: string) => {
@@ -466,12 +553,14 @@ export default function Home() {
     setCanvasWidth(preset.canvasWidth);
     setCanvasHeight(preset.canvasHeight);
     setCurrentPreset(preset.id);
+    wander.notifyActivity();
   };
 
   const handleCenterChange = (newCenterX: number, newCenterY: number) => {
     setCenterX(newCenterX);
     setCenterY(newCenterY);
     setCurrentPreset(""); // Clear preset when manually adjusting
+    wander.notifyActivity();
   };
 
   const handlePresetsChange = () => {
@@ -483,6 +572,40 @@ export default function Home() {
   const handleParameterChange = (updateFn: () => void) => {
     updateFn();
     setCurrentPreset("");
+  };
+
+  // A control that moves the view by hand. It does what a gesture does — the
+  // preset goes, the walk gets a fresh interval — so a magnified view reached
+  // with the buttons behaves like one reached with the wheel.
+  const handleViewChange = (updateFn: () => void) => {
+    updateFn();
+    setCurrentPreset("");
+    wander.notifyActivity();
+  };
+
+  const handleWanderChange = (enabled: boolean) => {
+    setWanderOn(enabled);
+    if (enabled) {
+      wander.start();
+    } else {
+      wander.stop();
+    }
+  };
+
+  // An entry the walk cannot use — empty, fractional, outside the range — is
+  // shown as typed and ignored, so the last good interval stays in force.
+  const handleWanderIntervalChange = (text: string) => {
+    setWanderIntervalDraft(text);
+
+    const seconds = Number(text);
+    if (
+      Number.isInteger(seconds) &&
+      seconds >= MIN_WANDER_INTERVAL_SECONDS &&
+      seconds <= MAX_WANDER_INTERVAL_SECONDS
+    ) {
+      setWanderInterval(seconds);
+      wander.setIntervalSeconds(seconds);
+    }
   };
 
   // Unticking auto hands the slider the count auto was showing, so taking
@@ -567,10 +690,9 @@ export default function Home() {
                   min={-2.5}
                   max={1.5}
                   step={0.01}
-                  onChange={(value) => {
-                    setCenterX(value);
-                    setCurrentPreset("");
-                  }}
+                  onChange={(value) =>
+                    handleViewChange(() => setCenterX(value))
+                  }
                   formatValue={(v) => v.toFixed(3)}
                 />
                 <Slider
@@ -579,10 +701,9 @@ export default function Home() {
                   min={-1.5}
                   max={1.5}
                   step={0.01}
-                  onChange={(value) => {
-                    setCenterY(value);
-                    setCurrentPreset("");
-                  }}
+                  onChange={(value) =>
+                    handleViewChange(() => setCenterY(value))
+                  }
                   formatValue={(v) => v.toFixed(3)}
                 />
                 <Slider
@@ -591,17 +712,20 @@ export default function Home() {
                   min={0}
                   max={1}
                   step={ZOOM_SLIDER_STEP}
-                  onChange={(position) => {
-                    setZoomLevel(sliderToZoom(position));
-                    setCurrentPreset("");
-                  }}
+                  onChange={(position) =>
+                    handleViewChange(() => setZoomLevel(sliderToZoom(position)))
+                  }
                   formatValue={(position) =>
                     `${formatZoom(sliderToZoom(position))}x`
                   }
                 />
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => setZoomLevel(clampZoom(zoomLevel / 2))}
+                    onClick={() =>
+                      handleViewChange(() =>
+                        setZoomLevel(clampZoom(zoomLevel / 2)),
+                      )
+                    }
                     disabled={zoomLevel <= MIN_ZOOM}
                     variant="secondary"
                     size="sm"
@@ -609,7 +733,11 @@ export default function Home() {
                     Zoom Out
                   </Button>
                   <Button
-                    onClick={() => setZoomLevel(clampZoom(zoomLevel * 2))}
+                    onClick={() =>
+                      handleViewChange(() =>
+                        setZoomLevel(clampZoom(zoomLevel * 2)),
+                      )
+                    }
                     disabled={zoomLevel >= MAX_ZOOM}
                     variant="secondary"
                     size="sm"
@@ -624,6 +752,28 @@ export default function Home() {
                     Reset View
                   </Button>
                 </div>
+
+                <Checkbox
+                  label="Random walk"
+                  checked={wanderOn}
+                  onChange={handleWanderChange}
+                />
+                <Input
+                  label="Seconds between steps"
+                  value={wanderIntervalDraft ?? String(wanderInterval)}
+                  type="number"
+                  step="1"
+                  min={MIN_WANDER_INTERVAL_SECONDS}
+                  max={MAX_WANDER_INTERVAL_SECONDS}
+                  onChange={handleWanderIntervalChange}
+                />
+                {wanderOn && (
+                  <p className="text-sm text-gray-600">
+                    {wanderCountdown === null
+                      ? "Waiting for the render to finish"
+                      : `Next step in about ${wanderCountdown} s`}
+                  </p>
+                )}
               </div>
             </div>
 

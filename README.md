@@ -28,6 +28,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Pan Navigation**: Click and drag to explore different regions, or drag with one finger on a touch screen
 - **Keyboard Navigation**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
 - **Center Controls**: Precise positioning with coordinate input
+- **Random Walk**: Tick Random walk in the Navigation panel and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose
 - **Download PNG**: Save the canvas at its full resolution, named from the fractal and the view it shows
 
 ### ⚙️ Customizable Parameters
@@ -125,6 +126,7 @@ The production container will be available at [http://localhost:8080](http://loc
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
+- **Random Walk**: Tick Random walk in the Navigation panel and set the seconds between steps (1 to 120, 5 by default). Once each render finishes the walk waits that long and then moves the view one step, staying on the selected fractal; the line under the controls counts the wait down. Untick the box to stop, and move the view by hand — drag, wheel, key, button or preset — to start the interval again. The walk pauses while the tab is in the background
 
 ## Project Structure
 
