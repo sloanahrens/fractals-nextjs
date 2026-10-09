@@ -84,11 +84,20 @@ var stackFiles = map[string]string{"staging": "Pulumi.staging.yaml", "prod": "Pu
 // specKeys are the config keys the program reads, named as the devops example
 // program names them (devops examples/app/main.go). A key outside this set is
 // a value the program never sees.
-var specKeys = []string{"name", "env", "project", "region", "imageDigest", "port", "healthPath", "memory"}
+var specKeys = []string{"name", "env", "project", "region", "imageDigest", "port", "healthPath", "memory", "deployedAt"}
 
 // releaseKeys are the keys a release writes rather than the repository
-// shipping them (scripts/release/lib.sh, set_digest_config).
-var releaseKeys = []string{"imageDigest"}
+// shipping them (scripts/release/lib.sh, set_digest_config and
+// set_deployed_at_config).
+var releaseKeys = []string{"imageDigest", "deployedAt"}
+
+// deployedAtKey is the stack config key the release flow records its apply time
+// under, and testDeployedAt is what an apply of this stack would leave there:
+// the UTC RFC 3339 timestamp set_deployed_at_config writes.
+const (
+	deployedAtKey  = "deployedAt"
+	testDeployedAt = "2026-10-09T00:14:07Z"
+)
 
 // TestMain reads the deployment's identity out of the stack config files
 // before the tests run. The fixture is what those files say, so a checkout
@@ -190,6 +199,9 @@ func TestProgramDeploysTheConfiguredApp(t *testing.T) {
 	if got := numberProp(t, httpGet, "port"); got != port {
 		t.Errorf("the startup probe port is %v, want %v", got, port)
 	}
+	if got := containerEnvs(t, container); len(got) != 0 {
+		t.Errorf("the container is started with %v, want no environment variables: the stack config holds no deployedAt", got)
+	}
 
 	exported, ok := exports["url"]
 	if !ok {
@@ -208,6 +220,55 @@ func TestProgramDeploysTheConfiguredApp(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the url the program exported never resolved")
+	}
+}
+
+// TestProgramPassesTheDeployedAtConfigToTheContainer runs the program with a
+// released stack -- one whose config carries the deployedAt a release wrote --
+// and asserts the container is started with that time as DEPLOYED_AT, the
+// value the app shows as when this revision went live (src/lib/version.ts).
+func TestProgramPassesTheDeployedAtConfigToTheContainer(t *testing.T) {
+	monitor, _, err := runProgram(t, "staging", map[string]string{pulumiProject + ":" + deployedAtKey: testDeployedAt})
+	if err != nil {
+		t.Fatalf("the program failed for a stack with deployedAt set: %v", err)
+	}
+
+	containers := arrayProp(t, objectProp(t, monitor.service(t), "template"), "containers")
+	container := objectPropValue(t, "template.containers[0]", containers[0])
+	if got, want := containerEnvs(t, container), map[string]string{"DEPLOYED_AT": testDeployedAt}; !maps.Equal(got, want) {
+		t.Errorf("the container is started with %v, want %v", got, want)
+	}
+}
+
+// TestBadDeployedAtFailsTheDeploy holds the value a release records to the
+// shape the app can use: UTC RFC 3339. Every other shape fails the deploy with
+// a message naming the key, and does it before anything reaches the provider,
+// so a stack whose config carries a time this app cannot vouch for is not
+// deployed at all rather than deployed with a wrong one on the page.
+func TestBadDeployedAtFailsTheDeploy(t *testing.T) {
+	values := []struct{ name, value string }{
+		{"empty", ""},
+		{"whitespace", " 2026-10-09T00:14:07Z "},
+		{"an offset instead of Z", "2026-10-09T00:14:07+00:00"},
+		{"another zone", "2026-10-09T00:14:07-05:00"},
+		{"no zone", "2026-10-09T00:14:07"},
+		{"a date", "2026-10-09Z"},
+		{"the word for it", "yesterday"},
+		{"an impossible date", "2026-13-45T99:99:99Z"},
+	}
+	for _, bad := range values {
+		t.Run(bad.name, func(t *testing.T) {
+			monitor, _, err := runProgram(t, "staging", map[string]string{pulumiProject + ":" + deployedAtKey: bad.value})
+			if err == nil {
+				t.Fatalf("the program accepted deployedAt %q, want a refusal", bad.value)
+			}
+			if got := err.Error(); !strings.Contains(got, deployedAtKey) {
+				t.Errorf("the program failed with %q, want a message naming %q", got, deployedAtKey)
+			}
+			if len(monitor.created) != 0 {
+				t.Errorf("the failed deploy created %v, want the refusal to come before anything is created", monitor.created)
+			}
+		})
 	}
 }
 
@@ -267,11 +328,23 @@ func TestStackConfigsHoldNoSecrets(t *testing.T) {
 	}
 }
 
-// deploy runs the program for a stack the way the release flow does -- its
-// program, under the mock provider, with the environment's own config file and
-// a digest standing in for the one a release pins -- and returns what the
-// provider was asked to create and what the program exported.
+// deploy runs the program for a stack the way the release flow does and fails
+// the test if the program fails.
 func deploy(t *testing.T, env string) (*deployMonitor, map[string]pulumi.Input) {
+	t.Helper()
+	monitor, exports, err := runProgram(t, env, nil)
+	if err != nil {
+		t.Fatalf("the program failed for the %s stack: %v", env, err)
+	}
+	return monitor, exports
+}
+
+// runProgram runs the program for a stack the way the release flow does -- its
+// program, under the mock provider, with the environment's own config file, a
+// digest standing in for the one a release pins, and whatever else a test sets
+// on top of the file -- and returns what the provider was asked to create,
+// what the program exported, and the error the program returned.
+func runProgram(t *testing.T, env string, extra map[string]string) (*deployMonitor, map[string]pulumi.Input, error) {
 	t.Helper()
 	file, ok := stackFiles[env]
 	if !ok {
@@ -279,6 +352,9 @@ func deploy(t *testing.T, env string) (*deployMonitor, map[string]pulumi.Input) 
 	}
 	config := stackConfig(t, file)
 	config[pulumiProject+":imageDigest"] = testDigest
+	for key, value := range extra {
+		config[key] = value
+	}
 
 	rendered, err := json.Marshal(config)
 	if err != nil {
@@ -295,10 +371,7 @@ func deploy(t *testing.T, env string) (*deployMonitor, map[string]pulumi.Input) 
 		exports = ctx.GetCurrentExportMap()
 		return nil
 	}, pulumi.WithMocks(pulumiProject, env, monitor))
-	if err != nil {
-		t.Fatalf("the program failed for the %s stack: %v", env, err)
-	}
-	return monitor, exports
+	return monitor, exports, err
 }
 
 // stackConfig reads a stack's config file and holds its keys to what the
@@ -423,8 +496,15 @@ func arrayProp(t *testing.T, m resource.PropertyMap, key string) []resource.Prop
 	if !ok {
 		t.Fatalf("no %q in %s", key, render(m))
 	}
+	return arrayPropValue(t, key, value)
+}
+
+// arrayPropValue returns value as an array, failing the test when it is
+// another kind of value.
+func arrayPropValue(t *testing.T, name string, value resource.PropertyValue) []resource.PropertyValue {
+	t.Helper()
 	if !value.IsArray() {
-		t.Fatalf("%q is %s, want an array", key, render(value))
+		t.Fatalf("%s is %s, want an array", name, render(value))
 	}
 	return value.ArrayValue()
 }
@@ -455,6 +535,24 @@ func numberProp(t *testing.T, m resource.PropertyMap, key string) float64 {
 		t.Fatalf("%q is %s, want a number", key, render(value))
 	}
 	return value.NumberValue()
+}
+
+// containerEnvs returns the environment variables a container is started with
+// as a name-to-value map: the container's `envs` array, which is absent or
+// empty for a container started with none.
+func containerEnvs(t *testing.T, container resource.PropertyMap) map[string]string {
+	t.Helper()
+	value, ok := container[resource.PropertyKey("envs")]
+	if !ok {
+		return nil
+	}
+	items := arrayPropValue(t, "envs", value)
+	envs := make(map[string]string, len(items))
+	for i, item := range items {
+		env := objectPropValue(t, fmt.Sprintf("envs[%d]", i), item)
+		envs[stringProp(t, env, "name")] = stringProp(t, env, "value")
+	}
+	return envs
 }
 
 // stringMapProp returns the object under key as a map of strings, failing the

@@ -150,6 +150,30 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-08_
 
+### The deploy program reads the deploy time (2026-10-08)
+
+- `deploy/main.go` turns the stack config's optional `deployedAt` into the
+  container's `DEPLOYED_AT`, the variable `src/lib/version.ts` shows as
+  "Deployed <time>". A release writes that key when it applies a new image
+  (`set_deployed_at_config`, devops dv-bte); the read is optional because a
+  stack may have no deploy time at all, and then the container is started with
+  no environment variables rather than an empty one, so the page says nothing
+  instead of showing a blank date.
+- A value that is present is checked first and fails the deploy if it is not an
+  RFC 3339 timestamp in UTC with the `Z` designator (`2026-10-09T00:14:07Z`),
+  the shape the release writes and checks before writing it. The program fails
+  before the provider is asked to create anything: a `deployedAt` set by hand
+  is a time no release stands behind, and `src/lib/version.ts` can only reject
+  what it cannot parse.
+- `deploy/main_test.go` covers absent, valid and each invalid shape, and
+  `specKeys`/`releaseKeys` now name `deployedAt` -- the repository ships no
+  value for it, exactly as for `imageDigest`.
+- One thing this cannot fix: a release whose digest is the one the stack
+  already runs writes no `deployedAt`, and this program then renders no
+  `DEPLOYED_AT`, which is a container spec that differs from the running
+  revision -- the new revision such a release exists to avoid. The release flow
+  has to leave that apply alone; filed as `dv-iuqp` in the devops rig.
+
 ### Integration tier (2026-10-08)
 
 - Added `tests/integration/`, the checks that call a deployed app rather than

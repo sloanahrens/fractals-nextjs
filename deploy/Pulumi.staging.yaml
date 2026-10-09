@@ -1,7 +1,8 @@
 # The staging stack's configuration: the part of the deployment Spec that is
-# not a release input. A release changes one value, imageDigest, which
-# scripts/release/preview.sh sets from the digest build_push.sh printed; every
-# other value stays here, in the app's own repository (scripts/release/README.md).
+# not a release input. A release writes two values into it, imageDigest (the
+# digest build_push.sh printed) and deployedAt (the time it applied that digest),
+# and both are set by the scripts; every other value stays here, in the app's own
+# repository (scripts/release/README.md).
 #
 # The keys are namespaced with the Pulumi project name, `fractals` (Pulumi.yaml).
 # No value here is a secret: appdeploy.Spec refuses an env var whose name names
