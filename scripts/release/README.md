@@ -12,10 +12,10 @@ a Forgejo job running as `gt-cloud` (bead B5.4) and are wired together by
 | `build_push_staging.sh` | — | The landing build: builds the commit main is at, pushes it as `<image>:main-<12 hex of the commit>`, prints the digest |
 | `mint_token.sh` | 3 | Mints a one-hour token for the app's deployer SA from the base key |
 | `preview.sh` | 4 | Pins the digest in the stack config and writes the `pulumi preview` diff the release is read from |
-| `up.sh` | 5 | Applies the previewed digest and records the deploy time; prints the service URL |
+| `up.sh` | 5 | Applies the previewed digest and records the deploy time, or applies nothing when the stack already runs it; prints the service URL |
 | `health.sh` | 5 | Polls the declared health path on that URL; fails the job if it never answers |
 | `wait_version.sh` | integration | Polls the app's version endpoint until it reports the commit that was just deployed; exits 1 on another commit, 2 on no usable answer |
-| `promote.sh` | 6 | Deploys the staging digest to prod and records the deploy time, refusing anything that is not a digest |
+| `promote.sh` | 6 | Deploys the staging digest to prod and records the deploy time, or applies nothing when prod already runs it; refuses anything that is not a digest |
 | `staged_digest.sh` | 6 | Reads the image a stack is running out of `pulumi stack export`, which is what prod checks its promotion against |
 | `init_stack.sh` | — | Creates an app's stack for one environment, with the project's `gcpkms` secrets provider; idempotent |
 | `lib.sh` | — | The names and rules every script shares; sourced, never run |
@@ -169,10 +169,10 @@ the app's Pulumi project is the name its manifest states as `pulumiProject`
 `.pulumi/stacks/<pulumiProject>/<env>.json` -- the path the patrol reads an
 app's state under (cmd/patrol's `readState`, beads dv-iou and dv-4fu).
 
-A release writes two values into a stack's config, and the rest of the app's
-`Spec` (`name`, `env`, `project`, `region`, `port`, `healthPath`) stays with the
-app repo, in `Pulumi.<env>.yaml`, which is what the app's Pulumi program reads
-(`examples/app/main.go`).
+A release writes at most two values into a stack's config, and the rest of the
+app's `Spec` (`name`, `env`, `project`, `region`, `port`, `healthPath`) stays
+with the app repo, in `Pulumi.<env>.yaml`, which is what the app's Pulumi
+program reads (`examples/app/main.go`).
 
 - `imageDigest` is the released image, pinned by `preview.sh` before its preview
   and again by `up.sh`/`promote.sh` before their apply.
@@ -183,19 +183,26 @@ app repo, in `Pulumi.<env>.yaml`, which is what the app's Pulumi program reads
   deployed. `preview.sh` does not write it — a preview applies nothing, so the
   preview diff does not show the key — and nothing else in this flow reads it.
 
-`deployedAt` is set only when the apply changes the image the stack runs. The
-script compares the digest it was given with the image the live stack currently
-runs, read out of `pulumi stack export` (the same read `staged_digest.sh` makes
-from the state backend, bead dv-yf4). When the two are equal the release writes
-nothing: Cloud Run creates no new revision, and a fresh `deployedAt` would have
-the app claim a deployment that did not happen, so whatever the stack's config
-holds for the key is left as it is. A first apply, where the stack holds no
-service yet, sets it. The value
-is the script's own reading of the clock in RFC 3339 UTC — `2026-10-09T00:14:07Z`
-— and never an argument the caller passes or an environment variable it sets:
-the time a release reports has to be the time the release ran. The format is
-checked before it is set, so a clock that answers with anything else stops the
-release instead of deploying without a time to report.
+Both are written by the release that changes what a stack runs. The script
+compares the digest it was given with the image the live stack currently runs,
+read out of `pulumi stack export` (the same read `staged_digest.sh` makes from
+the state backend, bead dv-yf4). A first apply, where the stack holds no service
+yet, is a change. When the two differ the release writes `deployedAt` and
+applies the digest. When they are equal it applies nothing at all. The digest is
+the release's identity, so a stack that already runs it has nothing for the
+release to do; and applying anyway would render a container spec that differs
+from the running revision — the job's config is its own, so it holds no
+`deployedAt` for the app program to render (dv-yf4) — which creates the new
+revision `dv-bte` exists to prevent and drops the deploy time the app was
+showing (bead `dv-iuqp`). A release that changes nothing therefore leaves the
+running revision, and the time it carries, exactly as they are.
+
+`deployedAt` is the script's own reading of the clock in RFC 3339 UTC —
+`2026-10-09T00:14:07Z` — and never an argument the caller passes or an
+environment variable it sets: the time a release reports has to be the time the
+release ran. The format is checked before it is set, so a clock that answers
+with anything else stops the release instead of deploying without a time to
+report.
 
 ## Credentials
 
@@ -243,13 +250,15 @@ built from one — and it builds the file. The deploy image installs it
   proved, and `staged_digest.sh` reads that digest out of the stack's own state
   rather than out of a config file only the job that wrote it has.
 - **Never a deploy time for a deployment that did not happen.** `up.sh` and
-  `promote.sh` write `deployedAt` only when the apply changes the image the
+  `promote.sh` write `deployedAt` only when the release changes the image the
   stack runs, by comparing the digest they were given with the image the live
-  stack runs (`pulumi stack export`, the read `staged_digest.sh` makes). A no-op
-  apply creates no new revision and leaves `deployedAt` as it was; a first apply
-  sets it. The value is the script's own clock, and a clock that does not answer
-  with an RFC 3339 UTC timestamp stops the release rather than being written
-  (`lib.sh`, `set_deployed_at_config`).
+  stack runs (`pulumi stack export`, the read `staged_digest.sh` makes). A
+  release whose digest the stack already runs applies nothing and writes nothing:
+  no new revision is created, and the deploy time the running revision carries
+  stays on the app (bead `dv-iuqp`). A first apply sets it. The value is the
+  script's own clock, and a clock that does not answer with an RFC 3339 UTC
+  timestamp stops the release rather than being written (`lib.sh`,
+  `apply_digest`).
 - **Never a commit that did not land.** `build_push_staging.sh` refuses a HEAD
   that is not on main, and a ref that looks like a release tag, so the landing
   path publishes what the gate let onto main and nothing else. It is also the one
@@ -409,14 +418,18 @@ Bead dv-lh6, the commit an image carries, is the last:
   literal `HEAD` and a non-zero status, which is the malformed value the shape
   check is for, since a repository cannot hold a commit that is not 40 hex.
 
-Bead dv-bte, the deploy time a release records:
+Beads dv-bte and dv-iuqp, the deploy time a release records, and the release
+whose digest the stack already runs:
 
 - `deployed_at.bats`: `up.sh` and `promote.sh` set `deployedAt` when the digest
-  they are applying differs from the image the live stack runs, leave an
-  existing value alone when it does not (the apply still runs — it is the
-  deployment that did not happen), and set it on a first apply, with the fake's
-  export fixture standing in for the stack's state. Then the two ways it refuses
-  rather than guess: a state with more than one Cloud Run service, and a clock
-  that is not an RFC 3339 UTC timestamp — the fake `date` with `FAKE_DATE_BAD=1`
-  — after which nothing is written and nothing is applied. A dry run reads no
-  state and plans no config set at all.
+  they are applying differs from the image the live stack runs, set it on a first
+  apply, and when the two are equal apply nothing at all — no `pulumi up` reaches
+  the fake, so no new revision is created and no deploy time is written (dv-iuqp)
+  — with the fake's export fixture standing in for the stack's state. The skip
+  still pins the digest and still prints `url=`, which is what the job's health
+  check needs. Then the two ways it refuses rather than guess: a state with more
+  than one Cloud Run service, and a clock that is not an RFC 3339 UTC timestamp —
+  the fake `date` with `FAKE_DATE_BAD=1` — after which nothing is written and
+  nothing is applied. A dry run reads no state, so it prints both halves of the
+  plan — the deploy time and the apply a real run would make — and reaches no
+  tool at all.

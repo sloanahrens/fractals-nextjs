@@ -10,6 +10,10 @@ load helpers.bash
 
 setup() {
   setup_release_env
+  # The stack is running another image than the digest the flow builds, so the
+  # flow really deploys one: a stack that already runs the digest applies
+  # nothing (deployed_at.bats, bead dv-iuqp).
+  export FAKE_PULUMI_EXPORT_IMAGE="$PREVIOUS_DIGEST"
   CHECKOUT=$BATS_TEST_TMPDIR/app
   make_checkout "$CHECKOUT" v1.0.0
   PREVIEW_FILE=$BATS_TEST_TMPDIR/preview.diff

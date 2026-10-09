@@ -43,6 +43,10 @@ setup() {
 }
 
 @test "up applies the previewed digest and prints the service URL" {
+  # The fixture has to record another image than the one being applied, or this
+  # is the release that applies nothing, which deployed_at.bats covers.
+  export FAKE_PULUMI_EXPORT_IMAGE="$PREVIOUS_DIGEST"
+
   run "$RELEASE_DIR/up.sh" --app "$APP" --project "$PROJECT" --digest "$DIGEST" --token-file "$TOKEN_FILE"
 
   [ "$status" -eq 0 ]
@@ -58,6 +62,8 @@ setup() {
 }
 
 @test "up deploys to the prod stack when --env says so" {
+  export FAKE_PULUMI_EXPORT_IMAGE="$PREVIOUS_DIGEST"
+
   run "$RELEASE_DIR/up.sh" --app "$APP" --env prod --digest "$DIGEST" --token-file "$TOKEN_FILE"
 
   [ "$status" -eq 0 ]

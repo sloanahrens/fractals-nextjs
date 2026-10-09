@@ -513,40 +513,57 @@ set_digest_config() {
   run pulumi config set imageDigest "$digest" --stack "$STACK" --cwd "$STACK_DIR" --plaintext
 }
 
-# set_deployed_at_config TARGET_DIGEST records when a release deploys, in the
-# stack's config, so a deployed app can show a truthful "deployed <time>". The
-# app's own Pulumi program reads the key (the apps are beads of their own), and
-# nothing else in this flow does.
+# apply_digest TARGET_DIGEST is the last thing up.sh and promote.sh do: it
+# applies the digest the release was given, and prints the service URL health.sh
+# checks. It decides first, so that the decision and the apply cannot disagree.
 #
-# It sets the value only when this apply will change the image the stack runs.
 # What the stack runs now is read out of `pulumi stack export` -- the read
 # staged_digest.sh makes for the prod job's --staging-digest check, from the
 # state backend rather than from a config file only the job that wrote it has
 # (bead dv-yf4). When the target digest is the image the stack already runs the
-# apply changes nothing, Cloud Run creates no new revision, and a fresh
-# timestamp would make the app claim a deployment that did not happen: an
-# existing deployedAt is left alone. A first apply, where the stack holds no
-# service yet, sets it.
+# release applies nothing: the digest is the release's identity, so a stack that
+# already runs it has nothing for this release to do.
+#
+# Applying anyway is what bead dv-iuqp is about. The deployedAt a release writes
+# lives in the job's own stack config, which the next job does not see (dv-yf4),
+# so on a re-release of the digest a stack runs the container spec the app's
+# program renders has no DEPLOYED_AT in it while the live revision has one: it
+# differs from the revision Cloud Run runs, and the "no-op" apply creates the
+# new revision dv-bte exists to prevent -- dropping the deploy time the app was
+# showing. Skipping the apply leaves the running revision, and the time it
+# carries, exactly as they are.
+#
+# When the apply does change the image it records the deploy time first, as the
+# stack's `deployedAt` config, so a deployed app can show a truthful "deployed
+# <time>". The app's own Pulumi program reads the key (the apps are beads of
+# their own) and passes it to the container as DEPLOYED_AT; nothing else in this
+# flow reads it. A first apply, where the stack holds no service yet, sets it.
 #
 # The value is the script's own reading of the clock, never an argument the
 # caller passes or an environment variable it sets: the time a release reports
 # has to be the time the release ran. It is RFC 3339 UTC, which is what the
 # example the apps were asked for is -- 2026-10-09T00:14:07Z. The format is
 # checked before anything is set, so a clock that answers with something else
-# stops the release instead of writing a value an app would fail to read.
+# stops the release instead of writing a value an app would fail to read. It is
+# plaintext, like imageDigest and for the same reason: a deploy time is public.
+# set_digest_config must have run first -- the digest is pinned in the stack's
+# config before either branch runs.
 #
-# It is plaintext, like imageDigest and for the same reason: a deploy time is
-# public. set_digest_config must have run first -- this is the second half of
-# what a release writes into the stack's config.
-set_deployed_at_config() {
+# The apply goes through --skip-preview, here and only here: the workflow
+# already ran preview.sh over this exact digest, and an implicit second preview
+# would be a second plan.
+apply_digest() {
   local target=$1
   require_digest "$target" "digest"
 
-  # A dry run reads no state, so it cannot know whether this apply changes the
-  # image; it says what a real run would do with the answer rather than
-  # inventing one. Nothing is read and nothing is planned as run.
+  # A dry run reads no state, so it cannot know whether the stack already runs
+  # the digest; it says what a real run would do with the answer rather than
+  # inventing one. Nothing is read, and the apply it prints is the one a real
+  # run would make when the answer is "this release changes the image".
   if dry_run; then
-    note "would set deployedAt to now only if the image the $STACK stack runs differs from $target (a dry run reads no state)"
+    note "would set deployedAt to now, and apply $target only, if the image the $STACK stack runs differs from $target (a dry run reads no state)"
+    run pulumi up --yes --skip-preview --stack "$STACK" --cwd "$STACK_DIR"
+    note "service URL: unknown in a dry run"
     return 0
   fi
 
@@ -554,13 +571,15 @@ set_deployed_at_config() {
   # runs in rather than this shell. `|| exit 1` is what turns that into the
   # script stopping: without it a caller that ever ran without `set -e` would
   # take the empty output of a failed read for "the stack has applied nothing"
-  # and stamp a fresh deployedAt on it, which is the one thing this function
-  # exists not to do.
+  # and read the wrong branch, which is the one thing this function exists not
+  # to do.
   local live
   live=$(stack_running_image) || exit 1
 
   if [[ $live == "$target" ]]; then
-    note "deployedAt unchanged: the $STACK stack already runs $target"
+    note "nothing to apply: the $STACK stack already runs $target"
+    note "a release that changes nothing is not a deployment: no new revision is created, and the deploy time the live revision carries stays on the app"
+    print_service_url
     return 0
   fi
 
@@ -571,6 +590,8 @@ set_deployed_at_config() {
     die "the clock answered '$now', which is not an RFC 3339 UTC timestamp like 2026-10-09T00:14:07Z: deployedAt was not set and $STACK was not applied"
 
   run pulumi config set deployedAt "$now" --stack "$STACK" --cwd "$STACK_DIR" --plaintext
+  run pulumi up --yes --skip-preview --stack "$STACK" --cwd "$STACK_DIR"
+  print_service_url
 }
 
 # is_rfc3339_utc is true for a timestamp with the shape a deploy time has to
@@ -590,9 +611,9 @@ is_rfc3339_utc() {
 # Every other state it cannot answer for is a refusal rather than a guess: the
 # export failed, it is not the JSON pulumi prints, it holds more than one
 # service, or the service records no image. A caller that guessed "the image
-# changed" there would write a fresh deployedAt on every no-op apply, and a
-# timestamp with no new revision is the lie set_deployed_at_config exists to
-# avoid.
+# unchanged" there would skip an apply that was needed, and one that guessed
+# "the image changed" would write a fresh deployedAt on every no-op apply: the
+# two ways apply_digest's answer can be wrong, which is why it refuses instead.
 #
 # It reads state, so it must not be called under --dry-run (capture would print
 # the command and return nothing, and the empty export is not a value); its one
@@ -669,17 +690,15 @@ preview_stack() {
   note "wrote $(wc -l <"$preview_file" | tr -d ' ') lines of diff"
 }
 
-# up_stack applies the stack and prints the service URL the health check uses.
-# --skip-preview is right here and only here: the workflow already ran
-# preview.sh over this exact digest, and an implicit second preview would be a
-# second plan.
-up_stack() {
-  run pulumi up --yes --skip-preview --stack "$STACK" --cwd "$STACK_DIR"
-  if dry_run; then
-    note "service URL: unknown in a dry run"
-    return 0
-  fi
-
+# print_service_url prints the stack's url output, the value health.sh polls.
+# apply_digest prints it whether it applied the digest or found the stack already
+# running it: the URL is what the job checks next, and a release that applied
+# nothing has a service to check just as much as one that did.
+#
+# It reads state, so it is only called where a real run reaches. A dry run says
+# the URL is unknown instead (`capture` would print the command and return
+# nothing, and the empty output is not a URL).
+print_service_url() {
   local url
   url=$(pulumi stack output url --stack "$STACK" --cwd "$STACK_DIR") || url=""
   [[ -n $url ]] || die "stack $STACK exported no url output, so there is nothing to health check"
