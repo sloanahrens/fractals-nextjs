@@ -54,6 +54,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
+- **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
+- **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
 ### State Management Pattern
@@ -155,6 +157,48 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### Help overlay (2026-10-09)
+
+- A Help button under the page heading, and the `?` key, open a dialog headed
+  "How to use the explorer" listing every way to drive the explorer. Until now
+  the only hint was the one subtitle line under the heading.
+- `src/components/ui/HelpDialog.tsx` is a native `<dialog>` shown with
+  `showModal()`, so Escape, the inert page behind it and focus returning to the
+  element that opened it are the browser's, not the component's. It is always
+  mounted and the `open` prop only drives `showModal()` and `close()`; a click
+  whose target is the dialog element itself is the backdrop, and the element's
+  own `close` event — fired by Escape as well as by `close()` — is the one exit
+  all three ways report through. `aria-labelledby` points at the heading.
+- `src/lib/helpEntries.ts` holds `HELP_SECTIONS`, the four groups the dialog
+  renders (Mouse and touch, Keyboard, Random walk, Views and links) as
+  `{ title, entries: { keys, action }[] }[]`. It lists only what this build
+  really does — one-finger drag but no pinch, since `zoomPan.ts` ignores a
+  touch with more than one finger.
+- The `?` listener is on the window rather than the canvas, because help has
+  to be reachable with focus anywhere on the page; the canvas-local arrow keys
+  cannot do that. `opensHelpShortcut` is that decision as a pure function, so
+  the Node suite drives it directly: it fires for the `?` key only, refuses
+  Control, Meta and Alt (Shift is how `?` is typed, so it is not refused),
+  and refuses a press whose target is an `INPUT`, `SELECT`, `TEXTAREA` or an
+  editable region. `page.tsx` builds that descriptor off the `KeyboardEvent`
+  and calls `preventDefault()` before opening, so Chrome's quick-find — which
+  is also bound to `?` — does not cover the page.
+- `src/lib/__tests__/helpEntries.test.ts` checks the data's shape — every
+  section titled and non-empty, every entry with keys and an action, no key
+  named twice within a section — and drives `opensHelpShortcut` over each of
+  its refusals. `src/__tests__/help-overlay-panel.test.ts` reads the sources
+  the way the manual coordinates and share link tests here do: it walks the
+  Keyboard rows against `src/lib/canvasNavigation.ts`, failing if the help
+  names a canvas key (`ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `+`,
+  `-`) the `keyNavigationBounds` switch does not read, and checks the modal
+  wiring, the labelled title, the three exits, and that the Help button sits
+  under the heading and above the canvas.
+- Verified in headless Chrome against the production build: both ways in open
+  the dialog, Escape, Close and the backdrop close it, focus lands inside on
+  open and returns to the Help button on close, Tab never leaves the dialog
+  (the page behind it is inert), and a `?` typed into a number field or with
+  Control held opens nothing.
 
 ### Built-in views for every fractal (2026-10-09)
 

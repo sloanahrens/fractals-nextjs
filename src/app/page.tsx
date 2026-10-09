@@ -6,7 +6,7 @@ import {
   useState,
   useMemo,
   useCallback,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { FractalRenderer } from "../lib/fractalRenderer";
 import {
@@ -67,6 +67,7 @@ import {
   hasBaseAspect,
   readManualCoordinate,
 } from "../lib/manualBounds";
+import { opensHelpShortcut } from "../lib/helpEntries";
 import { encodeView } from "../lib/viewLink";
 import {
   DEFAULT_VIEW_LINK_UPDATES,
@@ -84,6 +85,7 @@ import { ZoomDisplay } from "../components/ui/ZoomDisplay";
 import { CenterControls } from "../components/ui/CenterControls";
 import { CustomPresetManager } from "../components/ui/CustomPresetManager";
 import { VersionFooter } from "../components/ui/VersionFooter";
+import { HelpDialog } from "../components/ui/HelpDialog";
 
 // The four manual coordinate boxes. A field is present only once the user has
 // typed in it; while it is absent the box shows the current view.
@@ -680,10 +682,42 @@ export default function Home() {
     }, offerToSelect);
   }, [currentLink, writeViewLink]);
 
+  // Whether the help overlay is up. The Help button and the `?` key both set
+  // it, so the two ways in are one piece of state rather than two.
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  // `?` opens the help from anywhere on the page, not only from the canvas,
+  // which is what the canvas-local arrow handlers cannot do. The decision is
+  // `opensHelpShortcut`'s so it can be tested without a browser: a `?` typed
+  // into a field belongs to the field, and a modifier means another command.
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const opens = opensHelpShortcut({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        targetTagName: target?.tagName ?? "",
+        targetIsContentEditable: target?.isContentEditable ?? false,
+      });
+      if (!opens) return;
+
+      // Chrome's quick-find opens on `?` by default and would cover the page.
+      event.preventDefault();
+      setHelpOpen(true);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Arrow keys pan the view and `+`/`-` zoom it, for a user who cannot use a
   // pointer. The keys are read off the canvas itself, so they only move the
   // view while the canvas has focus and Tab still reaches every control.
-  const handleCanvasKeyDown = (event: KeyboardEvent<HTMLCanvasElement>) => {
+  const handleCanvasKeyDown = (
+    event: ReactKeyboardEvent<HTMLCanvasElement>,
+  ) => {
     const next = keyNavigationBounds(event.key, bounds);
     if (!next) return;
 
@@ -951,6 +985,15 @@ export default function Home() {
             Scroll to zoom, drag to pan, or use the sliders. Focus the image to
             pan with the arrow keys and zoom with + and −.
           </p>
+          <div className="mt-4">
+            <Button
+              onClick={() => setHelpOpen(true)}
+              variant="outline"
+              size="sm"
+            >
+              Help
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8 items-start justify-center">
@@ -1351,6 +1394,10 @@ export default function Home() {
         </div>
 
         <VersionFooter />
+
+        {/* Escape, the Close button and the backdrop all report through the
+            same handler, so there is one place the overlay closes. */}
+        <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       </div>
     </div>
   );
