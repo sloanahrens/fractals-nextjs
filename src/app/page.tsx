@@ -73,6 +73,9 @@ export default function Home() {
   // once more for the view the gesture settled on.
   const [fullRenderNonce, setFullRenderNonce] = useState(0);
   const previewInFlightRef = useRef<Promise<void> | null>(null);
+  // Which full-quality draw is the current one, so an overtaken draw cannot
+  // report progress or clear the rendering flag on its behalf.
+  const drawTokenRef = useRef(0);
 
   // Navigation state - sliders control these directly
   const [centerX, setCenterX] = useState(-0.75); // Center of classic Mandelbrot view
@@ -193,12 +196,20 @@ export default function Home() {
       // image until something else redrew the canvas.
       await previewInFlightRef.current;
 
+      // Which draw owns the rendering flag and the progress bar. A draw that
+      // has been overtaken — a control used again while this one was still
+      // running — keeps rendering, but its reports and its finishing must not
+      // touch state the newer draw now owns. The renderer keeps the same
+      // promise for the canvas itself.
+      const token = ++drawTokenRef.current;
+
       // The renderer owns the run: it paints the canvas and reports how far
       // along it is, so the bar follows those reports. Reporting from its
       // callback rather than from the draw itself keeps this draw free of a
       // setState in the calling effect's own body, which would be a second
       // render stacked on the one that scheduled the draw.
       const onProgress = (value: number) => {
+        if (token !== drawTokenRef.current) return;
         setIsRendering(true);
         setProgress(value);
       };
@@ -209,7 +220,10 @@ export default function Home() {
           console.error("Error rendering fractal:", error);
         })
         .finally(() => {
-          setIsRendering(false);
+          // Only the newest draw clears the flag; an older one clearing it
+          // would hide the bar while the drawing it has handed over to is
+          // still running.
+          if (token === drawTokenRef.current) setIsRendering(false);
         });
     },
     [bounds, effectiveMaxIterations, colorScheme],
@@ -223,9 +237,11 @@ export default function Home() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // A render still running belongs to the kind being replaced and paints the
-    // same canvas, so stop it the way a parameter change stops the render it
-    // supersedes; otherwise the old fractal's rows land on top of the new one.
+    // A render still running belongs to the renderer being replaced and paints
+    // the same canvas: the old kind draws a different picture, and the old
+    // image buffer has the old dimensions. Two renderers share no run token, so
+    // neither case is caught anywhere else. The resolution controls are usable
+    // during a render, which is what makes the resize case reachable.
     rendererRef.current?.cancelRender();
 
     canvas.width = canvasWidth;
@@ -543,7 +559,6 @@ export default function Home() {
                     setCenterX(value);
                     setCurrentPreset("");
                   }}
-                  disabled={isRendering}
                   formatValue={(v) => v.toFixed(3)}
                 />
                 <Slider
@@ -556,7 +571,6 @@ export default function Home() {
                     setCenterY(value);
                     setCurrentPreset("");
                   }}
-                  disabled={isRendering}
                   formatValue={(v) => v.toFixed(3)}
                 />
                 <Slider
@@ -569,7 +583,6 @@ export default function Home() {
                     setZoomLevel(sliderToZoom(position));
                     setCurrentPreset("");
                   }}
-                  disabled={isRendering}
                   formatValue={(position) =>
                     `${formatZoom(sliderToZoom(position))}x`
                   }
@@ -577,7 +590,7 @@ export default function Home() {
                 <div className="flex gap-2">
                   <Button
                     onClick={() => setZoomLevel(clampZoom(zoomLevel / 2))}
-                    disabled={isRendering || zoomLevel <= MIN_ZOOM}
+                    disabled={zoomLevel <= MIN_ZOOM}
                     variant="secondary"
                     size="sm"
                   >
@@ -585,7 +598,7 @@ export default function Home() {
                   </Button>
                   <Button
                     onClick={() => setZoomLevel(clampZoom(zoomLevel * 2))}
-                    disabled={isRendering || zoomLevel >= MAX_ZOOM}
+                    disabled={zoomLevel >= MAX_ZOOM}
                     variant="secondary"
                     size="sm"
                   >
@@ -593,7 +606,6 @@ export default function Home() {
                   </Button>
                   <Button
                     onClick={resetToDefault}
-                    disabled={isRendering}
                     variant="secondary"
                     size="sm"
                   >
@@ -629,7 +641,6 @@ export default function Home() {
                     label: type.label,
                   }))}
                   onChange={handleFractalTypeChange}
-                  disabled={isRendering}
                 />
 
                 {/* A Julia set is a family, so the kind alone does not say
@@ -644,7 +655,6 @@ export default function Home() {
                       label: constant.name,
                     }))}
                     onChange={handleJuliaConstantChange}
-                    disabled={isRendering}
                   />
                 )}
 
@@ -652,7 +662,6 @@ export default function Home() {
                   label="Auto iterations"
                   checked={autoIterationsOn}
                   onChange={handleAutoIterationsChange}
-                  disabled={isRendering}
                 />
                 <Slider
                   label="Maximum Iterations"
@@ -663,7 +672,7 @@ export default function Home() {
                   onChange={(value) =>
                     handleParameterChange(() => setMaxIterations(value))
                   }
-                  disabled={isRendering || autoIterationsOn}
+                  disabled={autoIterationsOn}
                   formatValue={(v) => v.toString()}
                 />
 
@@ -676,7 +685,6 @@ export default function Home() {
                       setColorScheme(value as ColorScheme),
                     )
                   }
-                  disabled={isRendering}
                 />
               </div>
             </div>
@@ -696,7 +704,6 @@ export default function Home() {
                         handleParameterChange(() => setCanvasWidth(num));
                       }
                     }}
-                    disabled={isRendering}
                   />
                   <Input
                     label="Height"
@@ -708,7 +715,6 @@ export default function Home() {
                         handleParameterChange(() => setCanvasHeight(num));
                       }
                     }}
-                    disabled={isRendering}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -718,7 +724,6 @@ export default function Home() {
                       setCanvasHeight(300);
                       setCurrentPreset("");
                     }}
-                    disabled={isRendering}
                     variant="secondary"
                     size="sm"
                   >
@@ -730,7 +735,6 @@ export default function Home() {
                       setCanvasHeight(600);
                       setCurrentPreset("");
                     }}
-                    disabled={isRendering}
                     variant="secondary"
                     size="sm"
                   >
@@ -742,7 +746,6 @@ export default function Home() {
                       setCanvasHeight(900);
                       setCurrentPreset("");
                     }}
-                    disabled={isRendering}
                     variant="secondary"
                     size="sm"
                   >
@@ -763,7 +766,6 @@ export default function Home() {
                     type="number"
                     step="any"
                     onChange={(value) => editManualCoordinate("minReal", value)}
-                    disabled={isRendering}
                   />
                   <Input
                     label="Max Real"
@@ -771,7 +773,6 @@ export default function Home() {
                     type="number"
                     step="any"
                     onChange={(value) => editManualCoordinate("maxReal", value)}
-                    disabled={isRendering}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -783,7 +784,6 @@ export default function Home() {
                     onChange={(value) =>
                       editManualCoordinate("minImaginary", value)
                     }
-                    disabled={isRendering}
                   />
                   <Input
                     label="Max Imaginary"
@@ -793,21 +793,13 @@ export default function Home() {
                     onChange={(value) =>
                       editManualCoordinate("maxImaginary", value)
                     }
-                    disabled={isRendering}
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    onClick={applyManualCoordinates}
-                    disabled={isRendering}
-                  >
+                  <Button onClick={applyManualCoordinates}>
                     Apply Coordinates
                   </Button>
-                  <Button
-                    onClick={resetToDefault}
-                    disabled={isRendering}
-                    variant="secondary"
-                  >
+                  <Button onClick={resetToDefault} variant="secondary">
                     Reset to Default
                   </Button>
                 </div>

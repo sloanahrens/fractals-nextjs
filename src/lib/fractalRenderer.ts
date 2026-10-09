@@ -15,7 +15,14 @@ export class FractalRenderer {
   private ctx: CanvasRenderingContext2D;
   private imageData: ImageData;
   private isRendering = false;
-  private shouldCancel = false;
+  /**
+   * Identifies the run that owns the canvas. Starting a render takes the next
+   * token, which supersedes whatever was drawing: that older run stops at its
+   * next checkpoint, paints no further rows and makes no further progress
+   * reports. A counter rather than a flag, so that wiping out one run cannot
+   * also wipe out the run replacing it.
+   */
+  private runToken = 0;
   private kind: FractalKind;
 
   /**
@@ -44,13 +51,15 @@ export class FractalRenderer {
     onProgress?: (progress: number) => void,
     useSmooth: boolean = true,
   ): Promise<void> {
-    if (this.isRendering) {
-      this.shouldCancel = true;
-      await this.waitForRenderCompletion();
-    }
+    // Claim the canvas. Whatever was drawing before this call — a render the
+    // user's last control has just made obsolete, or one cancelRender stopped
+    // — is stale from here on and stops at its next checkpoint. This render
+    // does not wait for it: the two share only this token, and the older one
+    // drops out the moment it next looks at it.
+    const token = ++this.runToken;
+    const superseded = () => token !== this.runToken;
 
     this.isRendering = true;
-    this.shouldCancel = false;
 
     // Resize canvas if needed
     if (
@@ -69,9 +78,12 @@ export class FractalRenderer {
     // Render in chunks to avoid blocking the UI. The floor keeps canvases
     // under 10000 pixels (where totalPixels / 100 rounds to 0) from wedging
     // the row loop on a zero-sized step.
-    const chunkSize = Math.max(1, Math.min(1000, Math.floor(totalPixels / 100)));
+    const chunkSize = Math.max(
+      1,
+      Math.min(1000, Math.floor(totalPixels / 100)),
+    );
 
-    for (let y = 0; y < height && !this.shouldCancel; y++) {
+    for (let y = 0; y < height && !superseded(); y++) {
       const rowPromises: Promise<RenderPoint[]>[] = [];
 
       // Process row in chunks
@@ -92,6 +104,13 @@ export class FractalRenderer {
 
       // Wait for all chunks in the row to complete
       const rowResults = await Promise.all(rowPromises);
+
+      // The row was computed while another run may have claimed the canvas, so
+      // drop it rather than colouring pixels of a view the user has left. This
+      // is the only place a superseded run could paint or report after the
+      // await above suspends it, and nothing here writes before this check.
+      if (superseded()) break;
+
       const rowPoints = rowResults.flat();
 
       // Apply colors to pixels
@@ -116,11 +135,15 @@ export class FractalRenderer {
       }
     }
 
+    // A run that has been superseded owns neither the final frame nor the
+    // rendering flag: both belong to the run that superseded it, which is
+    // still going. Leaving them alone is also what keeps the flag honest —
+    // the last render to finish is the one that clears it.
+    if (superseded()) return;
+
     // Final render
-    if (!this.shouldCancel) {
-      this.ctx.putImageData(this.imageData, 0, 0);
-      onProgress?.(1);
-    }
+    this.ctx.putImageData(this.imageData, 0, 0);
+    onProgress?.(1);
 
     this.isRendering = false;
   }
@@ -173,10 +196,14 @@ export class FractalRenderer {
   }
 
   /**
-   * Cancel current rendering operation
+   * Cancel the render in flight. It keeps whatever it has already painted and
+   * stops at its next checkpoint. Nothing is drawing after this call until a
+   * new render starts, so the renderer reports not rendering straight away
+   * rather than waiting for the cancelled run to notice.
    */
   cancelRender(): void {
-    this.shouldCancel = true;
+    this.runToken++;
+    this.isRendering = false;
   }
 
   /**
@@ -184,15 +211,6 @@ export class FractalRenderer {
    */
   isCurrentlyRendering(): boolean {
     return this.isRendering;
-  }
-
-  /**
-   * Wait for current render to complete
-   */
-  private async waitForRenderCompletion(): Promise<void> {
-    while (this.isRendering) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
   }
 
   /**
