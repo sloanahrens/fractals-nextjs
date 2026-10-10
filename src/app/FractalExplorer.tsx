@@ -38,6 +38,7 @@ import {
 import {
   FractalConfig,
   FractalBounds,
+  ColorOptions,
   ColorScheme,
   ComplexNumber,
   ZoomState,
@@ -117,7 +118,7 @@ import {
   nearbyWindow,
   nextNearbyOffset,
 } from "../lib/nearbyStrip";
-import { decodeTour, encodeView, linkWithoutScheme } from "../lib/viewLink";
+import { decodeTour, encodeView, linkWithoutColour } from "../lib/viewLink";
 import { copyLinkUrl, readLocationLink } from "../lib/viewQuery";
 import {
   TOUR_CROSSFADE_MS,
@@ -324,6 +325,22 @@ export default function Home() {
   const [colorScheme, setColorScheme] = useState<ColorScheme>(
     DEFAULT_VIEW_LINK_UPDATES.colorScheme,
   );
+
+  // The scheme's two own settings: whether it is walked backwards, and how far
+  // round the palette it starts. They colour the picture without changing what
+  // it is made of, so a change of either is a repaint from the counts the last
+  // render left rather than a new render, and they travel in a link beside the
+  // scheme. One object, because that is how they are carried and passed on:
+  // the renderer, the link, and every surface that shows a picture of this
+  // view. Memoized on the two values so its identity holds while they do, which
+  // is what lets the strip's tiles and the Math card's plot list it as a
+  // dependency without asking for a picture on every render.
+  const [reverse, setReverse] = useState(DEFAULT_VIEW_LINK_UPDATES.reverse);
+  const [shift, setShift] = useState(DEFAULT_VIEW_LINK_UPDATES.shift);
+  const colorOptions = useMemo<ColorOptions>(
+    () => ({ reverse, shift }),
+    [reverse, shift],
+  );
   const [canvasWidth, setCanvasWidth] = useState(
     DEFAULT_VIEW_LINK_UPDATES.canvasWidth,
   );
@@ -516,6 +533,7 @@ export default function Home() {
         width: canvas.width,
         height: canvas.height,
         colorScheme,
+        colorOptions,
       };
 
       if (quality === "preview") {
@@ -545,19 +563,20 @@ export default function Home() {
       await previewInFlightRef.current;
 
       // A colour change is the one redraw that does not have to count the view
-      // again. If nothing but the scheme has moved since the render that
-      // finished — the two links agree once each has had its scheme taken out —
-      // the picture's iteration counts are the same numbers, and the renderer
-      // holds them: repainting from them is the whole of the change, and draws
-      // no orbit. It answers false when it has kept nothing, which is the case
-      // for a renderer that has not finished a render yet, was rebuilt for a
-      // new canvas or fractal, or had its run cancelled; then the view is
-      // counted as it always was.
+      // again. If nothing but the colours have moved since the render that
+      // finished — the two links agree once each has had its scheme, its
+      // reversal and its shift taken out — the picture's iteration counts are
+      // the same numbers, and the renderer holds them: repainting from them in
+      // the new colours is the whole of the change, and draws no orbit. It
+      // answers false when it has kept nothing, which is the case for a
+      // renderer that has not finished a render yet, was rebuilt for a new
+      // canvas or fractal, or had its run cancelled; then the view is counted
+      // as it always was.
       const showing = renderedLinkRef.current;
       if (
         showing !== "" &&
-        linkWithoutScheme(showing) === linkWithoutScheme(link) &&
-        renderer.recolour(colorScheme, effectiveMaxIterations)
+        linkWithoutColour(showing) === linkWithoutColour(link) &&
+        renderer.recolour(colorScheme, effectiveMaxIterations, colorOptions)
       ) {
         // The canvas is showing this view in the new colours, so it is the
         // drawn view the address bar may name, exactly as a render would make
@@ -610,7 +629,7 @@ export default function Home() {
           }
         });
     },
-    [bounds, effectiveMaxIterations, colorScheme, wander],
+    [bounds, effectiveMaxIterations, colorScheme, colorOptions, wander],
   );
 
   // Initialize canvas and renderer. The renderer is rebuilt when the canvas is
@@ -739,6 +758,8 @@ export default function Home() {
       setCenterY(updates.centerY);
       setZoomLevel(updates.zoomLevel);
       setColorScheme(updates.colorScheme);
+      setReverse(updates.reverse);
+      setShift(updates.shift);
       setAutoIterationsOn(updates.autoIterationsOn);
       setMaxIterations(updates.maxIterations);
       setCanvasWidth(updates.canvasWidth);
@@ -844,6 +865,8 @@ export default function Home() {
         centerY,
         zoomLevel,
         colorScheme,
+        reverse,
+        shift,
         autoIterationsOn,
         maxIterations,
         canvasWidth,
@@ -856,6 +879,8 @@ export default function Home() {
       centerY,
       zoomLevel,
       colorScheme,
+      reverse,
+      shift,
       autoIterationsOn,
       maxIterations,
       canvasWidth,
@@ -1472,7 +1497,9 @@ export default function Home() {
     applyDefaultView(fractalType);
     setMaxIterations(100);
     setAutoIterationsOn(true);
-    setColorScheme("classic");
+    setColorScheme(DEFAULT_VIEW_LINK_UPDATES.colorScheme);
+    setReverse(DEFAULT_VIEW_LINK_UPDATES.reverse);
+    setShift(DEFAULT_VIEW_LINK_UPDATES.shift);
   };
 
   // Export sizes: the screen size saves the canvas on screen, and a larger one
@@ -1563,6 +1590,7 @@ export default function Home() {
         width: job.width,
         height: job.height,
         colorScheme,
+        colorOptions,
       };
 
       const token = ++exportTokenRef.current;
@@ -1624,7 +1652,13 @@ export default function Home() {
         );
       });
     },
-    [effectiveMaxIterations, colorScheme, fractalKind, releaseExport],
+    [
+      effectiveMaxIterations,
+      colorScheme,
+      colorOptions,
+      fractalKind,
+      releaseExport,
+    ],
   );
 
   const handleCancelExport = useCallback(() => {
@@ -1992,6 +2026,7 @@ export default function Home() {
         bounds,
         effectiveMaxIterations,
         colorScheme,
+        colorOptions,
       );
       if (next) setProbe(next);
     };
@@ -2050,7 +2085,14 @@ export default function Home() {
       panel?.removeEventListener("pointerleave", handleCardLeave);
       throttle.cancel();
     };
-  }, [probeLive, fractalKind, bounds, effectiveMaxIterations, colorScheme]);
+  }, [
+    probeLive,
+    fractalKind,
+    bounds,
+    effectiveMaxIterations,
+    colorScheme,
+    colorOptions,
+  ]);
 
   // The Auto-wander pill's one-time offer to a visitor who has not found it.
   const wanderNudge = useWanderNudge({
@@ -2344,6 +2386,7 @@ export default function Home() {
                 autoIterations: autoIterationsOn,
                 colorScheme,
               }}
+              colorOptions={colorOptions}
               belowChips={variants !== null}
               // Held only while the probe runs, so a card that has just been
               // expanded again never shows the point from before it was
@@ -2362,6 +2405,7 @@ export default function Home() {
           <NearbyStrip
             places={nearbyWindow(nearby.pool, nearby.offset)}
             colorScheme={colorScheme}
+            colorOptions={colorOptions}
             paused={isRendering}
             hidden={tourPlaying}
             onSelect={handlePlaceSelect}

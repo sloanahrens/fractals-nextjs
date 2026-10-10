@@ -1,4 +1,9 @@
-import { ColorScheme, FractalConfig, FractalKind } from "../types/fractal";
+import {
+  ColorOptions,
+  ColorScheme,
+  FractalConfig,
+  FractalKind,
+} from "../types/fractal";
 import { mandelbrotKind } from "./mandelbrot";
 import { BYTES_PER_PIXEL, colourRgbaRows, countRgbaRows } from "./renderRgba";
 
@@ -83,7 +88,8 @@ export class FractalRenderer {
       this.imageData = this.ctx.createImageData(config.width, config.height);
     }
 
-    const { width, height, bounds, maxIterations, colorScheme } = config;
+    const { width, height, bounds, maxIterations, colorScheme, colorOptions } =
+      config;
     const totalPixels = width * height;
     let processedPixels = 0;
 
@@ -118,6 +124,7 @@ export class FractalRenderer {
         width,
         maxIterations,
         colorScheme,
+        colorOptions,
       );
 
       // Give a render started from a promise continuation its turn to claim
@@ -197,9 +204,15 @@ export class FractalRenderer {
    * @param scheme - Colour scheme to repaint in
    * @param maxIterations - The cap the counts are judged against, which is the
    *   one they were counted with
+   * @param options - Reverse and shift of the scheme, or nothing for the scheme
+   *   as it is
    * @returns Whether the canvas was repainted
    */
-  recolour(scheme: ColorScheme, maxIterations: number): boolean {
+  recolour(
+    scheme: ColorScheme,
+    maxIterations: number,
+    options?: ColorOptions,
+  ): boolean {
     const counts = this.counts;
     const { width, height } = this.canvas;
 
@@ -217,6 +230,7 @@ export class FractalRenderer {
       width,
       maxIterations,
       scheme,
+      options,
     );
     this.ctx.putImageData(this.imageData, 0, 0);
 

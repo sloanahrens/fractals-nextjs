@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import type {
+  ColorOptions,
   ColorScheme,
   ComplexNumber,
   EscapeInfo,
@@ -31,6 +32,8 @@ interface OrbitPlotProps {
   info: EscapeInfo;
   /** The colour scheme the picture is drawn in, which the dots are painted in. */
   scheme: ColorScheme;
+  /** That scheme's reversal and shift, which the dots are painted through too. */
+  colorOptions?: ColorOptions;
 }
 
 /** The ink the plot's furniture is drawn in: axes, ticks, the escape circle. */
@@ -68,6 +71,7 @@ export function OrbitPlot({
   orbit,
   info,
   scheme,
+  colorOptions,
 }: OrbitPlotProps) {
   const size = ORBIT_PLOT_SIZE;
   const geometry = useMemo(
@@ -217,7 +221,7 @@ export function OrbitPlot({
             cx={point.x}
             cy={point.y}
             r={3}
-            fill={orbitStepColour(step, orbit.length, scheme)}
+            fill={orbitStepColour(step, orbit.length, scheme, colorOptions)}
           />
         ))}
 

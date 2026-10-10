@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type {
+  ColorOptions,
   ComplexNumber,
   FractalConfig,
   FractalKind,
@@ -603,6 +604,86 @@ describe("FractalRenderer recolour", () => {
       }
     },
   );
+
+  /** The settings a repaint is asked for in, a scheme's own two. */
+  const OPTIONS: { name: string; options: ColorOptions }[] = [
+    { name: "reversed", options: { reverse: true } },
+    { name: "shifted", options: { shift: 0.25 } },
+    { name: "reversed and shifted", options: { reverse: true, shift: 0.5 } },
+  ];
+
+  it.each(KINDS)(
+    "%s: repaints in the scheme's own settings as the render of them",
+    async (_name, kind) => {
+      const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
+      const renderer = new FractalRenderer(element, kind);
+
+      await renderer.renderFractal(
+        renderConfig({
+          bounds: BOUNDS,
+          width: WIDTH,
+          height: HEIGHT,
+          maxIterations: CAP,
+          colorScheme: "classic",
+        }),
+      );
+
+      for (const { options } of OPTIONS) {
+        for (const scheme of SCHEMES) {
+          expect(renderer.recolour(scheme, CAP, options)).toBe(true);
+
+          // The settings colour the counts the render already left, so the
+          // picture a repaint in them leaves is the picture a full render in
+          // them draws, byte for byte.
+          const expected = renderRgba(
+            BOUNDS,
+            WIDTH,
+            HEIGHT,
+            CAP,
+            scheme,
+            kind,
+            true,
+            options,
+          );
+          expect(Array.from(pixels())).toEqual(Array.from(expected));
+        }
+      }
+
+      // Repainting in the plain scheme asks for the settings to be unasked:
+      // the counts never moved, so what comes back is the first render.
+      expect(renderer.recolour("classic", CAP, {})).toBe(true);
+      expect(Array.from(pixels())).toEqual(
+        Array.from(renderRgba(BOUNDS, WIDTH, HEIGHT, CAP, "classic", kind)),
+      );
+    },
+  );
+
+  it("draws a full render in the settings a config carries", async () => {
+    const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
+    const renderer = new FractalRenderer(element, mandelbrotKind);
+
+    await renderer.renderFractal(
+      renderConfig({
+        bounds: BOUNDS,
+        width: WIDTH,
+        height: HEIGHT,
+        maxIterations: CAP,
+        colorScheme: "fire",
+        colorOptions: { reverse: true, shift: 0.25 },
+      }),
+    );
+
+    // The settings are part of a render, not only of a repaint: a first draw
+    // asks for them the same way a colour change does.
+    expect(Array.from(pixels())).toEqual(
+      Array.from(
+        renderRgba(BOUNDS, WIDTH, HEIGHT, CAP, "fire", mandelbrotKind, true, {
+          reverse: true,
+          shift: 0.25,
+        }),
+      ),
+    );
+  });
 
   it("counts nothing when it repaints", async () => {
     const { element } = createFakeCanvas(WIDTH, HEIGHT);

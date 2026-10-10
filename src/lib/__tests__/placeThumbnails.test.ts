@@ -146,6 +146,35 @@ describe("createThumbnailStore", () => {
       expect(calls).toHaveLength(2);
     });
 
+    it("keys the cache by the scheme's own settings as well as by the scheme", async () => {
+      // A reversal or a shift is another picture of the same place, so it is
+      // asked for and held apart — which is what keeps a tile the picture a
+      // click on it draws.
+      const { store, calls } = newStore();
+      const reversed = { reverse: true };
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      calls[0].resolve();
+      await tick();
+
+      store.request(place("a"), "fire", () => {}, reversed);
+      await tick();
+
+      expect(calls).toHaveLength(2);
+      expect(calls[0].request.options).toBeUndefined();
+      expect(calls[1].request.options).toEqual(reversed);
+
+      calls[1].resolve();
+      await tick();
+
+      expect(store.get(place("a"), "fire", reversed)?.status).toBe("ready");
+      // A setting a request did not ask for is not the one it was given.
+      expect(store.get(place("a"), "fire", { shift: 0.25 })).toBeUndefined();
+      // ...and no settings at all is the key the store has always used.
+      expect(store.get(place("a"), "fire", {})?.status).toBe("ready");
+    });
+
     it("get is undefined for a place never requested", () => {
       const { store } = newStore();
 

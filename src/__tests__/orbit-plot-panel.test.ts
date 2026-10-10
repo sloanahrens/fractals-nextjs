@@ -91,7 +91,11 @@ describe("the plot", () => {
   });
 
   it("colours every dot from the picture's own palette", () => {
-    expect(plot).toContain("orbitStepColour(step, orbit.length, scheme)");
+    // The scheme and its two settings, which are what the picture's colours
+    // are: a reversed or shifted picture has reversed or shifted dots.
+    expect(plot).toContain(
+      "orbitStepColour(step, orbit.length, scheme, colorOptions)",
+    );
   });
 
   it("writes the last few points out in numbers", () => {

@@ -169,6 +169,24 @@ describe("orbitStepColour", () => {
   it("gives a one-dot orbit a colour rather than dividing by zero", () => {
     expect(orbitStepColour(0, 0, "grayscale")).toBe("rgb(0, 0, 0)");
   });
+
+  it("paints through the picture's own settings", () => {
+    // The dots are the picture's colours, so a reversed or shifted picture has
+    // reversed or shifted dots.
+    const reverse = { reverse: true };
+    const shift = { shift: 0.25 };
+
+    expect(orbitStepColour(1, 4, "grayscale", reverse)).toBe(
+      colourCss(mapIterationsToColor(1, 4, "grayscale", reverse)),
+    );
+    expect(orbitStepColour(1, 4, "grayscale", shift)).toBe(
+      colourCss(mapIterationsToColor(1, 4, "grayscale", shift)),
+    );
+    // ...and asking for nothing is the picture as it was.
+    expect(orbitStepColour(1, 4, "grayscale", {})).toBe(
+      orbitStepColour(1, 4, "grayscale"),
+    );
+  });
 });
 
 describe("describeOrbit", () => {

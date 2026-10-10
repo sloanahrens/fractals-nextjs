@@ -40,8 +40,8 @@ import { decodeView, type ViewLinkState } from "./viewLink";
 /**
  * A view as the page holds it: one value per piece of state a link can move.
  *
- * Every field is present, so applying a link is ten assignments rather than a
- * set of questions about which fields arrived and which did not.
+ * Every field is present, so applying a link is a plain assignment a field
+ * rather than a set of questions about which fields arrived and which did not.
  */
 export interface ViewLinkUpdates {
   /** Id of the fractal to draw, from {@link FRACTAL_TYPES} */
@@ -61,6 +61,10 @@ export interface ViewLinkUpdates {
   zoomLevel: number;
   /** Colour scheme to draw in */
   colorScheme: ColorScheme;
+  /** Whether the colour scheme is walked backwards (`ColorOptions.reverse`) */
+  reverse: boolean;
+  /** How far round the palette the colours start (`ColorOptions.shift`) */
+  shift: number;
   /** Whether the zoom picks the iteration count */
   autoIterationsOn: boolean;
   /** The count the slider is on, in force when auto is off */
@@ -90,6 +94,8 @@ export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
   centerY: DEFAULT_VIEW.centerY,
   zoomLevel: DEFAULT_VIEW.zoom,
   colorScheme: "classic",
+  reverse: false,
+  shift: 0,
   autoIterationsOn: true,
   maxIterations: 100,
   canvasWidth: 800,
@@ -117,7 +123,7 @@ export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
  * default (the Multibrot on power 3), not on Julia's constant.
  *
  * @param decoded - The fields a link carried, as `decodeView` read them
- * @returns The ten values to set, defaults included
+ * @returns The values to set, one a field, defaults included
  */
 export function viewLinkToUpdates(
   decoded: Partial<ViewLinkState>,
@@ -134,6 +140,8 @@ export function viewLinkToUpdates(
     centerY: decoded.centerY ?? defaults.centerY,
     zoomLevel: decoded.zoomLevel ?? defaults.zoomLevel,
     colorScheme: decoded.colorScheme ?? defaults.colorScheme,
+    reverse: decoded.reverse ?? defaults.reverse,
+    shift: decoded.shift ?? defaults.shift,
     autoIterationsOn: decoded.autoIterationsOn ?? defaults.autoIterationsOn,
     maxIterations: decoded.maxIterations ?? defaults.maxIterations,
     canvasWidth: decoded.canvasWidth ?? defaults.canvasWidth,
@@ -163,7 +171,7 @@ export function viewLinkToUpdates(
  *
  * @param fragment - The fragment, as `window.location.hash` gives it: with its
  *   leading `#` when the address bar has one
- * @returns The ten values to set, the page's opening view for anything the
+ * @returns The values to set, the page's opening view for anything the
  *   fragment did not say
  */
 export function viewLinkUpdatesFrom(fragment: string): ViewLinkUpdates {

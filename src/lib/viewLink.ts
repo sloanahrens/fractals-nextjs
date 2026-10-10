@@ -25,6 +25,13 @@
  * link is meant to be pasted into a chat; a fixed order, so one view is always
  * one string.
  *
+ * The scheme has two settings of its own, written between `s` and `i` because
+ * they are colour, not shape: `r=1` when the scheme is reversed, and `o` how
+ * far round the palette it starts (`s=fire&r=1&o=0.25`). Each is written only
+ * when it is asking for something — no `r` is not reversed, no `o` is a shift
+ * of nought — so the link of a view that touches neither is byte for byte what
+ * it was before these existed.
+ *
  * A number is written as plain decimal digits: at most ten significant of them,
  * no trailing zeros, never an exponent. Ten, because the deepest zoom shows
  * 4e-4 of the plane and a coordinate has to survive to about 1e-9 to come back
@@ -78,6 +85,17 @@ export interface ViewLinkState {
   zoomLevel: number;
   /** Colour scheme the picture is drawn in */
   colorScheme: ColorScheme;
+  /**
+   * Whether the colour scheme is walked backwards (`ColorOptions.reverse`).
+   * Written as `r=1`, and only when it is true: a link that says nothing about
+   * reversing names the scheme the app has always drawn.
+   */
+  reverse?: boolean;
+  /**
+   * How far round the palette the colours start, a fraction of a turn
+   * (`ColorOptions.shift`). Written as `o`, and only when it is not nought.
+   */
+  shift?: number;
   /** Whether the zoom picks the iteration count instead of the slider */
   autoIterationsOn: boolean;
   /**
@@ -221,6 +239,46 @@ function coordinateOf(value: number | null): number | null {
   return value !== null && Math.abs(value) <= COORDINATE_LIMIT ? value : null;
 }
 
+/** How many decimals of a palette shift a link carries. */
+const SHIFT_DECIMALS = 2;
+
+/**
+ * The shift a link's `o` names, or null when it names none this build reads.
+ *
+ * Only a number inside 0 to 1 is a shift of this palette: the mapping adds the
+ * shift modulo a whole turn, so a whole turn is no shift at all and reads as
+ * nought, while a value outside the range — negative, past 1, or not a number
+ * — is left out rather than wrapped. A link that says `o=7` is not a link about
+ * any palette this app draws.
+ */
+function shiftFrom(text: string | null): number | null {
+  const value = numberFrom(text);
+  if (value === null || value < 0 || value > 1) return null;
+
+  return value === 1 ? 0 : value;
+}
+
+/**
+ * The shift a link writes, or null when it writes none.
+ *
+ * The shift is a fraction of a turn and two decimals is enough of one: a
+ * hundredth of the way round a palette is a shade nobody can name, and the
+ * shorter `o` keeps a link short. A shift whose two decimals come to a whole
+ * turn — 0.999 rounds there — is the colours a shift of nought gives, so none
+ * is written, exactly as for a shift of nought itself. A value outside 0 to 1
+ * is written as the fraction it is worth (`shiftFrom` reads it back the same
+ * way), since the mapping reads every shift modulo a turn.
+ */
+function shiftForLink(shift: number | undefined): number | null {
+  if (shift === undefined || !Number.isFinite(shift)) return null;
+
+  const places = 10 ** SHIFT_DECIMALS;
+  const wrapped = shift - Math.floor(shift);
+  const rounded = (Math.round(wrapped * places) % places) / places;
+
+  return rounded === 0 ? null : rounded;
+}
+
 /**
  * A zoom inside the explorer's range, or null.
  *
@@ -315,6 +373,11 @@ export function encodeView(state: ViewLinkState): string {
   const scheme = schemeNamed(state.colorScheme);
   if (scheme !== null) fields.set("s", scheme);
 
+  // The scheme's own two settings, beside it and before the iteration count:
+  // they colour the picture without changing what it is made of.
+  if (state.reverse) fields.set("r", "1");
+  addNumber(fields, "o", shiftForLink(state.shift));
+
   if (state.autoIterationsOn) {
     fields.set("i", AUTO_ITERATIONS);
   } else {
@@ -334,24 +397,29 @@ export function encodeView(state: ViewLinkState): string {
 /** The fragment that is nothing but a request for a tour. */
 const TOUR_FRAGMENT = "tour";
 
+/** The fields that colour a picture without changing what it is made of. */
+const COLOUR_ONLY_KEYS = ["s", "r", "o"];
+
 /**
- * A link with its colour scheme left out.
+ * A link with everything that only colours it left out.
  *
- * Colour is the one field of a view that does not change what the picture is
- * made of: the same fractal, framed the same way, drawn another way. Two links
- * that agree in everything else name a picture whose iteration counts are the
- * same numbers, so the page asks this before it repaints the canvas from the
- * counts of the render that finished (`FractalRenderer.recolour`) rather than
- * counting the view again.
+ * Colour is the one part of a view that does not change what the picture is
+ * made of: the same fractal, framed the same way, drawn another way. That is
+ * the scheme itself and its two settings — a reversal and a shift — and two
+ * links that agree in everything else name a picture whose iteration counts are
+ * the same numbers, so the page asks this before it repaints the canvas from
+ * the counts of the render that finished (`FractalRenderer.recolour`) rather
+ * than counting the view again.
  *
  * @param fragment - The link, with or without its leading `#`
- * @returns The same link without its `s` field, and without a leading `#`
+ * @returns The same link without its `s`, `r` and `o` fields, and without a
+ *   leading `#`
  */
-export function linkWithoutScheme(fragment: string): string {
+export function linkWithoutColour(fragment: string): string {
   const text = fragment.startsWith("#") ? fragment.slice(1) : fragment;
   const fields = new URLSearchParams(text);
 
-  fields.delete("s");
+  for (const key of COLOUR_ONLY_KEYS) fields.delete(key);
 
   return fields.toString();
 }
@@ -432,6 +500,14 @@ export function decodeView(fragment: string): Partial<ViewLinkState> {
 
   const scheme = schemeNamed(fields.get("s"));
   if (scheme !== null) state.colorScheme = scheme;
+
+  // Read on their own, as every field here is: a link that carries the
+  // scheme's two settings without a scheme the build knows still names a
+  // reversal and a shift, and the scheme they are applied to is the page's.
+  if (fields.get("r") === "1") state.reverse = true;
+
+  const shift = shiftFrom(fields.get("o"));
+  if (shift !== null) state.shift = shift;
 
   if (fields.get("i") === AUTO_ITERATIONS) {
     state.autoIterationsOn = true;

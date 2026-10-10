@@ -17,6 +17,7 @@
  */
 
 import type {
+  ColorOptions,
   ColorRGB,
   ColorScheme,
   ComplexNumber,
@@ -98,20 +99,23 @@ export function orbitFor(
  * The probe for one point of the plane.
  *
  * The count is the whole-step one, so the card can print a number of steps; the
- * colour is the one a full render paints, which is made from the smooth count;
- * the path is the orbit itself, capped at `ORBIT_MAX_STEPS` whatever the
- * iteration cap is, so a deep view does not cost the plot a longer walk.
+ * colour is the one a full render paints, which is made from the smooth count
+ * and the scheme's own two settings, whatever they are; the path is the orbit
+ * itself, capped at `ORBIT_MAX_STEPS` whatever the iteration cap is, so a deep
+ * view does not cost the plot a longer walk.
  */
 export function probePoint(
   kind: FractalKind,
   point: ComplexNumber,
   maxIterations: number,
   scheme: ColorScheme,
+  options?: ColorOptions,
 ): PointProbe {
   const colour = mapIterationsToColor(
     kind.iterations(point, maxIterations, true),
     maxIterations,
     scheme,
+    options,
   );
 
   return {
@@ -272,6 +276,7 @@ export function probeAtPointer(
   bounds: FractalBounds,
   maxIterations: number,
   scheme: ColorScheme,
+  options?: ColorOptions,
 ): PointProbe | null {
   const pixel = pointerToCanvasPixel(clientX, clientY, rect, width, height);
   if (!pixel) return null;
@@ -281,6 +286,7 @@ export function probeAtPointer(
     pixelToComplex(pixel.x, pixel.y, width, height, bounds),
     maxIterations,
     scheme,
+    options,
   );
 }
 

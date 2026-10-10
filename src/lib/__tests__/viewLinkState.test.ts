@@ -37,12 +37,22 @@ describe("viewLinkToUpdates", () => {
       centerY: -0.094,
       zoomLevel: 2.56,
       colorScheme: "fire",
+      // A link that says nothing about the scheme's own settings leaves them
+      // as the page opens.
+      reverse: DEFAULT_VIEW_LINK_UPDATES.reverse,
+      shift: DEFAULT_VIEW_LINK_UPDATES.shift,
       autoIterationsOn: true,
       // An auto view carries no count, so the slider keeps the page's own.
       maxIterations: DEFAULT_VIEW_LINK_UPDATES.maxIterations,
       canvasWidth: 800,
       canvasHeight: 600,
     });
+  });
+
+  it("applies a reversed and shifted scheme beside the scheme itself", () => {
+    expect(
+      viewLinkToUpdates(decodeView(`${EXAMPLE_LINK}&r=1&o=0.25`)),
+    ).toMatchObject({ colorScheme: "fire", reverse: true, shift: 0.25 });
   });
 
   it("puts a Tricorn link's fractal on the page and leaves the constant standing", () => {
@@ -103,6 +113,8 @@ describe("viewLinkToUpdates", () => {
       centerY: -0.0149977,
       zoomLevel: 42.5,
       colorScheme: "rainbow",
+      reverse: DEFAULT_VIEW_LINK_UPDATES.reverse,
+      shift: DEFAULT_VIEW_LINK_UPDATES.shift,
       autoIterationsOn: false,
       maxIterations: 700,
       canvasWidth: 1200,

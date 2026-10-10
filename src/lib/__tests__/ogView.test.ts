@@ -36,6 +36,39 @@ describe("parseOgQuery", () => {
     expect(view(link).colorScheme).toBe("fire");
   });
 
+  it("honours a reversed or shifted scheme, in the key and in what draws", () => {
+    const plain = view("v=1&f=mandelbrot&z=3&s=fire");
+    const reversed = view("v=1&f=mandelbrot&z=3&s=fire&r=1&o=0.25");
+
+    expect(reversed.colorOptions).toEqual({ reverse: true, shift: 0.25 });
+    expect(reversed.key).toContain("&r=1&o=0.25&");
+    // Two pictures, so two keys: the cache holds the colours the link named.
+    expect(reversed.key).not.toBe(plain.key);
+    expect(plain.colorOptions).toEqual({ reverse: false, shift: 0 });
+  });
+
+  it("rounds a shift the codec writes, so the key names the picture exactly", () => {
+    const key = view("v=1&f=mandelbrot&z=3&s=fire&o=0.33").key;
+
+    expect(key).toContain("&o=0.33&");
+    expect(view(key).colorOptions.shift).toBe(0.33);
+  });
+
+  it("reads a whole turn of shift as nought, and writes no key for it", () => {
+    const whole = view("v=1&f=mandelbrot&z=3&s=fire&o=1");
+
+    expect(whole.colorOptions).toEqual({ reverse: false, shift: 0 });
+    expect(whole.key).toBe(view("v=1&f=mandelbrot&z=3&s=fire").key);
+    expect(whole.key).not.toMatch(/&o=/);
+  });
+
+  it("reads a reversal with no scheme beside it, since each field stands alone", () => {
+    expect(view("v=1&x=-0.75&r=1").colorOptions).toEqual({
+      reverse: true,
+      shift: 0,
+    });
+  });
+
   it("resolves the fractal and its variant the way the page does", () => {
     const julia = view("v=1&f=julia&k=Dendrite&x=0&y=0&z=1");
     const point = { real: 0.3, imaginary: 0.2 };
@@ -215,6 +248,12 @@ describe("parseOgQuery", () => {
       ["z", "v=1&z=-"],
       ["s", "v=1&s=neon"],
       ["s", "v=1&s=CLASSIC"],
+      ["r", "v=1&r=2"],
+      ["r", "v=1&r=yes"],
+      ["o", "v=1&o=abc"],
+      ["o", "v=1&o=2"],
+      ["o", "v=1&o=-1"],
+      ["o", "v=1&o="],
       ["i", "v=1&i=7"],
       ["i", "v=1&i=5000"],
       ["i", "v=1&i=1.5"],

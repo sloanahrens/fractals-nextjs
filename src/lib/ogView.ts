@@ -26,6 +26,11 @@
  *   centred, with extra plane at the sides (`cardBounds`). Cropping the 4:3 view
  *   to the card's height instead would cut off the top and bottom of what the
  *   link names.
+ * - Colour. The scheme and its two settings travel together: `r` and `o`
+ *   (`viewLink.ts`) are read like every other key, kept in the canonical query
+ *   and handed to the renderer, so a shared reversed or shifted scheme previews
+ *   in the colours the link names. A key that is present and refused — `o=2`,
+ *   `r=2` — is a 400 like any other.
  * - Iterations. The page's rule, then a cap: Auto picks `autoIterations(zoom)`
  *   (a multiple of 10 from 50 to 1000), a count the link names is taken as it is,
  *   and either is held to `OG_MAX_ITERATIONS` (400) so one render has a bounded
@@ -33,7 +38,12 @@
  *   little from the page's at the same view; that is the price of the limit.
  */
 
-import type { ColorScheme, FractalBounds, FractalKind } from "../types/fractal";
+import type {
+  ColorOptions,
+  ColorScheme,
+  FractalBounds,
+  FractalKind,
+} from "../types/fractal";
 import { resolveFractalKind } from "./fractalTypes";
 import { BASE_HEIGHT, autoIterations, calculateZoomBounds } from "./mandelbrot";
 import {
@@ -69,6 +79,11 @@ export interface OgView {
   maxIterations: number;
   /** Colour scheme to draw in. */
   colorScheme: ColorScheme;
+  /**
+   * Reverse and shift of that scheme, exactly as the link carried them, so the
+   * card is the shared picture and not the same view in the default palette.
+   */
+  colorOptions: ColorOptions;
 }
 
 /** What reading a query comes to: a view, or one sentence on why not. */
@@ -123,6 +138,8 @@ function unreadableKey(
     ["y", decoded.centerY !== undefined],
     ["z", decoded.zoomLevel !== undefined],
     ["s", decoded.colorScheme !== undefined],
+    ["r", decoded.reverse !== undefined],
+    ["o", decoded.shift !== undefined],
     ["i", decoded.autoIterationsOn !== undefined],
     // The size is one value: either key present needs the pair to be read.
     ["w", decoded.canvasWidth !== undefined],
@@ -187,6 +204,8 @@ export function parseOgQuery(search: string): OgParse {
     centerY: updates.centerY,
     zoomLevel: updates.zoomLevel,
     colorScheme: updates.colorScheme,
+    reverse: updates.reverse,
+    shift: updates.shift,
     autoIterationsOn: false,
     maxIterations,
     canvasWidth: OG_WIDTH,
@@ -206,6 +225,7 @@ export function parseOgQuery(search: string): OgParse {
       ),
       maxIterations,
       colorScheme: canonical.colorScheme,
+      colorOptions: { reverse: canonical.reverse, shift: canonical.shift },
     },
   };
 }

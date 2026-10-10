@@ -12,10 +12,11 @@ import {
 } from "../mandelbrot";
 import {
   CANVAS_SIZES,
+  MAX_FRAGMENT_LENGTH,
   decodeTour,
   decodeView,
   encodeView,
-  linkWithoutScheme,
+  linkWithoutColour,
   type ViewLinkState,
 } from "../viewLink";
 
@@ -50,10 +51,14 @@ const VIEWS = [
   { centerX: 0.2925755, centerY: -0.0149977, zoomLevel: 42.5 },
 ];
 
+/** Palette shifts a state is sampled with, all of them exact in two decimals. */
+const SHIFTS = [0, 0.25, 0.5, 0.75];
+
 /**
  * A state for each fractal, colour scheme, canvas size and iteration mode: the
  * whole of what the picker, the palette, the resolution buttons and the
- * iteration switch can put together.
+ * iteration switch can put together — and a share of them reversed and shifted,
+ * since those travel in a link beside the scheme.
  */
 function sampleStates(): ViewLinkState[] {
   const states: ViewLinkState[] = [];
@@ -82,6 +87,8 @@ function sampleStates(): ViewLinkState[] {
             ...constant,
             ...view,
             colorScheme: scheme.value,
+            reverse: (fractalIndex + sizeIndex) % 2 === 1,
+            shift: SHIFTS[(fractalIndex + schemeIndex) % SHIFTS.length],
             autoIterationsOn,
             maxIterations: autoIterationsOn
               ? undefined
@@ -113,6 +120,10 @@ function expectSameState(
   expect(actual.fractalType).toBe(expected.fractalType);
   expect(actual.variant).toBe(expected.variant);
   expect(actual.colorScheme).toBe(expected.colorScheme);
+  // Both settings are written only when they ask for something, so a link
+  // reads back the field as absent for the value that means "no change".
+  expect(actual.reverse ?? false).toBe(expected.reverse ?? false);
+  expect(actual.shift ?? 0).toBe(expected.shift ?? 0);
   expect(actual.autoIterationsOn).toBe(expected.autoIterationsOn);
   expect(actual.maxIterations).toBe(expected.maxIterations);
   expect(actual.canvasWidth).toBe(expected.canvasWidth);
@@ -473,6 +484,13 @@ describe("decodeView against a fragment it should not trust", () => {
       expect(state.zoomLevel).toBeGreaterThanOrEqual(MIN_ZOOM);
       expect(state.zoomLevel).toBeLessThanOrEqual(MAX_ZOOM);
     }
+    if (state.reverse !== undefined) expect(state.reverse).toBe(true);
+    if (state.shift !== undefined) {
+      // A whole turn reads as nought; anything else a link may say is a
+      // fraction of one.
+      expect(state.shift).toBeGreaterThanOrEqual(0);
+      expect(state.shift).toBeLessThan(1);
+    }
     if (state.maxIterations !== undefined) {
       expect(state.maxIterations).toBeGreaterThanOrEqual(MIN_ITERATIONS);
       expect(state.maxIterations).toBeLessThanOrEqual(MAX_ITERATIONS);
@@ -619,28 +637,45 @@ describe("the round trip", () => {
   });
 });
 
-describe("linkWithoutScheme", () => {
-  it("drops the colour field and keeps every other, in the format's order", () => {
-    expect(linkWithoutScheme(EXAMPLE_LINK)).toBe(
+describe("linkWithoutColour", () => {
+  it("drops the colour fields and keeps every other, in the format's order", () => {
+    expect(linkWithoutColour(EXAMPLE_LINK)).toBe(
       EXAMPLE_LINK.replace("s=fire&", ""),
     );
-    expect(linkWithoutScheme(`#${EXAMPLE_LINK}`)).toBe(
+    expect(linkWithoutColour(`#${EXAMPLE_LINK}`)).toBe(
       EXAMPLE_LINK.replace("s=fire&", ""),
     );
   });
 
-  it("makes two links that differ only in their scheme the same text", () => {
-    const same = (scheme: ViewLinkState["colorScheme"]) =>
-      linkWithoutScheme(encodeView({ ...EXAMPLE, colorScheme: scheme }));
+  it("drops a reversal and a shift as readily as a scheme", () => {
+    const state: ViewLinkState = {
+      ...EXAMPLE,
+      colorScheme: "ocean",
+      reverse: true,
+      shift: 0.25,
+    };
 
-    const first = same("classic");
-    for (const scheme of getAvailableColorSchemes().map((s) => s.value)) {
-      expect(same(scheme)).toBe(first);
-    }
+    expect(linkWithoutColour(encodeView(state))).toBe(
+      linkWithoutColour(EXAMPLE_LINK),
+    );
+  });
+
+  it("makes two links that differ only in their colours the same text", () => {
+    const same = (change: Partial<ViewLinkState>) =>
+      linkWithoutColour(encodeView({ ...EXAMPLE, ...change }));
+
+    const first = same({ colorScheme: "classic" });
+    const others: Partial<ViewLinkState>[] = [
+      { colorScheme: "fire", reverse: true },
+      { colorScheme: "grayscale", reverse: true, shift: 0.5 },
+      { colorScheme: "rainbow", shift: 0.75 },
+    ];
+
+    for (const change of others) expect(same(change)).toBe(first);
   });
 
   it("keeps two links that differ in anything else apart", () => {
-    const base = linkWithoutScheme(encodeView(EXAMPLE));
+    const base = linkWithoutColour(encodeView(EXAMPLE));
     const others: Partial<ViewLinkState>[] = [
       { centerX: EXAMPLE.centerX + 0.001 },
       { centerY: EXAMPLE.centerY + 0.001 },
@@ -652,7 +687,7 @@ describe("linkWithoutScheme", () => {
     ];
 
     for (const change of others) {
-      expect(linkWithoutScheme(encodeView({ ...EXAMPLE, ...change }))).not.toBe(
+      expect(linkWithoutColour(encodeView({ ...EXAMPLE, ...change }))).not.toBe(
         base,
       );
     }
@@ -666,9 +701,112 @@ describe("linkWithoutScheme", () => {
 
     // The name survives the field being dropped and the rest re-serialised, so
     // the two halves of the check read the same way round.
-    expect(linkWithoutScheme(encodeView(state))).toContain(
+    expect(linkWithoutColour(encodeView(state))).toContain(
       `k=${encodeURIComponent("custom:-0.8,0.156")}`,
     );
+  });
+});
+
+describe("encodeView and decodeView: the scheme's own settings", () => {
+  it("writes r and o after s and before i, and only when they say something", () => {
+    expect(encodeView({ ...EXAMPLE, reverse: true })).toBe(
+      "v=1&f=julia&k=Classic&x=-0.644&y=-0.094&z=2.56&s=fire&r=1&i=auto&w=800&h=600",
+    );
+    expect(encodeView({ ...EXAMPLE, shift: 0.25 })).toBe(
+      "v=1&f=julia&k=Classic&x=-0.644&y=-0.094&z=2.56&s=fire&o=0.25&i=auto&w=800&h=600",
+    );
+    expect(encodeView({ ...EXAMPLE, reverse: true, shift: 0.25 })).toBe(
+      "v=1&f=julia&k=Classic&x=-0.644&y=-0.094&z=2.56&s=fire&r=1&o=0.25&i=auto&w=800&h=600",
+    );
+  });
+
+  it("writes neither for a reversal that is off or a shift of nought", () => {
+    expect(encodeView({ ...EXAMPLE, reverse: false, shift: 0 })).toBe(
+      EXAMPLE_LINK,
+    );
+  });
+
+  it("writes a shift with two decimals and no more", () => {
+    // A third of a turn is a shade nobody can name; the hundredth is enough.
+    expect(encodeView({ ...EXAMPLE, shift: 1 / 3 })).toContain("&o=0.33&");
+    expect(encodeView({ ...EXAMPLE, shift: 0.1 })).toContain("&o=0.1&");
+    expect(encodeView({ ...EXAMPLE, shift: 0.9042 })).toContain("&o=0.9&");
+  });
+
+  it("writes a shift outside 0 to 1 as the fraction it is worth", () => {
+    // The mapping reads a shift modulo a whole turn, so a link that names the
+    // same colours as one of ours is written the way ours is.
+    expect(encodeView({ ...EXAMPLE, shift: 1.25 })).toContain("&o=0.25&");
+    expect(encodeView({ ...EXAMPLE, shift: -0.25 })).toContain("&o=0.75&");
+  });
+
+  it("reads r and o back", () => {
+    const read = decodeView(`#${EXAMPLE_LINK}&r=1&o=0.25`);
+
+    expect(read.reverse).toBe(true);
+    expect(read.shift).toBe(0.25);
+  });
+
+  it("writes a link with every field well inside the longest fragment it reads", () => {
+    const link = encodeView({
+      fractalType: "multibrot",
+      variant: "4",
+      centerX: -0.644,
+      centerY: -0.094,
+      zoomLevel: 2.56,
+      colorScheme: "fire",
+      reverse: true,
+      shift: 0.25,
+      autoIterationsOn: false,
+      maxIterations: 430,
+      canvasWidth: 1200,
+      canvasHeight: 900,
+    });
+
+    expect(link).toBe(
+      "v=1&f=multibrot&k=4&x=-0.644&y=-0.094&z=2.56&s=fire&r=1&o=0.25&i=430&w=1200&h=900",
+    );
+    expect(link.length).toBeLessThanOrEqual(MAX_FRAGMENT_LENGTH);
+    expect(decodeView(link)).toMatchObject({
+      reverse: true,
+      shift: 0.25,
+      maxIterations: 430,
+    });
+  });
+
+  it("reads a whole turn of shift as nought, which is no shift", () => {
+    expect(decodeView(`#${EXAMPLE_LINK}&o=1`).shift).toBe(0);
+  });
+
+  it("leaves out a shift outside 0 to 1, and any r that is not 1", () => {
+    for (const value of ["2", "-1", "abc", "", "0x1", " 0.5"]) {
+      expect(decodeView(`#${EXAMPLE_LINK}&o=${value}`).shift).toBeUndefined();
+    }
+
+    for (const value of ["2", "0", "true", ""]) {
+      expect(decodeView(`#${EXAMPLE_LINK}&r=${value}`).reverse).toBeUndefined();
+    }
+  });
+
+  it("reads r and o with no scheme beside them, since each field stands alone", () => {
+    const read = decodeView("v=1&x=-0.75&r=1&o=0.5");
+
+    expect(read.colorScheme).toBeUndefined();
+    expect(read.reverse).toBe(true);
+    expect(read.shift).toBe(0.5);
+  });
+
+  it("round-trips every sample state's settings, and reads nothing into a link without them", () => {
+    for (const state of sampleStates()) {
+      const read = decodeView(`#${encodeView(state)}`);
+
+      expect(read.reverse ?? false).toBe(state.reverse ?? false);
+      expect(read.shift ?? 0).toBe(state.shift ?? 0);
+    }
+
+    const plain = decodeView(`#${EXAMPLE_LINK}`);
+    expect(plain.reverse).toBeUndefined();
+    expect(plain.shift).toBeUndefined();
   });
 });
 

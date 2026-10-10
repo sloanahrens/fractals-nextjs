@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 
-import type { ColorScheme } from "../../types/fractal";
+import type { ColorOptions, ColorScheme } from "../../types/fractal";
 import { placeColorScheme, type Place } from "../../lib/places";
 import {
   DEFAULT_THUMBNAIL_HEIGHT,
@@ -24,6 +24,11 @@ interface NearbyStripProps {
    * scheme of its own; the others keep theirs (`placeColorScheme`).
    */
   colorScheme: ColorScheme;
+  /**
+   * That scheme's reversal and shift, which a click applies too: a tile is
+   * drawn with them so it is the picture the click shows.
+   */
+  colorOptions?: ColorOptions;
   /** True while the main render runs, which holds the thumbnails back. */
   paused: boolean;
   /** A tile was chosen: go there. */
@@ -66,6 +71,7 @@ function drawEntry(canvas: HTMLCanvasElement, entry: ThumbnailEntry): void {
 interface TileProps {
   place: Place;
   colorScheme: ColorScheme;
+  colorOptions: ColorOptions | undefined;
   store: ThumbnailStore;
   onSelect: (place: Place) => void;
 }
@@ -80,26 +86,40 @@ interface TileProps {
  * changes, which is what asks again.
  *
  * It is drawn in `placeColorScheme(place, colorScheme)`, the scheme a click on
- * it applies. A place that names its colours keeps them when the page's scheme
- * changes, so its effect has nothing new to ask for and its picture is not
- * repainted; only a place that names none follows the page.
+ * it applies, through the page's own palette settings (`colorOptions`), which a
+ * click applies as well. A place that names its colours keeps them when the
+ * page's scheme changes, so its effect has nothing new to ask for and its
+ * picture is not repainted; only a place that names none follows the page. A
+ * change to the palette settings moves every tile, since they colour every
+ * scheme.
  */
-function Tile({ place, colorScheme, store, onSelect }: TileProps) {
+function Tile({
+  place,
+  colorScheme,
+  colorOptions,
+  store,
+  onSelect,
+}: TileProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scheme = placeColorScheme(place, colorScheme);
 
   useEffect(() => {
     let mounted = true;
 
-    store.request(place, scheme, (entry) => {
-      const canvas = canvasRef.current;
-      if (mounted && canvas) drawEntry(canvas, entry);
-    });
+    store.request(
+      place,
+      scheme,
+      (entry) => {
+        const canvas = canvasRef.current;
+        if (mounted && canvas) drawEntry(canvas, entry);
+      },
+      colorOptions,
+    );
 
     return () => {
       mounted = false;
     };
-  }, [store, place, scheme]);
+  }, [store, place, scheme, colorOptions]);
 
   return (
     <button
@@ -147,6 +167,7 @@ function Tile({ place, colorScheme, store, onSelect }: TileProps) {
 export function NearbyStrip({
   places,
   colorScheme,
+  colorOptions,
   paused,
   onSelect,
   onMore,
@@ -191,6 +212,7 @@ export function NearbyStrip({
             key={`${listKey}|${place.id}`}
             place={place}
             colorScheme={colorScheme}
+            colorOptions={colorOptions}
             store={store}
             onSelect={onSelect}
           />
