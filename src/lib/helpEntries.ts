@@ -94,6 +94,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         action:
           "Buttons in the top bar that retrace the places you jumped to, as the browser's own do; each is disabled when there is nowhere to go",
       },
+      {
+        keys: "Blank picture",
+        action:
+          "If a zoom lands on a picture of one colour, a small note says there is nothing to see, with a Back button; it never moves the view, and goes when the view changes",
+      },
     ],
   },
   {
