@@ -159,6 +159,20 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-09_
 
+### Preset button labels are no longer clipped (2026-10-09)
+
+- The built-in view buttons asked for six columns from `lg` up, but from there
+  the Presets card is the fixed `w-96` column beside the canvas, not a share of
+  the viewport: each button got about 26px of text width and "Julia: Classic"
+  read "Classi". The grid is `grid-cols-2 sm:grid-cols-3 lg:grid-cols-2` now,
+  and a button carries `min-w-0 break-words`, so a name that does not fit wraps
+  inside its button. Labels and the `Julia:` prefix are unchanged.
+- `src/__tests__/preset-button-labels.test.ts` reads `PresetSelector.tsx` for
+  the classes that decide this — a column count past three, a missing
+  `lg:grid-cols-2`, a button that cannot shrink or wrap, and any
+  `truncate`/`whitespace-nowrap`/`overflow-hidden`/fixed-width class — since
+  the Node suite has no layout to measure.
+
 ### Custom Julia constant controls (2026-10-09)
 
 - The Julia constant select offers a fifth option, "Custom", after the named

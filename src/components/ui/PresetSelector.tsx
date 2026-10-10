@@ -74,18 +74,23 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
         />
       </div>
 
+      {/* The column count follows the card, not the viewport: from `lg` up the
+          card is the fixed w-96 beside the canvas, so six columns left each
+          button a few characters of text width and clipped "Julia: Classic" to
+          "Classi". Two columns fit the longest name, and a name that does not
+          fit wraps onto a second line. */}
       {/* Every fractal the picker offers has built-in views, but a fractal a
           preset names and this build does not know lists none, and the grid is
           absent then rather than an empty row above the list of saved ones. */}
       {builtins.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2">
           {builtins.map((preset) => (
             <Button
               key={preset.id}
               onClick={() => onPresetSelect(preset)}
               variant={currentPreset === preset.id ? "primary" : "secondary"}
               size="sm"
-              className="text-xs"
+              className="min-w-0 break-words text-xs"
             >
               {preset.name}
             </Button>
