@@ -4,7 +4,7 @@
  *
  * Everything here is pure or takes its storage and clock as arguments, so the
  * Node suite drives it without a browser. `WanderControl.tsx` draws the pill and
- * `page.tsx` owns the one wander state it and the Settings checkbox share.
+ * `FractalExplorer.tsx` owns the one wander state it and the Settings checkbox share.
  */
 
 /** The pill's accessible name, in both states; the visible words change. */

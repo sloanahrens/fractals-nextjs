@@ -24,7 +24,7 @@ function source(path: string): string {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 }
 
-const page = source("../app/page.tsx");
+const page = source("../app/FractalExplorer.tsx");
 const topBar = source("../components/ui/TopBar.tsx");
 const card = source("../components/ui/MathCard.tsx");
 const hint = source("../components/ui/BlankHint.tsx");

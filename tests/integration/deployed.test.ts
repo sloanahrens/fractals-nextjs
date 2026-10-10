@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { requestUrl, resolveIntegrationTarget } from "@/lib/integrationTarget";
+import { decodeView, encodeView } from "@/lib/viewLink";
+import { copyLinkUrl } from "@/lib/viewQuery";
 import { linkHref, metaContent } from "./html";
 import { get } from "./http";
 
@@ -98,6 +100,92 @@ describe(`the deployment at ${target.baseUrl}`, () => {
       expect(refused.status, `${OG}${bad}`).toBe(400);
       await refused.body?.cancel();
     }
+  });
+
+  it("previews a query link as that view: og:image is /api/og for it, on the same origin", async () => {
+    const origin = new URL(target.baseUrl).origin;
+    const view = encodeView({
+      fractalType: "julia",
+      variant: "Dendrite",
+      centerX: -0.5,
+      centerY: 0.25,
+      zoomLevel: 400,
+      colorScheme: "fire",
+      autoIterationsOn: true,
+      canvasWidth: 800,
+      canvasHeight: 600,
+    });
+
+    const html = await (await get(url(`${HOME}?${view}`))).text();
+    const image = metaContent(html, "og:image");
+
+    expect(image).toBe(`${origin}${OG}?${view}`);
+    expect(metaContent(html, "twitter:image")).toBe(image);
+    expect(metaContent(html, "og:url")).toBe(`${origin}/?${view}`);
+    expect(html).toMatch(/<title>\s*Julia set, Dendrite, 400x - /);
+
+    // The card the preview names is drawn, not a dead link.
+    const drawn = await get(image as string);
+    expect(drawn.status).toBe(200);
+    expect(drawn.headers.get("content-type")).toContain("image/png");
+    await drawn.body?.cancel();
+  });
+
+  it("serves the static card for a query that is not a view, and for no query", async () => {
+    const origin = new URL(target.baseUrl).origin;
+    const queries = [
+      "",
+      "?utm_source=mail",
+      "?v=1",
+      "?v=2&f=julia&z=4",
+      "?v=1&f=julia&x=banana",
+      "?garbage=%E0%A4%A&%",
+      `?v=1&f=julia&k=${"A".repeat(600)}`,
+      "?v=1&f=%3Cscript%3Ealert(1)%3C/script%3E",
+    ];
+
+    for (const query of queries) {
+      const response = await get(url(`${HOME}${query}`));
+      expect(response.status, query).toBe(200);
+      const html = await response.text();
+
+      expect(metaContent(html, "og:image"), query).toBe(`${origin}${CARD}`);
+      expect(metaContent(html, "twitter:image"), query).toBe(
+        `${origin}${CARD}`,
+      );
+      expect(html, query).not.toContain("<script>alert(1)");
+    }
+  });
+
+  it("round-trips the link Copy link writes: the same view comes back out of the preview", async () => {
+    const view = {
+      fractalType: "multibrot",
+      variant: "4",
+      centerX: 0.1234567891,
+      centerY: -0.5,
+      zoomLevel: 12.5,
+      colorScheme: "ocean" as const,
+      autoIterationsOn: false,
+      maxIterations: 300,
+      canvasWidth: 1200,
+      canvasHeight: 900,
+    };
+    const copied = copyLinkUrl(
+      new URL(target.baseUrl).origin,
+      "/",
+      encodeView(view),
+    );
+
+    const html = await (await get(copied)).text();
+    const image = new URL(metaContent(html, "og:image") as string);
+
+    expect(image.pathname).toBe(OG);
+    expect(decodeView(image.search.slice(1))).toEqual(
+      decodeView(encodeView(view)),
+    );
+    expect(new URL(metaContent(html, "og:url") as string).search).toBe(
+      image.search,
+    );
   });
 
   it("links the favicon and the touch icon from the page", async () => {

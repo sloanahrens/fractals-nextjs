@@ -1,7 +1,7 @@
 /**
  * Sharing a view: the parts of it that live in the page
  *
- * Four things about a shareable link are decided in `page.tsx` and nowhere
+ * Four things about a shareable link are decided in `FractalExplorer.tsx` and nowhere
  * else: the fragment is read from `window.location.hash` in an effect rather
  * than during render, a fragment that changes while the page is open is read by
  * the same effect path through a `hashchange` listener, the address bar is
@@ -21,7 +21,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIRECTORY = fileURLToPath(new URL("..", import.meta.url));
-const PAGE_PATH = fileURLToPath(new URL("../app/page.tsx", import.meta.url));
+const PAGE_PATH = fileURLToPath(
+  new URL("../app/FractalExplorer.tsx", import.meta.url),
+);
 const page = readFileSync(PAGE_PATH, "utf8");
 
 /**
@@ -69,7 +71,7 @@ function functionBody(source: string, name: string): string {
 
 describe("the copy link control", () => {
   it("reads the page it is checking", () => {
-    expect(relative(SRC_DIRECTORY, PAGE_PATH)).toBe("app/page.tsx");
+    expect(relative(SRC_DIRECTORY, PAGE_PATH)).toBe("app/FractalExplorer.tsx");
     expect(page.length).toBeGreaterThan(1000);
   });
 
@@ -124,7 +126,7 @@ describe("the address bar", () => {
     const applied = effectBody(page, "linkAppliedRef.current = true;");
 
     expect(applied).toContain("if (linkAppliedRef.current) return;");
-    expect(applied).toContain("applyViewLink(window.location.hash)");
+    expect(applied).toContain("applyViewLink(link.fragment)");
 
     // The setters are not in this effect: they are in the one function both
     // reads of a fragment share.
@@ -203,5 +205,42 @@ describe("the address bar", () => {
     expect(page).toContain(
       "drawCanvas(renderPolicy.requestRender(), currentLink)",
     );
+  });
+});
+
+describe("the query form", () => {
+  it("is what Copy link copies, on this origin and path", () => {
+    const copy = functionBody(page, "handleCopyLink");
+
+    // The bar is still brought up to date in the hash form first, and nothing
+    // else in the page writes the query form: the clipboard gets it, the bar
+    // does not.
+    expect(copy).toContain("writeViewLink(`#${currentLink}`");
+    expect(copy).toContain("copyLinkUrl(");
+    expect(copy).toContain("window.location.origin");
+    expect(copy).toContain("window.location.pathname");
+    expect(copy).not.toContain("window.location.href");
+    expect(page.match(/copyLinkUrl\(/g)).toHaveLength(1);
+  });
+
+  it("is read at mount through the one function that knows the two forms", () => {
+    const applied = effectBody(page, "linkAppliedRef.current = true;");
+
+    expect(applied.replace(/\s+/g, " ")).toContain(
+      "readLocationLink(window.location.search, window.location.hash)",
+    );
+    // The query goes from the bar by replaceState, never by an assignment that
+    // would reload the page, and a refusal does not stop the view being read.
+    expect(applied).toContain("if (link.dropQuery)");
+    expect(applied).toContain("window.history.replaceState(");
+    expect(applied.indexOf("replaceState(")).toBeLessThan(
+      applied.indexOf("applyViewLink(link.fragment)"),
+    );
+  });
+
+  it("is not read by the hashchange listener: only a load has a query", () => {
+    const listener = effectBody(page, 'window.addEventListener("hashchange"');
+
+    expect(listener).not.toContain("readLocationLink");
   });
 });

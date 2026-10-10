@@ -157,7 +157,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Copy link",
         action:
-          "Put the view on screen in the address bar and on the clipboard, to share or bookmark",
+          "Copy a link to the view on screen to share: it opens on the same view and previews as that view in a chat. The address bar already follows the view, so it can be bookmarked as it is",
       },
       {
         keys: "Download PNG",

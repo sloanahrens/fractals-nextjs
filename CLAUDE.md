@@ -71,7 +71,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Render quality** (`src/lib/renderQuality.ts`): Whether a redraw is a low-resolution preview or a full-resolution render
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
-- **Site origin** (`src/lib/siteOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `generateMetadata` in `src/app/layout.tsx` puts on og:image, twitter:image and og:url
+- **Site origin** (`src/lib/siteOrigin.ts`, read per request by `src/app/requestOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `pageMetadata` (`src/lib/pageMetadata.ts`, called by `generateMetadata` in `src/app/layout.tsx` and `src/app/page.tsx`) puts on og:image, twitter:image and og:url
+- **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>`; a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form; `generateMetadata` in the server page turns the search parameters into a view-specific og:image at `/api/og` or, for no view, the static card; see the Version Note of 2026-10-10 (fr-cr5)
 - **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Math/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
@@ -86,7 +87,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 
 ### State Management Pattern
 
-The main page (`src/app/page.tsx`) uses React hooks for:
+The main page (`src/app/FractalExplorer.tsx`, a client component; `src/app/page.tsx` is the server page that renders it and writes its metadata) uses React hooks for:
 
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
@@ -185,6 +186,98 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-10_
 
+### Per-view previews: Copy link carries the view in the query (2026-10-10)
+
+- The second half of per-view link previews (owner-approved 2026-10-10, fr-cr5;
+  the first half is `/api/og`, fr-c4z). A crawler never sees the part of an
+  address after `#`, so a shared link has to carry its view in the query. The
+  address bar keeps the hash form exactly as before; only the clipboard gets the
+  query form.
+- **The file split.** Only a page is given `searchParams`, and a layout is not,
+  so `src/app/page.tsx` is now a small server component (`generateMetadata` and
+  `<FractalExplorer />`) and the old page moved, whole, to
+  `src/app/FractalExplorer.tsx` (still `"use client"`). Every earlier Version Note that says `page.tsx` for the page's
+  state, handlers or effects means `FractalExplorer.tsx` now, and the
+  source-reading panel tests read that path. `src/app/requestOrigin.ts` reads
+  the request's origin (`headers()` and `siteOrigin`) for both the layout and
+  the page.
+- **Copy link.** `copyLinkUrl(origin, pathname, link)` (`src/lib/viewQuery.ts`)
+  is `<origin><pathname>?<link>`, the codec's `encodeView` text without the `#`.
+  `handleCopyLink` still writes the hash form to the address bar first, then
+  copies `copyLinkUrl(window.location.origin, window.location.pathname,
+  currentLink)` (not `location.href`); the manual-copy field offers the same
+  URL. Nothing else writes the query form.
+- **Reading either form.** `readLocationLink(search, hash)` returns `{ fragment,
+  dropQuery }`. A hash with anything past the `#` wins. Otherwise a query that is
+  a view link, meaning `decodeView` reads at least one field of it or
+  `decodeTour` says it asks for a tour (`?v=1&tour=1`), is taken as the fragment
+  `#<query>`; `?v=1` alone, a query of another version and tracking parameters
+  like `?utm_source=x` are not view links and are left in the bar. `dropQuery`
+  is true whenever the query was a view link, including when a hash beat it (a
+  bar naming one view in its query and another in its hash would preview as the
+  first and open as the second). The mount effect in `FractalExplorer.tsx` calls
+  it once, `history.replaceState(null, "", pathname + fragment)` when `dropQuery`
+  (in try/catch; a refusal does not stop the view being read), then
+  `journey.replace(fragment)` and `applyViewLink(fragment)`, the path a hash
+  takes, so validation, field-by-field dropping, `tour=1` and the journey are
+  unchanged. The `hashchange` listener does not read the query: only a load has
+  one. The effect calls `replaceState` directly because `replaceAddressBar` is
+  declared after it and would be in the dependency list's temporal dead zone.
+- **Preview.** `previewFor(searchParams)` (`src/lib/viewPreview.ts`) turns the
+  route's `searchParams` into a `{ fragment, line }` or null. It rebuilds the
+  query with `URLSearchParams` (a repeated key counts by its first value, as the
+  decoder reads it; Next has already decoded once, so a nested `%2566` stays
+  `%66` and is no fractal), and previews only when `parseOgQuery` accepts it,
+  the strictness `/api/og` has, so the card is one the route will draw. The
+  fragment is `encodeView(viewLinkToUpdates(decodeView(query)))`: only known
+  fields, the codec's order, Auto kept as `i=auto`, the canvas size filled in.
+  The line, `describeViewLine`, is built from the decoded state alone: a noun per
+  fractal (Mandelbrot set, Julia set, Burning Ship, Tricorn, Multibrot, Newton
+  fractal), the variant's option label or, for a custom Julia constant, `c =` and
+  `formatComplex`, and `formatZoom(zoom)` + `x`: "Julia set, Dendrite, 400x".
+  No request text reaches the head.
+- **Metadata.** `pageMetadata(origin, searchParams = {})`
+  (`src/lib/pageMetadata.ts`) holds everything `layout.tsx` held (the title,
+  description, keywords, robots, the card constants), so the layout and the page
+  share it and cannot drift; the page's `openGraph` replaces the layout's whole
+  (Next merges metadata one level deep), which is why the function builds the
+  complete object. With a preview: og:image and twitter:image are
+  `<origin>/api/og?<fragment>` (1200 x 630 declared, as the route draws), og:url
+  `<origin>/?<fragment>`, the title `<line> - <TITLE>`, the descriptions
+  `<line>. <description>`, the image alt `<line>, drawn by Fractal Explorer`.
+  Without one, exactly what fr-nd5 left. `/` was already `ƒ` (dynamic) for
+  `headers()`; `searchParams` adds nothing to that.
+- Measured in headless Chrome against a standalone server (a DevTools session;
+  the standalone folder needs `.next/static` and `public` copied in and the
+  server restarted after, since it lists static files at start): a query link
+  opens on its view and the bar settles to `/#v=1&...&w=800&h=600`; a query
+  beside a different hash opens on the hash and loses the query; `?utm_source=x`
+  keeps its query and gains the default view's hash; a query with `tour=1` starts
+  the tour; a hash link is as before; Copy link wrote
+  `http://host/?v=1&f=tricorn&x=0&y=0&z=1&s=classic&i=auto&w=800&h=600` with the
+  bar still on `#v=1&...`.
+- Tests: `viewQuery.test.ts` (the Copy link URL and its round trip through the
+  codec, empty / hash / query / both, a hash that is no view still winning,
+  tour, another version, `?v=1` alone, a repeated key, an unreadable value, a
+  600-character value, garbage and unknown fields), `viewPreview.test.ts` (null
+  for none and not-a-view, the re-encoded fragment, refusing what the route would
+  refuse, known fields only, first of a repeated key, zoom clamp, 600-character
+  values, nested encodings, script-looking text in every key, a custom
+  constant, the line for every fractal), `pageMetadata.test.ts` (the static head
+  unchanged for no, empty, tracking and `v=1`-only parameters; the view's image,
+  url, title, descriptions and alt; hostile parameters falling back to the
+  static head and no visitor text anywhere in the object), the new
+  `share-link-panel.test.ts` cases (Copy link copies the query form and not
+  `href`, the mount read goes through `readLocationLink`, the listener does not),
+  and in the integration tier three checks (a valid query link's og:image is
+  `<origin>/api/og?<fragment>` on the same origin and draws a PNG; the static card
+  for none and for a list of garbage queries; the link Copy link writes
+  round-trips through the codec). Run against a local standalone server, the
+  integration tier passes except the social-card file check, which needs
+  `public/` that only the image copies.
+- Docs: the README's Sharing a View and Link preview sections and Project
+  Structure, the Help entry for Copy link, and the design doc's As built.
+
 ### Math card is on by default, collapsed, and remembered (2026-10-10)
 
 - The owner liked the Math card (fr-1tk) and wants it up from the first visit
@@ -265,7 +358,7 @@ _Last updated: 2026-10-10_
 ### Image route: /api/og draws a view as a 1200x630 PNG (2026-10-10)
 
 - `GET /api/og?<view link>` is the first half of per-view link previews
-  (owner-approved 2026-10-10, fr-c4z); the next bead (fr-cr5) makes Copy link and
+  (owner-approved 2026-10-10, fr-c4z); the next bead (fr-cr5, done: see the note above) makes Copy link and
   the page's og:image use it. Nothing a visitor sees changed: no page code
   imports any of this. The query is exactly what the link codec writes after the
   `#` (`v`, `f`, `k`, `x`, `y`, `z`, `s`, `i`, `w`, `h`), read by `decodeView`,
