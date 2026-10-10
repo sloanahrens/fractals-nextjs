@@ -45,12 +45,6 @@ export interface FractalConfig {
   colorScheme: ColorScheme;
 }
 
-export interface RenderPoint {
-  x: number;
-  y: number;
-  iterations: number;
-}
-
 export interface ColorRGB {
   r: number;
   g: number;

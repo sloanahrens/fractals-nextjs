@@ -1,11 +1,6 @@
-import {
-  FractalConfig,
-  FractalBounds,
-  FractalKind,
-  RenderPoint,
-} from "../types/fractal";
-import { mandelbrotKind, pixelToComplex } from "./mandelbrot";
-import { mapIterationsToColor } from "./colorMapping";
+import { FractalConfig, FractalKind } from "../types/fractal";
+import { mandelbrotKind } from "./mandelbrot";
+import { BYTES_PER_PIXEL, renderRgbaRows } from "./renderRgba";
 
 /**
  * Fractal renderer class for managing canvas rendering operations
@@ -75,35 +70,29 @@ export class FractalRenderer {
     const totalPixels = width * height;
     let processedPixels = 0;
 
-    // Render in chunks to avoid blocking the UI. The floor keeps canvases
-    // under 10000 pixels (where totalPixels / 100 rounds to 0) from wedging
-    // the row loop on a zero-sized step.
-    const chunkSize = Math.max(
-      1,
-      Math.min(1000, Math.floor(totalPixels / 100)),
-    );
+    // A row at a time, into a buffer of its own, so nothing reaches the
+    // canvas's image data until the superseded check below has passed. The
+    // pixels are `renderRgbaRows`, the function the server draws a link
+    // preview with.
+    const row = new Uint8ClampedArray(width * BYTES_PER_PIXEL);
 
     for (let y = 0; y < height && !superseded(); y++) {
-      const rowPromises: Promise<RenderPoint[]>[] = [];
+      renderRgbaRows(
+        row,
+        y,
+        y + 1,
+        bounds,
+        width,
+        height,
+        maxIterations,
+        colorScheme,
+        this.kind,
+        useSmooth,
+      );
 
-      // Process row in chunks
-      for (let chunkStart = 0; chunkStart < width; chunkStart += chunkSize) {
-        const chunkEnd = Math.min(chunkStart + chunkSize, width);
-        const chunkPromise = this.renderRowChunk(
-          y,
-          chunkStart,
-          chunkEnd,
-          width,
-          height,
-          bounds,
-          maxIterations,
-          useSmooth,
-        );
-        rowPromises.push(chunkPromise);
-      }
-
-      // Wait for all chunks in the row to complete
-      const rowResults = await Promise.all(rowPromises);
+      // Give a render started from a promise continuation its turn to claim
+      // the canvas before this row is painted.
+      await Promise.resolve();
 
       // The row was computed while another run may have claimed the canvas, so
       // drop it rather than colouring pixels of a view the user has left. This
@@ -111,17 +100,7 @@ export class FractalRenderer {
       // await above suspends it, and nothing here writes before this check.
       if (superseded()) break;
 
-      const rowPoints = rowResults.flat();
-
-      // Apply colors to pixels
-      for (const point of rowPoints) {
-        const color = mapIterationsToColor(
-          point.iterations,
-          maxIterations,
-          colorScheme,
-        );
-        this.setPixel(point.x, point.y, color.r, color.g, color.b, 255);
-      }
+      this.imageData.data.set(row, y * width * BYTES_PER_PIXEL);
 
       processedPixels += width;
 
@@ -146,53 +125,6 @@ export class FractalRenderer {
     onProgress?.(1);
 
     this.isRendering = false;
-  }
-
-  /**
-   * Render a chunk of a row (for parallel processing)
-   */
-  private async renderRowChunk(
-    y: number,
-    startX: number,
-    endX: number,
-    width: number,
-    height: number,
-    bounds: FractalBounds,
-    maxIterations: number,
-    useSmooth: boolean,
-  ): Promise<RenderPoint[]> {
-    const points: RenderPoint[] = [];
-
-    for (let x = startX; x < endX; x++) {
-      const complex = pixelToComplex(x, y, width, height, bounds);
-      const iterations = this.kind.iterations(
-        complex,
-        maxIterations,
-        useSmooth,
-      );
-
-      points.push({ x, y, iterations });
-    }
-
-    return points;
-  }
-
-  /**
-   * Set a pixel color in the image data
-   */
-  private setPixel(
-    x: number,
-    y: number,
-    r: number,
-    g: number,
-    b: number,
-    a: number,
-  ): void {
-    const index = (y * this.canvas.width + x) * 4;
-    this.imageData.data[index] = r; // Red
-    this.imageData.data[index + 1] = g; // Green
-    this.imageData.data[index + 2] = b; // Blue
-    this.imageData.data[index + 3] = a; // Alpha
   }
 
   /**

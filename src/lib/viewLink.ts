@@ -95,7 +95,7 @@ export interface ViewLinkState {
 }
 
 /** The version this build writes, and the only one it reads. */
-const VERSION = 1;
+export const VIEW_LINK_VERSION = 1;
 
 /**
  * The canvas sizes the resolution buttons offer, as the pairs a link carries.
@@ -128,7 +128,7 @@ const SIGNIFICANT_DIGITS = 10;
  * A link for even the busiest state is about 90 characters, so a longer paste
  * is not one, and there is no reason to walk it.
  */
-const MAX_FRAGMENT_LENGTH = 500;
+export const MAX_FRAGMENT_LENGTH = 500;
 
 /** What `i` says when the zoom, not the slider, picks the count. */
 const AUTO_ITERATIONS = "auto";
@@ -296,7 +296,7 @@ export function encodeView(state: ViewLinkState): string {
 
   // Written in this order because the string a view produces is part of the
   // format: one view is always one link.
-  fields.set("v", String(VERSION));
+  fields.set("v", String(VIEW_LINK_VERSION));
 
   const fractal = fractalNamed(state.fractalType);
   if (fractal !== null) fields.set("f", fractal);
@@ -360,7 +360,9 @@ export function decodeTour(fragment: string): boolean {
 
   const fields = new URLSearchParams(text);
 
-  return fields.get("v") === String(VERSION) && fields.get("tour") === "1";
+  return (
+    fields.get("v") === String(VIEW_LINK_VERSION) && fields.get("tour") === "1"
+  );
 }
 
 /**
@@ -386,7 +388,7 @@ export function decodeView(fragment: string): Partial<ViewLinkState> {
   // The version is read first and nothing else is read without it: a link from
   // a build that means something else by these keys is not half a view, it is
   // no view.
-  if (fields.get("v") !== String(VERSION)) return state;
+  if (fields.get("v") !== String(VIEW_LINK_VERSION)) return state;
 
   const fractal = fractalNamed(fields.get("f"));
   if (fractal !== null) state.fractalType = fractal;

@@ -42,6 +42,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 ### Core Rendering System
 
 - **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support
+- **renderRgba** (`src/lib/renderRgba.ts`): A view as raw RGBA bytes with no canvas — `renderRgbaRows` (some rows into a buffer) and `renderRgba` (the whole picture); a pixel's point to its count through the kind, the count to a colour through the scheme. `FractalRenderer` draws every row through it, and so does `/api/og`
+- **Image route** (`src/app/api/og/route.ts`, a shell over `src/lib/ogRoute.ts`, `ogView.ts`, `ogLimits.ts`) and **PNG encoder** (`src/lib/pngEncode.ts`): `GET /api/og?<view link>` draws a view as a 1200x630 PNG on the server; see the Version Note of 2026-10-10 (fr-c4z)
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
 - **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, the choice-to-kind and choice-to-default-view resolvers, and the per-fractal variant descriptor (`fractalVariants`, `defaultVariant`, `variantOn`)
@@ -121,7 +123,7 @@ The application uses Next.js with these key settings:
 
 ESLint for code quality and Vitest for unit tests. Tests live in
 `src/**/__tests__/*.test.ts` and cover the pure logic in `src/lib` plus the
-`/api/health` route; `vitest.config.mts` aliases `@/*` to `src/*` and pins the
+`/api/health`, `/api/version` and `/api/og` routes; `vitest.config.mts` aliases `@/*` to `src/*` and pins the
 node environment, so a test must not need a browser, canvas or network.
 
 The integration tier is separate on purpose. `tests/integration/**` calls a
@@ -182,6 +184,121 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Image route: /api/og draws a view as a 1200x630 PNG (2026-10-10)
+
+- `GET /api/og?<view link>` is the first half of per-view link previews
+  (owner-approved 2026-10-10, fr-c4z); the next bead (fr-cr5) makes Copy link and
+  the page's og:image use it. Nothing a visitor sees changed: no page code
+  imports any of this. The query is exactly what the link codec writes after the
+  `#` (`v`, `f`, `k`, `x`, `y`, `z`, `s`, `i`, `w`, `h`), read by `decodeView`,
+  filled by `viewLinkToUpdates`, and drawn with `resolveFractalKind(f, k)`.
+- `src/lib/renderRgba.ts` is the pipeline the canvas used to run inline, pulled
+  out so the browser and the server cannot draw a view differently:
+  `renderRgbaRows(out, firstRow, endRow, bounds, width, height, maxIterations,
+  scheme, kind, smooth = true)` writes rows (row `y` at `(y - firstRow) * width *
+  4`), `renderRgba(bounds, width, height, maxIterations, scheme, kind, smooth =
+  true)` returns the whole `Uint8ClampedArray`. A pixel's point is its top-left
+  corner (`pixelToComplex`, as ever), the count is `kind.iterations`, the colour
+  `mapIterationsToColor`, alpha 255. It has no canvas, `window` or Node module.
+  `FractalRenderer.renderFractal` now computes each row into a one-row buffer with
+  `renderRgbaRows`, awaits (a newer render claims the canvas there), checks the
+  run token, then copies the row into its `ImageData`; nothing reaches the image
+  data before the check, as before. `renderRowChunk` (never actually parallel) and
+  `setPixel` are gone, and so is the unused `RenderPoint` type. The parity is
+  tested for every fractal and variant: `fractalRenderer.test.ts` fills a fake
+  canvas through the renderer and compares it byte for byte with `renderRgba`
+  (smooth, and whole counts as a preview draws them), and `renderRgba.test.ts`
+  holds `renderRgba` to the old formula written out by hand. A smooth count just
+  under 0 gives a negative colour channel, which an `ImageData` and a
+  `Uint8ClampedArray` both clamp to 0.
+- `src/lib/pngEncode.ts`: `encodePng(rgba, width, height)` on `node:zlib` alone
+  (server only; no dependency, and its own CRC-32 table, since `zlib.crc32` is
+  newer than the gate's Node 20.18). 8-bit truecolour with the alpha byte dropped
+  (every picture is opaque), each row the smallest of the None, Sub and Up
+  filters by sum of absolute residuals, one IDAT, deflate level 6; no time or text
+  in it, so one picture is one file. It throws a `RangeError` for a size that is
+  not a positive integer pair or a buffer of the wrong length.
+- `src/lib/ogView.ts`, `parseOgQuery(search)`: the page is forgiving of a link (a
+  field it cannot read keeps its default), the route is strict, because it is an
+  unauthenticated CPU endpoint and a card showing another place than the link
+  names is worse than a 400. It answers a 400 sentence, never echoing a value, for
+  a query that is not version 1 (or is past `MAX_FRAGMENT_LENGTH`, 500), for
+  `v=1` with no readable field, and for any of `f k x y z s i w h` that is present
+  and refused (`Cannot read the value of "x".`; `w` and `h` are one pair; an
+  unknown key and a `k` the fractal cannot use are ignored, a zoom past the range
+  is clamped as the page clamps it). The view is built as the page builds it: the
+  kind from `resolveFractalKind`, the iteration cap Auto's `autoIterations(zoom)`
+  or the count named, then `Math.min(400, ...)` (`OG_MAX_ITERATIONS`, so a deep
+  view's colours, being count over cap, differ a little from the page's).
+- Bounds, which the bead asked to be documented. The page draws
+  `calculateZoomBounds(centre, zoom)`, 4/zoom by 3/zoom of the plane, onto a canvas
+  of that 4:3 shape, and Download PNG saves that canvas. The card is 1.91:1, so
+  `cardBounds` keeps that rule's height (3/zoom) and centre and widens to 1200:630:
+  square pixels, and the whole 4:3 view a visitor had is inside the card, centred,
+  with more plane at the sides. Cropping the 4:3 view to the card's height would
+  have cut off the top and bottom of what the link names. It is also what
+  `scripts/make-og-card.mjs` does for the shipped static card.
+- The canonical key is the codec's own `encodeView` of the resolved view, with
+  Auto replaced by the count it picks (so `i=auto` at zoom 2 and `i=150` are one
+  key) and the canvas size left out (`w`/`h` are checked, not drawn: the card is
+  fixed), and the picture is drawn from what the key decodes to, so a key names
+  its image exactly: ten significant digits, which is what the codec carries.
+- Limits (`src/lib/ogLimits.ts`; an unauthenticated CPU endpoint on a
+  scale-to-zero service, so each instance protects itself and nothing is shared
+  or persistent): output is always 1200x630; iterations at most 400; an LRU of 40
+  PNGs (`OG_CACHE_ENTRIES`, `LruCache`, a few hundred KB each, about 20 MB full,
+  keyed by the canonical key); one render at a time with a queue of 2
+  (`RenderGate`, `OG_QUEUE_LIMIT`; a fourth concurrent request is a 503 with
+  `Retry-After: 2` and never starts); an 8 s budget per render
+  (`OG_RENDER_BUDGET_MS`, `startBudget`, a 503 with no `Retry-After` since asking
+  again would spend the same time); two concurrent requests for one view share one
+  render and take no place in the line (the `inFlight` map in `ogRoute.ts`, not in
+  the bead's list). A 200 carries `Cache-Control: public, max-age=31536000,
+  immutable` (the URL names the picture); 400 and 503 carry `no-store`; any other
+  failure is a 500 that says nothing of why. No new cloud resource, credential or
+  always-on work.
+- `src/lib/ogRoute.ts`, `createOgHandler({ cache, gate, now, yieldToEventLoop,
+  budgetMs, render })`: the handler with the clock, the waiting, the cache, the
+  gate and the renderer injectable (every part defaults to the real one), so the
+  tests need no real waiting. `src/app/api/og/route.ts` is `runtime = "nodejs"`
+  (the encoder is `node:zlib`), `dynamic = "force-dynamic"`, one handler built once
+  for the process and a `GET` that calls it: a Next route file may export nothing
+  else, so the policy lives in the lib. The real renderer (`renderOgPng`) draws 6
+  rows at a time, looks at the budget and awaits a `setImmediate` between slices,
+  so `/api/health` is served while a render runs (measured on a standalone server
+  with a render and two queued: health answered in 11 and 57 ms).
+- Cost, measured on this Mac (Node 25, warm, the whole handler: render plus PNG
+  encode, 1200x630): a deep Mandelbrot view (Seahorse Valley, zoom 400, 400
+  iterations) about 460 ms (378 ms drawing, 80 ms encoding, 486 KB); a Julia view
+  (Classic, zoom 40, 370 iterations) about 350 ms (272 + 72, 542 KB); the other
+  fractals' views 170 to 450 ms. A Cloud Run vCPU is slower, but the 8 s budget is
+  more than ten times the worst of these.
+- Standalone build: `npm run build` lists `ƒ /api/og`, and
+  `.next/standalone/.next/server/app/api/og` is there; served from
+  `.next/standalone/server.js` the route answered a view with 542332 bytes
+  identical to the unit test's, a repeat in 5 ms from the cache, 400 for an empty
+  or unreadable query, and 503 with `Retry-After: 2` for the fourth and fifth of
+  five simultaneous views. It imports only `src/lib` modules and `node:zlib`, so
+  nothing needs copying beside what the Dockerfile already copies. `/api/health`,
+  the Dockerfile and the port are untouched.
+- `viewLink.ts` now exports `VIEW_LINK_VERSION` (was the private `VERSION`) and
+  `MAX_FRAGMENT_LENGTH`, so the route asks the codec's own limits rather than
+  repeating them.
+- Tests: `renderRgba.test.ts`, the parity block in `fractalRenderer.test.ts`,
+  `pngEncode.test.ts` (a decoded round trip through an independent reader that
+  also checks every chunk's CRC, rows wanting each filter, the 1200x630 header,
+  determinism, alpha dropped, the refusals), `ogView.test.ts` (the key, bounds,
+  iterations, and each key's refusal with hostile values),
+  `ogLimits.test.ts` (LRU order and eviction, the gate's order, line and
+  failure, the budget on a fake clock), `ogRoute.test.ts` (400 with no render,
+  the 200 and its headers, the cache, eviction, the 503s, the single flight, the
+  budget wired through the real renderer's clock checks, a 500, and one real
+  render), `src/__tests__/og-route.test.ts` (the route module's exports and
+  answers), and in the integration tier a check that a valid view is a 200
+  `image/png` of 1200x630 with the immutable header and an invalid one is a 400
+  (run against a local standalone server it passes; the social-card check beside
+  it needs `public/`, which only the image copies).
 
 ### Math card: the rule, the settings and the view's numbers (2026-10-10)
 

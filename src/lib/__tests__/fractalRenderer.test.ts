@@ -7,7 +7,18 @@ import type {
 } from "../../types/fractal";
 import { mapIterationsToColor } from "../colorMapping";
 import { FractalRenderer } from "../fractalRenderer";
-import { mandelbrotIterations, pixelToComplex } from "../mandelbrot";
+import {
+  calculateZoomBounds,
+  mandelbrotIterations,
+  mandelbrotKind,
+  pixelToComplex,
+} from "../mandelbrot";
+import {
+  FRACTAL_TYPES,
+  fractalVariants,
+  resolveFractalKind,
+} from "../fractalTypes";
+import { renderRgba } from "../renderRgba";
 
 interface KindCall {
   point: ComplexNumber;
@@ -87,6 +98,7 @@ function createFakeCanvas(width: number, height: number) {
 
   return {
     element: canvas as unknown as HTMLCanvasElement,
+    pixels: (): Uint8ClampedArray => state.pixels,
     pixelAt: (x: number, y: number): number[] => {
       const index = (y * state.width + x) * 4;
       return Array.from(state.pixels.slice(index, index + 4));
@@ -191,7 +203,11 @@ describe("FractalRenderer", () => {
     const renderer = new FractalRenderer(element);
 
     await renderer.renderFractal(renderConfig(), undefined, false);
-    await renderer.renderFractal(renderConfig({ width: 10, height: 6 }), undefined, false);
+    await renderer.renderFractal(
+      renderConfig({ width: 10, height: 6 }),
+      undefined,
+      false,
+    );
 
     expect(element.width).toBe(10);
     expect(element.height).toBe(6);
@@ -464,5 +480,73 @@ describe("FractalRenderer cancellation", () => {
 
     await superseding;
     expect(renderer.isCurrentlyRendering()).toBe(false);
+  });
+});
+
+describe("FractalRenderer and renderRgba", () => {
+  // Every fractal the picker offers with every variant it can be drawn with,
+  // plus a custom Julia point: the kinds `resolveFractalKind` returns for them.
+  const KINDS: [string, FractalKind][] = [
+    ...FRACTAL_TYPES.flatMap((type): [string, FractalKind][] => {
+      const options = fractalVariants(type.id)?.options.map((o) => o.value);
+      return (options ?? [""]).map((variant) => [
+        `${type.id} ${variant}`.trim(),
+        resolveFractalKind(type.id, variant),
+      ]);
+    }),
+    ["julia custom", resolveFractalKind("julia", "custom:-0.8,0.156")],
+  ];
+
+  it("covers every fractal in the picker", () => {
+    for (const type of FRACTAL_TYPES) {
+      expect(KINDS.some(([name]) => name.startsWith(type.id))).toBe(true);
+    }
+  });
+
+  it.each(KINDS)(
+    "%s: the canvas holds the very bytes renderRgba returns",
+    async (_name, kind) => {
+      const width = 48;
+      const height = 36;
+      const bounds = calculateZoomBounds(0.1, -0.05, 1.5);
+      const { element, pixels } = createFakeCanvas(width, height);
+      const renderer = new FractalRenderer(element, kind);
+
+      await renderer.renderFractal(
+        renderConfig({
+          bounds,
+          width,
+          height,
+          maxIterations: 120,
+          colorScheme: "rainbow",
+        }),
+      );
+
+      const expected = renderRgba(bounds, width, height, 120, "rainbow", kind);
+      expect(Array.from(pixels())).toEqual(Array.from(expected));
+    },
+  );
+
+  it("matches for whole counts too, as a preview draws them", async () => {
+    const bounds = calculateZoomBounds(-0.75, 0, 1);
+    const { element, pixels } = createFakeCanvas(32, 24);
+    const renderer = new FractalRenderer(element);
+
+    await renderer.renderFractal(
+      renderConfig({ bounds, width: 32, height: 24, colorScheme: "fire" }),
+      undefined,
+      false,
+    );
+
+    const expected = renderRgba(
+      bounds,
+      32,
+      24,
+      100,
+      "fire",
+      mandelbrotKind,
+      false,
+    );
+    expect(Array.from(pixels())).toEqual(Array.from(expected));
   });
 });
