@@ -1,14 +1,19 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 
-import {
-  createIdleFade,
-  TOP_BAR_ACTIVITY_EVENTS,
-  TOP_BAR_FADE_MS,
-} from "../../lib/idleFade";
+import { TOP_BAR_FADE_MS } from "../../lib/idleFade";
+import { useIdleVisibility } from "./useIdleVisibility";
 
 interface TopBarProps {
+  /** Steps back through the journey, as the browser's Back does. */
+  onBack: () => void;
+  /** Steps forward through the journey, as the browser's Forward does. */
+  onForward: () => void;
+  /** Whether the journey has an entry before this one; Back is disabled without. */
+  canGoBack: boolean;
+  /** Whether the journey has an entry after this one; Forward is disabled without. */
+  canGoForward: boolean;
   /** Opens the help overlay. */
   onHelp: () => void;
   /** Opens the Settings drawer. */
@@ -20,76 +25,40 @@ interface TopBarProps {
 }
 
 const BUTTON_CLASSES =
-  "rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white";
+  "rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10";
 
 /**
- * The floating bar over the canvas: the title on the left, Help and Settings
- * on the right.
+ * The floating bar over the canvas: the title on the left, then Back, Forward,
+ * Help and Settings on the right.
+ *
+ * Back and Forward retrace the journey — the views the user jumped to — through
+ * the browser's own history; the page says whether there is anywhere to go, and
+ * a button with nowhere to go is disabled rather than hidden so the bar does not
+ * change shape.
  *
  * It fades to nothing after `TOP_BAR_IDLE_MS` without a pointer move, key press
- * or touch, and any of those brings it back. Two things hold it up regardless:
- * the drawer being open, and focus being on a control inside the bar, so a
- * keyboard user who tabs to Settings is never looking at an invisible button.
- * The clock is `createIdleFade`; this component is its owner, and makes a new
- * one whenever the hold changes so the bar gets a full wait after the drawer
- * closes.
+ * or touch, and any of those brings it back. The drawer being open, and focus
+ * being on a control inside the bar, hold it up (`useIdleVisibility`).
  *
  * A faded bar takes no pointer events: the touch that brings it back should
  * not also press whatever button is under the finger.
  */
 export function TopBar({
+  onBack,
+  onForward,
+  canGoBack,
+  canGoForward,
   onHelp,
   onSettings,
   settingsOpen,
   settingsButtonRef,
 }: TopBarProps) {
-  const [visible, setVisible] = useState(true);
-  const [focusWithin, setFocusWithin] = useState(false);
-
-  const held = settingsOpen || focusWithin;
-
-  // A hold starting or ending is itself a reason to show the bar: it is made
-  // visible during the render that sees the change, against the hold it last
-  // saw, rather than from the effect that restarts the clock.
-  const [seenHeld, setSeenHeld] = useState(held);
-  if (held !== seenHeld) {
-    setSeenHeld(held);
-    setVisible(true);
-  }
-
-  useEffect(() => {
-    const fade = createIdleFade({ onChange: setVisible, held });
-    const handleActivity = () => fade.activity();
-
-    for (const name of TOP_BAR_ACTIVITY_EVENTS) {
-      window.addEventListener(name, handleActivity, { passive: true });
-    }
-
-    return () => {
-      for (const name of TOP_BAR_ACTIVITY_EVENTS) {
-        window.removeEventListener(name, handleActivity);
-      }
-      fade.dispose();
-    };
-  }, [held]);
-
-  const shown = held || visible;
+  const { shown, focusProps } = useIdleVisibility(settingsOpen);
 
   return (
     <header
       data-visible={shown}
-      // Only focus a keyboard user would see counts. A mouse click also focuses
-      // a button, and the drawer hands focus back to Settings when it closes,
-      // so holding on any focus would pin the bar for the rest of the visit.
-      onFocus={(event) => {
-        if (event.target.matches(":focus-visible")) setFocusWithin(true);
-      }}
-      onBlur={(event) => {
-        // Focus moving from one control in the bar to another is not leaving.
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          setFocusWithin(false);
-        }
-      }}
+      {...focusProps}
       style={{ transitionDuration: `${TOP_BAR_FADE_MS}ms` }}
       className={`fixed inset-x-0 top-0 z-20 flex h-[var(--top-bar-height)] items-center justify-between bg-gray-900/80 px-4 text-white backdrop-blur transition-opacity ${
         shown ? "opacity-100" : "pointer-events-none opacity-0"
@@ -97,6 +66,22 @@ export function TopBar({
     >
       <h1 className="text-lg font-semibold">Fractal Explorer</h1>
       <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={!canGoBack}
+          className={BUTTON_CLASSES}
+        >
+          Back
+        </button>
+        <button
+          type="button"
+          onClick={onForward}
+          disabled={!canGoForward}
+          className={BUTTON_CLASSES}
+        >
+          Forward
+        </button>
         <button type="button" onClick={onHelp} className={BUTTON_CLASSES}>
           Help
         </button>

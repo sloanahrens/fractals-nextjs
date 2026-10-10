@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { Journey, MAX_JOURNEY_ENTRIES } from "../journey";
+import { Journey, MAX_JOURNEY_ENTRIES, historyButtons } from "../journey";
 
 /** A journey holding the given fragments, the last one current. */
 function journeyOf(...fragments: string[]): Journey {
@@ -197,6 +197,64 @@ describe("Journey", () => {
       expect(journey.arrive("#a")).toBe("back");
       expect(journey.current).toBe("#a");
       expect(journey.arrive("#b")).toBe("forward");
+    });
+  });
+});
+
+describe("historyButtons", () => {
+  it("has both buttons off on a journey with nowhere to go", () => {
+    expect(historyButtons(new Journey())).toEqual({
+      canGoBack: false,
+      canGoForward: false,
+    });
+    expect(historyButtons(journeyOf("#a"))).toEqual({
+      canGoBack: false,
+      canGoForward: false,
+    });
+  });
+
+  it("turns Back on after a jump and leaves Forward off at the newest entry", () => {
+    expect(historyButtons(journeyOf("#a", "#b"))).toEqual({
+      canGoBack: true,
+      canGoForward: false,
+    });
+  });
+
+  it("follows the browser's Back and Forward to both ends", () => {
+    const journey = journeyOf("#a", "#b", "#c");
+
+    // The browser went back to #b: both directions are open.
+    journey.arrive("#b");
+    expect(historyButtons(journey)).toEqual({
+      canGoBack: true,
+      canGoForward: true,
+    });
+
+    // And on to the first entry: Back has nowhere to go, Forward does.
+    journey.arrive("#a");
+    expect(historyButtons(journey)).toEqual({
+      canGoBack: false,
+      canGoForward: true,
+    });
+
+    // Forward all the way: Forward goes off again.
+    journey.arrive("#b");
+    journey.arrive("#c");
+    expect(historyButtons(journey)).toEqual({
+      canGoBack: true,
+      canGoForward: false,
+    });
+  });
+
+  it("turns Forward off when a jump is made from the middle", () => {
+    const journey = journeyOf("#a", "#b", "#c");
+
+    journey.arrive("#b");
+    journey.push("#d");
+
+    expect(historyButtons(journey)).toEqual({
+      canGoBack: true,
+      canGoForward: false,
     });
   });
 });

@@ -79,7 +79,16 @@ import {
   readManualCoordinate,
 } from "../lib/manualBounds";
 import { opensHelpShortcut } from "../lib/helpEntries";
-import { Journey } from "../lib/journey";
+import { Journey, historyButtons } from "../lib/journey";
+import { PLACES, suggest, type Place } from "../lib/places";
+import {
+  CROSSFADE_MS,
+  NEARBY_POOL_SIZE,
+  hasMoreNearby,
+  nearbyRefreshDue,
+  nearbyWindow,
+  nextNearbyOffset,
+} from "../lib/nearbyStrip";
 import { encodeView } from "../lib/viewLink";
 import {
   DEFAULT_VIEW_LINK_UPDATES,
@@ -100,6 +109,7 @@ import { VersionFooter } from "../components/ui/VersionFooter";
 import { HelpDialog } from "../components/ui/HelpDialog";
 import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
+import { NearbyStrip } from "../components/ui/NearbyStrip";
 
 // The four manual coordinate boxes. A field is present only once the user has
 // typed in it; while it is absent the box shows the current view.
@@ -508,6 +518,29 @@ export default function Home() {
   // without a browser (see `Journey`).
   const [journey] = useState(() => new Journey());
 
+  // Whether the journey has a step either side, for the top bar's Back and
+  // Forward. The journey is a plain object the page mutates, so a render does
+  // not follow it by itself: every place that moves it says so here.
+  const [historyState, setHistoryState] = useState(() =>
+    historyButtons(journey),
+  );
+  const syncHistoryButtons = useCallback(() => {
+    const next = historyButtons(journey);
+
+    setHistoryState((previous) =>
+      previous.canGoBack === next.canGoBack &&
+      previous.canGoForward === next.canGoForward
+        ? previous
+        : next,
+    );
+  }, [journey]);
+
+  // How many links have been put into effect: the one a load carried, a pasted
+  // one, and the entries Back and Forward land on. Each is a deliberate move as
+  // far as the Nearby strip is concerned, and none is a jump the follower
+  // pushes an entry for, so it is counted apart from `jumpSerial`.
+  const [linkArrivals, setLinkArrivals] = useState(0);
+
   // Putting a fragment into effect is one path, taken by both the read at mount
   // and the read on every later change of the fragment. It moves the view
   // through the same setters every control uses, so the canvas, the sliders and
@@ -531,6 +564,7 @@ export default function Home() {
       // Settings, not views, are what a preset names: a link is a view, so no
       // preset is selected in the page it opens.
       setCurrentPreset("");
+      setLinkArrivals((count) => count + 1);
       wander.notifyActivity();
     },
     [wander],
@@ -578,13 +612,14 @@ export default function Home() {
   useEffect(() => {
     const handleHashChange = () => {
       journey.arrive(window.location.hash);
+      syncHistoryButtons();
       applyViewLink(window.location.hash);
     };
 
     window.addEventListener("hashchange", handleHashChange);
 
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [applyViewLink, journey]);
+  }, [applyViewLink, journey, syncHistoryButtons]);
 
   // The view as a link, rebuilt whenever anything a link carries moves. Both
   // halves of the feature read it: the effect below writes it to the address
@@ -683,10 +718,87 @@ export default function Home() {
       // The journey keeps the step either way: it is the page's own record and
       // works without the browser.
       journey.push(fragment);
+      syncHistoryButtons();
       lastLinkWriteRef.current = nowMs;
     },
-    [journey, replaceAddressBar],
+    [journey, replaceAddressBar, syncHistoryButtons],
   );
+
+  // The Nearby strip's suggestions. They are worked out when a render settles
+  // after a deliberate move — a jump or a link arriving — and not on every
+  // frame of a drag, which would reshuffle the strip under the pointer; the
+  // policy is `nearbyRefreshDue`. The pool is three pages of the strip, and
+  // `offset` is the page the More tile has rotated to. Adjusting this state
+  // during the render that sees the settle is the documented alternative to an
+  // effect that copies one value into another:
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [nearby, setNearby] = useState<{
+    pool: Place[];
+    offset: number;
+    refreshedAt: number | null;
+  }>({ pool: [], offset: 0, refreshedAt: null });
+  const deliberateMoves = jumpSerial + linkArrivals;
+  if (
+    nearbyRefreshDue({
+      settled: renderedLink !== "" && renderedLink === currentLink,
+      deliberateMoves,
+      refreshedAt: nearby.refreshedAt,
+    })
+  ) {
+    setNearby({
+      pool: suggest(
+        {
+          fractal: fractalType,
+          juliaConstant,
+          centerX,
+          centerY,
+          zoom: zoomLevel,
+        },
+        PLACES,
+        NEARBY_POOL_SIZE,
+      ),
+      offset: 0,
+      refreshedAt: deliberateMoves,
+    });
+  }
+
+  // The old picture, held in a second canvas over the first while a flight to
+  // a place draws. It is copied from the canvas the moment a tile is chosen and
+  // faded out when the new view's full render has been drawn, or when the user
+  // moves on from it first. The link the flight is waiting for is what ends it;
+  // it is a ref because nothing renders from it, and the overlay's opacity is
+  // set on the element for the same reason.
+  const crossfadeRef = useRef<HTMLCanvasElement>(null);
+  const crossfadeTargetRef = useRef<string | null>(null);
+
+  const startCrossfade = (targetLink: string) => {
+    const overlay = crossfadeRef.current;
+    const canvas = canvasRef.current;
+    if (!overlay || !canvas) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    overlay.width = canvas.width;
+    overlay.height = canvas.height;
+    overlay.getContext("2d")?.drawImage(canvas, 0, 0);
+    overlay.style.transition = "none";
+    overlay.style.opacity = "1";
+    crossfadeTargetRef.current = targetLink;
+  };
+
+  useEffect(() => {
+    const target = crossfadeTargetRef.current;
+    if (target === null) return;
+    // Still waiting: the flight's view is the one on the way and has not been
+    // drawn. Anything else — it has been, or the view moved off it — ends it.
+    if (currentLink === target && renderedLink !== target) return;
+
+    crossfadeTargetRef.current = null;
+    const overlay = crossfadeRef.current;
+    if (!overlay) return;
+
+    overlay.style.transition = `opacity ${CROSSFADE_MS}ms ease-out`;
+    overlay.style.opacity = "0";
+  }, [currentLink, renderedLink]);
 
   // The address bar follows the view — a random walk step, a control, a wheel,
   // a preset, a link — but only once that view has been drawn, which is also
@@ -1096,6 +1208,62 @@ export default function Home() {
     wander.notifyActivity();
   };
 
+  // A tile in the Nearby strip: go to the place. It is a deliberate move like a
+  // preset, through the same setters, so the sliders, the manual coordinates
+  // and the address bar follow it. The place is drawn at the iteration count
+  // Auto picks for its zoom, which is the count its catalogue entry was chosen
+  // at, and in its own colours when it names any. The link it will settle on is
+  // worked out first: a place that is already the view changes nothing, and a
+  // crossfade waiting for a render that never comes would hold the old picture
+  // on screen.
+  const handlePlaceSelect = (place: Place) => {
+    const zoom = clampZoom(place.zoom);
+    const scheme = place.colorScheme ?? colorScheme;
+    const constant =
+      place.fractal === "julia"
+        ? (place.juliaConstant ?? juliaConstant)
+        : juliaConstant;
+    const target = encodeView({
+      fractalType: place.fractal,
+      juliaConstant: constant,
+      centerX: place.centerX,
+      centerY: place.centerY,
+      zoomLevel: zoom,
+      colorScheme: scheme,
+      autoIterationsOn: true,
+      maxIterations,
+      canvasWidth,
+      canvasHeight,
+    });
+    if (target === currentLink) return;
+
+    startCrossfade(target);
+    beginJump();
+
+    setFractalType(place.fractal);
+    if (place.fractal === "julia") setJuliaConstant(constant);
+    setCenterX(place.centerX);
+    setCenterY(place.centerY);
+    setZoomLevel(zoom);
+    setColorScheme(scheme);
+    setAutoIterationsOn(true);
+    setCurrentPreset("");
+    wander.notifyActivity();
+  };
+
+  const handleNearbyMore = () => {
+    setNearby((previous) => ({
+      ...previous,
+      offset: nextNearbyOffset(previous.pool.length, previous.offset),
+    }));
+  };
+
+  // Back and Forward are the browser's own. The change of fragment they cause
+  // arrives at the `hashchange` listener, which is the one path that puts a
+  // link into effect, so there is nothing more to do here.
+  const handleBack = () => window.history.back();
+  const handleForward = () => window.history.forward();
+
   const handleCenterChange = (newCenterX: number, newCenterY: number) => {
     setCenterX(newCenterX);
     setCenterY(newCenterY);
@@ -1162,6 +1330,10 @@ export default function Home() {
   return (
     <div className="fractal-stage bg-gray-950">
       <TopBar
+        onBack={handleBack}
+        onForward={handleForward}
+        canGoBack={historyState.canGoBack}
+        canGoForward={historyState.canGoForward}
         onHelp={() => setHelpOpen(true)}
         onSettings={() => setSettingsOpen(true)}
         settingsOpen={settingsOpen}
@@ -1188,6 +1360,15 @@ export default function Home() {
             }
           />
 
+          {/* The picture being left, held here while a flight to a place
+              draws. It takes no pointer events and says nothing to a screen
+              reader; the page sets its opacity directly. */}
+          <canvas
+            ref={crossfadeRef}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+          />
+
           {isRendering && (
             <div className="absolute inset-x-0 top-0 h-1 bg-black/30">
               <div
@@ -1199,6 +1380,19 @@ export default function Home() {
           <p role="status" className="sr-only">
             {isRendering && `Rendering... ${Math.round(progress * 100)}%`}
           </p>
+
+          {/* Places worth a look near this view. The thumbnails wait for a
+              render in flight, so the strip never slows the picture the user
+              is waiting for. */}
+          <NearbyStrip
+            places={nearbyWindow(nearby.pool, nearby.offset)}
+            colorScheme={colorScheme}
+            paused={isRendering}
+            onSelect={handlePlaceSelect}
+            onMore={
+              hasMoreNearby(nearby.pool.length) ? handleNearbyMore : undefined
+            }
+          />
         </div>
       </main>
 

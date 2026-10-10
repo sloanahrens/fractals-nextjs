@@ -30,6 +30,8 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Help Overlay**: A Help button in the top bar, or the `?` key from anywhere on the page, opens a dialog listing every way to drive the explorer — mouse and touch, keyboard, the random walk, and the views and links
 - **Center Controls**: Precise positioning with coordinate input under a line that reads the zoom and centre of the view on screen ("Zoom 400x at -0.7453, 0.1127"), and four boxes under Manual Coordinates that apply a view you type in: Apply says so when a box cannot be read or runs the wrong way, and notes when a box of another shape is fitted around its centre to the view's 4:3
 - **Random Walk**: Tick Random walk in the Navigation card of the Settings drawer and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose
+- **Nearby Strip**: A strip along the bottom of the picture, headed "Nearby, worth a look", shows small pictures of up to six named places near the view — click one, or Tab to it and press Enter, and the picture flies there with a short crossfade. A More tile rotates in the next suggestions
+- **Back and Forward**: Buttons in the top bar retrace the places you jumped to, and are disabled at the ends of the trail
 - **Download PNG**: In the Settings drawer, save the canvas at its full resolution, named from the fractal and the view it shows
 - **Shareable Links**: The address bar follows the view once a render settles, and the Copy link button in the Navigation card of the Settings drawer puts that URL — fractal, Julia constant, centre, zoom, colour scheme, iterations and canvas size — on the clipboard
 
@@ -38,7 +40,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Iteration Control**: Adjust detail level with iteration sliders
 - **Auto Iterations**: Iterations follow the zoom level; unticking the checkbox takes manual control, and loading a preset turns it off because that preset was framed at its own count
 - **Color Mapping**: Dynamic color schemes for enhanced visualization
-- **Parameter Presets**: Quick access to interesting fractal configurations, listing the views saved for the fractal selected now
+- **Parameter Presets**: Quick access to interesting fractal configurations from the Presets dropdown in the Settings drawer, listing the built-in and saved views for the fractal selected now
 - **Custom Presets**: Save and manage your own configurations; a saved view remembers its fractal and, for a Julia set, its constant
 
 ### 🚀 Technical Features
@@ -175,7 +177,9 @@ dependencies and needs nothing else.
 
 ### Basic Navigation
 
-- **The Page**: The picture fills the window, with a slim bar over it holding the title, Help and Settings. The bar fades after two seconds without a pointer move, key press or touch and comes back on any of them, and it stays up while Settings is open or one of its buttons has keyboard focus. Settings opens a drawer down the right-hand side — a bottom sheet on a narrow screen — holding every control the page has: presets, navigation, coordinates, rendering parameters, canvas resolution, manual coordinates, saved views and Download PNG. Escape, its Close button and a click outside it close it, and opening it does not interrupt a render
+- **The Page**: The picture fills the window, with a slim bar over it holding the title, Back, Forward, Help and Settings. The bar fades after two seconds without a pointer move, key press or touch and comes back on any of them, and it stays up while Settings is open or one of its buttons has keyboard focus. Settings opens a drawer down the right-hand side — a bottom sheet on a narrow screen — holding every control the page has: presets, navigation, coordinates, rendering parameters, canvas resolution, manual coordinates, saved views and Download PNG. Escape, its Close button and a click outside it close it, and opening it does not interrupt a render
+- **Nearby strip**: Along the bottom of the picture, "Nearby, worth a look" shows up to six places near the view for the fractal you are on, each a small picture in your current colour scheme. Hover or Tab to a tile to read its name, and click it (or press Enter) to fly there: the old picture fades into the new one over about 0.4 s (no fade if your system asks for reduced motion), the place is drawn at the iteration count Auto picks for its zoom and in its own colours, and the move adds one history entry. More swaps in the next six, wrapping back to the first. The suggestions are worked out again once the picture has been drawn after a jump — a preset, applying coordinates, picking another fractal or Julia constant, a tile, a pasted link, Back or Forward — and not while you drag, wheel or key about, so the strip does not shuffle under your pointer. The thumbnails wait while the main picture renders. Like the top bar the strip fades after two seconds without input, but it stays up while one of its tiles has keyboard focus
+- **Back and Forward**: The top bar's Back and Forward buttons are the browser's own, moving along the places you jumped to; each is disabled when there is nothing in that direction, which is always so on a freshly opened page until the first jump
 - **Zoom In/Out**: Use the mouse wheel, the Zoom In/Out buttons, or the Zoom Level slider
 - **Pan**: Click and drag to move around the fractal, or drag with one finger on a touch screen
 - **Keyboard**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
@@ -183,12 +187,12 @@ dependencies and needs nothing else.
 
 ### Advanced Features
 
-- **Custom Presets**: A view belongs to the fractal it was framed on, so each fractal in the Fractal select offers its own built-in views — six for the Mandelbrot set, five for Julia (the four named constants, and a second view of the Classic set's spirals) and two for the Burning Ship — as buttons under the dropdown. Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant; loading it puts the Fractal and Julia constant selects back on that picture. The preset dropdown, the built-in buttons and the saved list show the views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
+- **Custom Presets**: A view belongs to the fractal it was framed on, so each fractal in the Fractal select offers its own built-in views — six for the Mandelbrot set, five for Julia (the four named constants, and a second view of the Classic set's spirals) and two for the Burning Ship — in the Presets dropdown. Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant; loading it puts the Fractal and Julia constant selects back on that picture. The preset dropdown shows the built-in and saved views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button in the Settings drawer saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
 - **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Settings drawer's Navigation card copies the current URL and says "Link copied" for two seconds; a browser that will not take a clipboard write shows the URL in a read-only field with the text already selected. A link shows the view it names — the fields it carries applied together, the page's defaults left standing for the rest — whether it is opened as the page loads or pasted into the address bar of a page already open, where it changes that page's view without a reload; either way the fields the link could not be read for are the page's defaults rather than a refusal, so the URL is the view and the address bar is rewritten to match it. A link names no preset
-  The browser's Back and Forward buttons retrace jumps: choosing a preset, applying coordinates, or picking another fractal or Julia constant from its select adds a history entry, while dragging, zooming, the keys, the sliders and the random walk only update the current one.
+  The browser's Back and Forward buttons, and the top bar's, retrace jumps: choosing a preset, applying coordinates, picking another fractal or Julia constant from its select, or choosing a Nearby tile adds a history entry, while dragging, zooming, the keys, the sliders and the random walk only update the current one.
 - **Random Walk**: Tick Random walk in the Navigation card of the Settings drawer and set the seconds between steps (1 to 120, 5 by default). Once each render finishes the walk waits that long and then moves the view one step, staying on the selected fractal; the line under the controls counts the wait down. Untick the box to stop, and move the view by hand — drag, wheel, key, button or preset — to start the interval again. The walk pauses while the tab is in the background
 
 ## Project Structure
@@ -209,7 +213,7 @@ dependencies and needs nothing else.
 │   │   └── api/
 │   │       ├── health/route.ts  # Health check endpoint
 │   │       └── version/route.ts # Build, deploy time, commit and revision as JSON
-│   ├── components/ui/      # Reusable UI components (TopBar, SettingsDrawer, HelpDialog, VersionFooter, ...)
+│   ├── components/ui/      # Reusable UI components (TopBar, NearbyStrip, SettingsDrawer, HelpDialog, VersionFooter, ...)
 │   ├── lib/                # Core logic and utilities
 │   │   ├── __tests__/              # Unit tests for the modules below
 │   │   ├── burningShip.ts          # Burning Ship iteration
@@ -227,6 +231,9 @@ dependencies and needs nothing else.
 │   │   ├── julia.ts                # Julia sets, named constants and custom:<re>,<im> names
 │   │   ├── mandelbrot.ts           # Mandelbrot iteration and coordinates
 │   │   ├── manualBounds.ts         # Checks the Manual Coordinates boxes
+│   │   ├── nearbyStrip.ts          # When the Nearby suggestions refresh, which show, the crossfade time
+│   │   ├── placeThumbnails.ts      # Off-screen place pictures: LRU cache, queue, cancel and pause
+│   │   ├── places.ts               # Catalogue of named places, and suggest() for the ones near a view
 │   │   ├── presets.ts              # Built-in and saved presets
 │   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
 │   │   ├── version.ts              # Build and deploy facts, and the footer wording
