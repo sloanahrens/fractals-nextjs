@@ -6,6 +6,7 @@ import {
   BLANK_SAMPLE_ROWS,
   canvasIsBlank,
   isBlankImage,
+  nearUniformShare,
 } from "../blankView";
 import { defaultViewFor, FRACTAL_TYPES } from "../fractalTypes";
 import { createCanvasThumbnailRender } from "../placeThumbnails";
@@ -48,6 +49,30 @@ function withSpecks(base: Uint8ClampedArray, count: number): Uint8ClampedArray {
 
   return pixels;
 }
+
+describe("nearUniformShare", () => {
+  it("is 1 for one colour and 0 for a picture with no pixels", () => {
+    expect(nearUniformShare(filled(20, 120, 40), WIDTH, HEIGHT)).toBe(1);
+    expect(nearUniformShare(new Uint8ClampedArray(0), WIDTH, HEIGHT)).toBe(0);
+  });
+
+  it("counts the samples off the common colour: 384 of 768 is one half", () => {
+    const base = filled(20, 120, 40);
+
+    expect(nearUniformShare(withSpecks(base, 384), WIDTH, HEIGHT)).toBe(0.5);
+  });
+
+  it("agrees with isBlankImage at the 98% line", () => {
+    const base = filled(20, 120, 40);
+
+    expect(
+      nearUniformShare(withSpecks(base, 15), WIDTH, HEIGHT),
+    ).toBeGreaterThanOrEqual(0.98);
+    expect(nearUniformShare(withSpecks(base, 16), WIDTH, HEIGHT)).toBeLessThan(
+      0.98,
+    );
+  });
+});
 
 describe("isBlankImage", () => {
   it("is true for one colour", () => {
