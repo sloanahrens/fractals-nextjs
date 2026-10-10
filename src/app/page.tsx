@@ -292,9 +292,20 @@ export default function Home() {
     null,
   );
   const [rng] = useState(() => createRng(Date.now()));
+  // The walk's hops (every `WANDER_HOP_EVERY`th step) are the tour engine's
+  // choices, with a memory of their own: what a walk has visited is not what a
+  // tour has. A drift that settles on a blank picture is replaced by a hop, and
+  // the controller asks the canvas whether it is blank.
+  const wanderHopRef = useRef<TourState | null>(null);
   const [wander] = useState(
     () => new WanderController({ onCountdown: setWanderCountdown }),
   );
+  useEffect(() => {
+    wander.setBlankDetector(() => {
+      const canvas = canvasRef.current;
+      return canvas ? canvasIsBlank(canvas) === true : false;
+    });
+  }, [wander]);
 
   // Tour mode. `TourMode` owns the clock and the rules — when a tour starts,
   // when it hops, when it gives way — and this page owns what a hop does and
@@ -511,28 +522,6 @@ export default function Home() {
     },
     [wander],
   );
-
-  // What one step of the walk does: from the view on screen now, take a step
-  // with the fractal on screen now, and put it up the way any other view change
-  // does. It is handed to the controller after every render, because the
-  // controller is built once and the kind and the view move under it.
-  useEffect(() => {
-    wander.setStepHandler(() => {
-      const view = boundsToView(boundsRef.current);
-      const next = nextWanderView(
-        { centerX: view.centerX, centerY: view.centerY, zoom: view.scale },
-        fractalKind,
-        fractalType,
-        rng,
-      );
-
-      applyView({
-        centerX: next.centerX,
-        centerY: next.centerY,
-        scale: next.zoom,
-      });
-    });
-  });
 
   // The walk counts down only while the tab is on screen: a background tab has
   // nobody watching the view move, and a browser throttles its timers anyway.
@@ -1334,9 +1323,16 @@ export default function Home() {
   // A tour's hop is the same flight with two differences: the fade takes
   // `TOUR_CROSSFADE_MS`, and it is no jump — it counts nothing and writes
   // nothing, because the tour's end is the jump (see `seenTourState`).
+  //
+  // An Auto-wander hop is the tile's flight with the tile's crossfade and the
+  // entry rewritten instead of added (`replace`), since the walk, like a drift,
+  // is not a place the visitor went.
   const handlePlaceSelect = (
     place: Place,
-    { tour = false }: { tour?: boolean } = {},
+    {
+      tour = false,
+      replace = tour,
+    }: { tour?: boolean; replace?: boolean } = {},
   ) => {
     const zoom = clampZoom(place.zoom);
     const scheme = placeColorScheme(place, colorScheme);
@@ -1359,7 +1355,7 @@ export default function Home() {
     if (target === currentLink) return;
 
     startCrossfade(target, tour ? TOUR_CROSSFADE_MS : CROSSFADE_MS);
-    if (!tour) beginJump();
+    if (!replace) beginJump();
 
     setFractalType(place.fractal);
     if (place.fractal === "julia") setJuliaConstant(constant);
@@ -1471,6 +1467,54 @@ export default function Home() {
   useEffect(() => {
     tourMode.setConditions({ settled: tourSettled });
   }, [tourMode, tourSettled]);
+
+  // What one step of Auto-wander does. A drift takes a small step from the view
+  // on screen with the fractal on screen and puts it up the way any other view
+  // change does. A hop asks the tour engine for the next place, from where the
+  // walk is now, and goes there the way a tile does, but rewriting the history
+  // entry rather than adding one. Handed to the controller after every render,
+  // because the controller is built once and the kind and the view move under
+  // it. It is declared before the effect that reports a settled picture, so the
+  // controller's blank-picture hop runs the handler of the render it sees.
+  useEffect(() => {
+    wander.setStepHandler(({ hop }) => {
+      if (hop) {
+        const { place, state } = nextTourStop(
+          {
+            ...(wanderHopRef.current ?? initialTourState(placeView)),
+            view: placeView,
+          },
+          PLACES,
+          rng,
+        );
+        wanderHopRef.current = state;
+        handlePlaceSelect(place, { replace: true });
+        // A hop onto the view already shown draws nothing, and the next
+        // countdown is armed by a render; arm it here as a drift does.
+        wander.notifyActivity();
+        return;
+      }
+
+      const view = boundsToView(boundsRef.current);
+      const next = nextWanderView(
+        { centerX: view.centerX, centerY: view.centerY, zoom: view.scale },
+        fractalKind,
+        fractalType,
+        rng,
+      );
+
+      applyView({
+        centerX: next.centerX,
+        centerY: next.centerY,
+        scale: next.zoom,
+      });
+    });
+  });
+
+  // A drift that has settled on a blank picture is replaced at once by a hop.
+  useEffect(() => {
+    if (tourSettled) wander.notifySettled();
+  }, [wander, tourSettled]);
 
   const tourOverlayOpen = settingsOpen || helpOpen;
   useEffect(() => {

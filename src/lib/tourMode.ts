@@ -4,6 +4,13 @@ import { TOUR_DWELL_MS } from "./tour";
 export const TOUR_IDLE_START_MS = 20000;
 
 /**
+ * How long the page is left alone before a tour starts again, once one has
+ * played in this page session. Shorter than {@link TOUR_IDLE_START_MS}: someone
+ * who stopped a tour has already seen what it does.
+ */
+export const TOUR_RESUME_MS = 15000;
+
+/**
  * The window events that count as someone being there, and so stop a tour and
  * start the idle wait over: a pointer moving or pressing, a key, a touch, the
  * wheel.
@@ -26,7 +33,7 @@ export const TOUR_ACTIVITY_EVENTS = [
  *   for the tab or the render. The tour begins when it runs out.
  * - `playing`: the tour is on screen and hopping.
  * - `stopped`: a tour was ended and the idle wait is running again, so the page
- *   that has been left alone for {@link TOUR_IDLE_START_MS} again plays another.
+ *   that has been left alone for {@link TOUR_RESUME_MS} again plays another.
  *   It is `armed` for a machine that has played.
  */
 export type TourModeState = "idle" | "armed" | "playing" | "stopped";
@@ -54,7 +61,10 @@ export interface TourModeOptions {
    * `playing` is the end of a tour, whatever ended it.
    */
   onChange?: (state: TourModeState, previous: TourModeState) => void;
+  /** The idle wait on a page no tour has played on yet. */
   idleMs?: number;
+  /** The idle wait on a page a tour has played on and been stopped. */
+  resumeMs?: number;
   dwellMs?: number;
   /** The conditions the page starts in; the rest are the permissive ones. */
   conditions?: Partial<TourConditions>;
@@ -72,7 +82,7 @@ export interface TourModeOptions {
  * harmless.
  *
  * A tour starts three ways. After {@link TOUR_IDLE_START_MS} without
- * `activity()`, while the page is somewhere a tour may start by itself; and at
+ * `activity()` ({@link TOUR_RESUME_MS} once a tour has played), while the page is somewhere a tour may start by itself; and at
  * once on `hashTour()` or `buttonStart()`, which are asks and so are refused
  * only while a drawer, a dialog or a text field has the user's attention. Every
  * start waits for a visible tab and a settled picture, so a tour never begins
@@ -86,6 +96,7 @@ export class TourMode {
   private onHop: (first: boolean) => void = () => {};
   private readonly onChange: NonNullable<TourModeOptions["onChange"]>;
   private readonly idleMs: number;
+  private readonly resumeMs: number;
   private readonly dwellMs: number;
 
   private conditions: TourConditions;
@@ -102,11 +113,13 @@ export class TourMode {
   constructor({
     onChange = () => {},
     idleMs = TOUR_IDLE_START_MS,
+    resumeMs = TOUR_RESUME_MS,
     dwellMs = TOUR_DWELL_MS,
     conditions,
   }: TourModeOptions = {}) {
     this.onChange = onChange;
     this.idleMs = idleMs;
+    this.resumeMs = resumeMs;
     this.dwellMs = dwellMs;
     this.conditions = {
       overlayOpen: false,
@@ -276,17 +289,23 @@ export class TourMode {
     this.syncHop();
   }
 
-  /** The idle wait, from the full length. */
+  /**
+   * The idle wait, from the full length: {@link TOUR_RESUME_MS} once a tour has
+   * played in this page session, {@link TOUR_IDLE_START_MS} before that.
+   */
   private restartCountdown(): void {
     this.clearIdle();
     this.idleDue = false;
     if (!this.allowsAutoStart()) return;
 
-    this.idleTimer = setTimeout(() => {
-      this.idleTimer = null;
-      this.idleDue = true;
-      this.advance();
-    }, this.idleMs);
+    this.idleTimer = setTimeout(
+      () => {
+        this.idleTimer = null;
+        this.idleDue = true;
+        this.advance();
+      },
+      this.hasPlayed ? this.resumeMs : this.idleMs,
+    );
   }
 
   /**

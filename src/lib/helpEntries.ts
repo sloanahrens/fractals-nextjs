@@ -117,7 +117,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "20 seconds of quiet",
         action:
-          "Leave the page alone for 20 seconds, with this window in front and the Settings drawer and this help shut, and a tour starts by itself",
+          "Leave the page alone for 20 seconds, with this window in front and the Settings drawer and this help shut, and a tour starts by itself; after you stop one, 15 seconds is enough for the next",
       },
       {
         keys: "#tour",
@@ -132,7 +132,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Auto-wander",
         action:
-          "Tick it in the Auto-wander card of the Settings drawer and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose",
+          "Tick it in the Auto-wander card of the Settings drawer and the view moves every few seconds: three small steps nearby, then a hop to a place from the catalogue, which may be on another fractal, and a step that lands on an empty picture hops at once",
       },
       {
         keys: "Seconds between steps",

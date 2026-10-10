@@ -52,7 +52,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
 - **Tour engine** (`src/lib/tour.ts`): Where an unattended tour goes next — `nextTourStop` over the places catalogue from an injected random function, with the dwell and crossfade times, the fractal-switch odds and the recent window
 - **Tour mode** (`src/lib/tourMode.ts`) and **wake lock** (`src/lib/wakeLock.ts`): The screensaver's clock — the idle start, the `#tour` and button starts, the hops, and the conditions that make it wait or give way — and the best-effort screen lock held while it plays; `decodeTour` in `src/lib/viewLink.ts` reads the `#tour` link
-- **Wander controller** (`src/lib/wanderController.ts`): The Auto-wander clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
+- **Wander controller** (`src/lib/wanderController.ts`): The Auto-wander clock — the countdown that says when a step is due, which steps are hops (`WANDER_HOP_EVERY`), and the states that suspend it: a render in flight, a hidden tab, the mode switched off
 - **Blank view** (`src/lib/blankView.ts`) and **BlankHint** (`src/components/ui/BlankHint.tsx`): The detector for a nearly one-colour picture, and the quiet "Nothing to see here" pill with a Back button
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, and a decoder that judges every value on its own and leaves out what it cannot read
@@ -177,6 +177,58 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-10_
 
+### Auto-wander hops; a stopped Tour resumes after 15 s (2026-10-10)
+
+- Auto-wander's drifts stayed on one fractal and wandered into dull areas, and
+  a Tour that input had stopped waited the full 20 s to start again. Every
+  `WANDER_HOP_EVERY`th step (4, `wanderController.ts`) is now a hop to a
+  catalogue place and the other three are the drifts `wander.ts` always took
+  (`wander.ts` is untouched). A hop of any kind restarts the count, so the walk
+  goes drift, drift, drift, hop; switching the mode off and on restarts it too.
+  A tab that is hidden, a tour that plays or a render in flight takes no step,
+  so none of them uses up a slot.
+- `WanderController` now calls its handler with a `WanderStep`, `{ hop }`, and
+  counts the drifts since the last hop itself. The page's handler (declared with
+  the tour's hop handler, after `handlePlaceSelect` and `placeView`) turns a
+  hop into `nextTourStop({ ...wanderHopRef.current ?? initialTourState(placeView),
+  view: placeView }, PLACES, rng)`: the tour's rules (never the place on screen,
+  the 12-place recent window, one hop in six changes fractal), a memory of the
+  walk's own in `wanderHopRef`, and the page's seeded `rng`, with `view`
+  refreshed to where the drifts have taken the walk. It goes through
+  `handlePlaceSelect(place, { replace: true })`: the tile's 400 ms crossfade,
+  the place's scheme and Julia constant, Auto iterations, and no `beginJump`,
+  so the follower rewrites the current history entry as it does for a drift.
+  `replace` defaults to `tour`, so a tour's hop is as it was.
+- A blank landing. After a drift the controller holds `driftUnchecked`; the
+  page calls `wander.notifySettled()` from an effect on `tourSettled` (a full
+  render has drawn the view), declared after the handler effect so the hop is
+  made by the handler of the render that settled. If the walk is running and
+  not held, and the controller's `setBlankDetector` (the page passes
+  `canvasIsBlank(canvasRef.current)`, the fr-2oa detector) says the picture is
+  nearly one colour, the walk hops at once instead of waiting an interval. The
+  flag is cleared by the check, by a hop, by `start()` and by `notifyActivity`
+  from anywhere but the step handler (the drift's own `applyView` reports
+  activity from inside it, tracked by `stepping`), so a view the visitor has
+  since moved is never judged. A hop is never checked, so a replacement cannot
+  loop.
+- `TOUR_RESUME_MS` (15000, `tourMode.ts`) is the idle wait once a tour has
+  played in the page session (`hasPlayed`, which is `stopped` and also an
+  `armed` that an ask has since made); a cold page keeps `TOUR_IDLE_START_MS`
+  (20000). The constructor takes `resumeMs` beside `idleMs`. Every condition
+  that holds a start back (drawer, dialog, text focus, hidden tab, a render in
+  flight) is as it was.
+- Tests: `wanderControllerHops.test.ts` (fake time: the 4th step is a hop and
+  the others drifts over 20, the count restarting, a hold taking no step, a
+  faked detector forcing a hop and counting as one, never looking at a hop's
+  picture or a view moved by hand, off and held walks staying still);
+  `wanderHops.test.ts` (the controller wired to `nextTourStop` on a seeded
+  generator: every 4th of 20 a catalogue hop, a blank landing replaced, about
+  one hop in six changing fractal over 600, no repeat inside the recent window
+  unless the fractal has nothing else outside it); `tourMode.test.ts` (15 s
+  after a stop, 20 s on a cold page, a drawer still refusing);
+  `wander-hop-panel.test.ts` (sources: the hop through the tile's handler with
+  `replace`, the detector, `notifySettled` after the handler).
+
 ### Fractal switcher (2026-10-10)
 
 - Changing fractal was Settings, Rendering Parameters, the Fractal select, and
@@ -252,7 +304,7 @@ _Last updated: 2026-10-10_
   page a tour may not start by itself on; `armed` is the idle wait running, or
   a start asked for waiting on the tab or the render; `stopped` is `armed` for
   a machine that has played, so the left-alone page tours again after another
-  20 s. The events are `activity()`, `hashTour()`, `buttonStart()`, `stop()`
+  `TOUR_RESUME_MS` (15 s; see the 2026-10-10 note on Auto-wander hops). The events are `activity()`, `hashTour()`, `buttonStart()`, `stop()`
   and the hop timer; `setConditions(patch)` is how the page reports itself.
   The constructor starts no timer (the first `setConditions` does), so
   building one in a server render is harmless; `dispose()` goes back to `idle`
@@ -314,8 +366,7 @@ _Last updated: 2026-10-10_
   for a `screen` lock while the tour plays, asks again when the tab comes back
   (a browser drops it on hide), releases on stop, and swallows every failure.
 - Auto-wander is held while a tour plays by the same `wander.setHidden` it uses
-  for a hidden tab (`wanderController.ts` is unchanged); it gets a fresh
-  interval when the tour ends.
+  for a hidden tab; it gets a fresh interval when the tour ends.
 - The Tour button is in the top bar's centre beside Surprise me (the bar fits
   375 px with six buttons: the last ends at 367). The Help overlay has a Tour
   group (`helpEntries.ts`).

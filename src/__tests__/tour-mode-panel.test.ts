@@ -152,7 +152,9 @@ describe("a hop", () => {
     const select = handlerBody("handlePlaceSelect");
 
     expect(select).toContain("tour ? TOUR_CROSSFADE_MS : CROSSFADE_MS");
-    expect(select).toContain("if (!tour) beginJump();");
+    // A hop adds no entry because `replace` defaults to `tour`.
+    expect(select).toContain("replace = tour");
+    expect(select).toContain("if (!replace) beginJump();");
     // Nothing else a hop does writes history.
     expect(select).not.toContain("pushState");
     expect(select).not.toContain("pushViewLink");
