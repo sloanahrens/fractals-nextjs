@@ -57,6 +57,49 @@ export function escapeTimeIterations(
 }
 
 /**
+ * Walk one escape-time orbit, z -> z^2 + c, and hand back the points it visited.
+ *
+ * The same loop as {@link escapeTimeIterations} with the arithmetic kept rather
+ * than the count: the Math card's orbit plot draws the path, so it wants the
+ * points and not a number. The start is the first point, one point is added per
+ * step, and the step whose result leaves the radius of 2 ends the walk with that
+ * point included -- the dot that flew off is the one worth seeing. An orbit
+ * still inside after `maxSteps` stops there.
+ *
+ * This is the one orbit walker both z -> z^2 + c kinds use: the Mandelbrot set
+ * starts at 0 and adds the point the renderer handed over, a Julia set starts
+ * at that point and adds its own constant, and nothing else differs.
+ * @param start - Point the orbit starts from (z0)
+ * @param constant - Constant added at every step (c)
+ * @param maxSteps - Most steps to walk
+ * @returns The visited points, the start first
+ */
+export function escapeTimeOrbit(
+  start: ComplexNumber,
+  constant: ComplexNumber,
+  maxSteps: number,
+): ComplexNumber[] {
+  const points: ComplexNumber[] = [{ ...start }];
+  let real = start.real;
+  let imaginary = start.imaginary;
+
+  for (let steps = 0; steps < maxSteps; steps++) {
+    // Calculate z^2 + c, the step escapeTimeIterations walks.
+    const squaredReal = real * real - imaginary * imaginary;
+    const squaredImaginary = 2 * real * imaginary;
+    real = squaredReal + constant.real;
+    imaginary = squaredImaginary + constant.imaginary;
+    points.push({ real, imaginary });
+
+    // The same escape test, read after the step: the point that left the
+    // radius is on the path, and the path ends with it.
+    if (real * real + imaginary * imaginary > 4) break;
+  }
+
+  return points;
+}
+
+/**
  * Whether a point lies inside the two components of the set whose orbits are
  * known in closed form: the main cardioid and the period-2 bulb.
  *
@@ -151,6 +194,11 @@ export const mandelbrotKind: FractalKind = {
     const steps = mandelbrotIterations(point, maxIterations);
 
     return { steps, escaped: steps < maxIterations };
+  },
+  orbit(point, maxSteps) {
+    // The shortcut is for the count, not for the path: a point in the cardioid
+    // is inside the set and its orbit is a real one, so the plot walks it.
+    return escapeTimeOrbit(ORIGIN, point, maxSteps);
   },
 };
 

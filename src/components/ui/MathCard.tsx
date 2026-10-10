@@ -26,6 +26,7 @@ import {
 } from "../../lib/mathProbe";
 import { PLACES, placeAtView } from "../../lib/places";
 import { MathView } from "./MathView";
+import { OrbitPlot } from "./OrbitPlot";
 
 interface MathCardProps {
   /** The `FRACTAL_TYPES` id on the canvas. */
@@ -294,6 +295,17 @@ export function MathCard({
                 <>
                   <dt className={ROW_LABEL}>Orbit</dt>
                   <dd>{describeProbe(fractalType, probe.info, iterations)}</dd>
+                  {/* The path itself, under the two lines that name it, so a
+                      point inside the set can be watched spiralling and one
+                      outside it flying off. */}
+                  <div className="col-span-2">
+                    <OrbitPlot
+                      fractalType={fractalType}
+                      orbit={probe.orbit}
+                      info={probe.info}
+                      scheme={colorScheme}
+                    />
+                  </div>
                 </>
               )}
 

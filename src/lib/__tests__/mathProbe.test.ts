@@ -19,6 +19,7 @@ import {
 } from "../mandelbrot";
 import {
   type FrameThrottle,
+  ORBIT_MAX_STEPS,
   colourCss,
   createFrameThrottle,
   describeProbe,
@@ -204,6 +205,33 @@ describe("pointerToCanvasPixel", () => {
     expect(
       pointerToCanvasPixel(10, 10, { ...rect, height: 0 }, 640, 480),
     ).toBeNull();
+  });
+});
+
+describe("the path the probe carries", () => {
+  it("is the kind's own orbit, capped for the plot rather than by the cap", () => {
+    const point = pixelToComplex(5, 4, WIDTH, HEIGHT, VIEW);
+    const probe = probePoint(mandelbrotKind, point, CAP, SCHEME);
+
+    expect(probe.orbit).toEqual(
+      mandelbrotKind.orbit!(point, ORBIT_MAX_STEPS),
+    );
+    // CAP is 60 here and so is the plot's cap; the walk is the plot's, not the
+    // render's, whatever the iteration cap in use is.
+    expect(probePoint(mandelbrotKind, point, 1000, SCHEME).orbit).toEqual(
+      probe.orbit,
+    );
+  });
+
+  it("is the point alone for a kind that cannot walk one", () => {
+    const bare: FractalKind = {
+      id: "bare",
+      iterations: (point, maxIterations) =>
+        point.real > 0 ? 3 : maxIterations,
+    };
+    const point = { real: 1, imaginary: 0 };
+
+    expect(probePoint(bare, point, CAP, SCHEME).orbit).toEqual([point]);
   });
 });
 

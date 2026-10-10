@@ -1,6 +1,6 @@
 /**
- * The Math card's live probe: the number under the pointer, what its orbit did
- * and the colour the picture paints it.
+ * The Math card's live probe: the number under the pointer, what its orbit did,
+ * the path it took and the colour the picture paints it.
  *
  * `MathCard` shows the numbers of a view and they are the same for every pixel
  * of it; a probe is about one point, the one under the pointer. The point is
@@ -27,6 +27,18 @@ import type {
 import { mapIterationsToColor } from "./colorMapping";
 import { pixelToComplex } from "./mandelbrot";
 
+/**
+ * How many steps of an orbit the probe keeps for the plot.
+ *
+ * The point under the pointer is one point of the picture and its path is a
+ * path, not a number: a point in the set spirals for ever and a point outside
+ * flies off within a few steps, so the card draws a window of it and this is
+ * how wide. Sixty is enough for the spiral to read as a spiral — a point well
+ * inside the set is still circling at sixty — and few enough that one frame's
+ * work is a few thousand operations.
+ */
+export const ORBIT_MAX_STEPS = 60;
+
 /** One point, as the Math card's probe reports it. */
 export interface PointProbe {
   /** The point of the plane the pointer is over. */
@@ -35,6 +47,8 @@ export interface PointProbe {
   info: EscapeInfo;
   /** The colour the picture paints that point, as a full render paints it. */
   colour: ColorRGB;
+  /** The path that point's orbit took, start first (`ORBIT_MAX_STEPS` at most). */
+  orbit: ComplexNumber[];
 }
 
 /**
@@ -61,10 +75,32 @@ export function escapeInfoFor(
 }
 
 /**
+ * The path a point's orbit took, from a kind that may not answer for itself.
+ *
+ * Every kind this app ships has `orbit`; this is the fallback for one that does
+ * not, so an outside kind still probes: the point itself is all the path that
+ * can be known without running the formula, and the plot draws one dot where it
+ * would draw a spiral.
+ * @param kind - The formula the renderer is drawing with
+ * @param point - Point in the complex plane to test
+ * @param maxSteps - Most steps to walk
+ * @returns The visited points, the start first
+ */
+export function orbitFor(
+  kind: FractalKind,
+  point: ComplexNumber,
+  maxSteps: number,
+): ComplexNumber[] {
+  return kind.orbit ? kind.orbit(point, maxSteps) : [{ ...point }];
+}
+
+/**
  * The probe for one point of the plane.
  *
  * The count is the whole-step one, so the card can print a number of steps; the
- * colour is the one a full render paints, which is made from the smooth count.
+ * colour is the one a full render paints, which is made from the smooth count;
+ * the path is the orbit itself, capped at `ORBIT_MAX_STEPS` whatever the
+ * iteration cap is, so a deep view does not cost the plot a longer walk.
  */
 export function probePoint(
   kind: FractalKind,
@@ -86,6 +122,7 @@ export function probePoint(
       g: colourByte(colour.g),
       b: colourByte(colour.b),
     },
+    orbit: orbitFor(kind, point, ORBIT_MAX_STEPS),
   };
 }
 
