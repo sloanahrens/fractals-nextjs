@@ -58,6 +58,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
+- **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, and `suggest` — which of them are near a given view
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
 ### State Management Pattern
@@ -211,6 +212,41 @@ _Last updated: 2026-10-09_
   not, the push after the draw and past the throttle, the `hashchange` path.
   The check in `share-link-panel.test.ts` that the page never pushes now says
   there is exactly one `pushState` and the follower's writer has none.
+
+### Places and suggest() (2026-10-09)
+
+- `src/lib/places.ts` is the first step of guided exploration and changes no
+  screen: nothing in the page imports it yet. A `Place` is `{ id, name,
+  fractal, juliaConstant?, centerX, centerY, zoom, colorScheme? }` — the fields
+  a link and the page's own state already carry — so going to one is setting
+  what a link sets. `PLACES` holds 19 Mandelbrot, 10 Julia and 10 Burning Ship
+  places and `placesForFractal(id)` filters it in catalogue order.
+- The numbers were picked from renders, not worked out: candidates were drawn
+  headless at low resolution onto contact sheets, the striking ones kept, and
+  their centre and zoom written in as the render had them. The six Mandelbrot
+  built-in views and the Julia and ship ones are in the catalogue under their
+  own numbers, with one exception: the whole-set place of each fractal sits at
+  `defaultViewFor`, not at the overview preset's frame (which is centred at
+  -0.5, not -0.75), so the view the app opens on is itself a place and
+  `suggest` never offers it back to a visitor who has not moved.
+- `suggest(view, places, count)` is pure and deterministic. It keeps places of
+  the view's fractal, drops the one that *is* the view (centre within 1% of the
+  view's span and zoom within 1%, same Julia constant), and ranks the rest by
+  the centre's distance measured in the view's own spans plus the zoom's
+  distance in octaves from two octaves deeper than the view — the step a click
+  should usually be. A tie breaks by id. For a Julia view the places that share
+  its constant (compared as points, so `custom:0.50,0.5` is `custom:0.5,0.5`)
+  come first, each group ranked on its own; a view with no readable constant
+  shares one with nothing. A view that cannot be measured, or a count under 1,
+  returns `[]`; a larger count returns what exists.
+- `src/lib/__tests__/places.test.ts` drives `suggest` over hand-built
+  catalogues and holds every `PLACES` entry to the same guards: a unique id and
+  name, a kind `resolveFractalKind` returns for its fractal, a finite centre
+  with a zoom inside `MIN_ZOOM`..`MAX_ZOOM`, an `encodeView`/`decodeView`
+  round trip that returns the same numbers (so a centre carries at most ten
+  significant digits), and a 64x48 render at `autoIterations(zoom)` with the
+  existing renderer in which at least 5% of the pixels differ from the corner
+  pixel.
 
 ### Preset button labels are no longer clipped (2026-10-09)
 
