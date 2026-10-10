@@ -26,6 +26,7 @@ import { NEWTON_BAND } from "../newton";
 import {
   FEATURED_PLACE_IDS,
   PLACES,
+  REAL_AXIS_GUARD_MIN_ZOOM,
   REAL_AXIS_MATCHES_MANDELBROT,
   featuredPlace,
   placeColorScheme,
@@ -682,6 +683,7 @@ describe("featuredPlace", () => {
     });
 
     it("is not the opening view, so a switch goes somewhere", () => {
+      if (FEATURED_IS_OPENING_VIEW.has(fractal)) return;
       const featured = featuredPlace(fractal);
       const opening = defaultViewFor(fractal);
 
@@ -696,14 +698,14 @@ describe("featuredPlace", () => {
       expect(featuredPlace(fractal).colorScheme).toBeDefined();
     });
 
-    it("is off the real axis where that axis is the Mandelbrot set's", () => {
+    it("is not zoomed in on the real axis where that axis is the Mandelbrot set's", () => {
       if (REAL_AXIS_MATCHES_MANDELBROT[fractal] !== true) return;
       const featured = featuredPlace(fractal);
 
       expect(
-        offRealAxis(featured),
-        `${featured.id} lies on the real axis, where ${fractal} draws the Mandelbrot set`,
-      ).toBe(true);
+        zoomedInOnRealAxis(featured),
+        `${featured.id} is zoomed in (${featured.zoom}x) on the real axis, where ${fractal} draws the Mandelbrot set`,
+      ).toBe(false);
     });
 
     it("is not blank, at the count Auto draws it at", async () => {
@@ -759,11 +761,34 @@ describe("the real-axis guard", () => {
     }
   });
 
-  it("refuses the left-arm view the Tricorn button used to land on", () => {
+  it("refuses a deep view on the axis: the left-arm needle the Tricorn button once landed on", () => {
     const along = PLACES.find((place) => place.id === "tricorn-along-the-arm");
 
     expect(along).toBeDefined();
-    expect(offRealAxis(along as Place)).toBe(false);
+    expect((along as Place).zoom).toBeGreaterThan(REAL_AXIS_GUARD_MIN_ZOOM);
+    expect(zoomedInOnRealAxis(along as Place)).toBe(true);
+  });
+
+  it("accepts the whole set on the axis: its three arms are the picture", () => {
+    const whole = PLACES.find((place) => place.id === "tricorn-whole") as Place;
+
+    expect(offRealAxis(whole)).toBe(false);
+    expect(zoomedInOnRealAxis(whole)).toBe(false);
+    // The limit is exclusive: a view at the zoom itself is still a wide view.
+    expect(
+      zoomedInOnRealAxis({ ...whole, zoom: REAL_AXIS_GUARD_MIN_ZOOM }),
+    ).toBe(false);
+    expect(
+      zoomedInOnRealAxis({ ...whole, zoom: REAL_AXIS_GUARD_MIN_ZOOM + 0.01 }),
+    ).toBe(true);
+  });
+
+  it("accepts a deep view off the axis", () => {
+    const star = PLACES.find((place) => place.id === "tricorn-star") as Place;
+
+    expect(star.zoom).toBeGreaterThan(REAL_AXIS_GUARD_MIN_ZOOM);
+    expect(zoomedInOnRealAxis(star)).toBe(false);
+    expect(zoomedInOnRealAxis({ ...star, centerY: 0 })).toBe(true);
   });
 
   it("accepts a view whose centre is a share of its height off the axis", () => {
@@ -867,6 +892,19 @@ function offRealAxis(place: Place): boolean {
 
   return Math.abs(place.centerY) >= OFF_AXIS_VIEW_HEIGHTS * viewHeight;
 }
+
+/** Whether a place is a zoomed-in view that fills with the real axis. */
+function zoomedInOnRealAxis(place: Place): boolean {
+  return place.zoom > REAL_AXIS_GUARD_MIN_ZOOM && !offRealAxis(place);
+}
+
+/**
+ * Fractals whose switcher button may land on the view the Fractal select opens
+ * them on. The rule that a switch should go somewhere protects a page opening
+ * on a view and a button repeating it; the Tricorn's whole set is the picture
+ * that shows it best (fr-hbe), and nothing opens on it but a switch.
+ */
+const FEATURED_IS_OPENING_VIEW = new Set(["tricorn"]);
 
 /**
  * The smallest stand-in for a 2D canvas that FractalRenderer touches, with the

@@ -809,28 +809,29 @@ export function placesForFractal(fractal: string): Place[] {
  *   in a field of one colour, which is what the constant chips are for.
  * - Burning Ship: the Armada. Masts standing on the hull's silhouette, the one
  *   view that reads as a ship; the closer views are textures.
- * - Tricorn: the star on an antenna (fr-gxr). Along the left arm, the pick
- *   before it (fr-6oi), lies on the real axis, where the Tricorn is exactly
- *   the Mandelbrot set (conjugating a real z changes nothing): drawn at 800x600
- *   it is a needle with bulbs on a red field, the same picture as
- *   `mandelbrot-needle-bulbs` on the same sheet, so a click on Tricorn showed
- *   the Mandelbrot set again. All nine places were redrawn at 800x600 in their
- *   own schemes, the whole set, the star and the small Tricorn also in rainbow,
- *   fire and ocean, beside the Mandelbrot set's whole view, needle bulbs and
- *   spiral galaxy. The whole set and the small Tricorn show three arms but
- *   sit on the axis (the whole set is also the opening view, which a switch
- *   should not repeat); the left-arm bulb is the Mandelbrot needle again; two
- *   bulbs and the upper-arm bulb are black blobs on deep blue; the frayed edge
- *   and the body meeting an arm are fields with no outline. The star is the
- *   one off-axis view where the three-fold form is the picture: a black body
- *   with three arms, one up and two down, and antennae carrying their own
- *   chains of bulbs. It keeps classic: in rainbow and ocean the same star sits
- *   on a flat red or blue field and in fire the antennae are lost in dark red.
- *   fr-6oi dropped the star for a flat green field judged at 200x150; at
- *   800x600 the arms and their edge read, and the guard in `places.test.ts`
- *   still holds it to the flat-field limit. Another fractal whose real axis is
- *   the Mandelbrot set's must keep its featured place off the axis
- *   (`REAL_AXIS_MATCHES_MANDELBROT`, tested).
+ * - Tricorn: the whole Tricorn (fr-hbe). Along the left arm, the pick of
+ *   fr-6oi, is zoomed in on the real axis, where the Tricorn is exactly the
+ *   Mandelbrot set (conjugating a real z changes nothing): at 800x600 it is a
+ *   needle with bulbs on a red field, the same picture as
+ *   `mandelbrot-needle-bulbs`. The star on an antenna (fr-gxr's pick) is off
+ *   the axis, but at 800x600 in classic it is a flat green field with one
+ *   black arm: the picture fr-6oi was filed against. The whole set sits on
+ *   the axis too, and that is fine: the axis only shows the Mandelbrot set
+ *   once the view is zoomed in until the axis fills it, and at whole-set zoom
+ *   the three-fold form is the picture. Drawn at 800x600 beside the Mandelbrot
+ *   set's whole view, the whole set in classic, rainbow, fire and ocean, and
+ *   the same frame at zooms 1.1, 1.25, 1.5, 2 and 2.5: classic reads best, a
+ *   black three-armed body with a green-to-magenta band round its edge and the
+ *   arm tips running off the frame; rainbow is a flat red field and fire and
+ *   ocean are dark fields with a thin edge. Zooming in only loses the arms
+ *   (1.1 already clips more of the upper and lower tips; 1.5 and up is a black
+ *   wedge between two green fields). The place is also the view the Fractal
+ *   select opens the Tricorn on, so nothing but a switch from another fractal
+ *   shows it, and the test that a featured place is not the opening view
+ *   exempts it (`FEATURED_IS_OPENING_VIEW`). The guard keeps a fractal whose
+ *   real axis is the Mandelbrot set's (`REAL_AXIS_MATCHES_MANDELBROT`) from
+ *   featuring a place zoomed in past `REAL_AXIS_GUARD_MIN_ZOOM` on the axis,
+ *   and `places.test.ts` names the place and its zoom when one does.
  * - Multibrot: the small copy of the z^3 set. A two-lobed set, one disc above
  *   the other, riding on the big set's edge among filaments in full colour; it
  *   reads as the Multibrot rather than the Mandelbrot set, which the
@@ -860,7 +861,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   mandelbrot: "mandelbrot-seahorse-valley",
   julia: "julia-classic-spirals",
   "burning-ship": "burning-ship-armada",
-  tricorn: "tricorn-star",
+  tricorn: "tricorn-whole",
   multibrot: "multibrot-3-small-copy",
   newton: "newton-junction",
 };
@@ -869,14 +870,24 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
  * The fractals whose real axis is the Mandelbrot set's own.
  *
  * Conjugating a real z changes nothing, so the Tricorn's orbit of a real c is
- * the Mandelbrot orbit and a view centred on the axis shows what the
+ * the Mandelbrot orbit and a view zoomed in on the axis shows what the
  * Mandelbrot button already shows. The Multibrot's powers of 3 and up differ
  * on the axis, so it is not listed. `places.test.ts` keeps the featured place
- * of every fractal listed here off the axis.
+ * of every fractal listed here from being zoomed in past
+ * `REAL_AXIS_GUARD_MIN_ZOOM` on the axis.
  */
 export const REAL_AXIS_MATCHES_MANDELBROT: Readonly<Record<string, boolean>> = {
   tricorn: true,
 };
+
+/**
+ * The zoom above which a view centred on the real axis is the axis's picture.
+ *
+ * Out at the whole set the three-fold form is what shows, however the view is
+ * centred; only once the view is zoomed in until the axis fills it is it a
+ * needle that looks like the Mandelbrot set's.
+ */
+export const REAL_AXIS_GUARD_MIN_ZOOM = 4;
 
 /**
  * The place a fractal's switcher button goes to.
