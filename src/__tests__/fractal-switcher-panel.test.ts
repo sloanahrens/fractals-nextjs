@@ -35,11 +35,12 @@ function handlerBody(name: string): string {
 }
 
 describe("the switcher's buttons", () => {
-  it("are the picker's three fractals, mapped from FRACTAL_TYPES", () => {
+  it("are the picker's four fractals, mapped from FRACTAL_TYPES", () => {
     expect(FRACTAL_TYPES.map((type) => type.label)).toEqual([
       "Mandelbrot",
       "Julia",
       "Burning Ship",
+      "Tricorn",
     ]);
     expect(switcher).toContain("FRACTAL_TYPES.map((type)");
     expect(switcher).toContain("{type.label}");
@@ -55,6 +56,28 @@ describe("the switcher's buttons", () => {
     expect(switcher).toContain('type="button"');
     expect(switcher).toMatch(/focus-visible:ring-2/);
     expect(switcher).toContain("if (!current) onSelectFractal(type.id)");
+  });
+
+  it("scroll sideways in a narrow picture instead of wrapping over it", () => {
+    // The four labels are about 290 px at text-xs, which fits 320 px (measured
+    // in headless Chrome at 375 and 320). The group is still capped at the
+    // picture's width and scrolls, and a button keeps its label on one line at
+    // its own width, so a narrower picture cannot wrap it.
+    const group = switcher.slice(
+      switcher.indexOf('aria-label="Fractal"') - 40,
+      switcher.indexOf("FRACTAL_TYPES.map"),
+    );
+
+    expect(group).toContain("max-w-full");
+    expect(group).toContain("overflow-x-auto");
+    expect(group).not.toMatch(/flex-wrap/);
+
+    const buttonClasses = switcher.slice(
+      switcher.indexOf("const BUTTON_CLASSES"),
+      switcher.indexOf("const CHIP_CLASSES"),
+    );
+    expect(buttonClasses).toContain("shrink-0");
+    expect(buttonClasses).toContain("whitespace-nowrap");
   });
 
   it("keep their full names: no abbreviated label is in the markup", () => {

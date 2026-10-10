@@ -48,6 +48,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Julia sets** (`src/lib/julia.ts`): The four named Julia constants, the `custom:<re>,<im>` spelling that names any other point, and the factory that turns one into a fractal kind
 - **Custom constant input** (`src/lib/customConstantInput.ts`): The Real and Imaginary boxes' text turned into a `custom:<re>,<im>` name or the sentence that says why not, and the Custom option's select value
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
+- **Tricorn** (`src/lib/tricorn.ts`): The Tricorn (Mandelbar) formula — the Mandelbrot loop with z conjugated before squaring, z -> conj(z)^2 + c — behind its own fractal kind
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
 - **Tour engine** (`src/lib/tour.ts`): Where an unattended tour goes next — `nextTourStop` over the places catalogue from an injected random function, with the dwell and crossfade times, the fractal-switch odds and the recent window
@@ -72,7 +73,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia chips land
-- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship buttons, and Julia's constant chips, drawn over the top left of the canvas and never faded
+- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn buttons, and Julia's constant chips, drawn over the top left of the canvas and never faded
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -83,7 +84,7 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
-- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship) and custom fractal configurations
+- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Tricorn) and custom fractal configurations
 
 ### Component Structure
 
@@ -176,6 +177,72 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Tricorn: a fourth fractal (2026-10-10)
+
+- The Tricorn (the Mandelbar set), owner-approved 2026-10-10 ("add more
+  fractals"), is the Mandelbrot loop with the conjugate taken first: z -> conj(z)^2
+  + c. Conjugating keeps |z| and negates the angle that squaring doubles, so the
+  set has three-fold rotational symmetry (a turn of 120 degrees about the origin
+  maps it onto itself, which is exact in the maths: conj(wz)^2 = w conj(z)^2 for a
+  cube root of unity w) and the Mandelbrot set's mirror symmetry about the real
+  axis. On the real axis the conjugate changes nothing, so the Tricorn counts what
+  the Mandelbrot set counts there.
+- `src/lib/tricorn.ts` exports `tricornKind` (id `tricorn`), written line for
+  line on `burningShip.ts`: the same orbit from 0, the `|z|^2 > 4` test after the
+  step, the loop index returned for an orbit that escapes (so c = 2 is 1), the
+  same smoothing and `maxIterations` for one that does not. There is no
+  cardioid shortcut: that is closed form for the Mandelbrot set's bulbs only.
+- Registered like the ship: `FRACTAL_TYPES` has `{ id: "tricorn", label:
+  "Tricorn" }` after Burning Ship, `resolveFractalKind("tricorn", ...)` returns
+  `tricornKind` whatever the variant beside it, and `fractalVariants` is `null`
+  for it, so it gets no second chip row and no Settings variant select. The link
+  codec (`fractalNamed`) and `presetFractal` validate against `FRACTAL_TYPES`, so
+  `f=tricorn` round-trips and a saved Tricorn view lists under it with no change
+  to either, and stores no `juliaConstant`. The renderer is untouched.
+  `FRACTAL_KINDS` in `fractalKinds.ts` is still Mandelbrot alone, as it is for the
+  ship and Julia: the picker's resolver is what the page draws by.
+- `defaultViewFor("tricorn")` is (0, 0) at zoom 1. The set's arms point to -2 and
+  to 1 +- 1.73i, so the origin frames the three alike; zoom 1 is the widest view
+  (x -2 to 2, y -1.5 to 1.5), which holds the left arm and the body and loses
+  the last 0.23 of the other two arms' tips at the top and bottom edges. Chosen
+  from 400x300 renders of (0, 0) and (-0.25, 0): the second only moved the left
+  tip off the frame's edge, at the cost of the symmetry.
+- The button row. `FractalSwitcher` draws four buttons; measured in headless
+  Chrome the row is about 290 px wide, ending at 302 px, so it fits 375 px and
+  320 px, and the label is not shortened. The group still has `max-w-full
+  overflow-x-auto` and a button `shrink-0 whitespace-nowrap`, so a picture
+  narrower than that scrolls the row sideways like the chip row and never wraps
+  it over the picture. `aria-pressed` was already `type.id ===
+  fractalType`, so the fourth button is covered by the same line.
+- Two built-in views (`presets.ts`, `fractal: "tricorn"`, no constant):
+  `tricorn-overview` (the default view, bounds -2..2 by -1.5..1.5) and
+  `tricorn-star` (centre 0.872, 1.51 at zoom 50, bounds 0.832..0.912 by
+  1.48..1.54). They fall under the existing per-fractal guards in
+  `presets.test.ts`, which now count 9 fractal-owned views and 15 built-ins.
+- Nine places in `places.ts` (`TRICORN_PLACES`; the test allows 8 to 10), each
+  picked from contact sheets drawn through the real renderer in several schemes,
+  the numbers written as the render had them: the whole set, two bulbs on an
+  arm, the body's frayed edge, the left arm's bulb, along the left arm, where the
+  body meets an arm, a small Tricorn (a baby copy at about -1.768 on the real
+  axis), a bulb on the upper arm, and a star on an antenna. The set repeats a
+  feature on each of its three arms, so some frames run diagonally. The
+  featured place is `tricorn-star`, a three-pointed star with filaments in the
+  classic scheme (the comment on `FEATURED_PLACE_IDS` says why it beat the bulbs
+  and the whole-set frames). A candidate drawn far out on the real axis (a speck
+  at -1.94, zoom 200) was dropped: too dark to read even at the thumbnail size.
+  Thumbnails, Surprise me, Tour and Auto-wander hops pick the new places up with
+  no further code; `tour.test.ts` now expects four fractals.
+- Tests: `tricorn.test.ts` (the id, the origin inside, c = 2 escaping at count 1,
+  agreement with the Mandelbrot kind on the real axis, a hand-worked point that
+  differs from it, the 120 degree turn both ways on seven points and on a point
+  of the set, the mirror about the real axis, smooth against whole counts, the
+  cap, the default view holding the set), plus the Tricorn cases in
+  `fractalTypes.test.ts`, `viewLink.test.ts`, `viewLinkState.test.ts` and
+  `presets.test.ts`, the new count in `places.test.ts`, and the button row's
+  scrolling classes in `fractal-switcher-panel.test.ts`. Every place and the
+  featured place already run through the catalogue guards (kind, range, link
+  round trip, non-blank render, featured detail share).
 
 ### Fractal variants (2026-10-10)
 

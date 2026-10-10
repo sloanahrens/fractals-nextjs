@@ -25,7 +25,7 @@ interface FractalSwitcherProps {
 }
 
 const BUTTON_CLASSES =
-  "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:px-3 sm:text-sm";
+  "shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:px-3 sm:text-sm";
 
 const CHIP_CLASSES =
   "shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:text-sm";
@@ -34,11 +34,14 @@ const PRESSED = "bg-white text-gray-900";
 const RESTING = "bg-white/10 text-white hover:bg-white/20";
 
 /**
- * The one-click way to change fractal: Mandelbrot, Julia and Burning Ship as a
- * row of buttons over the top left of the canvas, the current one pressed, and
- * while the current fractal takes a setting (`fractalVariants`; today only
- * Julia, its constant) a second row of chips for it, with the setting's name as
- * a quiet caption before them. A fractal with none gets no second row.
+ * The one-click way to change fractal: Mandelbrot, Julia, Burning Ship and
+ * Tricorn as a row of buttons over the top left of the canvas, the current one
+ * pressed, and while the current fractal takes a setting (`fractalVariants`;
+ * today only Julia, its constant) a second row of chips for it, with the
+ * setting's name as a quiet caption before them. A fractal with none gets no
+ * second row. The button row is about 290 px wide, which fits a 320 px screen
+ * with room to spare; it scrolls sideways, as the chip row does, should a
+ * picture ever be narrower than that.
  *
  * It is drawn inside the canvas's own wrapper, so it sits under the top bar and
  * clear of the progress line, and below the blank-picture hint's row, which the
@@ -71,7 +74,7 @@ export function FractalSwitcher({
       <div
         role="group"
         aria-label="Fractal"
-        className="pointer-events-auto flex rounded-lg bg-gray-900/80 p-0.5 backdrop-blur"
+        className="pointer-events-auto flex max-w-full overflow-x-auto rounded-lg bg-gray-900/80 p-0.5 backdrop-blur"
       >
         {FRACTAL_TYPES.map((type) => {
           const current = type.id === fractalType;

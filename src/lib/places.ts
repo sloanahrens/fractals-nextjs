@@ -439,6 +439,96 @@ const BURNING_SHIP_PLACES: readonly Place[] = [
   },
 ];
 
+// Drawn headless at low resolution onto contact sheets in several schemes, the
+// striking ones kept and their centre and zoom written in as the render had
+// them. The set has three arms turned 120 degrees apart, so the same feature
+// turns up on the left arm (along the negative real axis, as the Mandelbrot set
+// has it) and on the two others, rotated: the places below take both, which is
+// why some frames run diagonally.
+const TRICORN_PLACES: readonly Place[] = [
+  {
+    id: "tricorn-whole",
+    name: "The whole Tricorn",
+    fractal: "tricorn",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "tricorn-two-bulbs",
+    name: "Two bulbs on an arm",
+    fractal: "tricorn",
+    centerX: 0.55,
+    centerY: 1,
+    zoom: 8,
+    colorScheme: "ocean",
+  },
+  {
+    id: "tricorn-frayed-edge",
+    name: "The body's frayed edge",
+    fractal: "tricorn",
+    centerX: 0.28,
+    centerY: 0.5,
+    zoom: 8,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "tricorn-left-arm-bulb",
+    name: "The left arm's bulb",
+    fractal: "tricorn",
+    centerX: -1.25,
+    centerY: 0,
+    zoom: 12,
+    colorScheme: "ocean",
+  },
+  {
+    id: "tricorn-along-the-arm",
+    name: "Along the left arm",
+    fractal: "tricorn",
+    centerX: -1.4,
+    centerY: 0,
+    zoom: 20,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "tricorn-body-meets-arm",
+    name: "Where the body meets an arm",
+    fractal: "tricorn",
+    centerX: -0.75,
+    centerY: 0.1,
+    zoom: 20,
+    colorScheme: "fire",
+  },
+  {
+    id: "tricorn-small-tricorn",
+    name: "A small Tricorn",
+    fractal: "tricorn",
+    centerX: -1.768,
+    centerY: 0,
+    zoom: 60,
+    colorScheme: "classic",
+  },
+  {
+    id: "tricorn-upper-arm-bulb",
+    name: "A bulb on the upper arm",
+    fractal: "tricorn",
+    centerX: 0.7,
+    centerY: 1.2,
+    zoom: 60,
+    colorScheme: "ocean",
+  },
+  {
+    id: "tricorn-star",
+    name: "A star on an antenna",
+    fractal: "tricorn",
+    centerX: 0.872,
+    centerY: 1.51,
+    zoom: 50,
+    colorScheme: "classic",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -448,6 +538,7 @@ export const PLACES: readonly Place[] = [
   ...MANDELBROT_PLACES,
   ...JULIA_PLACES,
   ...BURNING_SHIP_PLACES,
+  ...TRICORN_PLACES,
 ];
 
 /**
@@ -478,11 +569,15 @@ export function placesForFractal(fractal: string): Place[] {
  *   in a field of one colour, which is what the constant chips are for.
  * - Burning Ship: the Armada. Masts standing on the hull's silhouette, the one
  *   view that reads as a ship; the closer views are textures.
+ * - Tricorn: the star on an antenna. A three-pointed star with its filaments
+ *   in full colour, the set's own three-fold shape in small; the whole-set
+ *   views are a thin figure in a flat field and the bulbs are Mandelbrot-like.
  */
 export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   mandelbrot: "mandelbrot-seahorse-valley",
   julia: "julia-classic-spirals",
   "burning-ship": "burning-ship-armada",
+  tricorn: "tricorn-star",
 };
 
 /**

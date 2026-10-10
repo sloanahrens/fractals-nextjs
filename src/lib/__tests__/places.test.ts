@@ -367,6 +367,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   mandelbrot: [15, 20],
   julia: [8, 10],
   "burning-ship": [8, 10],
+  tricorn: [8, 10],
 };
 
 describe("PLACES", () => {

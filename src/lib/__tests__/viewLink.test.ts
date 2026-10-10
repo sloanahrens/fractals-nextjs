@@ -151,6 +151,30 @@ describe("encodeView", () => {
     );
   });
 
+  it("writes the Tricorn as f=tricorn and reads it back", () => {
+    const view = {
+      fractalType: "tricorn",
+      centerX: 0.872,
+      centerY: 1.51,
+      zoomLevel: 50,
+      colorScheme: "classic" as const,
+      autoIterationsOn: true,
+      canvasWidth: 800,
+      canvasHeight: 600,
+    };
+    const link = encodeView(view);
+
+    expect(link).toBe(
+      "v=1&f=tricorn&x=0.872&y=1.51&z=50&s=classic&i=auto&w=800&h=600",
+    );
+    expect(decodeView(`#${link}`)).toMatchObject({
+      fractalType: "tricorn",
+      centerX: 0.872,
+      centerY: 1.51,
+      zoomLevel: 50,
+    });
+  });
+
   it("writes no constant for a fractal that has none", () => {
     // The fractal and its constant are one choice, so a leftover Julia constant
     // on a Mandelbrot view is not part of the picture and does not travel.

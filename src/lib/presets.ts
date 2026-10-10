@@ -245,6 +245,40 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasHeight: 600,
     fractal: "burning-ship",
   },
+  {
+    id: "tricorn-overview",
+    name: "Tricorn",
+    description: "The whole Tricorn, its three arms to the frame",
+    // The Tricorn's default view (0, 0) at zoom 1: 4 by 3 about the origin.
+    bounds: {
+      minReal: -2,
+      maxReal: 2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "tricorn",
+  },
+  {
+    id: "tricorn-star",
+    name: "Tricorn star",
+    description: "A three-pointed star on one of the Tricorn's antennae",
+    // Centre (0.872, 1.51) at zoom 50: 0.08 by 0.06.
+    bounds: {
+      minReal: 0.832,
+      maxReal: 0.912,
+      minImaginary: 1.48,
+      maxImaginary: 1.54,
+    },
+    maxIterations: 400,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "tricorn",
+  },
 ];
 
 /**
