@@ -5,6 +5,14 @@ export const DEFAULT_WANDER_INTERVAL_SECONDS = 5;
 export const MIN_WANDER_INTERVAL_SECONDS = 1;
 export const MAX_WANDER_INTERVAL_SECONDS = 120;
 
+/**
+ * Every this-many-th step is a hop to a place from the catalogue instead of a
+ * drift: with 4, a walk goes drift, drift, drift, hop. Any hop starts the count
+ * again, a drift replaced because it landed on a blank picture included, so a
+ * hop never follows another by the calendar.
+ */
+export const WANDER_HOP_EVERY = 4;
+
 // The countdown ticks once a second. The wait is measured in whole seconds, so
 // the status line reads a number the user recognises rather than a fraction.
 const TICK_MS = 1000;
@@ -18,6 +26,15 @@ const TICK_MS = 1000;
 export interface WanderTimers {
   setInterval: (callback: () => void, milliseconds: number) => unknown;
   clearInterval: (handle: unknown) => void;
+}
+
+/** What a step is asked to do. */
+export interface WanderStep {
+  /**
+   * True when the step is a hop to a catalogue place; false for a drift, the
+   * small random step of `wander.ts`.
+   */
+  hop: boolean;
 }
 
 export interface WanderControllerOptions {
@@ -51,10 +68,11 @@ export interface WanderControllerOptions {
  * what keeps the cadence tied to finished pictures rather than to wall time.
  */
 export class WanderController {
-  private onStep: () => void = () => {};
+  private onStep: (step: WanderStep) => void = () => {};
   private readonly onCountdown:
     ((secondsRemaining: number | null) => void) | undefined;
   private readonly timers: WanderTimers;
+  private isBlank: () => boolean = () => false;
 
   private running = false;
   private hidden = false;
@@ -62,6 +80,12 @@ export class WanderController {
   private intervalSeconds: number;
   private remainingSeconds = 0;
   private timer: unknown = null;
+  /** Drifts taken since the walk began or since the last hop. */
+  private driftsSinceHop = 0;
+  /** A drift was taken and its settled picture has not been looked at yet. */
+  private driftUnchecked = false;
+  /** A step handler is running, so the activity it reports is its own. */
+  private stepping = false;
 
   constructor({
     onCountdown,
@@ -83,13 +107,26 @@ export class WanderController {
   }
 
   /**
-   * What a step does: move the view. Set rather than handed to the constructor
-   * because it is a live callback — a caller that builds this once has to be
-   * able to say what a step is later, using the fractal and the view it holds
-   * at that moment. Until it is set a step does nothing.
+   * What a step does: move the view, by a drift or, when the step says `hop`,
+   * to a place. Set rather than handed to the constructor because it is a live
+   * callback — a caller that builds this once has to be able to say what a step
+   * is later, using the fractal and the view it holds at that moment. Until it
+   * is set a step does nothing.
    */
-  setStepHandler(onStep: () => void): void {
+  setStepHandler(onStep: (step: WanderStep) => void): void {
     this.onStep = onStep;
+  }
+
+  /**
+   * Whether the picture on the canvas is nearly one colour. Asked once, when
+   * the picture a drift produced has settled ({@link WanderController.notifySettled});
+   * a drift that landed on a blank picture is replaced at once by a hop. A
+   * setter for the same reason as the step handler: the canvas belongs to the
+   * page, which is built after the controller. Until it is set, no picture is
+   * blank.
+   */
+  setBlankDetector(isBlank: () => boolean): void {
+    this.isBlank = isBlank;
   }
 
   /** Switch the walk on. A second call while it is already on does nothing. */
@@ -97,6 +134,8 @@ export class WanderController {
     if (this.running) return;
 
     this.running = true;
+    this.driftsSinceHop = 0;
+    this.driftUnchecked = false;
     this.settle();
   }
 
@@ -129,7 +168,29 @@ export class WanderController {
    * switch the mode off.
    */
   notifyActivity(): void {
+    // A move by hand leaves no drift picture to judge; the walk's own step
+    // reports through here too, and keeps its flag.
+    if (!this.stepping) this.driftUnchecked = false;
     this.settle();
+  }
+
+  /**
+   * The view on screen is fully drawn. If it is the picture a drift produced
+   * and it is blank, the walk does not sit on nothing: it hops at once, ahead
+   * of the next countdown. Any other settled picture is left alone.
+   *
+   * Call it once the handler from {@link WanderController.setStepHandler} is
+   * current, from the page's effect on the settled render rather than from
+   * inside the render's own completion.
+   */
+  notifySettled(): void {
+    if (!this.driftUnchecked) return;
+
+    this.driftUnchecked = false;
+    if (!this.running || this.hidden || this.rendering) return;
+    if (!this.isBlank()) return;
+
+    this.step(true);
   }
 
   /** The tab was hidden or shown again; a hidden tab counts down nothing. */
@@ -199,8 +260,23 @@ export class WanderController {
     this.stopTimer();
     this.remainingSeconds = 0;
     this.publish();
-    this.onStep();
+    this.step(this.driftsSinceHop + 1 >= WANDER_HOP_EVERY);
   };
+
+  /** Take one step, keeping count of the drifts since the last hop. */
+  private step(hop: boolean): void {
+    this.driftsSinceHop = hop ? 0 : this.driftsSinceHop + 1;
+
+    this.stepping = true;
+    try {
+      this.onStep({ hop });
+    } finally {
+      this.stepping = false;
+    }
+    // A hop goes to a place chosen for being worth seeing, so only a drift's
+    // picture is looked at.
+    this.driftUnchecked = !hop;
+  }
 
   private publish(): void {
     this.onCountdown?.(

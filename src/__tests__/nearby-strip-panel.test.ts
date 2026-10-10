@@ -182,7 +182,7 @@ describe("the suggestions", () => {
     // applyView is what wheel, drag, keys and walk steps share.
     const applyView = page.slice(
       page.indexOf("const applyView = useCallback("),
-      page.indexOf("// What one step of the walk does"),
+      page.indexOf("// The walk counts down only while the tab is on screen"),
     );
     expect(applyView).not.toContain("setJumpSerial");
     expect(applyView).not.toContain("setLinkArrivals");

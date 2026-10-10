@@ -4,6 +4,7 @@ import { TOUR_DWELL_MS } from "../tour";
 import {
   TOUR_ACTIVITY_EVENTS,
   TOUR_IDLE_START_MS,
+  TOUR_RESUME_MS,
   TourMode,
   isTextEntry,
   pointerMoved,
@@ -38,6 +39,11 @@ function quietPage(conditions: Partial<TourConditions> = {}) {
 describe("the constants", () => {
   it("wait twenty seconds for input before a tour starts by itself", () => {
     expect(TOUR_IDLE_START_MS).toBe(20000);
+  });
+
+  it("wait fifteen seconds before a stopped tour starts again, less than a cold start", () => {
+    expect(TOUR_RESUME_MS).toBe(15000);
+    expect(TOUR_RESUME_MS).toBeLessThan(TOUR_IDLE_START_MS);
   });
 
   it("count a move, a press, a key, a touch and the wheel as input", () => {
@@ -404,7 +410,8 @@ describe("a tour that is playing", () => {
 
     expect(tour.state).toBe("stopped");
     expect(changes).toEqual([["stopped", "playing"]]);
-    vi.advanceTimersByTime(TOUR_DWELL_MS * 2);
+    // Long enough for two dwells, short of the wait for the next tour.
+    vi.advanceTimersByTime(TOUR_RESUME_MS - 1);
     expect(hops).toEqual([true]);
   });
 
@@ -440,13 +447,13 @@ describe("a tour that is playing", () => {
 });
 
 describe("after a tour is stopped", () => {
-  it("plays another after twenty more seconds of silence", () => {
+  it("plays another after fifteen more seconds of silence", () => {
     const { tour, hops } = quietPage();
     tour.buttonStart();
     tour.activity();
     expect(tour.state).toBe("stopped");
 
-    vi.advanceTimersByTime(TOUR_IDLE_START_MS - 1);
+    vi.advanceTimersByTime(TOUR_RESUME_MS - 1);
     expect(tour.state).toBe("stopped");
     vi.advanceTimersByTime(1);
 
@@ -454,15 +461,51 @@ describe("after a tour is stopped", () => {
     expect(hops).toEqual([true, true]);
   });
 
-  it("restarts the wait on activity, as armed does", () => {
+  it("restarts the wait on activity, as armed does, at fifteen seconds", () => {
     const { tour } = quietPage();
     tour.buttonStart();
     tour.activity();
 
-    vi.advanceTimersByTime(TOUR_IDLE_START_MS - 1);
+    vi.advanceTimersByTime(TOUR_RESUME_MS - 1);
     tour.activity();
-    vi.advanceTimersByTime(TOUR_IDLE_START_MS - 1);
+    vi.advanceTimersByTime(TOUR_RESUME_MS - 1);
     expect(tour.state).toBe("stopped");
+    vi.advanceTimersByTime(1);
+    expect(tour.state).toBe("playing");
+  });
+
+  it("waits the full twenty seconds on a page no tour has played on", () => {
+    const { tour } = quietPage();
+    expect(tour.state).toBe("armed");
+
+    vi.advanceTimersByTime(TOUR_RESUME_MS);
+    expect(tour.state).toBe("armed");
+    vi.advanceTimersByTime(TOUR_IDLE_START_MS - TOUR_RESUME_MS - 1);
+    expect(tour.state).toBe("armed");
+    vi.advanceTimersByTime(1);
+    expect(tour.state).toBe("playing");
+  });
+
+  it("waits fifteen seconds once the page can start one again after a stop", () => {
+    const { tour } = quietPage();
+    tour.buttonStart();
+    tour.setConditions({ windowFocused: false });
+    tour.activity();
+    tour.setConditions({ windowFocused: true });
+    expect(tour.state).toBe("stopped");
+
+    vi.advanceTimersByTime(TOUR_RESUME_MS);
+    expect(tour.state).toBe("playing");
+  });
+
+  it("still refuses to start over a drawer, whatever the wait", () => {
+    const { tour } = quietPage();
+    tour.buttonStart();
+    tour.activity();
+    tour.setConditions({ overlayOpen: true });
+
+    vi.advanceTimersByTime(TOUR_RESUME_MS * 3);
+    expect(tour.state).toBe("idle");
   });
 
   it("does not wait to start a tour on a page where one may not start by itself", () => {
