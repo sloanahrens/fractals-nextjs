@@ -68,6 +68,25 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
+    title: "Nearby places",
+    entries: [
+      {
+        keys: "Nearby tile",
+        action:
+          "Click a picture in the strip along the bottom, or Tab to it and press Enter, to fly to that place; hover or focus a tile to read its name",
+      },
+      {
+        keys: "More",
+        action: "Show the next suggestions in the strip",
+      },
+      {
+        keys: "Back / Forward",
+        action:
+          "Buttons in the top bar that retrace the places you jumped to, as the browser's own do; each is disabled when there is nowhere to go",
+      },
+    ],
+  },
+  {
     title: "Random walk",
     entries: [
       {
@@ -88,7 +107,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Presets",
         action:
-          "Load a built-in view for the fractal on the canvas, or save and load your own",
+          "Pick a built-in view for the fractal on the canvas from the Presets dropdown in Settings, or save and load your own",
       },
       {
         keys: "Copy link",

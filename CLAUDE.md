@@ -56,7 +56,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
-- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`): The floating title/Help/Settings bar, and the clock that fades it after two seconds without input
+- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Back/Forward/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus and shares the clock with the Nearby strip
+- **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
@@ -164,6 +165,79 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### Nearby strip, Back and Forward (2026-10-09)
+
+- A strip over the bottom of the canvas (`NearbyStrip.tsx`, inside the wrapper
+  that is exactly the canvas's size) shows six places from
+  `suggest(view, PLACES, ...)` as 64x48 thumbnails, headed "Nearby, worth a
+  look", with a More tile after them. A tile is a `<button>` whose accessible
+  name is the place (`aria-label`); its caption is `aria-hidden`, shown on
+  hover, on `focus-visible`, and always where there is no hover. The row
+  scrolls sideways; only the tiles take pointer events, so the canvas under
+  the gaps still pans. It renders nothing for an empty list.
+- The pictures come from a `createThumbnailStore` the component owns, drawn in
+  the page's current colour scheme. The page passes `paused={isRendering}`,
+  which is `store.pause()`/`resume()`, so the strip never competes with the
+  picture being waited for. Tiles are keyed by the list and scheme and ask the
+  store when they mount and draw straight onto their canvas when it answers (a
+  cached one is immediate, no state); a changed list `cancelAll()`s in the
+  cleanup that runs before the new tiles ask. A failed thumbnail is the store's
+  flat grey and the tile still works.
+- The fade is the top bar's: both use `useIdleVisibility(hold)`, which holds on
+  `hold` or on keyboard focus (`:focus-visible`) inside, so the strip never
+  fades while a tile has focus. The hook's second argument, `resetKey`, shows
+  the bar and restarts its wait when it changes; the strip passes its list,
+  because the list only exists once the first render has settled and would
+  otherwise arrive already faded. `canvas-first-page.test.ts` reads the hook
+  for the rules the bar used to carry itself.
+- Suggestions refresh by `nearbyRefreshDue` (`nearbyStrip.ts`): a full render
+  has settled on the view (`renderedLink === currentLink`) and the count of
+  deliberate moves is not the one the list was worked out at. A deliberate move
+  is `jumpSerial + linkArrivals` — the jumps `beginJump` counts, plus every
+  link put into effect (`applyViewLink`: the load's, a paste, Back, Forward).
+  Wheel, drag, keys, sliders and walk steps go through `applyView`, which
+  counts nothing, so they leave the strip alone; the first settled render of a
+  visit refreshes because nothing has been suggested yet. The refresh is state
+  adjusted during the render that sees the settle (the page's usual pattern;
+  `react-hooks/set-state-in-effect` is an error here), and works out a pool of
+  18 (`NEARBY_POOL_SIZE`) so More has pages to rotate: `nearbyWindow` takes six
+  from `offset`, wrapping, and `nextNearbyOffset` advances by a page. More is
+  offered only when the pool is larger than a page.
+- A click is `handlePlaceSelect`: it works out the link the place will settle
+  on with `encodeView` and returns if it is the link already shown (a flight
+  that causes no render would otherwise leave the crossfade waiting forever),
+  then `beginJump()` and the setters a preset uses — fractal, the Julia
+  constant for a Julia place, centre, zoom, the place's colour scheme if it
+  names one — plus `setAutoIterationsOn(true)`, because the catalogue says each
+  place is drawn at the count Auto picks for its zoom. Canvas size and the
+  by-hand iteration count are left alone. It pushes no entry itself: the
+  follower makes the one, as for a preset.
+- The crossfade is a second `<canvas>` over the first (`crossfadeRef`, with
+  `aria-hidden` and no pointer events). `startCrossfade(target)` copies the
+  canvas into it at full opacity, unless `prefers-reduced-motion: reduce`
+  matches, and an effect on `[currentLink, renderedLink]` fades it out over
+  `CROSSFADE_MS` (400) once `renderedLink` is the target — or as soon as
+  `currentLink` has moved off it, so a drag during a flight cannot strand the
+  old frame. "The first full-resolution pass" is the finished full render;
+  previews do not set `renderedLink`. The opacity is set on the element, not
+  held in state, because nothing renders from it.
+- Back and Forward in `TopBar` call `history.back()` and `history.forward()`
+  and add no listener: the fragment change lands on the existing `hashchange`
+  path. They are disabled from `historyButtons(journey)` (`journey.ts`), held in
+  `historyState` because the `Journey` is a mutable object a render cannot see
+  into; `syncHistoryButtons` is called after `journey.push` (in `pushViewLink`)
+  and after `journey.arrive` (in the `hashchange` listener), the only two moves
+  that change whether either direction is open. Their accessible names are
+  "Back" and "Forward".
+- The Presets card is the dropdown alone; the button row and the clipped-label
+  problem it had are gone. Saved views and custom presets stay in the drawer.
+- `nearbyStrip.test.ts` drives the refresh policy, the window and the offset;
+  `journey.test.ts` grew `historyButtons`; `nearby-strip-panel.test.ts` reads
+  the sources for the label, the tile buttons, More, the focus hold, the pause,
+  the click's setters, the crossfade and the top bar buttons;
+  `preset-button-labels.test.ts`, kept at its path, now says the button row
+  stays gone.
 
 ### One place for position and zoom (2026-10-09)
 
@@ -372,14 +446,18 @@ _Last updated: 2026-10-09_
 
 ### Preset button labels are no longer clipped (2026-10-09)
 
+_Superseded: the Nearby strip replaced the button row, which is gone; what
+follows is how it was, and `preset-button-labels.test.ts` now asserts the row
+stays gone instead of measuring its classes._
+
 - The built-in view buttons asked for six columns from `lg` up, but from there
   the Presets card is the fixed `w-96` column beside the canvas, not a share of
   the viewport: each button got about 26px of text width and "Julia: Classic"
   read "Classi". The grid is `grid-cols-2 sm:grid-cols-3 lg:grid-cols-2` now,
   and a button carries `min-w-0 break-words`, so a name that does not fit wraps
   inside its button. Labels and the `Julia:` prefix are unchanged.
-- `src/__tests__/preset-button-labels.test.ts` reads `PresetSelector.tsx` for
-  the classes that decide this — a column count past three, a missing
+- `src/__tests__/preset-button-labels.test.ts` read `PresetSelector.tsx` for
+  the classes that decided this — a column count past three, a missing
   `lg:grid-cols-2`, a button that cannot shrink or wrap, and any
   `truncate`/`whitespace-nowrap`/`overflow-hidden`/fixed-width class — since
   the Node suite has no layout to measure.

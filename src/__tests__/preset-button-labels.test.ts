@@ -1,62 +1,50 @@
 /**
- * The built-in preset buttons show their whole label
+ * The Presets card is a dropdown and nothing else
  *
- * From the `lg` breakpoint the Presets card is a fixed `w-96` column beside
- * the canvas, and the button grid asked for six columns there: about 26px of
- * text per button, so "Julia: Classic" read "Classi". The suite has no DOM to
- * lay out, so this reads the `PresetSelector` source for the classes that
- * decide the clipping: a column count that outgrows the card, a button that is
- * not allowed to wrap, and a width or overflow rule that hides what does not
- * fit.
+ * The Nearby strip over the canvas replaced the row of built-in view buttons
+ * that used to sit under the dropdown, which also retired the clipped-label
+ * problem those buttons had ("Julia: Classic" read "Classi" in a fixed-width
+ * column). The suite has no DOM, so this reads the `PresetSelector` source for
+ * what is and is not in it, and the page for the strip that took the buttons'
+ * place.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-const SELECTOR = readFileSync(
-  fileURLToPath(
-    new URL("../components/ui/PresetSelector.tsx", import.meta.url),
-  ),
-  "utf8",
-);
-
-/** The class string of the element that holds the built-in view buttons. */
-function gridClasses(): string {
-  const match = SELECTOR.match(/className="(grid [^"]*)"/);
-  if (!match) throw new Error("PresetSelector has no grid of preset buttons");
-  return match[1];
+function source(path: string): string {
+  return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 }
 
-/** The class string handed to the `Button` that renders one built-in view. */
-function buttonClasses(): string {
-  const match = SELECTOR.match(/<Button\s[\s\S]*?className="([^"]*)"/);
-  if (!match) throw new Error("PresetSelector has no preset Button");
-  return match[1];
-}
+const selector = source("../components/ui/PresetSelector.tsx");
+const page = source("../app/page.tsx");
 
-describe("preset button labels", () => {
-  it("never asks for more than three columns at any width", () => {
-    const counts = [...gridClasses().matchAll(/grid-cols-(\d+)/g)].map((m) =>
-      Number(m[1]),
+describe("the Presets card", () => {
+  it("keeps its dropdown, listing built-in and saved views", () => {
+    expect(selector).toContain("<Select");
+    expect(selector).toContain('label="Presets"');
+    expect(selector).toContain("presetsForFractal(BUILTIN_PRESETS, fractal)");
+    expect(selector).toContain("presetsForFractal(customPresets, fractal)");
+    expect(selector).toContain("onChange={handlePresetChange}");
+  });
+
+  it("no longer has the row of built-in view buttons", () => {
+    expect(selector).not.toContain("<Button");
+    expect(selector).not.toContain('from "./Button"');
+    expect(selector).not.toMatch(/grid-cols-\d/);
+    expect(selector).not.toContain(
+      "builtins.map((preset) => (\n        <Button",
     );
-    expect(counts.length).toBeGreaterThan(0);
-    expect(Math.max(...counts)).toBeLessThanOrEqual(3);
   });
 
-  it("keeps two columns from lg up, where the card is a fixed width", () => {
-    expect(gridClasses()).toMatch(/\blg:grid-cols-2\b/);
-  });
-
-  it("lets a button shrink and wrap its label", () => {
-    expect(buttonClasses()).toMatch(/\bmin-w-0\b/);
-    expect(buttonClasses()).toMatch(/\bbreak-words\b/);
-  });
-
-  it("does not clip, truncate or fix the width of a button", () => {
-    const classes = `${gridClasses()} ${buttonClasses()}`;
-    expect(classes).not.toMatch(
-      /(^|\s)(truncate|whitespace-nowrap|text-ellipsis|overflow-(hidden|clip)|w-\d+|w-\[[^\]]+\]|max-w-\S+)(\s|$)/,
+  it("still offers saved views and custom presets from the drawer", () => {
+    const drawer = page.slice(
+      page.indexOf("<SettingsDrawer"),
+      page.indexOf("</SettingsDrawer>"),
     );
+
+    expect(drawer).toContain("<PresetSelector");
+    expect(drawer).toContain("<CustomPresetManager");
   });
 });

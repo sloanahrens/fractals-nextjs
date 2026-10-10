@@ -129,3 +129,24 @@ export class Journey {
     return "push";
   }
 }
+
+/** Whether the top bar's Back and Forward buttons have anywhere to go. */
+export interface HistoryButtons {
+  canGoBack: boolean;
+  canGoForward: boolean;
+}
+
+/**
+ * What the Back and Forward buttons may do, read off the journey.
+ *
+ * The buttons call the browser's own `history.back()` and `history.forward()`,
+ * but the browser will not say whether there is an entry on either side, and
+ * its entries from before this page loaded are not the explorer's to walk. The
+ * journey is the page's record of its own entries, so a button is enabled
+ * exactly when the journey has a step that way.
+ */
+export function historyButtons(
+  journey: Pick<Journey, "canGoBack" | "canGoForward">,
+): HistoryButtons {
+  return { canGoBack: journey.canGoBack, canGoForward: journey.canGoForward };
+}

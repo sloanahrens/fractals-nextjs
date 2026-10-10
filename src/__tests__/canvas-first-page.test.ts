@@ -21,6 +21,8 @@ function source(path: string): string {
 const page = source("../app/page.tsx");
 const drawer = source("../components/ui/SettingsDrawer.tsx");
 const topBar = source("../components/ui/TopBar.tsx");
+// The idle clock's glue is shared with the Nearby strip, so it lives in a hook.
+const idleVisibility = source("../components/ui/useIdleVisibility.ts");
 const css = source("../app/globals.css");
 
 /** The cards the right-hand column held, in the order it held them. */
@@ -156,20 +158,26 @@ describe("the top bar", () => {
   });
 
   it("fades on the idle clock and listens for input on the window", () => {
-    expect(topBar).toContain("createIdleFade({ onChange: setVisible, held })");
-    expect(topBar).toContain("TOP_BAR_ACTIVITY_EVENTS");
-    expect(topBar).toContain("window.addEventListener(name, handleActivity");
-    expect(topBar).toContain(
+    expect(topBar).toContain("useIdleVisibility(settingsOpen)");
+    expect(idleVisibility).toContain(
+      "createIdleFade({ onChange: setVisible, held })",
+    );
+    expect(idleVisibility).toContain("TOP_BAR_ACTIVITY_EVENTS");
+    expect(idleVisibility).toContain(
+      "window.addEventListener(name, handleActivity",
+    );
+    expect(idleVisibility).toContain(
       "window.removeEventListener(name, handleActivity)",
     );
-    expect(topBar).toContain("fade.dispose()");
+    expect(idleVisibility).toContain("fade.dispose()");
   });
 
   it("stays up while the drawer is open or a control in it has focus", () => {
-    expect(topBar).toContain("const held = settingsOpen || focusWithin;");
-    expect(topBar).toContain("const shown = held || visible;");
-    expect(topBar).toContain("onFocus={");
-    expect(topBar).toContain("onBlur={");
+    expect(idleVisibility).toContain("const held = hold || focusWithin;");
+    expect(idleVisibility).toContain("const shown = held || visible;");
+    expect(idleVisibility).toContain("onFocus:");
+    expect(idleVisibility).toContain("onBlur:");
+    expect(topBar).toContain("{...focusProps}");
     expect(page).toContain("settingsOpen={settingsOpen}");
   });
 

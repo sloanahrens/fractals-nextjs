@@ -9,7 +9,6 @@ import {
   presetsForFractal,
   subscribeToCustomPresets,
 } from "../../lib/presets";
-import { Button } from "./Button";
 import { Select } from "./Select";
 
 interface PresetSelectorProps {
@@ -24,6 +23,12 @@ interface PresetSelectorProps {
   className?: string;
 }
 
+/**
+ * The preset dropdown: the built-in views of the selected fractal, then the
+ * user's saved ones. The Nearby strip over the canvas is how a visitor finds
+ * places at a glance, so the dropdown is the only way in here and the row of
+ * buttons that used to sit under it is gone.
+ */
 export const PresetSelector: React.FC<PresetSelectorProps> = ({
   currentPreset,
   fractal,
@@ -73,30 +78,6 @@ export const PresetSelector: React.FC<PresetSelectorProps> = ({
           onChange={handlePresetChange}
         />
       </div>
-
-      {/* The column count follows the card, not the viewport: from `lg` up the
-          card is the fixed w-96 beside the canvas, so six columns left each
-          button a few characters of text width and clipped "Julia: Classic" to
-          "Classi". Two columns fit the longest name, and a name that does not
-          fit wraps onto a second line. */}
-      {/* Every fractal the picker offers has built-in views, but a fractal a
-          preset names and this build does not know lists none, and the grid is
-          absent then rather than an empty row above the list of saved ones. */}
-      {builtins.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2">
-          {builtins.map((preset) => (
-            <Button
-              key={preset.id}
-              onClick={() => onPresetSelect(preset)}
-              variant={currentPreset === preset.id ? "primary" : "secondary"}
-              size="sm"
-              className="min-w-0 break-words text-xs"
-            >
-              {preset.name}
-            </Button>
-          ))}
-        </div>
-      )}
     </div>
   );
 };
