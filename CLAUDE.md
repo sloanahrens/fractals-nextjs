@@ -92,6 +92,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 - **Palette controls** (`src/lib/paletteControls.ts`, `Slider`'s `onGestureStart`/`onKeyDown`): The Settings drawer's Reverse checkbox and Shift slider as the controls read them — the slider's whole percent against the view's fraction of a turn (`shiftToPercent`/`percentToShift`), `normalizeShift` (the mapping's reading, a whole turn being no shift), `isDefaultColorOptions` (judged exactly, so a slider dragged to its far end still has a Reset), `formatShiftPercent` and the keys that move a focused slider. The slider's far end is held rather than read modulo a turn, so a drag to the right does not snap the thumb back; a change of either setting repaints from kept counts and is one history entry per gesture, marked on the slider's pointer-down or on the first key press that moves it (`FractalExplorer.tsx`)
+- **Colour cycling** (`src/lib/cycleColours.ts`): The "Cycle colours" mode, which walks the palette's Shift slowly round a turn and repaints from the counts the last render left — `CYCLE_SPEEDS` (Slow 60 s, Medium 25 s, Fast 10 s a loop) and `cycleSpeedFor`, `CYCLE_MIN_PAINT_GAP_MS` (50, twenty repaints a second), `cycleShift(startShift, elapsedMs, loopMs)` (advanced by elapsed time, so a slow device cycles at the same speed and only the picture is choppier), `shouldPaint(now, last, minGap)` and `cyclePaused(conditions)` (a hidden tab, a render in flight, a hand on the picture or the slider, the Help overlay, a tour, reduced motion). The page's frame loop reads and writes `recolour` and nothing else — it never starts a render — and the palette it is painting lives in a ref rather than in the view, so the link, the history and the saved views are untouched until the visitor switches the mode off, which is where the palette stops and the one entry is written
 
 ### State Management Pattern
 
@@ -115,6 +116,7 @@ The main page (`src/app/FractalExplorer.tsx`, a client component; `src/app/page.
 - Cancellable rendering operations when parameters change
 - A preview pass while a gesture is in flight, with the full-resolution render deferred to its end
 - A colour change repaints from the iteration counts the last render left (`FractalRenderer.recolour`), so it costs a pass over the pixels and no orbit at all
+- Cycling the palette (`cycleColours.ts`) is that same repaint on a frame loop, at most twenty a second; it holds rather than queues a frame it cannot paint, and it never starts a render
 - Canvas ImageData direct pixel manipulation
 
 ## Next.js Configuration
@@ -238,6 +240,138 @@ _Last updated: 2026-10-10_
   `viewLinkState.ts` ones on the module and on `viewLinkToUpdates`, the README's
   Sharing a View and Link preview sections, and the View link state bullet in
   Project Architecture.
+
+### Cycle colours: a palette that flows, repainting and never counting again (2026-10-10)
+
+- fr-9in. The Rendering Parameters card now offers a **Cycle colours** checkbox
+  and a **Cycle speed** select (Slow 60 s per loop, Medium 25 s, Fast 10 s;
+  Slow by default) under the Shift slider and Reset colours. Switched on, the
+  palette walks slowly round a turn and the picture is repainted from the
+  iteration counts the last full render left — the path fr-di8 built — so a
+  deep view animates for the price of a colour change and no orbit is ever
+  counted twice. It is the mode fr-q7x and fr-ep7 were the groundwork for: the
+  Shift is a setting of the picture, and cycling is that setting moved.
+- **`src/lib/cycleColours.ts`** is the new pure module and the only new source
+  file: `CYCLE_SPEEDS` (`slow` 60 000, `medium` 25 000, `fast` 10 000 ms a
+  loop) and `cycleSpeedFor(id)`, which answers the slowest for an id this build
+  does not know, as `exportShapeFor` and `resolveFractalKind` do;
+  `DEFAULT_CYCLE_SPEED`; `CYCLE_MIN_PAINT_GAP_MS` (50, twenty repaints a
+  second); `cycleShift(startShift, elapsedMs, loopMs)`; `shouldPaint(now,
+  last, minGapMs)`; and `cyclePaused(conditions)`.
+- **The shift is advanced by elapsed time and not by frames**, which is what
+  the bead asks for and what makes the speed honest: a device that manages 12
+  frames a second rather than 60 arrives at the same point of the turn at the
+  same moment and only the picture is choppier. `cycleShift` reads the start
+  the way the mapping does (`normalizeShift`, a whole turn being none), so a
+  NaN start is no shift rather than a NaN handed to the palette, and returns
+  the fraction itself unchanged for no time passed or a loop that is not a
+  length. The result is always in 0 up to (not including) 1.
+- **A frame asks for a repaint and nothing else.** `FractalRenderer.recolour`
+  is called with the scheme, the cap the counts were made at, and
+  `{ reverse, shift: next }`; it answers false when there is nothing to repaint
+  from (a render has started and dropped the counts), and the frame is then
+  *skipped rather than queued*: the clock moves on, the palette holds still,
+  and it carries on from where it was when there is a picture again. The
+  cycling effect calls no render path at all — the panel test reads its body
+  and fails if it names `drawCanvas`, `renderFractal`, `renderPreview`,
+  `setIsRendering`, `setFullRenderNonce`, `cancelRender` or either wander
+  notice — because the view never moves while the palette flows, and the counts
+  a repaint needs are exactly the ones still on the canvas.
+- **The hold is a pause and not a stop, and it is one pure decision.**
+  `cyclePaused` answers true for a hidden tab (nobody is watching, and a
+  browser throttles its frames), a render in flight (the counts are gone), a
+  pointer mid-gesture on the picture, a pointer down on the Shift slider, the
+  Help overlay, a playing tour, and `prefers-reduced-motion`. The page holds
+  the whole frame loop — the effect returns before it asks for a frame — and
+  starts it again with its clock at `performance.now()`, which is what makes
+  time spent held no part of the visitor's turn. The Help overlay is in the
+  list and the Settings drawer is not, deliberately: the drawer is where the
+  switch lives, the picture is visible beside it, and a visitor who has just
+  switched the palette on should see it run; the drawer's own slider is the
+  thing the bead's fourth clause is about, and its drag is the hold.
+- **Cycling is a mode and not part of the view**, and the page is built so that
+  this is structural rather than remembered. The palette being painted lives in
+  `cycleShiftRef`, *not* in the `shift` state: a frame writes the ref and
+  nothing else, so the view's link, the address bar, `renderedLink`, a saved
+  view and the Shift slider are all untouched while the palette flows, no
+  `setState` runs twenty times a second through a 3 000-line component, and the
+  Nearby strip's thumbnails and the Math card's probe are not asked for a
+  picture every frame. **Verified in headless Chrome** against the production
+  build: with the switch on, the address bar's fragment and `history.length`
+  are both unchanged through 1.4 s of a flowing palette.
+- **The ref follows the view's Shift, not the other way round.** An effect
+  writes `cycleShiftRef.current = shift` whenever the view's Shift moves — the
+  slider, Reset colours, a link, a preset, a saved view — so the animation
+  carries on from wherever the visitor has just put the palette rather than
+  snapping back to where it was. That is also what makes a drag of the slider
+  work while the palette is flowing: the drag holds the animation (pointer
+  down) *and* rebases it, so releasing does not fight the picture back to where
+  the animation had reached.
+- **Switching it off is one move of the view and one history entry.**
+  `handleCycleChange(false)` marks the jump and sets the Shift to the ref's
+  value, which is where the palette stopped. The view genuinely changes, so the
+  draw is the recolour path, `renderedLink` follows, and the follower pushes
+  the one entry — Back then returns to the palette as it was before the
+  animation started. Nothing else in the page writes the Shift from the ref
+  (the panel test pins that to one site).
+- **A link made while the palette flows carries the palette that is on the
+  canvas.** `currentLink` was one `useMemo` around `encodeView`'s field list;
+  the list is now `viewLinkFor(shiftValue)` and `currentLink` is
+  `useMemo(() => viewLinkFor(shift))`, so Copy link can spell the same view
+  with the animated Shift (the constraint's "the link and Copy link carry the
+  Shift at the moment they are made"). The offer of a field to copy from still
+  belongs to the *view* (`copy.link` is `currentLink`), so a palette that is
+  still flowing does not take it away.
+- **The blank-picture detector stands down while the palette flows**, which is
+  a small guarding change this bead needed: a cycling canvas is one the visitor
+  asked to watch change, and the rainbow scheme's palette-end hue — the one
+  `hsvToRgb` paints black, noted in fr-q7x — would otherwise be able to raise
+  "Nothing to see here" over a picture in motion.
+- **Two landed panel tests moved with the code and nothing else did**:
+  `palette-options-panel.test.ts` reads `viewLinkFor` (and pins `shift:
+  shiftValue` and the `currentLink` line) and `share-link-panel.test.ts` pins
+  the copy's `viewLinkFor(cycleShiftRef.current)` and `writeViewLink(`#${link}`)`.
+  `blank-hint-panel.test.ts` grew `cycling` in its settled-render assertion.
+- **Left as they are, knowingly**: the Math card's probe and the Nearby strip
+  read `colorOptions`, which is the view's own palette, so while the palette
+  flows their swatches and thumbnails are the palette the view holds rather
+  than the one on the canvas (the strip is better for it: six thumbnails
+  repainted twenty times a second is not what a calm wallpaper should cost).
+  Exporting is unchanged and out of scope: a PNG saved while the palette flows
+  is drawn in the view's own Shift.
+- **Verified in headless Chrome** (CDP with real mouse events, against the
+  standalone production build on port 3100, 19 checks, all passing): the
+  checkbox and the select are in the drawer under the Shift slider, the three
+  speeds are the catalogue's and Slow is the default; switching the switch on
+  repaints the canvas (12 distinct samples of 12 over 1.4 s) with `Rendering...`
+  never once in the document, the fragment and `history.length` both unmoved;
+  the picture keeps moving (20 distinct samples of 20 over 1.3 s); switching it
+  off writes exactly one entry (`1 -> 2`), the link and the Shift slider both
+  carrying the palette it stopped at (`o=0.05`, 5%), the picture holding still
+  after, and Back returning to the view before the animation; a held mouse
+  button on the canvas freezes the palette and releasing it starts the flow
+  again; and under emulated `prefers-reduced-motion: reduce` the switch is
+  disabled, says why, and the picture does not move.
+- Docs: the README's Cycle Colours bullet and its Project Structure
+  (`cycleColours.ts`), the CLAUDE.md architecture bullet above, and a "Cycle
+  colours" row in the Help overlay's Views and links group.
+- Tests: the new `src/lib/__tests__/cycleColours.test.ts` (the three speeds and
+  the fallback, the label's own loop length; where the palette has reached —
+  no time passed, a clock or a loop that is not a length, a NaN start, the
+  fraction a time is worth, wraparound and the range over six elapsed times,
+  a start read the way the mapping reads it, and thirty frames of 20 ms being
+  one step of 600 ms; whether a frame is due a repaint, at the boundary and at
+  twenty a second; and each hold condition on its own and together) and the new
+  `src/__tests__/cycle-colours-panel.test.ts` (sources: the controls in the
+  drawer under the palette and nowhere else, the speeds read through the
+  resolver, the session-only state, the link that neither carries the mode nor
+  starts it, the frame loop's single outstanding request and its cleanup, the
+  repaint and the eight render paths a frame may not name, a skipped frame,
+  elapsed-time advancement, all seven hold conditions, the gesture's two
+  callbacks, the four writes a frame may not make, the Shift it may not touch,
+  the ref and its sync, the one entry on switching off, the slider's rebase and
+  its release, reduced motion, the blank detector's stand-down, and the copied
+  link's palette). `make gate` is green.
 
 ### Colour controls: Reverse and Shift in Settings, repainting live and part of the view (2026-10-10)
 

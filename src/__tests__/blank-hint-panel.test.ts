@@ -60,8 +60,11 @@ describe("the page's wiring", () => {
       page.indexOf("The address bar follows", start),
     );
 
+    // And not while the palette is cycling: the canvas is moving under the
+    // detector, and the hint is for a view that landed somewhere dull rather
+    // than for a picture the visitor asked to watch change.
     expect(body).toMatch(
-      /isRendering \|\| renderedLink === "" \|\| renderedLink !== currentLink/,
+      /isRendering \|\|\s*cycling \|\|\s*renderedLink === "" \|\|\s*renderedLink !== currentLink/,
     );
     expect(body).toContain("BLANK_HINT_DELAY_MS");
     expect(body).toMatch(
