@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { defaultVariant } from "../fractalTypes";
 import { ogUrl, pageMetadata } from "../pageMetadata";
 import { DESCRIPTION, TITLE } from "../siteText";
+import { encodeTourLink } from "../tourLink";
+import {
+  DEFAULT_VIEW_LINK_UPDATES,
+  type ViewLinkUpdates,
+} from "../viewLinkState";
 
 const ORIGIN = "https://fractals.example.com";
 const VIEW = {
@@ -105,6 +111,71 @@ describe("pageMetadata with a view", () => {
     expect(
       images(local).og.url.startsWith("http://localhost:3000/api/og?"),
     ).toBe(true);
+  });
+});
+
+describe("pageMetadata with a tour link", () => {
+  const stop = (changes: Partial<ViewLinkUpdates>): ViewLinkUpdates => ({
+    fractalType: "mandelbrot",
+    variant: defaultVariant("julia"),
+    centerX: 0,
+    centerY: 0,
+    zoomLevel: 1,
+    colorScheme: "classic",
+    reverse: false,
+    shift: 0,
+    autoIterationsOn: true,
+    maxIterations: DEFAULT_VIEW_LINK_UPDATES.maxIterations,
+    canvasWidth: 800,
+    canvasHeight: 600,
+    ...changes,
+  });
+  const TOUR = encodeTourLink([
+    stop({
+      fractalType: "julia",
+      variant: "Dendrite",
+      centerX: -0.5,
+      centerY: 0.25,
+      zoomLevel: 400,
+      colorScheme: "fire",
+    }),
+    stop({ fractalType: "tricorn", zoomLevel: 8 }),
+  ])!;
+  const FIRST =
+    "v=1&f=julia&k=Dendrite&x=-0.5&y=0.25&z=400&s=fire&i=auto&w=800&h=600";
+  const LINE = "Tour of 2 views, starting at Julia set, Dendrite, 400x";
+
+  /** A link as the route's `searchParams` hand it over. */
+  const params = (link: string) => {
+    const out: Record<string, string> = {};
+
+    for (const [key, value] of new URLSearchParams(link)) out[key] = value;
+
+    return out;
+  };
+
+  it("previews the tour as the first stop the card can draw", () => {
+    const metadata = pageMetadata(ORIGIN, params(TOUR));
+    const { og, twitter } = images(metadata);
+
+    expect(og.url).toBe(`${ORIGIN}/api/og?${FIRST}`);
+    expect(twitter.url).toBe(og.url);
+    expect(og.alt).toBe(`${LINE}, drawn by Fractal Explorer`);
+    expect(metadata.title).toBe(`${LINE} - ${TITLE}`);
+    expect(metadata.description).toBe(`${LINE}. ${DESCRIPTION}`);
+    expect((metadata.twitter as { description: string }).description).toMatch(
+      new RegExp(`^${LINE}\\. `),
+    );
+    expect(ogUrl(ORIGIN, params(TOUR))).toBe(`${ORIGIN}/?${FIRST}`);
+  });
+
+  it("falls back to the static card for a tour link it cannot read", () => {
+    expect(pageMetadata(ORIGIN, params("v=1&t.f=julia"))).toEqual(
+      pageMetadata(ORIGIN),
+    );
+    expect(pageMetadata(ORIGIN, params("v=2&t.f=julia~tricorn"))).toEqual(
+      pageMetadata(ORIGIN),
+    );
   });
 });
 

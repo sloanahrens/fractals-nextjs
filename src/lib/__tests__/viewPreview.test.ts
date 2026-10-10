@@ -1,9 +1,20 @@
 import { describe, expect, it } from "vitest";
 
+import { defaultVariant } from "../fractalTypes";
+import { encodeTourLink } from "../tourLink";
 import { decodeView, encodeView } from "../viewLink";
 import { parseOgQuery } from "../ogView";
-import { describeViewLine, previewFor } from "../viewPreview";
-import { viewLinkToUpdates } from "../viewLinkState";
+import {
+  describeTourLine,
+  describeViewLine,
+  previewFor,
+  type SearchParams,
+} from "../viewPreview";
+import {
+  DEFAULT_VIEW_LINK_UPDATES,
+  viewLinkToUpdates,
+  type ViewLinkUpdates,
+} from "../viewLinkState";
 
 const JULIA = {
   v: "1",
@@ -136,6 +147,105 @@ describe("previewFor", () => {
 
   it("takes an array of nothing as nothing", () => {
     expect(previewFor({ v: [], f: undefined })).toBeNull();
+  });
+});
+
+describe("previewFor with a tour link", () => {
+  const stop = (changes: Partial<ViewLinkUpdates>): ViewLinkUpdates => ({
+    fractalType: "mandelbrot",
+    variant: defaultVariant("julia"),
+    centerX: 0,
+    centerY: 0,
+    zoomLevel: 1,
+    colorScheme: "classic",
+    reverse: false,
+    shift: 0,
+    autoIterationsOn: true,
+    maxIterations: DEFAULT_VIEW_LINK_UPDATES.maxIterations,
+    canvasWidth: 800,
+    canvasHeight: 600,
+    ...changes,
+  });
+  const TOUR = encodeTourLink([
+    stop({
+      fractalType: "julia",
+      variant: "Dendrite",
+      centerX: -0.5,
+      centerY: 0.25,
+      zoomLevel: 400,
+      colorScheme: "fire",
+    }),
+    stop({ fractalType: "tricorn", zoomLevel: 8 }),
+    stop({ fractalType: "newton", centerX: 0.5, colorScheme: "ocean" }),
+  ])!;
+
+  /** A link as the route's `searchParams` hand it over. */
+  const params = (link: string): SearchParams => {
+    const out: Record<string, string> = {};
+
+    for (const [key, value] of new URLSearchParams(link)) out[key] = value;
+
+    return out;
+  };
+
+  it("is the first stop, as a view link, and says how long the tour is", () => {
+    const preview = previewFor(params(TOUR));
+
+    expect(preview).not.toBeNull();
+    expect(preview!.line).toBe(
+      "Tour of 3 views, starting at Julia set, Dendrite, 400x",
+    );
+    // The fragment is the codec's re-encoding of the first stop alone, which is
+    // what /api/og draws and what the route's own reader accepts.
+    expect(preview!.fragment).toBe(
+      "v=1&f=julia&k=Dendrite&x=-0.5&y=0.25&z=400&s=fire&i=auto&w=800&h=600",
+    );
+    expect(parseOgQuery(preview!.fragment).ok).toBe(true);
+  });
+
+  it("beats a single view in the same query", () => {
+    // A query that carries both: the columns are the tour's and the loose keys
+    // are the view's, so neither reader mistakes one for the other, and the
+    // link that names a walk is the one that previews.
+    expect(previewFor({ ...params(TOUR), ...JULIA })).toEqual(
+      previewFor(params(TOUR)),
+    );
+  });
+
+  it("falls back to the view, or to the static card, for a link it cannot read", () => {
+    // A tour of one stop is no tour, and the view beside it is still a view.
+    const single = params("v=1&t.f=julia");
+
+    expect(previewFor({ ...single, ...JULIA })).toEqual(previewFor(JULIA));
+    expect(previewFor(single)).toBeNull();
+    // Another version is neither reader's.
+    expect(previewFor(params("v=2&t.f=julia~tricorn"))).toBeNull();
+  });
+
+  it("reads a two-stop link, and refuses one past its own limit", () => {
+    expect(
+      previewFor(
+        params(
+          encodeTourLink([
+            stop({ fractalType: "julia" }),
+            stop({ fractalType: "tricorn", zoomLevel: 8 }),
+          ])!,
+        ),
+      )!.line,
+    ).toBe("Tour of 2 views, starting at Julia set, Classic, 1x");
+
+    expect(previewFor(params(`v=1&t.f=${"a".repeat(900)}~julia`))).toBeNull();
+  });
+});
+
+describe("describeTourLine", () => {
+  it("says how many views and where the walk begins", () => {
+    expect(describeTourLine(2, "Tricorn, 8x")).toBe(
+      "Tour of 2 views, starting at Tricorn, 8x",
+    );
+    expect(describeTourLine(1, "Tricorn, 8x")).toBe(
+      "Tour of 1 view, starting at Tricorn, 8x",
+    );
   });
 });
 

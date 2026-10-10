@@ -11,6 +11,12 @@
  * visitor's text. The sentence about the view is built from the same state out
  * of this build's own labels and formatted numbers, so no input is echoed into
  * the page's head.
+ *
+ * A tour link (`tourLink.ts`) previews as its first stop — the card can draw one
+ * picture, so it draws the one the walk begins at — and its sentence says how
+ * many views the tour is. A query that carries both a tour link and a single
+ * view previews as the tour: the link that names a walk is the one that was
+ * sent to be watched.
  */
 
 import { formatComplex } from "./fractalMath";
@@ -18,6 +24,7 @@ import { fractalVariants } from "./fractalTypes";
 import { parseJuliaConstant } from "./julia";
 import { parseOgQuery } from "./ogView";
 import { formatZoom } from "./presets";
+import { decodeTourLink } from "./tourLink";
 import { decodeView, encodeView } from "./viewLink";
 import { viewLinkToUpdates, type ViewLinkUpdates } from "./viewLinkState";
 
@@ -82,15 +89,43 @@ export function describeViewLine(view: ViewLinkUpdates): string {
 }
 
 /**
+ * "Tour of 5 views, starting at Julia set, Dendrite, 400x": a walk, described by
+ * the view it begins at and how long it is.
+ *
+ * @param count - How many stops the tour has
+ * @param first - The line of its first stop
+ */
+export function describeTourLine(count: number, first: string): string {
+  return `Tour of ${count} ${count === 1 ? "view" : "views"}, starting at ${first}`;
+}
+
+/**
  * The preview a request's query asks for.
  *
  * @param searchParams - The route's search parameters
- * @returns The link and phrase for a view `/api/og` can draw; null for no
- *   parameters, for garbage, and for anything the route would refuse
+ * @returns The link and phrase for a view `/api/og` can draw — a tour link's
+ *   being its first stop — or null for no parameters, for garbage, and for
+ *   anything the route would refuse
  */
 export function previewFor(searchParams: SearchParams): ViewPreview | null {
   const query = queryOf(searchParams);
-  if (query === "" || !parseOgQuery(query).ok) return null;
+  if (query === "") return null;
+
+  // A tour before a view, because a link that names a walk is about the walk:
+  // the card is one picture, so it is the picture the walk begins at, and the
+  // phrase says how many views follow. The two are read from one query without
+  // either key being taken for the other's (`tourLink.ts`).
+  const stops = decodeTourLink(query);
+  if (stops !== null) {
+    const first = stops[0];
+
+    return {
+      fragment: encodeView(first),
+      line: describeTourLine(stops.length, describeViewLine(first)),
+    };
+  }
+
+  if (!parseOgQuery(query).ok) return null;
 
   const view = viewLinkToUpdates(decodeView(query));
 
