@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
 import { CUSTOM_OPTION_LABEL } from "../../lib/customConstantInput";
 import {
@@ -25,7 +25,7 @@ interface FractalSwitcherProps {
 }
 
 const BUTTON_CLASSES =
-  "shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:px-3 sm:text-sm";
+  "shrink-0 whitespace-nowrap rounded-md px-1.5 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:px-3 sm:text-sm";
 
 const CHIP_CLASSES =
   "shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:text-sm";
@@ -34,14 +34,14 @@ const PRESSED = "bg-white text-gray-900";
 const RESTING = "bg-white/10 text-white hover:bg-white/20";
 
 /**
- * The one-click way to change fractal: Mandelbrot, Julia, Burning Ship and
- * Tricorn as a row of buttons over the top left of the canvas, the current one
+ * The one-click way to change fractal: Mandelbrot, Julia, Burning Ship,
+ * Tricorn and Multibrot as a row of buttons over the top left of the canvas, the current one
  * pressed, and while the current fractal takes a setting (`fractalVariants`;
- * today only Julia, its constant) a second row of chips for it, with the
- * setting's name as a quiet caption before them. A fractal with none gets no
- * second row. The button row is about 290 px wide, which fits a 320 px screen
- * with room to spare; it scrolls sideways, as the chip row does, should a
- * picture ever be narrower than that.
+ * Julia's constant, the Multibrot's power) a second row of chips for it, with
+ * the setting's name as a quiet caption before them. A fractal with none gets
+ * no second row. The button row is about 323 px wide, which fits a 375 px
+ * screen; on a 320 px one it scrolls sideways, as the chip row does, with the
+ * lit button kept in view.
  *
  * It is drawn inside the canvas's own wrapper, so it sits under the top bar and
  * clear of the progress line, and below the blank-picture hint's row, which the
@@ -53,8 +53,8 @@ const RESTING = "bg-white/10 text-white hover:bg-white/20";
  * It holds no state. The page owns the fractal and its variant, so the
  * Settings selects and these buttons are two views of the same two values, and
  * the page decides where a click lands (`featuredPlace`, `wholeSetPlaceFor`).
- * The labels are the picker's own and are short enough for a 320 px screen, so
- * they are never abbreviated.
+ * The labels are the picker's own and are never abbreviated; a screen too narrow
+ * for the row scrolls it instead.
  */
 export function FractalSwitcher({
   fractalType,
@@ -64,6 +64,18 @@ export function FractalSwitcher({
   onSelectCustom,
   hidden = false,
 }: FractalSwitcherProps) {
+  // The row scrolls sideways when the picture is narrower than it is, which
+  // five buttons are on a 320 px screen, so the lit one can be out of view:
+  // bring it into view when the fractal changes and when the switcher comes
+  // back from being hidden.
+  const currentButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    currentButton.current?.scrollIntoView({
+      inline: "nearest",
+      block: "nearest",
+    });
+  }, [fractalType, hidden]);
+
   if (hidden) return null;
 
   const variants = fractalVariants(fractalType);
@@ -82,6 +94,7 @@ export function FractalSwitcher({
           return (
             <button
               key={type.id}
+              ref={current ? currentButton : undefined}
               type="button"
               aria-pressed={current}
               onClick={() => {

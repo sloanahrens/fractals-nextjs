@@ -278,7 +278,7 @@ describe("built-in preset framing", () => {
 
 describe("built-in views for the other fractals", () => {
   it("has presets to measure, so the guards below cannot pass vacuously", () => {
-    expect(FRACTAL_OWNED_PRESETS).toHaveLength(9);
+    expect(FRACTAL_OWNED_PRESETS).toHaveLength(12);
   });
 
   it("frames each one at the canvas's 4:3 shape", () => {
@@ -333,8 +333,8 @@ describe("built-in views for the other fractals", () => {
 });
 
 describe("BUILTIN_PRESETS", () => {
-  it("ships fifteen presets with unique ids and names", () => {
-    expect(BUILTIN_PRESETS).toHaveLength(15);
+  it("ships eighteen presets with unique ids and names", () => {
+    expect(BUILTIN_PRESETS).toHaveLength(18);
 
     const ids = BUILTIN_PRESETS.map((preset) => preset.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -508,11 +508,30 @@ describe("the fractal a saved view belongs to", () => {
 });
 
 describe("the built-in views each fractal lists", () => {
-  it("offers six Mandelbrot views, five Julia, two Burning Ship and two Tricorn", () => {
+  it("offers six Mandelbrot views, five Julia, two Burning Ship, two Tricorn and three Multibrot", () => {
     expect(presetsForFractal(BUILTIN_PRESETS, "mandelbrot")).toHaveLength(6);
     expect(presetsForFractal(BUILTIN_PRESETS, "julia")).toHaveLength(5);
     expect(presetsForFractal(BUILTIN_PRESETS, "burning-ship")).toHaveLength(2);
     expect(presetsForFractal(BUILTIN_PRESETS, "tricorn")).toHaveLength(2);
+    expect(presetsForFractal(BUILTIN_PRESETS, "multibrot")).toHaveLength(3);
+  });
+
+  it("gives the Multibrot a view of power 3, one of power 4 and a deep one of power 3", () => {
+    const views = presetsForFractal(BUILTIN_PRESETS, "multibrot");
+
+    expect(views.map((view) => presetVariant(view))).toEqual(["3", "4", "3"]);
+    expect(views.map((view) => calculateZoomLevel(view.bounds) > 10)).toEqual([
+      false,
+      false,
+      true,
+    ]);
+  });
+
+  it("stores a Multibrot view's power as `variant` and never as a Julia constant", () => {
+    for (const view of presetsForFractal(BUILTIN_PRESETS, "multibrot")) {
+      expect(view.variant, view.id).toMatch(/^[345]$/);
+      expect(view.juliaConstant, view.id).toBeUndefined();
+    }
   });
 
   it("lists every built-in view under exactly one fractal", () => {
@@ -550,6 +569,97 @@ describe("the fractal fields a view is saved with", () => {
     expect(presetFractalFields("burning-ship", "Dendrite")).toEqual({
       fractal: "burning-ship",
     });
+    expect(presetFractalFields("tricorn", "Dendrite")).toEqual({
+      fractal: "tricorn",
+    });
+  });
+
+  it("writes a Multibrot power as `variant`, not under the Julia field's name", () => {
+    // A new field rather than `juliaConstant` reused: a power is not a
+    // constant, and an older build then leaves the view unlisted instead of
+    // reading "4" as a constant.
+    expect(presetFractalFields("multibrot", "4")).toEqual({
+      fractal: "multibrot",
+      variant: "4",
+    });
+  });
+});
+
+describe("the Multibrot power a saved view names", () => {
+  const MULTIBROT_PRESET: FractalPreset = {
+    ...CUSTOM_PRESET,
+    id: "custom-multibrot",
+    ...presetFractalFields("multibrot", "5"),
+  };
+
+  it("names the power the view was saved against", () => {
+    expect(presetVariant(MULTIBROT_PRESET)).toBe("5");
+  });
+
+  it("falls back to power 3 for a value the Multibrot cannot be drawn with", () => {
+    // Power 3 is what `resolveFractalKind` draws for a value it cannot read, so
+    // the Power select and the canvas describe the same picture.
+    for (const variant of ["6", "2", "3.0", "Classic", "", undefined]) {
+      expect(
+        presetVariant({ ...MULTIBROT_PRESET, variant }),
+        String(variant),
+      ).toBe("3");
+    }
+  });
+
+  it("reads both stored fields, the fractal's own first", () => {
+    // A Julia view found under `variant` still loads, and a Julia constant
+    // under `juliaConstant` wins over a `variant` beside it; a Multibrot view
+    // reads `variant`, and a stray `juliaConstant` is never taken for a power.
+    expect(
+      presetVariant({
+        ...JULIA_PRESET,
+        juliaConstant: undefined,
+        variant: "Dendrite",
+      }),
+    ).toBe("Dendrite");
+    expect(
+      presetVariant({
+        ...JULIA_PRESET,
+        juliaConstant: "Dendrite",
+        variant: "Classic",
+      }),
+    ).toBe("Dendrite");
+    expect(
+      presetVariant({
+        ...MULTIBROT_PRESET,
+        variant: "4",
+        juliaConstant: "Dendrite",
+      }),
+    ).toBe("4");
+    expect(
+      presetVariant({
+        ...MULTIBROT_PRESET,
+        variant: undefined,
+        juliaConstant: "Dendrite",
+      }),
+    ).toBe("3");
+  });
+
+  it("is a power the renderer draws as the Multibrot of that power", () => {
+    // The kind resolved from the view is the z^d orbit, so one point counts
+    // differently under two powers: the variant changes the picture rather
+    // than just the label.
+    const point = { real: 0.3, imaginary: 0.9 };
+
+    expect(
+      kindForPreset({ ...MULTIBROT_PRESET, variant: "3" }).iterations(
+        point,
+        200,
+        false,
+      ),
+    ).not.toBe(
+      kindForPreset({ ...MULTIBROT_PRESET, variant: "4" }).iterations(
+        point,
+        200,
+        false,
+      ),
+    );
   });
 });
 
@@ -687,6 +797,43 @@ describe("reading views out of storage", () => {
     );
     expect(presetsForFractal(getCustomPresets(), "tricorn")).toEqual([stored]);
     expect(presetsForFractal(getCustomPresets(), "mandelbrot")).toEqual([]);
+  });
+
+  it("round-trips a Multibrot view saved now back to its fractal and power, under `variant`", () => {
+    saveCustomPreset({
+      ...CUSTOM_PRESET,
+      ...presetFractalFields("multibrot", "4"),
+    });
+
+    const [stored] = getCustomPresets();
+
+    expect(stored.variant).toBe("4");
+    expect(stored.juliaConstant).toBeUndefined();
+    expect(presetFractal(stored)).toBe("multibrot");
+    expect(presetVariant(stored)).toBe("4");
+    expect(kindForPreset(stored).id).toBe("multibrot");
+    expect(presetsForFractal(getCustomPresets(), "multibrot")).toEqual([
+      stored,
+    ]);
+    expect(presetsForFractal(getCustomPresets(), "julia")).toEqual([]);
+  });
+
+  it("loads a stored Multibrot view that names its power under `variant`", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        {
+          ...JSON.parse(LEGACY_PRESETS_JSON)[0],
+          fractal: "multibrot",
+          variant: "5",
+        },
+      ]),
+    );
+
+    const [view] = getCustomPresets();
+
+    expect(presetFractal(view)).toBe("multibrot");
+    expect(presetVariant(view)).toBe("5");
   });
 
   it("round-trips a custom constant through storage and back to its picture", () => {

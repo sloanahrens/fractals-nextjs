@@ -124,6 +124,54 @@ describe("viewLinkToUpdates", () => {
     expect(julia.variant).toBe("Dendrite");
   });
 
+  it("takes a Multibrot power only beside the Multibrot, and a constant only beside Julia", () => {
+    const multibrot = viewLinkToUpdates(decodeView("#v=1&f=multibrot&k=4"));
+    expect(multibrot.fractalType).toBe("multibrot");
+    expect(multibrot.variant).toBe("4");
+
+    // A power in a Julia link, and a constant in a Multibrot one, are fields
+    // that mean nothing there: each fractal opens on its own default.
+    const julia = viewLinkToUpdates(decodeView("#v=1&f=julia&k=4"));
+    expect(julia.variant).toBe(DEFAULT_VIEW_LINK_UPDATES.variant);
+
+    const wrongConstant = viewLinkToUpdates(
+      decodeView("#v=1&f=multibrot&k=Dendrite"),
+    );
+    expect(wrongConstant.variant).toBe("3");
+
+    // Nor a power in a link about a fractal that takes none.
+    const mandelbrot = viewLinkToUpdates(decodeView("#v=1&f=mandelbrot&k=5"));
+    expect(mandelbrot.variant).toBe(DEFAULT_VIEW_LINK_UPDATES.variant);
+  });
+
+  it("opens a Multibrot link that names no usable power on power 3, not on Julia's constant", () => {
+    for (const fragment of [
+      "#v=1&f=multibrot",
+      "#v=1&f=multibrot&k=6",
+      "#v=1&f=multibrot&k=3.0",
+      "#v=1&f=multibrot&k=Classic",
+    ]) {
+      expect(viewLinkToUpdates(decodeView(fragment)).variant, fragment).toBe(
+        "3",
+      );
+    }
+  });
+
+  it("round-trips each Multibrot power through the link and back to the page's state", () => {
+    for (const power of ["3", "4", "5"]) {
+      const link = encodeView({
+        ...viewLinkToUpdates(decodeView("#v=1&f=multibrot")),
+        variant: power,
+      });
+
+      expect(link).toContain(`f=multibrot&k=${power}&`);
+      expect(viewLinkUpdatesFrom(`#${link}`)).toMatchObject({
+        fractalType: "multibrot",
+        variant: power,
+      });
+    }
+  });
+
   it("gives a Julia link with no constant the page's own", () => {
     // The fractal is the part that was asked for; the constant it opens on is
     // the one the app draws for a name it has no answer for, which is what the

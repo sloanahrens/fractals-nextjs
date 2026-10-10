@@ -15,9 +15,10 @@
  *
  * `v` is the version, so a link from a build that means something else by these
  * keys is refused rather than half-read. `f` names the fractal and `k`, written
- * only beside a Julia fractal, names its constant — one of the four the picker
- * offers, or a custom name that is a point of the plane written out (see
- * `julia.ts`). `x` and `y` are the centre,
+ * only beside a fractal that takes a variant, names it: for Julia its constant
+ * — one of the four the picker offers, or a custom name that is a point of the
+ * plane written out (see `julia.ts`) — and for the Multibrot its power, `3`,
+ * `4` or `5` (`f=multibrot&k=4`). `x` and `y` are the centre,
  * `z` the zoom, `s` the colour scheme — colour is part of the picture, so all
  * five travel — `i` the iteration setting, `auto` or the count when the slider
  * is in charge, and `w`/`h` the canvas size as a pair. Short keys, because a
@@ -40,8 +41,7 @@
 
 import type { ColorScheme } from "../types/fractal";
 import { getAvailableColorSchemes } from "./colorMapping";
-import { FRACTAL_TYPES } from "./fractalTypes";
-import { isJuliaConstantName } from "./julia";
+import { FRACTAL_TYPES, isVariantValue } from "./fractalTypes";
 import {
   ITERATION_STEP,
   MAX_ITERATIONS,
@@ -59,13 +59,15 @@ export interface ViewLinkState {
   /** Id of the fractal drawn, from {@link FRACTAL_TYPES} */
   fractalType: string;
   /**
-   * The fractal's variant (`fractalVariants`). Only Julia has one, and it is
-   * written as `k`: one of the named four constants, or a custom name that
-   * spells out a point (`julia.ts` has both spellings).
+   * The fractal's variant (`fractalVariants`), written as `k`. Julia and the
+   * Multibrot have one: for Julia one of the named four constants, or a custom
+   * name that spells out a point (`julia.ts` has both spellings); for the
+   * Multibrot its power, "3", "4" or "5".
    *
-   * Written only beside a Julia fractal, because the fractal and its variant
-   * are one choice; a state that names a variant for another fractal is not
-   * one this codec writes, and its link reads back without it.
+   * Written only beside a fractal that takes it and can draw the value,
+   * because the fractal and its variant are one choice; a state that names a
+   * variant for another fractal, or a power for Julia, is not one this codec
+   * writes, and its link reads back without it.
    */
   variant?: string;
   /** Real part of the centre of the view */
@@ -194,9 +196,16 @@ function fractalNamed(id: string | null | undefined): string | null {
   return id != null && FRACTAL_TYPES.some((type) => type.id === id) ? id : null;
 }
 
-/** A variant value this build reads (`k` is only ever a Julia constant today), or null. */
-function constantNamed(name: string | null | undefined): string | null {
-  return isJuliaConstantName(name) ? name : null;
+/**
+ * A variant value this build reads, or null: a Julia constant (named or custom)
+ * or a Multibrot power. Which fractal a value belongs to is not asked here,
+ * since the codec reads every field on its own; the page's half
+ * (`viewLinkToUpdates`) keeps a value for a fractal that can use it.
+ */
+function variantNamed(name: string | null | undefined): string | null {
+  return FRACTAL_TYPES.some((type) => isVariantValue(type.id, name))
+    ? (name ?? null)
+    : null;
 }
 
 /** A colour scheme this build draws in, or null. */
@@ -292,11 +301,11 @@ export function encodeView(state: ViewLinkState): string {
   const fractal = fractalNamed(state.fractalType);
   if (fractal !== null) fields.set("f", fractal);
 
-  // The constant belongs to the fractal it was chosen with, so it is written
-  // beside a Julia fractal and nowhere else.
-  if (fractal === "julia") {
-    const constant = constantNamed(state.variant);
-    if (constant !== null) fields.set("k", constant);
+  // The variant belongs to the fractal it was chosen with, so it is written
+  // beside a fractal that takes one and can draw it (a Julia constant beside
+  // Julia, a power beside the Multibrot) and nowhere else.
+  if (fractal !== null && isVariantValue(fractal, state.variant)) {
+    fields.set("k", state.variant);
   }
 
   addNumber(fields, "x", coordinateOf(state.centerX));
@@ -382,11 +391,11 @@ export function decodeView(fragment: string): Partial<ViewLinkState> {
   const fractal = fractalNamed(fields.get("f"));
   if (fractal !== null) state.fractalType = fractal;
 
-  // Read on its own, like every other value here: the format writes a constant
-  // only beside a Julia fractal, and a link that carries one without its
-  // fractal still names a constant this build can draw.
-  const constant = constantNamed(fields.get("k"));
-  if (constant !== null) state.variant = constant;
+  // Read on its own, like every other value here: the format writes a variant
+  // only beside a fractal that takes one, and a link that carries one without
+  // its fractal still names a value this build can draw.
+  const variant = variantNamed(fields.get("k"));
+  if (variant !== null) state.variant = variant;
 
   const centerX = coordinateOf(numberFrom(fields.get("x")));
   if (centerX !== null) state.centerX = centerX;

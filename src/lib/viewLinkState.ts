@@ -29,7 +29,12 @@
  */
 
 import type { ColorScheme } from "../types/fractal";
-import { defaultVariant, defaultViewFor, isVariantValue } from "./fractalTypes";
+import {
+  defaultVariant,
+  defaultViewFor,
+  isVariantValue,
+  variantOn,
+} from "./fractalTypes";
 import { decodeView, type ViewLinkState } from "./viewLink";
 
 /**
@@ -43,8 +48,9 @@ export interface ViewLinkUpdates {
   fractalType: string;
   /**
    * The fractal's variant: for Julia a constant, named or a custom spelling of
-   * a point. One string for every fractal, kept across a change of fractal, so
-   * it opens on Julia's default whatever fractal the page opens on.
+   * a point; for the Multibrot its power. One string for every fractal, kept
+   * across a change to a fractal that takes none, so it opens on Julia's
+   * default whatever fractal the page opens on.
    */
   variant: string;
   /** Real part of the centre of the view */
@@ -98,15 +104,17 @@ export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
  * leaves out what it cannot read, so a fragment from another build, or from
  * nowhere at all, decodes to no fields and leaves every default standing.
  *
- * The variant is only applied to a fractal that takes one, which is the codec's
- * own rule seen from this side: it writes `k` only beside `f=julia`, because the
- * fractal and its constant are one choice. A link naming the Mandelbrot set
- * and a constant is a link about the Mandelbrot set, with a field in it that
- * means nothing. The name is judged once more on the way in, because of all
- * these fields it is the one whose shape is a spelling rather than a range:
- * asking the codec's own question again costs a call and leaves this
- * function's answer about the constant a function of its argument rather than
- * of its caller.
+ * The variant is only applied to a fractal that can draw it, which is the
+ * codec's own rule seen from this side: it writes `k` only beside a fractal that
+ * takes one, because the fractal and its variant are one choice. A link naming
+ * the Mandelbrot set and a constant is a link about the Mandelbrot set, with a
+ * field in it that means nothing, and one naming Julia and a power is about
+ * Julia. The value is judged once more on the way in, because of all these
+ * fields it is the one whose shape is a spelling rather than a range: asking
+ * the codec's own question again costs a call and leaves this function's answer
+ * about the variant a function of its argument rather than of its caller. A
+ * fractal that takes a variant and is not given a usable one opens on its own
+ * default (the Multibrot on power 3), not on Julia's constant.
  *
  * @param decoded - The fields a link carried, as `decodeView` read them
  * @returns The ten values to set, defaults included
@@ -121,7 +129,7 @@ export function viewLinkToUpdates(
     fractalType,
     variant: isVariantValue(fractalType, decoded.variant)
       ? decoded.variant
-      : defaults.variant,
+      : variantOn(fractalType, defaults.variant),
     centerX: decoded.centerX ?? defaults.centerX,
     centerY: decoded.centerY ?? defaults.centerY,
     zoomLevel: decoded.zoomLevel ?? defaults.zoomLevel,

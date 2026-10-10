@@ -55,6 +55,7 @@ import {
   fractalVariants,
   isCustomVariant,
   resolveFractalKind,
+  variantOn,
 } from "../lib/fractalTypes";
 import {
   CUSTOM_OPTION_LABEL,
@@ -220,9 +221,10 @@ export default function Home() {
     DEFAULT_VIEW_LINK_UPDATES.canvasHeight,
   );
 
-  // Which fractal is drawn, and — when it is the Julia one — which named
-  // constant it iterates against. The two are a single choice as far as the
-  // renderer is concerned: it is rebuilt whenever either moves.
+  // Which fractal is drawn, and — for a fractal that takes one — its variant:
+  // the Julia constant it iterates against, or the Multibrot's power. The two
+  // are a single choice as far as the renderer is concerned: it is rebuilt
+  // whenever either moves.
   const [fractalType, setFractalType] = useState(
     DEFAULT_VIEW_LINK_UPDATES.fractalType,
   );
@@ -1179,17 +1181,22 @@ export default function Home() {
     wander.notifyActivity();
   };
 
+  // The page holds one variant across fractals, so going to a fractal that
+  // takes one (Julia, the Multibrot) brings a value it can draw: the one held
+  // if that fits, else the fractal's own default.
   const handleFractalTypeChange = (typeId: string) => {
     beginJump();
     setFractalType(typeId);
+    setVariant(variantOn(typeId, variant));
     applyDefaultView(typeId);
   };
 
-  // Another constant is another picture, framed the same way: a Julia set is
-  // symmetric about the origin whatever its c.
+  // Another variant is another picture, framed the same way: a Julia set is
+  // symmetric about the origin whatever its c, and one frame holds all three
+  // Multibrot powers.
   const handleVariantChange = (name: string) => {
     setVariant(name);
-    applyDefaultView("julia");
+    applyDefaultView(fractalType);
   };
 
   // The select is the deliberate act, so picking a constant from it is a jump;
@@ -1288,11 +1295,12 @@ export default function Home() {
     beginJump();
 
     // A view belongs to a fractal, and loading it puts the picker back on that
-    // fractal — for a Julia view, on its constant too — before the view itself.
-    // The bounds mean nothing without the picture they were framed on.
+    // fractal — for a view of a fractal that takes one, on its variant too —
+    // before the view itself. The bounds mean nothing without the picture they
+    // were framed on.
     const fractal = presetFractal(preset) ?? DEFAULT_PRESET_FRACTAL;
     setFractalType(fractal);
-    if (fractal === "julia") setVariant(presetVariant(preset));
+    if (fractalVariants(fractal) !== null) setVariant(presetVariant(preset));
 
     setCenterX(view.centerX);
     setCenterY(view.centerY);
@@ -1334,11 +1342,13 @@ export default function Home() {
   ) => {
     const zoom = clampZoom(place.zoom);
     const scheme = placeColorScheme(place, colorScheme);
-    const constant =
-      place.fractal === "julia" ? (place.variant ?? variant) : variant;
+    // A place of a fractal with a variant names its own; one that names none
+    // (a hand-built Julia place) keeps the page's, or the fractal's default
+    // when the page holds a variant of another fractal.
+    const placeVariant = variantOn(place.fractal, place.variant ?? variant);
     const target = encodeView({
       fractalType: place.fractal,
-      variant: constant,
+      variant: placeVariant,
       centerX: place.centerX,
       centerY: place.centerY,
       zoomLevel: zoom,
@@ -1354,7 +1364,7 @@ export default function Home() {
     if (!replace) beginJump();
 
     setFractalType(place.fractal);
-    if (place.fractal === "julia") setVariant(constant);
+    if (fractalVariants(place.fractal) !== null) setVariant(placeVariant);
     setCenterX(place.centerX);
     setCenterY(place.centerY);
     setZoomLevel(zoom);
@@ -1394,13 +1404,13 @@ export default function Home() {
     handlePlaceSelect(featuredPlace(typeId));
   };
 
-  // A named constant chip goes to the whole of that constant's set when the
-  // catalogue has it (all four do) and otherwise only changes the constant,
-  // leaving the view where it is.
+  // A named chip (a Julia constant, a Multibrot power) goes to the whole of that
+  // variant's set when the catalogue has it (every chip does) and otherwise only
+  // changes the variant, leaving the view where it is.
   const handleSwitchVariant = (name: string) => {
     if (name === variant) return;
 
-    const whole = wholeSetPlaceFor(name);
+    const whole = wholeSetPlaceFor(name, fractalType);
     if (whole) {
       handlePlaceSelect(whole);
       return;
@@ -1690,8 +1700,9 @@ export default function Home() {
     });
   };
 
-  // The setting the fractal takes, if any (the Julia constant for Julia): the
-  // switcher's second row and the Settings select are both drawn from it.
+  // The setting the fractal takes, if any (the Julia constant for Julia, the
+  // power for the Multibrot): the switcher's second row and the Settings select
+  // are both drawn from it.
   const variants = fractalVariants(fractalType);
 
   return (

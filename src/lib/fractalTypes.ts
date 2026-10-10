@@ -8,6 +8,11 @@ import {
   parseJuliaConstant,
 } from "./julia";
 import { mandelbrotKind } from "./mandelbrot";
+import {
+  MULTIBROT_POWERS,
+  createMultibrotKind,
+  parseMultibrotPower,
+} from "./multibrot";
 import { tricornKind } from "./tricorn";
 
 /**
@@ -30,6 +35,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "julia", label: "Julia" },
   { id: "burning-ship", label: "Burning Ship" },
   { id: "tricorn", label: "Tricorn" },
+  { id: "multibrot", label: "Multibrot" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -42,7 +48,7 @@ export interface FractalVariantOption {
 
 /**
  * The one setting a fractal takes beyond its view: the Julia constant for
- * Julia. The switcher's second row and the Settings select are both drawn from
+ * Julia, the power for the Multibrot. The switcher's second row and the Settings select are both drawn from
  * this, so a fractal that takes a setting needs a descriptor and no new
  * controls.
  */
@@ -64,13 +70,27 @@ const JULIA_VARIANTS: FractalVariants = {
   allowsCustom: true,
 };
 
+// The power is written as the plain digit in a link and in storage, and the
+// chip shows the formula's term, so "z^4" is what a visitor sees for "4".
+const MULTIBROT_VARIANTS: FractalVariants = {
+  label: "Power",
+  options: MULTIBROT_POWERS.map((power) => ({
+    value: String(power),
+    label: `z^${power}`,
+  })),
+  allowsCustom: false,
+};
+
 /**
  * The setting a fractal takes, or null for a fractal that takes none.
  * @param fractalId - Id of the fractal
- * @returns Its variant descriptor; null for every fractal but Julia and for any id this build does not know
+ * @returns Its variant descriptor; null for every fractal but Julia and the Multibrot, and for any id this build does not know
  */
 export function fractalVariants(fractalId: string): FractalVariants | null {
-  return fractalId === "julia" ? JULIA_VARIANTS : null;
+  if (fractalId === "julia") return JULIA_VARIANTS;
+  if (fractalId === "multibrot") return MULTIBROT_VARIANTS;
+
+  return null;
 }
 
 /**
@@ -95,7 +115,31 @@ export function isVariantValue(
   fractalId: string,
   value: string | null | undefined,
 ): value is string {
-  return fractalId === "julia" && isJuliaConstantName(value);
+  if (value == null) return false;
+  if (fractalId === "julia") return isJuliaConstantName(value);
+
+  return fractalId === "multibrot" && parseMultibrotPower(value) !== null;
+}
+
+/**
+ * The variant to hold once the page is on a fractal.
+ *
+ * The page keeps one variant string across a change of fractal, so a visit from
+ * Julia to the Multibrot would otherwise leave a constant's name where a power
+ * belongs. A value the fractal can be drawn with stays; a fractal that takes a
+ * setting but cannot use the value gets its default; a fractal that takes none
+ * leaves the value as it was, so Julia -> Mandelbrot -> Julia keeps the
+ * constant.
+ * @param fractalId - Id of the fractal the page is going to
+ * @param variant - The variant the page holds
+ * @returns The variant to hold for that fractal
+ */
+export function variantOn(fractalId: string, variant: string): string {
+  if (fractalVariants(fractalId) === null) return variant;
+
+  return isVariantValue(fractalId, variant)
+    ? variant
+    : defaultVariant(fractalId);
 }
 
 /**
@@ -120,9 +164,10 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
  * thing. Julia is a family rather than a picture, so the choice carries a constant as well — one
  * of the named four, or a custom spelling of any other point — and a name this
  * build cannot read falls back to the first named constant instead of to a
- * blank canvas.
+ * blank canvas. The Multibrot is a family of powers, and one it cannot read
+ * falls back to 3 the same way.
  * @param typeId - Id of the fractal the picker selected
- * @param variant - Name of the Julia constant; ignored unless typeId is "julia"
+ * @param variant - Name of the Julia constant or the Multibrot power; ignored for any other fractal
  * @returns The kind to draw
  */
 export function resolveFractalKind(
@@ -131,6 +176,11 @@ export function resolveFractalKind(
 ): FractalKind {
   if (typeId === "burning-ship") return burningShipKind;
   if (typeId === "tricorn") return tricornKind;
+  if (typeId === "multibrot") {
+    return createMultibrotKind(
+      parseMultibrotPower(variant) ?? MULTIBROT_POWERS[0],
+    );
+  }
   if (typeId !== "julia") return mandelbrotKind;
 
   const constant = parseJuliaConstant(variant);
@@ -151,8 +201,9 @@ export interface FractalDefaultView {
  * The fractals are pictures of different points, so none can inherit another's
  * view: the Mandelbrot set is framed around -0.75, a Julia set is symmetric
  * about the origin whatever its constant, and the ship sits below and left of
- * the origin, around -0.45 by -0.5, at the size that holds the whole of it, and
- * the Tricorn is turned onto itself by 120 degrees about the origin.
+ * the origin, around -0.45 by -0.5, at the size that holds the whole of it,
+ * the Tricorn is turned onto itself by 120 degrees about the origin, and the
+ * Multibrot sets are turned onto themselves about it too.
  * @param typeId - Id of the fractal to frame
  * @returns The centre and zoom that fractal opens on
  */
@@ -173,6 +224,20 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // the frame's edge and no more of the others in, at the cost of the symmetry,
   // so the centre stays on the origin.
   if (typeId === "tricorn") return { centerX: 0, centerY: 0, zoom: 1 };
+
+  // The Multibrot sets are symmetric about the origin by a turn of 360/(d-1)
+  // degrees, so the origin centres each alike, and one frame has to hold three
+  // sets of different shapes. Measured with a 0.002 grid and a cap of 400
+  // (points still inside at the cap), the sets span:
+  //   z^3: x -0.69..0.69, y -1.32..1.32   (the tallest: two lobes, one above
+  //                                         the other)
+  //   z^4: x -1.26..0.80, y -1.10..1.10   (three lobes, one pointing left)
+  //   z^5: x -0.91..0.91, y -0.91..0.91   (four lobes)
+  // Zoom 1 is x -2..2 by y -1.5..1.5: z^3, the one that fills most of it, keeps
+  // 0.18 clear above and below, and the other two sit well inside (confirmed in
+  // renders of all three at 300x225 in the classic scheme). Zoom 1.1 would
+  // leave z^3's top bulb only 0.04 from the frame's edge.
+  if (typeId === "multibrot") return { centerX: 0, centerY: 0, zoom: 1 };
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }

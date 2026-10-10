@@ -44,11 +44,12 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
-- **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, the choice-to-kind and choice-to-default-view resolvers, and the per-fractal variant descriptor (`fractalVariants`, `defaultVariant`)
+- **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, the choice-to-kind and choice-to-default-view resolvers, and the per-fractal variant descriptor (`fractalVariants`, `defaultVariant`, `variantOn`)
 - **Julia sets** (`src/lib/julia.ts`): The four named Julia constants, the `custom:<re>,<im>` spelling that names any other point, and the factory that turns one into a fractal kind
 - **Custom constant input** (`src/lib/customConstantInput.ts`): The Real and Imaginary boxes' text turned into a `custom:<re>,<im>` name or the sentence that says why not, and the Custom option's select value
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
 - **Tricorn** (`src/lib/tricorn.ts`): The Tricorn (Mandelbar) formula — the Mandelbrot loop with z conjugated before squaring, z -> conj(z)^2 + c — behind its own fractal kind
+- **Multibrot** (`src/lib/multibrot.ts`): The Mandelbrot loop with a higher power, z -> z^d + c for d = 3, 4, 5 — `createMultibrotKind(power)` and `parseMultibrotPower`, the power being the fractal's variant
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
 - **Tour engine** (`src/lib/tour.ts`): Where an unattended tour goes next — `nextTourStop` over the places catalogue from an injected random function, with the dwell and crossfade times, the fractal-switch odds and the recent window
@@ -75,7 +76,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia chips land
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
-- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn buttons, and Julia's constant chips, drawn over the top left of the canvas and never faded
+- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -86,7 +87,7 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
-- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Tricorn) and custom fractal configurations
+- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Tricorn, three Multibrot) and custom fractal configurations
 
 ### Component Structure
 
@@ -179,6 +180,121 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Multibrot: a fifth fractal with a power row (2026-10-10)
+
+- The Multibrot sets, owner-approved 2026-10-10 ("add more fractals"), are the
+  Mandelbrot loop with a higher power: z -> z^d + c for d = 3, 4, 5. With d = 2
+  it is the Mandelbrot set, so the family starts at 3. A turn of c by 360/(d-1)
+  degrees turns the orbit by the same angle ((wz)^d = w z^d when w^(d-1) = 1),
+  so the set has d-1 lobes: two for z^3 (one above the other on the imaginary
+  axis), three for z^4 (one pointing left), four for z^5. It is the first
+  fractal after Julia to use the variant mechanism (see the Fractal variants
+  note below): its variant is the power.
+- `src/lib/multibrot.ts` exports `MULTIBROT_POWERS` ([3, 4, 5]),
+  `parseMultibrotPower(value)` (the number for exactly "3", "4" or "5", else
+  null: "3.0", "03", " 4", "6" and text are no power) and
+  `createMultibrotKind(power)` (id `multibrot`; throws a `RangeError` for any
+  other power, so a value from outside never reaches it: `resolveFractalKind`
+  parses first and falls back to 3, as an unknown Julia name falls back to the
+  first constant). The loop is the Tricorn's convention line for line: orbit
+  from 0, `|z|^2 > 4` after the step, the loop index returned for an orbit that
+  escapes (c = 2 is 1 for every power), the cap for one that does not. z^d is
+  repeated complex multiplication, not a power function. Radius 2 stays the
+  right escape radius: for |c| <= 2 and |z| > 2, |z^d + c| >= |z|^d - 2 > |z|. The
+  smooth count is `n + 1 - log(log|z| / log 2) / log(d)`: log|z| grows by a
+  factor d a step, so the fraction is a log base d (for d = 2 it is the
+  Mandelbrot formula). There is no interior shortcut: the cardioid and bulb test
+  is closed form for the Mandelbrot set only.
+- Registered like Julia: `FRACTAL_TYPES` has `{ id: "multibrot", label:
+  "Multibrot" }` after the Tricorn; `fractalVariants("multibrot")` is label
+  "Power", options "3", "4", "5" labelled "z^3", "z^4", "z^5", `allowsCustom:
+  false`; `defaultVariant` is "3"; `isVariantValue` takes the plain spellings
+  only. The switcher's second row and the Settings select draw from the
+  descriptor and needed no change; there is no Custom chip and no Real or
+  Imaginary box. The renderer is untouched.
+- One variant string still serves every fractal, so it can hold a value the
+  next fractal cannot use (a constant going to the Multibrot, a power going to
+  Julia). `variantOn(fractalId, variant)` in `fractalTypes.ts` is the rule: a
+  value the fractal can draw stays, a fractal that takes a variant otherwise
+  gets its default, a fractal that takes none leaves the value alone (so Julia
+  -> Mandelbrot -> Julia still keeps the constant). The Fractal select
+  (`handleFractalTypeChange`), a place (`handlePlaceSelect`, so the switcher's
+  buttons, Tour and Auto-wander hops) and a link (`viewLinkToUpdates`: a
+  Multibrot link with no usable power opens on 3, not on Julia's constant) all
+  go through it. `handleVariantChange` frames the new variant at the *current*
+  fractal's default view where it used to say "julia".
+- Link: `k=3|4|5` beside `f=multibrot`, the existing variant field. The codec
+  writes `k` when `isVariantValue(fractal, variant)` and reads a `k` any
+  fractal can draw on its own (`variantNamed`); `viewLinkToUpdates` keeps it
+  only for a fractal that can use it, so `f=julia&k=4` and `f=multibrot&k=Classic`
+  each drop the field. Julia's links are byte for byte as before.
+- Saved views: a new stored field `variant` for a fractal other than Julia
+  that takes one (`presetFractalFields("multibrot", "4")` is `{ fractal,
+  variant }`); Julia keeps `juliaConstant`, so an older build still reads what a
+  Julia view saves and sees a Multibrot view as a fractal it does not know.
+  `presetVariant` reads both fields, the fractal's own first, and falls back to
+  the fractal's default. A fractal with no variant (Mandelbrot, ship, Tricorn)
+  writes neither key.
+- `defaultViewFor("multibrot")` is (0, 0) at zoom 1. Measured with a 0.002 grid
+  at a cap of 400 the sets span x -0.69..0.69, y -1.32..1.32 (z^3), x
+  -1.26..0.80, y -1.10..1.10 (z^4) and +-0.91 both ways (z^5); zoom 1 (x -2..2,
+  y -1.5..1.5) leaves the tallest, z^3, 0.18 clear above and below, and a test
+  samples the whole frame border for each power and finds it all escaped (the
+  set is connected and holds the origin, so it is all inside). Zoom 1.1 would
+  leave z^3's top bulb 0.04 from the edge.
+- Three built-in views, `multibrot-cubic` (z^3, the default frame),
+  `multibrot-quartic` (z^4, the same frame) and `multibrot-copy` (z^3, centre
+  0.267, 1.26 at zoom 50: a small two-lobed copy riding on the top lobe, in the
+  classic scheme), guarded per fractal like the others (`presets.test.ts` counts
+  12 fractal-owned views and 18 built-ins).
+- Twelve places in `places.ts` (`MULTIBROT_PLACES`; the test allows 10 to 12),
+  four per power, from contact sheets drawn through the real iteration and the
+  real colour mapping in several schemes (with smooth counts, as the page draws),
+  then each re-measured with whole counts at 64x48, which is how a tile and the
+  featured-place guard draw them: the rainbow scheme looks fine smooth and is a
+  red field of 67-80% in whole counts, so most places name classic. The places:
+  the whole set of each power, and for
+  z^3 a heart on the top lobe, a small copy and a cusp between two bulbs; for
+  z^4 a chain of copies on the left antenna, the cleft between two lobes and
+  where two lobes touch; for z^5 a bulb in the notch between lobes, a bulb
+  ringed with smaller ones and twin bulbs on the edge. Names are plain ("z^4:
+  the cleft between two lobes"). Candidates dropped for being a flat field (a
+  z^5 view at (0.62, 0.7) zoom 25 is solid black, one at (0.9, 0) zoom 10 is
+  sky; a z^3 cusp at zoom 40 in the ocean scheme is mostly black). The featured
+  place is `multibrot-3-small-copy` in classic, 36% one colour against the
+  guard's 60% (the comment on `FEATURED_PLACE_IDS` says why: it reads as a
+  two-lobed set, not the Mandelbrot set's one-lobed bulbs, and it lands on
+  power 3).
+- `suggest()` takes a Multibrot view's own power first, as it does a Julia
+  view's own constant (`sameVariant`: constants as points for Julia, text for
+  a power), and the place that "is the view" must share the variant too.
+  `wholeSetPlaceFor(variant, fractal = "julia")` generalises the chip's
+  destination: the page passes the fractal, so a power chip goes to the whole
+  set of that power. Tour, Surprise me and Auto-wander need no code.
+- The button row. Five buttons measure 323 px with `px-1.5` (was `px-2.5`, 362
+  px for five): it fits 375 px (351 of room inside the gutters) and no longer
+  needs to scroll there, and scrolls on 320 px (296 of room), where a small
+  effect now brings the lit button into view (`scrollIntoView` on the current
+  button when the fractal changes or the switcher comes back from hidden).
+  Measured in headless Chrome by a DevTools session, not by eye: a plain
+  `--window-size` screenshot in desktop Chrome lays the page out at its 500 px
+  minimum and would show the wrong picture.
+- Tests: `multibrot.test.ts` (the parser's refusals, the id, the RangeError,
+  the origin, c = 2 at count 1 for each power, hand-worked orbits for c = 1 and
+  c = i, the d-1 rotations on every power over 50+ escaping points both smooth
+  and whole, that another angle is not a symmetry, the exact mirror, the smooth
+  count against the log-base-d formula by hand, the cap, and the default frame's
+  border escaping for each power), the Multibrot cases in `fractalTypes.test.ts`
+  (`variantOn` included), `viewLink.test.ts`, `viewLinkState.test.ts`,
+  `presets.test.ts` and `places.test.ts` (twelve places over the three powers,
+  each power's whole set, the variant-first order of `suggest`), the new count
+  in `tour.test.ts`, and the source-reading panel tests. Checked in headless
+  Chrome against the dev server: the Multibrot button lands on the small copy
+  with the Power row "z^3" lit, the chips go to each whole set and write
+  `k=4` and `k=5`, Julia -> Multibrot opens power 3 (not Classic) and Back
+  retraces each step, the Settings Presets list shows three views and the
+  Power select shows z^3, z^4 and z^5.
 
 ### Auto-wander pill on the picture (2026-10-10)
 
@@ -358,9 +474,10 @@ _Last updated: 2026-10-10_
 
 ### Fractal variants (2026-10-10)
 
-- A fractal can take one setting, its *variant*; only Julia does today, and its
-  variant is the Julia constant. This is a refactor so the next fractal that
-  takes a setting (a Multibrot power) needs a descriptor and no new controls.
+- A fractal can take one setting, its *variant*; only Julia did when this
+  landed, and its variant is the Julia constant (the Multibrot's power, in the
+  note above, is the second). This is a refactor so the next fractal that
+  takes a setting needs a descriptor and no new controls.
   Nothing a visitor does changes; the one visible difference is the switcher's
   second row, which now opens with a quiet caption, "Julia constant".
 - `fractalVariants(fractalId)` in `fractalTypes.ts` returns `{ label, options:
