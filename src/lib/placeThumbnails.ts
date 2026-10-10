@@ -1,4 +1,4 @@
-import type { ColorRGB, ColorScheme } from "../types/fractal";
+import type { ColorOptions, ColorRGB, ColorScheme } from "../types/fractal";
 import { FractalRenderer } from "./fractalRenderer";
 import { resolveFractalKind } from "./fractalTypes";
 import { autoIterations, calculateZoomBounds } from "./mandelbrot";
@@ -36,6 +36,12 @@ export type ThumbnailEntry =
 export interface ThumbnailRenderRequest {
   place: Place;
   scheme: ColorScheme;
+  /**
+   * Reverse and shift of that scheme, or nothing for the scheme as it is. A
+   * tile is drawn with the scheme and the settings a click on it draws the
+   * place with, so the two are the same picture.
+   */
+  options?: ColorOptions;
   width: number;
   height: number;
   /** Aborted by `cancelAll`; a render that sees it should stop early. */
@@ -70,8 +76,19 @@ export interface ThumbnailStore {
    * calls `onReady` before this returns. Otherwise the request joins the render
    * of that key already queued or running, or queues one, and `onReady` is
    * called when it ends. `cancelAll` drops the request without calling it.
+   *
+   * `options` is the scheme's reversal and shift, which are part of what the
+   * picture looks like: two requests that differ only in them are two pictures
+   * and are cached apart. Left out, they are nothing, which is the scheme as
+   * the app has always drawn it — so a caller that has no such settings asks
+   * for exactly the key it always did.
    */
-  request(place: Place, scheme: ColorScheme, onReady: ThumbnailListener): void;
+  request(
+    place: Place,
+    scheme: ColorScheme,
+    onReady: ThumbnailListener,
+    options?: ColorOptions,
+  ): void;
   /**
    * Drop every queued render, abort the one in flight, and never call the
    * `onReady` of anything dropped. Cached entries stay, and the store stays
@@ -82,7 +99,11 @@ export interface ThumbnailStore {
    * The entry already held, or undefined. A hit counts as a use, so a picture
    * the strip keeps drawing is not the one evicted. Never throws.
    */
-  get(place: Place, scheme: ColorScheme): ThumbnailEntry | undefined;
+  get(
+    place: Place,
+    scheme: ColorScheme,
+    options?: ColorOptions,
+  ): ThumbnailEntry | undefined;
   /**
    * Stop starting renders. A render already running finishes: it is a few
    * thousand pixels, so aborting it would cost more than it saves.
@@ -103,9 +124,25 @@ interface Job {
   key: string;
   place: Place;
   scheme: ColorScheme;
+  options: ColorOptions | undefined;
   listeners: ThumbnailListener[];
   controller: AbortController | undefined;
   cancelled: boolean;
+}
+
+/**
+ * What makes two thumbnails the same picture: the place, the scheme — and the
+ * scheme's two settings, since reversing or shifting one is another picture of
+ * the same place. A request with neither setting keys exactly as it did before
+ * they existed.
+ */
+function optionsKey(options: ColorOptions | undefined): string {
+  if (!options) return "";
+
+  const reverse = options.reverse ? "r" : "";
+  const shift = options.shift ? String(options.shift) : "";
+
+  return reverse === "" && shift === "" ? "" : `|${reverse}|${shift}`;
 }
 
 function requirePositiveInteger(name: string, value: number): number {
@@ -172,7 +209,13 @@ export function createThumbnailStore({
   let paused = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const keyOf = (place: Place, scheme: ColorScheme) => `${place.id}|${scheme}`;
+  // `optionsKey` is empty for a request with neither setting, so a caller that
+  // has none keys exactly what it did before the settings existed.
+  const keyOf = (
+    place: Place,
+    scheme: ColorScheme,
+    options: ColorOptions | undefined,
+  ) => `${place.id}|${scheme}${optionsKey(options)}`;
 
   function remember(key: string, entry: ThumbnailEntry): void {
     ready.delete(key);
@@ -224,6 +267,7 @@ export function createThumbnailStore({
       const image = await render({
         place: job.place,
         scheme: job.scheme,
+        options: job.options,
         width,
         height,
         signal,
@@ -271,8 +315,8 @@ export function createThumbnailStore({
   }
 
   return {
-    request(place, scheme, onReady) {
-      const key = keyOf(place, scheme);
+    request(place, scheme, onReady, options) {
+      const key = keyOf(place, scheme, options);
       const held = lookup(key);
 
       if (held) {
@@ -291,6 +335,7 @@ export function createThumbnailStore({
         key,
         place,
         scheme,
+        options,
         listeners: [onReady],
         controller: undefined,
         cancelled: false,
@@ -315,8 +360,8 @@ export function createThumbnailStore({
       running = undefined;
     },
 
-    get(place, scheme) {
-      return lookup(keyOf(place, scheme));
+    get(place, scheme, options) {
+      return lookup(keyOf(place, scheme, options));
     },
 
     pause() {
@@ -380,7 +425,7 @@ export function createCanvasThumbnailRender(
     height: number,
   ) => ThumbnailCanvas = createOffscreenCanvas,
 ): ThumbnailRender {
-  return async ({ place, scheme, width, height, signal }) => {
+  return async ({ place, scheme, options, width, height, signal }) => {
     if (signal.aborted) throw abortError();
 
     const canvas = createCanvas(width, height);
@@ -405,6 +450,9 @@ export function createCanvasThumbnailRender(
           width,
           height,
           colorScheme: scheme,
+          // The scheme's own settings, so the tile is drawn in the palette a
+          // click draws the place in and not in the scheme's plain one.
+          colorOptions: options,
         },
         undefined,
         false,

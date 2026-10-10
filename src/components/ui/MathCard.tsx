@@ -10,6 +10,7 @@ import React, {
   useSyncExternalStore,
 } from "react";
 
+import type { ColorOptions } from "../../types/fractal";
 import { describeFractalMath, formatComplex } from "../../lib/fractalMath";
 import {
   type MathCardView,
@@ -36,6 +37,12 @@ interface MathCardProps {
   variant: string;
   /** The view on screen, as the renderer is drawing it. */
   view: MathCardView;
+  /**
+   * The scheme's reversal and shift, which the probe's colour and the orbit
+   * plot's dots are painted through, so the card shows the picture's own
+   * colours rather than the scheme's plain ones.
+   */
+  colorOptions?: ColorOptions;
   /** Whether the switcher shows its second row, which pushes the card down. */
   belowChips: boolean;
   /**
@@ -120,6 +127,7 @@ export function MathCard({
   fractalType,
   variant,
   view,
+  colorOptions,
   belowChips,
   probe = null,
   stepAside = false,
@@ -324,6 +332,7 @@ export function MathCard({
                       orbit={probe.orbit}
                       info={probe.info}
                       scheme={colorScheme}
+                      colorOptions={colorOptions}
                     />
                   </div>
                 </>

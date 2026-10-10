@@ -42,8 +42,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 ### Core Rendering System
 
 - **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support, and the counts of the render that finished: `recolour(scheme, maxIterations)` repaints the canvas from them in another scheme, computing no orbit, and answers false when it has kept none; the page uses it for a colour change, which is the one redraw that does not have to count the view again
-- **renderRgba** (`src/lib/renderRgba.ts`): A view as raw RGBA bytes with no canvas, in two steps — `countRgbaRows` (each pixel's point to its count through the kind) and `colourRgbaRows` (the count to a colour through the scheme) — with `renderRgbaRows` (some rows into a buffer) and `renderRgba` (the whole picture) as the two composed, so a picture is exactly its counts, coloured, and a colour change is the second step alone. `FractalRenderer` draws every row through it, and so does `/api/og`
-- **Image route** (`src/app/api/og/route.ts`, a shell over `src/lib/ogRoute.ts`, `ogView.ts`, `ogLimits.ts`) and **PNG encoder** (`src/lib/pngEncode.ts`): `GET /api/og?<view link>` draws a view as a 1200x630 PNG on the server; see the Version Note of 2026-10-10 (fr-c4z)
+- **renderRgba** (`src/lib/renderRgba.ts`): A view as raw RGBA bytes with no canvas, in two steps — `countRgbaRows` (each pixel's point to its count through the kind) and `colourRgbaRows` (the count to a colour through the scheme and its `ColorOptions`) — with `renderRgbaRows` (some rows into a buffer) and `renderRgba` (the whole picture) as the two composed, so a picture is exactly its counts, coloured, and a colour change is the second step alone. `FractalRenderer` draws every row through it, and so does `/api/og`
+- **Image route** (`src/app/api/og/route.ts`, a shell over `src/lib/ogRoute.ts`, `ogView.ts`, `ogLimits.ts`) and **PNG encoder** (`src/lib/pngEncode.ts`): `GET /api/og?<view link>` draws a view as a 1200x630 PNG on the server, in the colours the link names — scheme, reversal and shift; see the Version Notes of 2026-10-10 (fr-c4z, fr-q7x)
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
 - **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, the choice-to-kind and choice-to-default-view resolvers, and the per-fractal variant descriptor (`fractalVariants`, `defaultVariant`, `variantOn`)
@@ -61,7 +61,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Wander controller** (`src/lib/wanderController.ts`): The Auto-wander clock — the countdown that says when a step is due, which steps are hops (`WANDER_HOP_EVERY`), and the states that suspend it: a render in flight, a hidden tab, the mode switched off
 - **Blank view** (`src/lib/blankView.ts`) and **BlankHint** (`src/components/ui/BlankHint.tsx`): The detector for a nearly one-colour picture, and the quiet "Nothing to see here" pill with a Back button
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
-- **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, and a decoder that judges every value on its own and leaves out what it cannot read
+- **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, the colour scheme's two own settings among them (`r=1` reversed, `o` the shift), and a decoder that judges every value on its own and leaves out what it cannot read; `linkWithoutColour` drops everything that colours a picture without changing what it is made of
 - **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
 - **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
@@ -192,6 +192,122 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Palette options: a scheme can be reversed and shifted, in links, renders and previews (2026-10-10)
+
+- fr-q7x. A colour scheme has two settings of its own: **reverse** (walk the
+  palette backwards) and **shift** (start it a fraction of a turn round). They
+  colour a picture without changing what it is made of — a point's iteration
+  count is the same number whoever is watching — so they travel with the view in
+  a link, in the card `/api/og` draws for it, and in every render the page or an
+  export makes. This landing is the library half: nothing sets them yet (fr-ep7
+  adds the Settings controls), but a link that carries them draws them here, in
+  a shared preview, in a thumbnail and in the Math card.
+- **`ColorOptions`** (`src/types/fractal.ts`) is `{ reverse?: boolean; shift?:
+  number }`, and `mapIterationsToColor(iterations, maxIterations, scheme,
+  options?)` applies it in one order: a point at or past the cap is black first
+  and whatever the settings — that is not a place on the palette but the absence
+  of one — and otherwise the position is `t = iterations / maxIterations`,
+  reversed to `1 - t`, then shifted to `t + shift` modulo a whole turn. Reversed
+  and then shifted, because that is what a visitor setting one and then the
+  other sees. Each is applied only when it asks for something, so no options,
+  `reverse: false` and `shift: 0` all hand the mapping the very double it has
+  always been given, and so draw the very colours. `reverse` is not wrapped and
+  `shift` is, which is what the two mean: a shift is a distance round a loop, a
+  reversal a reflection. One consequence worth knowing, and left as it is: the
+  rainbow scheme's hue is exactly 360 at a shift or reversal that lands on the
+  palette's end, where `hsvToRgb`'s switch has no branch and paints black —
+  today's negative smooth counts paint black there too, and giving that hue a
+  branch would change pixels this landing must not.
+- **Threaded through the pipeline** as an optional trailing argument, so every
+  existing caller compiles and draws exactly as it did: `colourRgbaRows(...,
+  options?)`, `renderRgbaRows(..., smooth, options?)`, `renderRgba(..., smooth,
+  options?)`, an optional `FractalConfig.colorOptions`, and
+  `FractalRenderer.recolour(scheme, maxIterations, options?)`. `FractalRenderer`
+  hands its config's options to the row colouring, and its repaint to the same
+  step, so a repaint is the picture a full render in the same options draws.
+- **The link codec** (`viewLink.ts`) writes `r=1` — only when reversed — and
+  `o=<shift>` — only when it is not nought — between `s` and `i`, in that order,
+  so the link of a view that touches neither is byte for byte what it was before
+  the keys existed. `o` carries two decimals, because a hundredth of the way
+  round a palette is a shade nobody can name; a value whose two decimals come to
+  a whole turn (0.999 rounds there) is written as none at all, and a shift
+  outside 0..1 (`-0.25`, `1.25`) is written as the fraction it is worth, since
+  the mapping reads every shift modulo a turn. Reading is strict, as every field
+  here is: `r` is read only as exactly `1`, and `o` only as a number inside 0 to
+  1, with a whole turn (1) read as nought, which is no shift — so `r=2`,
+  `o=abc`, `o=2` and `o=-1` are dropped and the page keeps its own value. The
+  version stays `v=1` and `MAX_FRAGMENT_LENGTH` stays 500: a link with every
+  field is about 105 characters, and a test pins that. `ViewLinkState` and
+  `ViewLinkUpdates` gain `reverse` and `shift`, defaulting to `false` and `0` in
+  `DEFAULT_VIEW_LINK_UPDATES`, so a link that says nothing leaves the page as it
+  opens.
+- **`linkWithoutScheme` is now `linkWithoutColour`** (`viewLink.ts`), and drops
+  `s`, `r` and `o` rather than `s` alone: all three colour a picture without
+  changing its counts, so a change of any of them is the repaint from the counts
+  the last render left, never a redraw. This is the landing's one rename; the
+  fr-di8 note below says `linkWithoutScheme` and means this function.
+- **`/api/og` honours them.** `parseOgQuery`'s strict key list gains `r` and
+  `o`, so a query carrying one that cannot be read is the same 400 as any other
+  bad key, and the canonical key is written with them — cache key and all — so
+  two cards that differ only in the palette are two images.
+  `renderOgPng` hands `view.colorOptions` to its row renderer. The card is the
+  picture the link names rather than the scheme's plain one.
+- **The page** (`FractalExplorer.tsx`) holds them as part of the view: `reverse`
+  and `shift` state initialised from the defaults, moved by `applyViewLink` like
+  every other field, written by `currentLink`, and passed on as one `useMemo`d
+  `colorOptions` object — a fresh object each render would have every surface
+  that takes it in a dependency list asking for a picture again on every render.
+  `drawCanvas` puts it in the render config and in the `recolour` call, since a
+  repaint of the counts must be made in the settings the picture is drawn in or
+  it would lay the scheme's plain colours over a reversed picture; `runExport`
+  puts it in the export's config. Reset View puts both back.
+- **The surfaces that show this view's colours are told about them too**, since
+  each is meant to be the picture rather than the scheme's plain one: the Math
+  card's probe (`probePoint`/`probeAtPointer` take the options, so the swatch is
+  the colour on screen), the orbit plot's dots (`orbitStepColour`, and
+  `OrbitPlot`'s new optional `colorOptions` prop through `MathCard`), and the
+  Nearby strip's tiles (the thumbnail store's `request` and `get` take an
+  optional options, which joins the cache key only when there is one — so a
+  caller with no such settings keys exactly what it always did).
+- **Not changed**: how a count is computed, any control or animation (fr-ep7),
+  the schemes themselves, the route's size limits, and saved views — a preset
+  still stores a scheme alone, so a view saved with the settings up returns
+  without them until fr-ep7 says otherwise.
+- Tests: `colorMapping.test.ts` (no options is the mapping's own output for
+  every scheme; reverse is the place `1 - t`; shift is the place `t + shift`
+  with a whole turn coming back round; reverse then shift, shown not to be the
+  other order; a point of the set black whatever the settings; whole channels in
+  range under both), the new block in `renderRgba.test.ts` (no settings is the
+  picture that was there; each count coloured through the mapping with the same
+  settings; the row-by-row picture and the whole one still agreeing, which is
+  what a repaint rests on), the new cases in `fractalRenderer.test.ts` (every
+  fractal and variant repaints in each scheme in each of three option pairs as
+  the full render of them, and a config's own settings are drawn), the new cases
+  in `viewLink.test.ts` (`r` and `o` written after `s`, only when they say
+  something, to two decimals, wrapped and rounded, read back, a whole turn read
+  as nought, `r=2`/`o=2`/`o=abc`/`o=-1` dropped, a settings-free link unchanged,
+  every sample state's settings round-tripped, and a link with every field
+  inside `MAX_FRAGMENT_LENGTH`), `viewLinkState.test.ts` (a link's `r` and `o`
+  applied beside its scheme, and a link without them leaving the page's own),
+  `ogView.test.ts` (the settings in the key and in what draws, the rounded shift
+  naming the same picture again, a whole turn naming the plain one, and each
+  unreadable value refused by name), `ogRoute.test.ts` (the real renderer's
+  PNG for a reversed, shifted view is the shared pipeline's pixels for it, and
+  not the plain scheme's), `viewPreview.test.ts` (a link with `r` and `o`
+  re-encoded with them, its phrase unmoved, and an unreadable one refused),
+  `viewQuery.test.ts` (the settings carried through the copied query and back),
+  `mathProbe.test.ts` (the swatch is the picture's pixel under those settings,
+  and the steps and path are unmoved), `orbitPlot.test.ts` and
+  `placeThumbnails.test.ts` (the dots and the tiles painted through the
+  settings, and two settings making two cached pictures), the updated
+  `recolour-panel.test.ts` and `nearby-strip-panel.test.ts`, and the new
+  `src/__tests__/palette-options-panel.test.ts` (the page's half: the state,
+  the memo, the link, the render and repaint, the export, the probe, the strip
+  and the card, and Reset View).
+- Docs: the `viewLink.ts` doc comment's example and key list; the README's
+  Shareable Links, Color Mapping and Sharing a View; and the Project
+  Architecture bullets for `renderRgba`, the image route and the view link.
 
 ### Recolour instantly: a colour change repaints from kept counts (2026-10-10)
 

@@ -241,3 +241,107 @@ describe("the counting and colouring steps", () => {
     }
   });
 });
+
+describe("the scheme's own settings through the pipeline", () => {
+  const WIDTH = 12;
+  const HEIGHT = 9;
+  const KINDS = [
+    mandelbrotKind,
+    resolveFractalKind("julia", "Dendrite"),
+    resolveFractalKind("burning-ship", ""),
+    resolveFractalKind("tricorn", ""),
+    resolveFractalKind("multibrot", "4"),
+    resolveFractalKind("newton", ""),
+  ];
+  const OPTIONS = [
+    {},
+    { reverse: true },
+    { shift: 0.25 },
+    { reverse: true, shift: 0.5 },
+  ];
+
+  it("draws the very picture it always did when asked for no settings", () => {
+    for (const kind of KINDS) {
+      for (const scheme of ["classic", "fire", "rainbow"] as const) {
+        const plain = renderRgba(BOUNDS, WIDTH, HEIGHT, 90, scheme, kind);
+
+        expect([
+          ...renderRgba(BOUNDS, WIDTH, HEIGHT, 90, scheme, kind, true, {}),
+        ]).toEqual([...plain]);
+        expect([
+          ...renderRgba(BOUNDS, WIDTH, HEIGHT, 90, scheme, kind, true, {
+            reverse: false,
+            shift: 0,
+          }),
+        ]).toEqual([...plain]);
+      }
+    }
+  });
+
+  it("colours each count through the mapping with the same settings", () => {
+    for (const kind of KINDS) {
+      for (const options of OPTIONS) {
+        const counts = new Float64Array(WIDTH * HEIGHT);
+        const out = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+
+        countRgbaRows(counts, 0, HEIGHT, BOUNDS, WIDTH, HEIGHT, 90, kind, true);
+        colourRgbaRows(out, counts, 0, HEIGHT, WIDTH, 90, "fire", options);
+
+        let index = 0;
+        for (let i = 0; i < counts.length; i++) {
+          const expected = mapIterationsToColor(
+            counts[i],
+            90,
+            "fire",
+            options,
+          );
+          expect([...out.subarray(index, index + 4)]).toEqual([
+            ...new Uint8ClampedArray([expected.r, expected.g, expected.b]),
+            255,
+          ]);
+          index += 4;
+        }
+      }
+    }
+  });
+
+  it("makes the one-pass picture again when the settings are asked for once", () => {
+    // The settings colour the picture without touching a count, so the rows
+    // drawn one at a time and the picture drawn whole are the same pixels
+    // whichever pair is asked for — which is what lets a colour change repaint
+    // from kept counts.
+    for (const kind of KINDS) {
+      for (const options of OPTIONS) {
+        const whole = renderRgba(
+          BOUNDS,
+          WIDTH,
+          HEIGHT,
+          90,
+          "ocean",
+          kind,
+          true,
+          options,
+        );
+        const rows = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+
+        for (let y = 0; y < HEIGHT; y++) {
+          renderRgbaRows(
+            rows.subarray(y * WIDTH * 4, (y + 1) * WIDTH * 4),
+            y,
+            y + 1,
+            BOUNDS,
+            WIDTH,
+            HEIGHT,
+            90,
+            "ocean",
+            kind,
+            true,
+            options,
+          );
+        }
+
+        expect([...rows]).toEqual([...whole]);
+      }
+    }
+  });
+});

@@ -1,24 +1,45 @@
-import { ColorRGB, ColorScheme } from "../types/fractal";
+import { ColorOptions, ColorRGB, ColorScheme } from "../types/fractal";
 
 /**
  * Map iteration count to a color based on the selected color scheme
  * @param iterations - Number of iterations (can be float for smooth coloring)
  * @param maxIterations - Maximum iteration count
  * @param scheme - Color scheme to use
+ * @param options - Reverse and shift of the scheme; nothing for the scheme as
+ *   the app has always drawn it
  * @returns RGB color values
  */
 export function mapIterationsToColor(
   iterations: number,
   maxIterations: number,
   scheme: ColorScheme = "classic",
+  options?: ColorOptions,
 ): ColorRGB {
-  // Points in the set are black
+  // Points in the set are black. This is decided before the palette options,
+  // and is not a place on the palette they move along: a point that never
+  // escaped is the same black reversed or shifted as it is as it is.
   if (iterations >= maxIterations) {
     return { r: 0, g: 0, b: 0 };
   }
 
   // Normalize iterations to 0-1 range
-  const normalizedIterations = iterations / maxIterations;
+  let normalizedIterations = iterations / maxIterations;
+
+  // The two palette options, in this order: the scheme is reversed and then
+  // shifted, so a reversed scheme started a quarter of the way round is the
+  // mirror of that scheme started a quarter of the way round, which is what a
+  // visitor setting one and then the other sees. Neither one is applied at all
+  // when it is asking for the place it is already at, so a caller passing
+  // nothing, or `reverse: false` and `shift: 0`, gets the very number the
+  // mapping has always been given — and so the very colours.
+  if (options?.reverse) normalizedIterations = 1 - normalizedIterations;
+  const shift = options?.shift;
+  if (shift !== undefined && Number.isFinite(shift) && shift !== 0) {
+    // Modulo a whole turn: the palette is a loop, and starting a hundredth of a
+    // turn past its end is starting that hundredth of a turn into it.
+    const shifted = normalizedIterations + shift;
+    normalizedIterations = shifted - Math.floor(shifted);
+  }
 
   switch (scheme) {
     case "classic":

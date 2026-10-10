@@ -111,14 +111,19 @@ describe("the Nearby strip", () => {
   });
 
   it("draws each picture in the scheme its click applies, with the flat placeholder for a failure", () => {
-    // The page hands over its own scheme for the places that name none.
+    // The page hands over its own scheme for the places that name none, and
+    // the scheme's two settings, which colour every scheme a click applies.
     expect(page).toContain("colorScheme={colorScheme}");
+    expect(page).toContain("colorOptions={colorOptions}");
     // The tile and the click ask the one rule, and the tile asks the store for
     // the scheme that rule gave, never for the page's directly.
     expect(strip).toContain(
       "const scheme = placeColorScheme(place, colorScheme);",
     );
-    expect(strip).toContain("store.request(place, scheme,");
+    expect(strip).toMatch(/store\.request\(\s*place,\s*scheme,/);
+    // ...and asks for the palette settings with it, so the tile is the picture
+    // a click shows rather than the scheme's plain one.
+    expect(strip).toMatch(/store\.request\([\s\S]*?colorOptions,\s*\)/);
     expect(strip).not.toContain("store.request(place, colorScheme");
     expect(handlerBody("handlePlaceSelect")).toContain(
       "const scheme = placeColorScheme(place, colorScheme);",
@@ -148,8 +153,9 @@ describe("the Nearby strip", () => {
       'const listKey = places.map((place) => place.id).join(",");',
     );
     // The request effect depends on the resolved scheme, which a place that
-    // names its own never changes.
-    expect(strip).toContain("}, [store, place, scheme]);");
+    // names its own never changes, and on the palette settings, which colour
+    // every scheme and so do move every tile.
+    expect(strip).toContain("}, [store, place, scheme, colorOptions]);");
   });
 
   it("renders nothing for an empty list", () => {

@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LruCache, RenderGate } from "../ogLimits";
+import { OG_HEIGHT, OG_WIDTH, parseOgQuery } from "../ogView";
 import {
   OG_CACHE_CONTROL,
   createOgHandler,
   renderOgPng,
   type OgRender,
 } from "../ogRoute";
+import { encodePng } from "../pngEncode";
+import { renderRgba } from "../renderRgba";
 
 const URL_BASE = "http://localhost:3000/api/og";
 
@@ -328,6 +331,39 @@ describe("the real renderer", () => {
     // A fresh handler has no cache and draws the same file again.
     const fresh = await createOgHandler()(new Request(`${URL_BASE}?${query}`));
     expect(Buffer.from(await fresh.arrayBuffer()).equals(bytes)).toBe(true);
+  }, 30_000);
+
+  it("draws the colours the link names, the scheme's own settings and all", async () => {
+    const query = "v=1&f=mandelbrot&x=-0.75&y=0&z=1&s=fire&r=1&o=0.25";
+    const parsed = parseOgQuery(query);
+    if (!parsed.ok) throw new Error(parsed.message);
+
+    const response = await createOgHandler()(new Request(`${URL_BASE}?${query}`));
+    const drawn = Buffer.from(await response.arrayBuffer());
+
+    // The same pixels the shared pipeline draws for that view, settings
+    // included — a card is the picture its link names, not the scheme's plain
+    // one.
+    const expected = encodePng(
+      renderRgba(
+        parsed.view.bounds,
+        OG_WIDTH,
+        OG_HEIGHT,
+        parsed.view.maxIterations,
+        parsed.view.colorScheme,
+        parsed.view.kind,
+        true,
+        parsed.view.colorOptions,
+      ),
+      OG_WIDTH,
+      OG_HEIGHT,
+    );
+    expect(drawn.equals(expected)).toBe(true);
+
+    const plain = await createOgHandler()(
+      new Request(`${URL_BASE}?v=1&f=mandelbrot&x=-0.75&y=0&z=1&s=fire`),
+    );
+    expect(Buffer.from(await plain.arrayBuffer()).equals(drawn)).toBe(false);
   }, 30_000);
 
   it("gives the event loop a turn between slices of rows", async () => {

@@ -25,7 +25,12 @@
  * Nothing here touches the DOM, `window` or any Node module, so it runs in both.
  */
 
-import type { ColorScheme, FractalBounds, FractalKind } from "../types/fractal";
+import type {
+  ColorOptions,
+  ColorScheme,
+  FractalBounds,
+  FractalKind,
+} from "../types/fractal";
 import { mapIterationsToColor } from "./colorMapping";
 import { pixelToComplex } from "./mandelbrot";
 
@@ -106,6 +111,9 @@ export function countRgbaRows(
  * @param maxIterations - The cap the counts were counted with, which is what
  *   they are judged against: a count of the whole cap is in the set, and black
  * @param scheme - Colour scheme to draw in
+ * @param options - Reverse and shift of the scheme, or nothing for the scheme
+ *   as it is; the same counts in another pair of options is a repaint, not a
+ *   redraw of the view
  */
 export function colourRgbaRows(
   out: Uint8ClampedArray,
@@ -115,6 +123,7 @@ export function colourRgbaRows(
   width: number,
   maxIterations: number,
   scheme: ColorScheme,
+  options?: ColorOptions,
 ): void {
   // One count a pixel, four bytes a pixel: the two buffers walk at different
   // rates.
@@ -123,7 +132,12 @@ export function colourRgbaRows(
 
   for (let y = firstRow; y < endRow; y++) {
     for (let x = 0; x < width; x++) {
-      const color = mapIterationsToColor(counts[pixel], maxIterations, scheme);
+      const color = mapIterationsToColor(
+        counts[pixel],
+        maxIterations,
+        scheme,
+        options,
+      );
 
       out[index] = color.r;
       out[index + 1] = color.g;
@@ -153,6 +167,8 @@ export function colourRgbaRows(
  * @param kind - The formula to iterate
  * @param smooth - Whether counts are fractional; the full render is smooth, a
  *   preview is not
+ * @param options - Reverse and shift of the scheme, or nothing for the scheme
+ *   as it is
  */
 export function renderRgbaRows(
   out: Uint8ClampedArray,
@@ -165,6 +181,7 @@ export function renderRgbaRows(
   scheme: ColorScheme,
   kind: FractalKind,
   smooth: boolean = true,
+  options?: ColorOptions,
 ): void {
   const rows = Math.max(0, endRow - firstRow);
   const counts = new Float64Array(rows * width);
@@ -180,7 +197,16 @@ export function renderRgbaRows(
     kind,
     smooth,
   );
-  colourRgbaRows(out, counts, firstRow, endRow, width, maxIterations, scheme);
+  colourRgbaRows(
+    out,
+    counts,
+    firstRow,
+    endRow,
+    width,
+    maxIterations,
+    scheme,
+    options,
+  );
 }
 
 /**
@@ -193,6 +219,8 @@ export function renderRgbaRows(
  * @param scheme - Colour scheme to draw in
  * @param kind - The formula to iterate
  * @param smooth - Whether counts are fractional (the default, as the page draws)
+ * @param options - Reverse and shift of the scheme, or nothing for the scheme
+ *   as it is
  * @returns `width * height * 4` bytes of RGBA, row by row from the top
  */
 export function renderRgba(
@@ -203,6 +231,7 @@ export function renderRgba(
   scheme: ColorScheme,
   kind: FractalKind,
   smooth: boolean = true,
+  options?: ColorOptions,
 ): Uint8ClampedArray {
   const pixels = new Uint8ClampedArray(width * height * BYTES_PER_PIXEL);
 
@@ -217,6 +246,7 @@ export function renderRgba(
     scheme,
     kind,
     smooth,
+    options,
   );
 
   return pixels;

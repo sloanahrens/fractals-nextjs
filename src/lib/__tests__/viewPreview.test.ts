@@ -56,7 +56,29 @@ describe("previewFor", () => {
     const keys = [...new URLSearchParams(preview!.fragment).keys()];
 
     expect(preview!.fragment).not.toMatch(/fbclid|evil|script|tour/);
-    expect(keys.every((key) => "vfkxyzsiwh".includes(key))).toBe(true);
+    expect(keys.every((key) => "vfkxyzsiwhro".includes(key))).toBe(true);
+  });
+
+  it("carries the scheme's own settings into the fragment and the card", () => {
+    const preview = previewFor({ ...JULIA, r: "1", o: "0.25" });
+
+    expect(preview).not.toBeNull();
+    // The preview is the picture the link names, settings and all, so the
+    // fragment keeps them where the codec writes them and the route that draws
+    // it honours them.
+    expect(preview!.fragment).toBe(
+      "v=1&f=julia&k=Dendrite&x=-0.5&y=0.25&z=400&s=fire&r=1&o=0.25&i=auto&w=800&h=600",
+    );
+    expect(parseOgQuery(preview!.fragment).ok).toBe(true);
+    // The phrase is about the view, not its colours: a reversed Julia set is
+    // still "Julia set, Dendrite, 400x".
+    expect(preview!.line).toBe("Julia set, Dendrite, 400x");
+  });
+
+  it("refuses a reversal or a shift the route would refuse", () => {
+    expect(previewFor({ ...JULIA, r: "2" })).toBeNull();
+    expect(previewFor({ ...JULIA, o: "7" })).toBeNull();
+    expect(previewFor({ ...JULIA, o: "nope" })).toBeNull();
   });
 
   it("reads a repeated key by its first value", () => {

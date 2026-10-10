@@ -9,7 +9,12 @@
  * left with the markup.
  */
 
-import type { ColorScheme, ComplexNumber, EscapeInfo } from "../types/fractal";
+import type {
+  ColorOptions,
+  ColorScheme,
+  ComplexNumber,
+  EscapeInfo,
+} from "../types/fractal";
 import { mapIterationsToColor } from "./colorMapping";
 import { colourCss } from "./mathProbe";
 
@@ -179,18 +184,23 @@ export function hasEscapeCircle(fractalId: string): boolean {
  * @param step - The dot's index in the orbit, 0 for the start
  * @param points - How many dots there are, which the palette is spread over
  * @param scheme - The colour scheme the picture is drawn in
+ * @param options - Reverse and shift of that scheme, or nothing for the scheme
+ *   as it is
  * @returns An `rgb()` value
  */
 export function orbitStepColour(
   step: number,
   points: number,
   scheme: ColorScheme,
+  options?: ColorOptions,
 ): string {
   // The count is of dots and not of steps, so the last dot sits just short of
   // the palette's end: a step count as the denominator would put it exactly at
   // the cap, which the mapping paints black, and the dot that flew off is the
   // last one worth seeing.
-  return colourCss(mapIterationsToColor(step, Math.max(points, 1), scheme));
+  return colourCss(
+    mapIterationsToColor(step, Math.max(points, 1), scheme, options),
+  );
 }
 
 /** How many steps an orbit of this many points took. */

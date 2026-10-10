@@ -83,6 +83,8 @@ export const renderOgPng: OgRender = async (
       view.maxIterations,
       view.colorScheme,
       view.kind,
+      true,
+      view.colorOptions,
     );
 
     checkBudget();

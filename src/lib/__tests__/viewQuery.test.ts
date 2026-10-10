@@ -39,6 +39,36 @@ describe("copyLinkUrl", () => {
     );
     expect(decodeView(location.fragment).variant).toBe("4");
   });
+
+  it("carries a reversed and shifted scheme through the query and back", () => {
+    const link = encodeView({
+      fractalType: "julia",
+      variant: "Classic",
+      centerX: -0.644,
+      centerY: -0.094,
+      zoomLevel: 2.56,
+      colorScheme: "fire",
+      reverse: true,
+      shift: 0.25,
+      autoIterationsOn: true,
+      canvasWidth: 800,
+      canvasHeight: 600,
+    });
+
+    expect(link).toContain("&r=1&o=0.25&");
+
+    const url = new URL(copyLinkUrl("https://example.com", "/", link));
+    const location = readLocationLink(url.search, url.hash);
+
+    // The query form is a view the page reads, so it settles on the hash and
+    // the settings come with the rest of the view.
+    expect(location.dropQuery).toBe(true);
+    expect(viewLinkUpdatesFrom(location.fragment)).toMatchObject({
+      colorScheme: "fire",
+      reverse: true,
+      shift: 0.25,
+    });
+  });
 });
 
 describe("readLocationLink", () => {

@@ -96,12 +96,38 @@ export interface FractalKind {
   orbit?(point: ComplexNumber, maxSteps: number): ComplexNumber[];
 }
 
+/**
+ * How a picture is coloured, beyond which scheme it is drawn in.
+ *
+ * The scheme is a walk through a palette from black to the palette's end, and
+ * these are the two ways a visitor can move along it without changing the
+ * picture: `reverse` walks it the other way, and `shift` starts the walk
+ * somewhere else round. Both are colour only — a point's iteration count is the
+ * same number whoever is watching — so a view's counts can be coloured again
+ * with another pair without counting anything.
+ *
+ * Absent, `false` and `0` are the scheme as the app has always drawn it, so a
+ * caller that does not care passes nothing and gets the same pixels as before
+ * this existed.
+ */
+export interface ColorOptions {
+  /** Walk the palette backwards: a count that sat at `t` sits at `1 - t`. */
+  reverse?: boolean;
+  /**
+   * How far round the palette the walk starts, a fraction of a turn: the
+   * position becomes `t + shift` modulo 1.
+   */
+  shift?: number;
+}
+
 export interface FractalConfig {
   bounds: FractalBounds;
   maxIterations: number;
   width: number;
   height: number;
   colorScheme: ColorScheme;
+  /** Reverse and shift of the scheme, or nothing for the scheme as it is. */
+  colorOptions?: ColorOptions;
 }
 
 export interface ColorRGB {

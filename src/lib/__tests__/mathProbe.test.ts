@@ -437,3 +437,55 @@ describe("createFrameThrottle", () => {
     expect(runs).toBe(2);
   });
 });
+
+describe("probePoint with the scheme's own settings", () => {
+  const OPTIONS = [
+    { reverse: true },
+    { shift: 0.25 },
+    { reverse: true, shift: 0.5 },
+  ];
+
+  it("reports the colour the picture paints under those settings", () => {
+    // The swatch is the colour on screen, so a reversed or shifted picture has
+    // a reversed or shifted swatch: the probe reads the same mapping, with the
+    // same settings, that the render does.
+    for (const options of OPTIONS) {
+      const pixels = renderRgba(
+        VIEW,
+        WIDTH,
+        HEIGHT,
+        CAP,
+        SCHEME,
+        mandelbrotKind,
+        true,
+        options,
+      );
+
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          const point = pixelToComplex(x, y, WIDTH, HEIGHT, VIEW);
+          const probe = probePoint(mandelbrotKind, point, CAP, SCHEME, options);
+          const at = (y * WIDTH + x) * 4;
+
+          expect([probe.colour.r, probe.colour.g, probe.colour.b]).toEqual([
+            pixels[at],
+            pixels[at + 1],
+            pixels[at + 2],
+          ]);
+        }
+      }
+    }
+  });
+
+  it("says the same steps and the same path, which colour does not move", () => {
+    const point = { real: -0.5, imaginary: 0.3 };
+    const plain = probePoint(mandelbrotKind, point, CAP, SCHEME);
+
+    for (const options of OPTIONS) {
+      const probe = probePoint(mandelbrotKind, point, CAP, SCHEME, options);
+
+      expect(probe.info).toEqual(plain.info);
+      expect(probe.orbit).toEqual(plain.orbit);
+    }
+  });
+});
