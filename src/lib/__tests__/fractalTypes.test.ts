@@ -11,7 +11,9 @@ import {
   isCustomVariant,
   isVariantValue,
   resolveFractalKind,
+  variantOn,
 } from "../fractalTypes";
+import { createMultibrotKind } from "../multibrot";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
 
@@ -32,7 +34,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the four fractals in order, each once", () => {
+  it("offers the five fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -40,6 +42,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "julia", label: "Julia" },
       { id: "burning-ship", label: "Burning Ship" },
       { id: "tricorn", label: "Tricorn" },
+      { id: "multibrot", label: "Multibrot" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -76,6 +79,37 @@ describe("resolveFractalKind", () => {
   it("draws the Tricorn for its own id, whatever constant is beside it", () => {
     expect(resolveFractalKind("tricorn", "Dendrite")).toBe(tricornKind);
     expect(resolveFractalKind("tricorn", "")).toBe(tricornKind);
+  });
+
+  it("draws the Multibrot of the power beside it", () => {
+    const points = sampledPoints();
+
+    for (const power of [3, 4, 5]) {
+      const resolved = resolveFractalKind("multibrot", String(power));
+      const expected = createMultibrotKind(power);
+
+      for (const point of points) {
+        expect(resolved.iterations(point, CAP, true), String(power)).toBe(
+          expected.iterations(point, CAP, true),
+        );
+      }
+    }
+  });
+
+  it("falls back to power 3 for a power it cannot read, as an unknown Julia name falls back to the first constant", () => {
+    const expected = createMultibrotKind(3);
+    const points = sampledPoints();
+
+    for (const variant of ["", "6", "2", "3.0", "Classic", "custom:0,0"]) {
+      const resolved = resolveFractalKind("multibrot", variant);
+
+      expect(resolved.id, variant).toBe("multibrot");
+      for (const point of points) {
+        expect(resolved.iterations(point, CAP, true), variant).toBe(
+          expected.iterations(point, CAP, true),
+        );
+      }
+    }
   });
 
   it("falls back to the Mandelbrot set for an unknown id", () => {
@@ -192,6 +226,14 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("frames the Multibrot about the origin at zoom 1, holding all three powers", () => {
+    expect(defaultViewFor("multibrot")).toEqual({
+      centerX: 0,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("falls back to the Mandelbrot view for an unknown id", () => {
     expect(defaultViewFor("newton")).toEqual({
       centerX: -0.75,
@@ -215,6 +257,18 @@ describe("fractalVariants", () => {
     );
   });
 
+  it("gives the Multibrot a captioned Power row of 3, 4 and 5 labelled z^3, z^4 and z^5, with no Custom choice", () => {
+    const variants = fractalVariants("multibrot");
+
+    expect(variants?.label).toBe("Power");
+    expect(variants?.allowsCustom).toBe(false);
+    expect(variants?.options).toEqual([
+      { value: "3", label: "z^3" },
+      { value: "4", label: "z^4" },
+      { value: "5", label: "z^5" },
+    ]);
+  });
+
   it("gives the Mandelbrot set, the Burning Ship, the Tricorn and an unknown id no row", () => {
     expect(fractalVariants("mandelbrot")).toBeNull();
     expect(fractalVariants("burning-ship")).toBeNull();
@@ -222,12 +276,12 @@ describe("fractalVariants", () => {
     expect(fractalVariants("newton")).toBeNull();
   });
 
-  it("describes only Julia among the picker's fractals", () => {
+  it("describes only Julia and the Multibrot among the picker's fractals", () => {
     expect(
       FRACTAL_TYPES.filter((type) => fractalVariants(type.id) !== null).map(
         (type) => type.id,
       ),
-    ).toEqual(["julia"]);
+    ).toEqual(["julia", "multibrot"]);
   });
 });
 
@@ -240,10 +294,16 @@ describe("defaultVariant", () => {
     expect(defaultVariant("newton")).toBe("");
   });
 
-  it("is always one of the fractal's own options", () => {
-    const values = fractalVariants("julia")?.options.map((o) => o.value);
+  it("is power 3 for the Multibrot", () => {
+    expect(defaultVariant("multibrot")).toBe("3");
+  });
 
-    expect(values).toContain(defaultVariant("julia"));
+  it("is always one of the fractal's own options", () => {
+    for (const id of ["julia", "multibrot"]) {
+      const values = fractalVariants(id)?.options.map((o) => o.value);
+
+      expect(values, id).toContain(defaultVariant(id));
+    }
   });
 });
 
@@ -251,6 +311,23 @@ describe("isVariantValue", () => {
   it("accepts a named constant and a readable custom one for Julia", () => {
     expect(isVariantValue("julia", "Dendrite")).toBe(true);
     expect(isVariantValue("julia", "custom:-0.8,0.156")).toBe(true);
+  });
+
+  it("accepts exactly the plain spellings of 3, 4 and 5 for the Multibrot", () => {
+    for (const power of ["3", "4", "5"]) {
+      expect(isVariantValue("multibrot", power), power).toBe(true);
+    }
+    for (const value of ["2", "6", "03", "3.0", " 4", "4 ", "Classic", ""]) {
+      expect(isVariantValue("multibrot", value), value).toBe(false);
+    }
+    expect(isVariantValue("multibrot", undefined)).toBe(false);
+    expect(isVariantValue("multibrot", null)).toBe(false);
+  });
+
+  it("keeps a power out of Julia and a constant out of the Multibrot", () => {
+    expect(isVariantValue("julia", "3")).toBe(false);
+    expect(isVariantValue("multibrot", "Classic")).toBe(false);
+    expect(isVariantValue("multibrot", "custom:-0.8,0.156")).toBe(false);
   });
 
   it("refuses an unreadable value, and every value of a fractal with no variant", () => {
@@ -274,5 +351,29 @@ describe("isCustomVariant", () => {
     expect(isCustomVariant("mandelbrot", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("burning-ship", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("tricorn", "custom:-0.8,0.156")).toBe(false);
+    expect(isCustomVariant("multibrot", "custom:-0.8,0.156")).toBe(false);
+  });
+});
+
+describe("variantOn", () => {
+  it("keeps a value the fractal can be drawn with", () => {
+    expect(variantOn("julia", "Dendrite")).toBe("Dendrite");
+    expect(variantOn("julia", "custom:-0.8,0.156")).toBe("custom:-0.8,0.156");
+    expect(variantOn("multibrot", "5")).toBe("5");
+  });
+
+  it("gives a fractal that takes a variant its own default for another fractal's value", () => {
+    // Julia -> Multibrot must not leave a constant's name where a power goes,
+    // nor Multibrot -> Julia a power where a constant goes.
+    expect(variantOn("multibrot", "Dendrite")).toBe("3");
+    expect(variantOn("julia", "4")).toBe(JULIA_CONSTANTS[0].name);
+    expect(variantOn("multibrot", "")).toBe("3");
+  });
+
+  it("leaves the value alone for a fractal that takes none, so Julia -> Mandelbrot -> Julia keeps the constant", () => {
+    for (const id of ["mandelbrot", "burning-ship", "tricorn", "newton"]) {
+      expect(variantOn(id, "Dendrite"), id).toBe("Dendrite");
+      expect(variantOn(id, "4"), id).toBe("4");
+    }
   });
 });

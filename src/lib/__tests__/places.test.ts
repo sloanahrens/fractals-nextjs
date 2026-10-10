@@ -4,6 +4,8 @@ import { FractalRenderer } from "../fractalRenderer";
 import {
   FRACTAL_TYPES,
   defaultViewFor,
+  fractalVariants,
+  isVariantValue,
   resolveFractalKind,
 } from "../fractalTypes";
 import {
@@ -364,6 +366,47 @@ describe("suggest on a Julia view", () => {
 
     expect(ids(suggest(view, catalogue, 5))).toEqual(["a", "b"]);
   });
+
+  it("lists a Multibrot view's own power first, then the others, each group by distance", () => {
+    const view: PlaceView = {
+      fractal: "multibrot",
+      variant: "3",
+      centerX: 0,
+      centerY: 0,
+      zoom: 10,
+    };
+    const multibrot = (id: string, variant: string, overrides = {}) =>
+      place(id, { fractal: "multibrot", variant, ...overrides });
+    const catalogue = [
+      multibrot("four-near", "4", { centerX: 0.1, zoom: 40 }),
+      multibrot("three-far", "3", { centerX: 0.5, zoom: 40 }),
+      multibrot("three-near", "3", { centerX: 0.2, zoom: 40 }),
+      multibrot("five-near", "5", { centerX: 0.15, zoom: 40 }),
+    ];
+
+    expect(ids(suggest(view, catalogue, 5))).toEqual([
+      "three-near",
+      "three-far",
+      "four-near",
+      "five-near",
+    ]);
+  });
+
+  it("does not take another power's place at the view's own centre and zoom for the view", () => {
+    const view: PlaceView = {
+      fractal: "multibrot",
+      variant: "3",
+      centerX: 0,
+      centerY: 0,
+      zoom: 10,
+    };
+    const catalogue = [
+      place("same", { fractal: "multibrot", variant: "3" }),
+      place("other", { fractal: "multibrot", variant: "4" }),
+    ];
+
+    expect(ids(suggest(view, catalogue, 5))).toEqual(["other"]);
+  });
 });
 
 /** Which fractal's places the catalogue must hold, and how many. */
@@ -372,6 +415,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   julia: [8, 10],
   "burning-ship": [8, 10],
   tricorn: [8, 10],
+  multibrot: [10, 12],
 };
 
 describe("PLACES", () => {
@@ -415,13 +459,30 @@ describe("PLACES", () => {
     expect(custom.size).toBeGreaterThanOrEqual(2);
   });
 
-  it("names a constant for a Julia place and for no other", () => {
+  it("names a variant for a place of a fractal that takes one and for no other", () => {
     for (const entry of PLACES) {
-      if (entry.fractal === "julia") {
+      if (fractalVariants(entry.fractal) !== null) {
         expect(entry.variant, entry.id).toBeTypeOf("string");
+        expect(isVariantValue(entry.fractal, entry.variant), entry.id).toBe(
+          true,
+        );
       } else {
         expect(entry.variant, entry.id).toBeUndefined();
       }
+    }
+  });
+
+  it("spreads the Multibrot places over all three powers, each with its own whole set", () => {
+    const places = placesForFractal("multibrot");
+
+    for (const power of ["3", "4", "5"]) {
+      const ofPower = places.filter((entry) => entry.variant === power);
+
+      expect(ofPower.length, power).toBeGreaterThanOrEqual(3);
+      // The chip's destination: the power's whole set at the default view.
+      expect(wholeSetPlaceFor(power, "multibrot")?.id, power).toBe(
+        `multibrot-${power}-whole`,
+      );
     }
   });
 
@@ -648,6 +709,26 @@ describe("wholeSetPlaceFor", () => {
       expect(found?.centerY).toBe(opening.centerY);
       expect(found?.zoom).toBe(opening.zoom);
     }
+  });
+
+  it("finds the whole-set place of each Multibrot power, at the Multibrot opening view", () => {
+    const opening = defaultViewFor("multibrot");
+
+    for (const power of ["3", "4", "5"]) {
+      const found = wholeSetPlaceFor(power, "multibrot");
+
+      expect(found?.fractal, power).toBe("multibrot");
+      expect(found?.variant, power).toBe(power);
+      expect(found?.centerX, power).toBe(opening.centerX);
+      expect(found?.centerY, power).toBe(opening.centerY);
+      expect(found?.zoom, power).toBe(opening.zoom);
+    }
+  });
+
+  it("keeps a power and a constant apart: neither finds the other's place", () => {
+    expect(wholeSetPlaceFor("3")).toBeNull();
+    expect(wholeSetPlaceFor("Classic", "multibrot")).toBeNull();
+    expect(wholeSetPlaceFor("6", "multibrot")).toBeNull();
   });
 
   it("is never a deeper place of the constant", () => {

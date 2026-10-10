@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { getAvailableColorSchemes } from "../colorMapping";
-import { FRACTAL_TYPES } from "../fractalTypes";
-import {
-  JULIA_CONSTANTS,
-  MAX_CUSTOM_CONSTANT_LENGTH,
-  isJuliaConstantName,
-} from "../julia";
+import { FRACTAL_TYPES, fractalVariants } from "../fractalTypes";
+import { MAX_CUSTOM_CONSTANT_LENGTH, isJuliaConstantName } from "../julia";
 import {
   ITERATION_STEP,
   MAX_ITERATIONS,
@@ -67,15 +63,15 @@ function sampleStates(): ViewLinkState[] {
       CANVAS_SIZES.forEach((size, sizeIndex) => {
         const view =
           VIEWS[(fractalIndex + schemeIndex + sizeIndex) % VIEWS.length];
-        // The fractal and its constant are one choice, so only a Julia state
-        // carries one — which is the state the format writes.
+        // The fractal and its variant are one choice, so only a fractal that
+        // takes one carries one (a Julia constant, a Multibrot power) — which
+        // is the state the format writes.
+        const options = fractalVariants(fractal.id)?.options ?? [];
         const constant =
-          fractal.id === "julia"
+          options.length > 0
             ? {
                 variant:
-                  JULIA_CONSTANTS[
-                    (fractalIndex + schemeIndex) % JULIA_CONSTANTS.length
-                  ].name,
+                  options[(fractalIndex + schemeIndex) % options.length].value,
               }
             : {};
 
@@ -173,6 +169,55 @@ describe("encodeView", () => {
       centerY: 1.51,
       zoomLevel: 50,
     });
+  });
+
+  it("writes the Multibrot's power as k and reads it back", () => {
+    for (const power of ["3", "4", "5"]) {
+      const link = encodeView({
+        fractalType: "multibrot",
+        variant: power,
+        centerX: 0,
+        centerY: 0,
+        zoomLevel: 1,
+        colorScheme: "classic",
+        autoIterationsOn: true,
+        canvasWidth: 800,
+        canvasHeight: 600,
+      });
+
+      expect(link).toBe(
+        `v=1&f=multibrot&k=${power}&x=0&y=0&z=1&s=classic&i=auto&w=800&h=600`,
+      );
+      expect(decodeView(`#${link}`)).toMatchObject({
+        fractalType: "multibrot",
+        variant: power,
+      });
+    }
+  });
+
+  it("writes only the variant the fractal can draw: no constant beside the Multibrot, no power beside Julia", () => {
+    const multibrot = encodeView({
+      ...EXAMPLE,
+      fractalType: "multibrot",
+      variant: "Classic",
+    });
+    const julia = encodeView({ ...EXAMPLE, variant: "4" });
+
+    expect(multibrot).toBe(
+      "v=1&f=multibrot&x=-0.644&y=-0.094&z=2.56&s=fire&i=auto&w=800&h=600",
+    );
+    expect(julia).toBe(
+      "v=1&f=julia&x=-0.644&y=-0.094&z=2.56&s=fire&i=auto&w=800&h=600",
+    );
+  });
+
+  it("writes no power for a Multibrot state whose power is not one it offers", () => {
+    for (const variant of ["2", "6", "3.0", "03", "", undefined]) {
+      expect(
+        encodeView({ ...EXAMPLE, fractalType: "multibrot", variant }),
+        String(variant),
+      ).not.toContain("k=");
+    }
   });
 
   it("writes no constant for a fractal that has none", () => {
@@ -278,6 +323,24 @@ describe("decodeView", () => {
       fractalType: "julia",
       variant: "custom:-0.8,0.156",
     });
+  });
+
+  it("reads a Multibrot power out of a link", () => {
+    expect(decodeView("v=1&f=multibrot&k=5")).toEqual({
+      fractalType: "multibrot",
+      variant: "5",
+    });
+  });
+
+  it("drops a power it cannot read and keeps the rest of the view", () => {
+    // Judged by the one rule in `multibrot.ts`: a power outside 3 to 5, another
+    // spelling of one, or text, is dropped and the page keeps its own power.
+    for (const power of ["2", "6", "3.0", "03", "%204", "4%20", "x", "-3"]) {
+      expect(decodeView(`v=1&f=multibrot&k=${power}&z=2.5`), power).toEqual({
+        fractalType: "multibrot",
+        zoomLevel: 2.5,
+      });
+    }
   });
 
   it("drops a custom constant it cannot read and keeps the rest of the view", () => {

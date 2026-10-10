@@ -4,9 +4,9 @@
  * Where a button lands is `places.test.ts`'s business (`featuredPlace`,
  * `wholeSetPlaceFor`). What a Node suite with no DOM cannot render is the
  * component and the page, so this reads the sources the way the Nearby strip
- * and Tour tests here do: three buttons that say which is pressed, the chips
- * only for Julia, a switch that goes through the tile's handler, the Custom
- * chip's trip to the Real box, and the places it hides.
+ * and Tour tests here do: five buttons that say which is pressed, the chips
+ * for a fractal that takes a variant, a switch that goes through the tile's
+ * handler, the Custom chip's trip to the Real box, and the places it hides.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -35,15 +35,24 @@ function handlerBody(name: string): string {
 }
 
 describe("the switcher's buttons", () => {
-  it("are the picker's four fractals, mapped from FRACTAL_TYPES", () => {
+  it("are the picker's five fractals, mapped from FRACTAL_TYPES", () => {
     expect(FRACTAL_TYPES.map((type) => type.label)).toEqual([
       "Mandelbrot",
       "Julia",
       "Burning Ship",
       "Tricorn",
+      "Multibrot",
     ]);
     expect(switcher).toContain("FRACTAL_TYPES.map((type)");
     expect(switcher).toContain("{type.label}");
+  });
+
+  it("bring the lit button into view, since the row scrolls on a narrow screen", () => {
+    expect(switcher).toContain("ref={current ? currentButton : undefined}");
+    expect(switcher).toMatch(
+      /currentButton\.current\?\.scrollIntoView\(\{\s*inline: "nearest",\s*block: "nearest",?\s*\}\)/,
+    );
+    expect(switcher).toContain("[fractalType, hidden]");
   });
 
   it("say which one is current with aria-pressed, in a labelled group", () => {
@@ -59,10 +68,12 @@ describe("the switcher's buttons", () => {
   });
 
   it("scroll sideways in a narrow picture instead of wrapping over it", () => {
-    // The four labels are about 290 px at text-xs, which fits 320 px (measured
-    // in headless Chrome at 375 and 320). The group is still capped at the
-    // picture's width and scrolls, and a button keeps its label on one line at
-    // its own width, so a narrower picture cannot wrap it.
+    // The five labels are about 345 px at text-xs with px-1.5 (measured in
+    // headless Chrome with a DevTools session at 375 and 320: 351 and 296 px of
+    // room inside the gutters), which fits 375 px and scrolls on 320 px. The
+    // group is capped at the picture's width and scrolls, and a button keeps
+    // its label on one line at its own width, so a narrower picture cannot wrap
+    // it.
     const group = switcher.slice(
       switcher.indexOf('aria-label="Fractal"') - 40,
       switcher.indexOf("FRACTAL_TYPES.map"),
@@ -173,10 +184,10 @@ describe("a click on the switcher", () => {
     );
   });
 
-  it("sends a named constant to its whole set, and only changes the constant without one", () => {
+  it("sends a named chip (a constant or a power) to its whole set, and only changes the variant without one", () => {
     const body = handlerBody("handleSwitchVariant");
 
-    expect(body).toContain("wholeSetPlaceFor(name)");
+    expect(body).toContain("wholeSetPlaceFor(name, fractalType)");
     expect(body).toContain("handlePlaceSelect(whole)");
     expect(body).toContain("setVariant(name)");
     expect(body).toContain("if (name === variant) return");

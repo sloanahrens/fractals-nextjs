@@ -1,6 +1,11 @@
 import { FractalBounds, ColorScheme } from "../types/fractal";
-import { FRACTAL_TYPES } from "./fractalTypes";
-import { JULIA_CONSTANTS, isJuliaConstantName } from "./julia";
+import {
+  FRACTAL_TYPES,
+  defaultVariant,
+  fractalVariants,
+  isVariantValue,
+  variantOn,
+} from "./fractalTypes";
 import { boundsToView } from "./mandelbrot";
 
 export interface FractalPreset {
@@ -19,12 +24,20 @@ export interface FractalPreset {
    */
   fractal?: string;
   /**
-   * The fractal's variant (see `fractalVariants`) this view was saved against;
-   * read only for a Julia view, where it is the Julia constant. The page calls
-   * it `variant`; the stored name stays `juliaConstant` so saved views from
-   * before variants still load.
+   * A Julia view's constant, the variant `fractalVariants("julia")` offers. The
+   * page calls it `variant`; the stored name stays `juliaConstant` so saved
+   * views from before variants still load, and a Julia view is still written
+   * under it so an older build can read what this one saves.
    */
   juliaConstant?: string;
+  /**
+   * The variant (see `fractalVariants`) of any other fractal that takes one:
+   * for the Multibrot its power, "3", "4" or "5". A new field rather than
+   * `juliaConstant` reused, because a power is not a constant, and an older
+   * build then sees a Multibrot view as a view of a fractal it does not know
+   * and leaves it unlisted instead of reading a power as a Julia name.
+   */
+  variant?: string;
 }
 
 /** The fractal a view with no `fractal` field was saved for. */
@@ -279,6 +292,59 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasHeight: 600,
     fractal: "tricorn",
   },
+  {
+    id: "multibrot-cubic",
+    name: "Multibrot z^3",
+    description: "The whole z^3 Multibrot set, two lobes one above the other",
+    // The Multibrot default view (0, 0) at zoom 1: 4 by 3 about the origin.
+    bounds: {
+      minReal: -2,
+      maxReal: 2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "multibrot",
+    variant: "3",
+  },
+  {
+    id: "multibrot-quartic",
+    name: "Multibrot z^4",
+    description: "The whole z^4 Multibrot set, three lobes",
+    bounds: {
+      minReal: -2,
+      maxReal: 2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "multibrot",
+    variant: "4",
+  },
+  {
+    id: "multibrot-copy",
+    name: "Multibrot copy",
+    description: "A small copy of the z^3 set riding on its top lobe",
+    // Centre (0.267, 1.26) at zoom 50: 0.08 by 0.06.
+    bounds: {
+      minReal: 0.227,
+      maxReal: 0.307,
+      minImaginary: 1.23,
+      maxImaginary: 1.29,
+    },
+    maxIterations: 400,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "multibrot",
+    variant: "3",
+  },
 ];
 
 /**
@@ -361,40 +427,58 @@ export function presetsForFractal(
 /**
  * The fractal fields a view saved right now should carry.
  *
- * A view belongs to the fractal on the canvas when it is saved, and the
- * variant belongs to a Julia view and to nothing else: a Mandelbrot or Burning
- * Ship entry gets no `juliaConstant` key at all, so its stored JSON stays the
- * shape it had before this field existed. The key keeps its Julia name in
- * storage so views saved before variants still load.
+ * A view belongs to the fractal on the canvas when it is saved, and its
+ * variant goes with it only for a fractal that takes one. A Julia view keeps
+ * the stored name it has always had, `juliaConstant`, so views saved before
+ * variants still load and a view saved now still reads in an older build; the
+ * Multibrot's power is written as `variant`. A Mandelbrot, Burning Ship or
+ * Tricorn entry gets neither key at all, so its stored JSON stays the shape it
+ * had before these fields existed.
  * @param fractalId - Id of the fractal on the canvas
- * @param variant - Variant on the canvas; written only for Julia
+ * @param variant - Variant on the canvas; written only for a fractal that takes one
  * @returns The fields to merge into the saved preset
  */
 export function presetFractalFields(
   fractalId: string,
   variant: string,
-): { fractal: string; juliaConstant?: string } {
-  return fractalId === "julia"
-    ? { fractal: fractalId, juliaConstant: variant }
-    : { fractal: fractalId };
+): { fractal: string; juliaConstant?: string; variant?: string } {
+  if (fractalId === "julia") {
+    return { fractal: fractalId, juliaConstant: variant };
+  }
+  if (fractalVariants(fractalId) !== null) {
+    return { fractal: fractalId, variant };
+  }
+
+  return { fractal: fractalId };
 }
 
 /**
- * The variant a view names: its Julia constant, the only variant a saved view
- * carries.
+ * The variant a view names: its Julia constant or its Multibrot power.
  *
- * A preset that names a constant this build cannot read cannot be loaded as
- * written: the picker would sit on a name it has no option for. A custom name
- * is read on its own terms rather than looked up, because it is a point rather
- * than one of the four; only a name that is neither keeps the view from being
- * loaded. The first constant is what `resolveFractalKind` draws for such a
- * name, so naming it here keeps the select and the canvas describing the same
- * picture.
+ * Both stored fields are read, the fractal's own first: a Julia view's
+ * `juliaConstant` (then `variant`), any other fractal's `variant` (then
+ * `juliaConstant`). A value the fractal cannot be drawn with is skipped, so a
+ * view that names a constant this build cannot read cannot be loaded as
+ * written, and the picker would otherwise sit on a name it has no option for.
+ * A custom Julia name is read on its own terms rather than looked up, because
+ * it is a point rather than one of the four; only a name that is neither keeps
+ * the view from being loaded. What is named then is the fractal's default: the
+ * first constant for Julia, power 3 for the Multibrot, which is what
+ * `resolveFractalKind` draws for such a value, so the select and the canvas
+ * describe the same picture. A fractal that takes no variant gets the Julia
+ * default, which the page does not apply.
  */
 export function presetVariant(preset: FractalPreset): string {
-  return isJuliaConstantName(preset.juliaConstant)
-    ? preset.juliaConstant
-    : JULIA_CONSTANTS[0].name;
+  const fractal = presetFractal(preset) ?? DEFAULT_PRESET_FRACTAL;
+  const stored =
+    fractal === "julia"
+      ? [preset.juliaConstant, preset.variant]
+      : [preset.variant, preset.juliaConstant];
+
+  return (
+    stored.find((value) => isVariantValue(fractal, value)) ??
+    variantOn(fractal, defaultVariant("julia"))
+  );
 }
 
 // Custom presets live in localStorage: an external store that the components

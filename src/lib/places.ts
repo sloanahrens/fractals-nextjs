@@ -1,5 +1,5 @@
 import type { ColorScheme } from "../types/fractal";
-import { defaultViewFor } from "./fractalTypes";
+import { defaultViewFor, fractalVariants } from "./fractalTypes";
 import { parseJuliaConstant } from "./julia";
 import { BASE_WIDTH } from "./mandelbrot";
 
@@ -19,8 +19,10 @@ export interface Place {
   /** A `FRACTAL_TYPES` id. */
   fractal: string;
   /**
-   * The Julia constant, as a name or a `custom:<re>,<im>` spelling
-   * (`julia.ts`). Present for a Julia place and for no other.
+   * The fractal's variant: for Julia the constant, as a name or a
+   * `custom:<re>,<im>` spelling (`julia.ts`); for the Multibrot its power, "3",
+   * "4" or "5". Present for a place of a fractal that takes one and for no
+   * other.
    */
   variant?: string;
   /** Real part of the centre of the view. */
@@ -529,6 +531,137 @@ const TRICORN_PLACES: readonly Place[] = [
   },
 ];
 
+// Twelve places over the three powers, four each, picked from contact sheets
+// drawn headless at low resolution in several schemes. Each carries its power
+// as its variant ("3", "4" or "5"), the way a Julia place carries its constant.
+// The sets are the Mandelbrot set with more lobes (two for z^3, three for z^4,
+// four for z^5), and each repeats its own bulbs and small copies of itself, so
+// the places below are the whole set of each power and three views of what
+// grows on its edge. The whole-set place of each power is at the Multibrot
+// default view (`defaultViewFor`), which is the frame the chips go to.
+const MULTIBROT_PLACES: readonly Place[] = [
+  {
+    id: "multibrot-3-whole",
+    name: "z^3: the whole set",
+    fractal: "multibrot",
+    variant: "3",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "multibrot-3-heart",
+    name: "z^3: a heart on the top lobe",
+    fractal: "multibrot",
+    variant: "3",
+    centerX: 0,
+    centerY: 1.1,
+    zoom: 6,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "multibrot-3-small-copy",
+    name: "z^3: a small copy of the set",
+    fractal: "multibrot",
+    variant: "3",
+    centerX: 0.267,
+    centerY: 1.26,
+    zoom: 50,
+    colorScheme: "classic",
+  },
+  {
+    id: "multibrot-3-cusp",
+    name: "z^3: a cusp between two bulbs",
+    fractal: "multibrot",
+    variant: "3",
+    centerX: 0.4,
+    centerY: 0.85,
+    zoom: 5,
+    colorScheme: "classic",
+  },
+  {
+    id: "multibrot-4-whole",
+    name: "z^4: the whole set",
+    fractal: "multibrot",
+    variant: "4",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "multibrot-4-antenna",
+    name: "z^4: a chain of copies on the antenna",
+    fractal: "multibrot",
+    variant: "4",
+    centerX: -1.2,
+    centerY: 0,
+    zoom: 30,
+    colorScheme: "classic",
+  },
+  {
+    id: "multibrot-4-cleft",
+    name: "z^4: the cleft between two lobes",
+    fractal: "multibrot",
+    variant: "4",
+    centerX: 0.3,
+    centerY: 0.9,
+    zoom: 5,
+    colorScheme: "ocean",
+  },
+  {
+    id: "multibrot-4-junction",
+    name: "z^4: where two lobes touch",
+    fractal: "multibrot",
+    variant: "4",
+    centerX: 0.45,
+    centerY: 0.65,
+    zoom: 8,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "multibrot-5-whole",
+    name: "z^5: the whole set",
+    fractal: "multibrot",
+    variant: "5",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "multibrot-5-notch",
+    name: "z^5: a bulb in the notch between lobes",
+    fractal: "multibrot",
+    variant: "5",
+    centerX: 0.65,
+    centerY: 0.65,
+    zoom: 6,
+    colorScheme: "classic",
+  },
+  {
+    id: "multibrot-5-ringed-bulb",
+    name: "z^5: a bulb ringed with smaller ones",
+    fractal: "multibrot",
+    variant: "5",
+    centerX: 0.3,
+    centerY: 0.8,
+    zoom: 10,
+    colorScheme: "classic",
+  },
+  {
+    id: "multibrot-5-twin-bulbs",
+    name: "z^5: twin bulbs on the edge",
+    fractal: "multibrot",
+    variant: "5",
+    centerX: 0,
+    centerY: 0.9,
+    zoom: 5,
+    colorScheme: "classic",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -539,6 +672,7 @@ export const PLACES: readonly Place[] = [
   ...JULIA_PLACES,
   ...BURNING_SHIP_PLACES,
   ...TRICORN_PLACES,
+  ...MULTIBROT_PLACES,
 ];
 
 /**
@@ -580,8 +714,19 @@ export function placesForFractal(fractal: string): Place[] {
  *   left-arm bulb and the upper-arm bulb are black blobs on deep blue; the
  *   frayed edge, the body meeting an arm and the small Tricorn are fields of
  *   one colour or a texture with no outline.
+ * - Multibrot: the small copy of the z^3 set. A two-lobed set, one disc above
+ *   the other, riding on the big set's edge among filaments in full colour; it
+ *   reads as the Multibrot rather than the Mandelbrot set, which the
+ *   one-lobed bulbs of the other places do not, and it lands on power 3, the
+ *   chip row's first. First picked in the rainbow scheme from contact sheets
+ *   drawn with smooth counts, but the guard (and a tile) draw whole counts, and
+ *   there rainbow is a red field, 74% one colour; classic is 36%, so the place
+ *   names classic. The Multibrot's other places were measured the same way and
+ *   given the scheme with the least flat field of their own (the whole sets and
+ *   the notch 46-57% in classic, the rest 31-40% except the junction, 73%: two
+ *   big black bulbs, which is not the featured place).
  *
- * The other three were redrawn and kept: each is at most 21% one colour (the
+ * The others were redrawn and kept: each is at most 21% one colour (the
  * guard in `places.test.ts` holds every one under 60%).
  */
 export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
@@ -589,6 +734,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   julia: "julia-classic-spirals",
   "burning-ship": "burning-ship-armada",
   tricorn: "tricorn-along-the-arm",
+  multibrot: "multibrot-3-small-copy",
 };
 
 /**
@@ -607,24 +753,29 @@ export function featuredPlace(fractal: string): Place {
 }
 
 /**
- * Where a Julia constant chip goes: the whole of that constant's set.
+ * Where a variant chip goes: the whole of that variant's set.
  *
  * A Julia set is symmetric about the origin whatever its constant, so its whole
  * set is the Julia default view, and a place counts as one when it is that view
  * of that constant. Constants are compared as points, so a custom spelling of a
- * named constant finds the same place.
+ * named constant finds the same place. A Multibrot's whole set is likewise the
+ * Multibrot default view, one frame for the three powers.
  *
- * @param constant - A named constant or a `custom:<re>,<im>` name
+ * @param variant - A named Julia constant or a `custom:<re>,<im>` name, or a Multibrot power
+ * @param fractal - The fractal the chip belongs to; Julia unless said
  * @returns The catalogue's whole-set place for it, or null when it has none
  */
-export function wholeSetPlaceFor(constant: string): Place | null {
-  const whole = defaultViewFor("julia");
+export function wholeSetPlaceFor(
+  variant: string,
+  fractal: string = "julia",
+): Place | null {
+  const whole = defaultViewFor(fractal);
 
   return (
     PLACES.find(
       (place) =>
-        place.fractal === "julia" &&
-        sameConstant(place.variant, constant) &&
+        place.fractal === fractal &&
+        sameVariant(fractal, place.variant, variant) &&
         place.centerX === whole.centerX &&
         place.centerY === whole.centerY &&
         place.zoom === whole.zoom,
@@ -664,10 +815,24 @@ function sameConstant(
   return a.real === b.real && a.imaginary === b.imaginary;
 }
 
+/**
+ * Whether two variants of one fractal are the same picture: Julia constants as
+ * points, any other variant (a Multibrot power) as text.
+ */
+function sameVariant(
+  fractal: string,
+  first: string | undefined,
+  second: string | undefined,
+): boolean {
+  return fractal === "julia"
+    ? sameConstant(first, second)
+    : first !== undefined && first === second;
+}
+
 /** Whether a place is the view itself: same picture, within the tolerance. */
 function isCurrentView(view: PlaceView, place: Place, span: number): boolean {
-  if (place.fractal === "julia") {
-    if (!sameConstant(place.variant, view.variant)) return false;
+  if (fractalVariants(place.fractal) !== null) {
+    if (!sameVariant(place.fractal, place.variant, view.variant)) return false;
   }
 
   return (
@@ -703,9 +868,10 @@ function distanceFrom(view: PlaceView, place: Place, span: number): number {
  * place that is the view — the same fractal and constant with the centre
  * within 1% of the view's span and the zoom within 1%. The rest are ranked by
  * {@link distanceFrom}, nearest first, and a tie is broken by id so the order
- * does not change between calls. For a Julia view the places that share its
- * constant come first, each group ranked on its own: another constant's picture
- * is never a step from this one, however near its numbers are.
+ * does not change between calls. For a view of a fractal with a variant the
+ * places that share its variant come first (a Julia constant, a Multibrot
+ * power), each group ranked on its own: another constant's picture is never a
+ * step from this one, however near its numbers are.
  *
  * A view that cannot be measured — a centre or zoom that is not a finite
  * number, or a zoom that is not positive — has nothing near it, and a count
@@ -733,16 +899,20 @@ export function suggest(
   }
 
   const span = BASE_WIDTH / view.zoom;
-  const isJulia = view.fractal === "julia";
+  const takesVariant = fractalVariants(view.fractal) !== null;
 
   return places
     .filter((place) => place.fractal === view.fractal)
     .filter((place) => !isCurrentView(view, place, span))
     .map((place) => ({
       place,
-      // 0 for a place that shares a Julia view's constant, 1 for the others;
-      // every other fractal has one group.
-      group: isJulia && !sameConstant(place.variant, view.variant) ? 1 : 0,
+      // 0 for a place that shares the view's variant (a Julia constant, a
+      // Multibrot power), 1 for the others; a fractal with no variant has one
+      // group.
+      group:
+        takesVariant && !sameVariant(view.fractal, place.variant, view.variant)
+          ? 1
+          : 0,
       distance: distanceFrom(view, place, span),
     }))
     .sort(

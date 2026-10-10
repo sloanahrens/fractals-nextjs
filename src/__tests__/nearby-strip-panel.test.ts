@@ -215,11 +215,16 @@ describe("a click on a tile", () => {
     expect(page).toContain("onSelect={handlePlaceSelect}");
   });
 
-  it("sets the Julia constant for a Julia place and takes the scheme from the shared rule", () => {
+  it("sets the variant for a place of a fractal that takes one and takes the scheme from the shared rule", () => {
     const body = handler();
 
     expect(body).toContain(
-      'if (place.fractal === "julia") setVariant(constant)',
+      "if (fractalVariants(place.fractal) !== null) setVariant(placeVariant)",
+    );
+    // A place that names no variant gets the page's if it fits, else the
+    // fractal's own, so Julia -> Multibrot never carries a constant across.
+    expect(body).toContain(
+      "variantOn(place.fractal, place.variant ?? variant)",
     );
     expect(body).toContain("placeColorScheme(place, colorScheme)");
     // The rule lives in places.ts alone, so the click cannot drift from the tile.

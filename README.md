@@ -1,6 +1,6 @@
 # Next Fractals - Interactive Fractal Explorer
 
-A modern, interactive web application for exploring the infinite beauty of the Mandelbrot set, Julia sets, the Burning Ship and the Tricorn, built with Next.js 16, React 19 and TypeScript.
+A modern, interactive web application for exploring the infinite beauty of the Mandelbrot set, Julia sets, the Burning Ship, the Tricorn and the Multibrot sets, built with Next.js 16, React 19 and TypeScript.
 
 ![Next Fractals Preview](public/og-card.png)
 
@@ -16,14 +16,14 @@ system. The workflows under `.forgejo/workflows/` are described under
 
 ## Overview
 
-Next Fractals is a real-time fractal generator that allows users to explore the Mandelbrot set, Julia sets, the Burning Ship and the Tricorn with smooth zoom controls, customizable parameters, and preset configurations. The application uses optimized Canvas API rendering with progressive calculation techniques for smooth performance and provides an intuitive interface for mathematical visualization.
+Next Fractals is a real-time fractal generator that allows users to explore the Mandelbrot set, Julia sets, the Burning Ship, the Tricorn and the Multibrot sets with smooth zoom controls, customizable parameters, and preset configurations. The application uses optimized Canvas API rendering with progressive calculation techniques for smooth performance and provides an intuitive interface for mathematical visualization.
 
 ## Features
 
 ### 🎨 Interactive Visualization
 
-- **Fractal Types**: Draw the Mandelbrot set, the Burning Ship, the Tricorn or a Julia set, and pick the Julia constant from four named ones or choose Custom and type your own Real and Imaginary parts (each from -2 to 2, written as plain decimals like `-0.8` and `0.156`); an entry that is empty, not a number or out of range shows a message under the boxes and leaves the picture as it was, and a view link carries the point as `k=custom:<re>,<im>`
-- **Fractal Switcher**: Four buttons over the top left of the picture — Mandelbrot, Julia, Burning Ship and Tricorn, the current one lit — change fractal in one click and fly to that fractal's showpiece place (Seahorse Valley, the Classic set's spirals, the Burning Ship's armada, the bulb and antennae along the Tricorn's left arm); Back returns to where you were. While Julia is current a row of chips offers its four named constants and Custom
+- **Fractal Types**: Draw the Mandelbrot set, the Burning Ship, the Tricorn, a Multibrot set (the Mandelbrot loop with a higher power, `z^3`, `z^4` or `z^5`, picked from the Power select; a view link carries it as `k=3`, `k=4` or `k=5`) or a Julia set, and pick the Julia constant from four named ones or choose Custom and type your own Real and Imaginary parts (each from -2 to 2, written as plain decimals like `-0.8` and `0.156`); an entry that is empty, not a number or out of range shows a message under the boxes and leaves the picture as it was, and a view link carries the point as `k=custom:<re>,<im>`
+- **Fractal Switcher**: Five buttons over the top left of the picture — Mandelbrot, Julia, Burning Ship, Tricorn and Multibrot, the current one lit — change fractal in one click and fly to that fractal's showpiece place (Seahorse Valley, the Classic set's spirals, the Burning Ship's armada, the bulb and antennae along the Tricorn's left arm, a small copy of the z^3 set); Back returns to where you were. While Julia is current a row of chips offers its four named constants and Custom; while Multibrot is current a row captioned "Power" offers z^3, z^4 and z^5
 - **Real-time Rendering**: Smooth fractal generation with optimized performance
 - **Zoom Controls**: Zoom with the mouse wheel, a two-finger pinch on a touch screen, the Zoom In/Out buttons and the Zoom Level slider, which is logarithmic — equal slider steps are equal zoom ratios from 1x to 10000x
 - **Pan Navigation**: Click and drag to explore different regions, or drag with one finger on a touch screen
@@ -36,7 +36,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Nearby Strip**: A strip along the bottom of the picture, headed "Nearby, worth a look", shows small pictures of up to six named places near the view — click one, or Tab to it and press Enter, and the picture flies there with a short crossfade. A More tile rotates in the next suggestions
 - **Back and Forward**: Buttons in the top bar retrace the places you jumped to, and are disabled at the ends of the trail
 - **Download PNG**: In the Settings drawer, save the canvas at its full resolution, named from the fractal and the view it shows
-- **Shareable Links**: The address bar follows the view once a render settles, and the Copy link button in the Navigation card of the Settings drawer puts that URL — fractal, Julia constant, centre, zoom, colour scheme, iterations and canvas size — on the clipboard
+- **Shareable Links**: The address bar follows the view once a render settles, and the Copy link button in the Navigation card of the Settings drawer puts that URL — fractal, Julia constant or Multibrot power, centre, zoom, colour scheme, iterations and canvas size — on the clipboard
 
 ### ⚙️ Customizable Parameters
 
@@ -187,7 +187,7 @@ dependencies and needs nothing else.
 ### Basic Navigation
 
 - **The Page**: The picture fills the window, with a slim bar over it holding the title, Surprise me, Tour, Back, Forward, Help and Settings. The bar fades after two seconds without a pointer move, key press or touch and comes back on any of them, and it stays up while Settings is open or one of its buttons has keyboard focus. Settings opens a drawer down the right-hand side — a bottom sheet on a narrow screen — holding every control the page has: Presets, Navigation, Auto-wander, Coordinates, Rendering Parameters, Canvas Resolution, Manual Coordinates, saved views and Download PNG. Escape, its Close button and a click outside it close it, and opening it does not interrupt a render
-- **Fractal switcher**: Over the top left of the picture, under the top bar, are four buttons — Mandelbrot, Julia, Burning Ship and Tricorn — with the fractal on screen lit (`aria-pressed`). One click goes to another fractal and lands on its featured place: Seahorse Valley for the Mandelbrot set, the spirals of the Classic Julia set, the armada of the Burning Ship and the bulb with its antennae along the Tricorn's left arm, each in its own colour scheme and at the iteration count Auto picks. It is a jump like a Nearby tile, with the same crossfade, and adds one history entry, so Back returns to the previous fractal and view. Pressing the fractal already shown does nothing. While Julia is current a second row of chips, captioned "Julia constant" — Classic, Dendrite, Douady rabbit, Siegel disk and Custom — picks the constant: a named chip goes to the whole of that constant's set, and Custom opens Settings with the cursor in the Real box (the picture does not change until you type). The chip row scrolls sideways on a narrow screen. Unlike the top bar the switcher never fades; it is hidden while a tour plays and while Settings or Help is open. The Fractal and Julia constant selects in Settings stay, showing the same two values
+- **Fractal switcher**: Over the top left of the picture, under the top bar, are five buttons — Mandelbrot, Julia, Burning Ship, Tricorn and Multibrot — with the fractal on screen lit (`aria-pressed`). One click goes to another fractal and lands on its featured place: Seahorse Valley for the Mandelbrot set, the spirals of the Classic Julia set, the armada of the Burning Ship, the bulb with its antennae along the Tricorn's left arm and a small copy of the z^3 set riding on the Multibrot's top lobe, each in its own colour scheme and at the iteration count Auto picks. It is a jump like a Nearby tile, with the same crossfade, and adds one history entry, so Back returns to the previous fractal and view. Pressing the fractal already shown does nothing. While Julia is current a second row of chips, captioned "Julia constant" — Classic, Dendrite, Douady rabbit, Siegel disk and Custom — picks the constant: a named chip goes to the whole of that constant's set, and Custom opens Settings with the cursor in the Real box (the picture does not change until you type). While Multibrot is current the second row is captioned "Power" and offers z^3, z^4 and z^5, each going to the whole set of that power (one frame holds all three); going from Julia to Multibrot, or back, brings the fractal's own first choice rather than the other's value. The button row fits a 375 px screen and scrolls sideways on a 320 px one, keeping the lit button in view, and the chip row scrolls too. Unlike the top bar the switcher never fades; it is hidden while a tour plays and while Settings or Help is open. The Fractal select in Settings, and its Julia constant or Power select, stay, showing the same two values
 - **Nearby strip**: Along the bottom of the picture, "Nearby, worth a look" shows up to six places near the view for the fractal you are on, each a small picture of what a click will show, in the place's own colour scheme (or your current one for a place that names none). Hover or Tab to a tile to read its name, and click it (or press Enter) to fly there: the old picture fades into the new one over about 0.4 s (no fade if your system asks for reduced motion), the place is drawn at the iteration count Auto picks for its zoom and in its own colours, and the move adds one history entry. More swaps in the next six, wrapping back to the first. The suggestions are worked out again once the picture has been drawn after a jump — a preset, applying coordinates, picking another fractal or Julia constant, a tile, a pasted link, Back or Forward — and not while you drag, wheel or key about, so the strip does not shuffle under your pointer. The thumbnails wait while the main picture renders. Unlike the top bar, the strip never fades: it stays on screen however long the page is left alone, so there is always a place to click
 - **Back and Forward**: The top bar's Back and Forward buttons are the browser's own, moving along the places you jumped to; each is disabled when there is nothing in that direction, which is always so on a freshly opened page until the first jump
 - **Zoom In/Out**: Use the mouse wheel, the Zoom In/Out buttons, or the Zoom Level slider. On a touch screen, pinch with two fingers: moving them apart zooms in and bringing them together zooms out, about the point between them, within the same 1x to 10000x range. Moving both fingers together pans as well, and lifting one finger carries on as a one-finger pan. A pinch, like a wheel or a drag, rewrites the current history entry and adds none
@@ -197,7 +197,7 @@ dependencies and needs nothing else.
 
 ### Advanced Features
 
-- **Custom Presets**: A view belongs to the fractal it was framed on, so each fractal in the Fractal select offers its own built-in views — six for the Mandelbrot set, five for Julia (the four named constants, and a second view of the Classic set's spirals) two for the Burning Ship and two for the Tricorn (the whole set and the star) — in the Presets dropdown. Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant; loading it puts the Fractal and Julia constant selects back on that picture. The preset dropdown shows the built-in and saved views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
+- **Custom Presets**: A view belongs to the fractal it was framed on, so each fractal in the Fractal select offers its own built-in views — six for the Mandelbrot set, five for Julia (the four named constants, and a second view of the Classic set's spirals) two for the Burning Ship, two for the Tricorn (the whole set and the star) and three for the Multibrot (the whole z^3 set, the whole z^4 set and a small copy of the z^3 set) — in the Presets dropdown. Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant (stored as `juliaConstant`) or, for a Multibrot, its power (stored as `variant`); loading it puts the Fractal select and the Julia constant or Power select back on that picture. The preset dropdown shows the built-in and saved views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button in the Settings drawer saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
@@ -238,7 +238,7 @@ dependencies and needs nothing else.
 │   │   ├── CenterControls.tsx      # The Real (X) and Imaginary (Y) centre boxes with Apply and Reset
 │   │   ├── Checkbox.tsx            # Checkbox
 │   │   ├── CustomPresetManager.tsx # Saved views: Save Current, the list, Delete
-│   │   ├── FractalSwitcher.tsx     # The Mandelbrot / Julia / Burning Ship / Tricorn buttons and Julia's constant chips over the canvas
+│   │   ├── FractalSwitcher.tsx     # The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot buttons and the Julia constant or Multibrot power chips over the canvas
 │   │   ├── HelpDialog.tsx          # The Help overlay, a modal <dialog>
 │   │   ├── Input.tsx               # Text and number box
 │   │   ├── NearbyStrip.tsx         # The "Nearby, worth a look" thumbnails over the bottom of the canvas
@@ -269,6 +269,7 @@ dependencies and needs nothing else.
 │   │   ├── julia.ts                # Julia sets, named constants and custom:<re>,<im> names
 │   │   ├── mandelbrot.ts           # Mandelbrot iteration and coordinates
 │   │   ├── manualBounds.ts         # Checks the Manual Coordinates boxes
+│   │   ├── multibrot.ts            # Multibrot iteration (z^d + c for d = 3 to 5) and the power parser
 │   │   ├── nearbyStrip.ts          # When the Nearby suggestions refresh, which show, the crossfade time
 │   │   ├── pinch.ts                # Pinch helpers: finger distance, midpoint, scale about a point
 │   │   ├── placeThumbnails.ts      # Off-screen place pictures: LRU cache, queue, cancel and pause
@@ -311,7 +312,7 @@ not part of the project.)
 
 ## Mathematics Behind the Magic
 
-All four fractals share one escape-time loop: iterate, and count the steps
+All five fractals share one escape-time loop: iterate, and count the steps
 until `|z|² > 4`. A point that has not escaped after the maximum number of
 iterations is drawn black. They differ in where the orbit starts and what each
 step does.
@@ -359,8 +360,28 @@ turned onto itself by 120° about the origin: three arms, one of them along the
 negative real axis. On the real axis itself the conjugate changes nothing, so
 there the two loops agree. Its whole-set view is centred on the origin at zoom 1.
 
-An orbit that escapes is counted with the same smoothing for all four,
-`n + 1 − log₂(log₂|z|)`, so a colour scheme looks alike on each.
+The Multibrot sets raise the power: the Mandelbrot loop with `z^d` for an
+integer `d` from 3 to 5.
+
+```
+z₀ = 0
+z_{n+1} = z_n^d + c
+```
+
+`z^d` is built by repeated complex multiplication. Raising `z` to `d` multiplies
+its angle by `d`, so a turn of `c` by 360°/(d − 1) turns the whole orbit by the
+same angle and the set maps onto itself: `d − 1` lobes, two for `z^3`
+(one above the other along the imaginary axis), three for `z^4` and four for
+`z^5`. With `d = 2` it is the Mandelbrot set, which is why the family starts
+at 3. Radius 2 still bounds every orbit that stays (for `|c| ≤ 2`, once
+`|z| > 2`, `|z^d + c| ≥ |z|^d − 2 > |z|`), so the escape test is unchanged. One
+frame — the origin at zoom 1 — holds all three whole sets.
+
+An orbit that escapes is counted with the same smoothing for all five. The
+fraction is how far into the next step the orbit's size says it was: an escaping
+orbit's `log|z|` multiplies by `d` each step, so the smooth count is
+`n + 1 − log_d(log₂|z|)`, which for the Mandelbrot set's `d = 2` is the familiar
+`n + 1 − log₂(log₂|z|)`. A colour scheme then looks alike on each.
 
 ## Performance Optimization
 
