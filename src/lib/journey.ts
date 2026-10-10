@@ -29,6 +29,19 @@ export class Journey {
     return this.entries[this.index] ?? null;
   }
 
+  /**
+   * The entries the visitor has walked, oldest first: the ones up to and
+   * including the step the page is on.
+   *
+   * A step Forward has not taken is not one of them, which is what a walk made
+   * of a journey wants: the places somebody went, in the order they went, and
+   * no place they did not. A copy, so the caller cannot change the journey by
+   * writing to what it is given.
+   */
+  get visited(): readonly string[] {
+    return this.entries.slice(0, this.index + 1);
+  }
+
   get canGoBack(): boolean {
     return this.index > 0;
   }

@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { defaultViewFor } from "../fractalTypes";
-import { copyLinkUrl, readLocationLink } from "../viewQuery";
+import { decodeTourLink } from "../tourLink";
+import { copyLinkUrl, copyTourUrl, readLocationLink } from "../viewQuery";
 import { decodeView, encodeView } from "../viewLink";
 import { viewLinkUpdatesFrom } from "../viewLinkState";
 
 const LINK = "v=1&f=julia&k=Dendrite&x=-0.5&y=0.25&z=400&s=fire&i=auto";
 const OTHER = "v=1&f=tricorn&x=0&y=0&z=1";
+const TOUR = "v=1&t.f=mandelbrot~julia&t.k=~Dendrite&t.z=1~400";
 
 describe("copyLinkUrl", () => {
   it("is the codec's text as a query on the origin and path", () => {
@@ -72,6 +74,39 @@ describe("copyLinkUrl", () => {
   });
 });
 
+describe("copyTourUrl", () => {
+  const stops = [`#${LINK}`, `#${OTHER}`].map(viewLinkUpdatesFrom);
+
+  it("is a walk as a query on the origin and path", () => {
+    const url = copyTourUrl("https://example.com", "/", stops);
+
+    expect(url?.startsWith("https://example.com/?v=1&")).toBe(true);
+    expect(url?.slice("https://example.com/?".length)).toContain("t.f=");
+    expect(
+      decodeTourLink(url?.slice("https://example.com/?".length) ?? ""),
+    ).toHaveLength(2);
+  });
+
+  it("round-trips: the copied query reads back as the walk that was copied", () => {
+    const url = copyTourUrl("http://localhost:3000", "/fractals/", stops);
+    const location = readLocationLink(new URL(url ?? "").search, "");
+    const walk = decodeTourLink(location.fragment);
+
+    // The address a page load makes of it is the hash form of the walk, which
+    // is the form every later write and the hash reader find.
+    expect(location.dropQuery).toBe(true);
+    expect(location.fragment).toBe(`#${url?.slice("http://localhost:3000/fractals/?".length)}`);
+    expect(walk?.map((stop) => stop.fractalType)).toEqual(["julia", "tricorn"]);
+    expect(walk?.[0].variant).toBe("Dendrite");
+    expect(walk?.[1].zoomLevel).toBe(1);
+  });
+
+  it("is no URL for fewer than two stops, which is a view and not a walk", () => {
+    expect(copyTourUrl("https://example.com", "/", [])).toBeNull();
+    expect(copyTourUrl("https://example.com", "/", [stops[0]])).toBeNull();
+  });
+});
+
 describe("readLocationLink", () => {
   it("reads nothing from an address with neither form", () => {
     expect(readLocationLink("", "")).toEqual({
@@ -125,6 +160,22 @@ describe("readLocationLink", () => {
     const location = readLocationLink("?v=1&tour=1", "");
 
     expect(location).toEqual({ fragment: "#v=1&tour=1", dropQuery: true });
+  });
+
+  it("reads a query that names a walk, in the query or in the hash", () => {
+    // A tour link is a link like any other: the page can be sent one, and the
+    // address bar settles on the hash form of it as it does for a view.
+    expect(readLocationLink(`?${TOUR}`, "")).toEqual({
+      fragment: `#${TOUR}`,
+      dropQuery: true,
+    });
+    expect(readLocationLink("", `#${TOUR}`)).toEqual({
+      fragment: `#${TOUR}`,
+      dropQuery: false,
+    });
+    // One stop is a view and has a link of its own, so a one-column query is
+    // not one of these.
+    expect(readLocationLink("?v=1&t.f=julia", "").dropQuery).toBe(false);
   });
 
   it("is not fooled by a version it does not read or a version with nothing in it", () => {

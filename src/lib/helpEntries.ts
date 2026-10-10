@@ -175,6 +175,11 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Copy a link to the view on screen to share: it opens on the same view and previews as that view in a chat. The address bar already follows the view, so it can be bookmarked as it is",
       },
       {
+        keys: "Copy tour link",
+        action:
+          "Copy the places you have just visited, up to the last eight of them, as a walk to share: whoever opens the link sees the first place and is then taken through the rest, about 8 seconds at each, and is carried on wandering from the last one. It needs at least two places, so it stays off until you have been somewhere. Any key, touch or click stops the walk for good",
+      },
+      {
         keys: "Download PNG",
         action:
           "Save the canvas at its full resolution, or pick a Shape and an Export size — 2x, 4x or the largest whole multiple that fits, or a wallpaper shape (Desktop 16:9, Phone 9:19.5, Square 1:1) at one of its own pixel sizes — to draw the same view again off-screen, framed for that shape, and save that, with the size in the file name. The card shows how far along the export is and offers a Cancel button; the picture on screen is untouched",

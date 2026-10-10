@@ -64,7 +64,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, the colour scheme's two own settings among them (`r=1` reversed, `o` the shift), and a decoder that judges every value on its own and leaves out what it cannot read; `linkWithoutColour` drops everything that colours a picture without changing what it is made of
 - **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing (the frame of the fractal the link names for a missing centre or zoom, so a fractal-only link opens on that fractal's own default view rather than the Mandelbrot set's, and the page's opening view for everything else — and so for a link naming no fractal at all), the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
-- **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
+- **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200, and `visited`, the entries walked so far, which a tour link is made of
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **Export size** (`src/lib/exportSize.ts`): The sizes the Download PNG controls offer — the canvas, 2x and 4x, with the largest whole multiple within 12 megapixels standing in for a candidate the cap rules out — the `_2x`/`_4x` an export file is named with, the shared part-before-the-extension rule (`appendToFileName`), and the 250 ms throttle on the button's progress text
 - **Export shape** (`src/lib/exportShape.ts`): The wallpaper shapes the Shape select offers — Screen (4:3), Desktop 16:9, Phone 9:19.5, Square 1:1, with their own pixel sizes — `exportFrame(centerX, centerY, zoom, aspect)`, the region a picture of that shape draws, which contains the screen's 4:3 view rather than cropping it, and the `_16x9_3840x2160` a wallpaper file is named with
@@ -76,8 +76,9 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
 - **Site origin** (`src/lib/siteOrigin.ts`, read per request by `src/app/requestOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `pageMetadata` (`src/lib/pageMetadata.ts`, called by `generateMetadata` in `src/app/layout.tsx` and `src/app/page.tsx`) puts on og:image, twitter:image and og:url
-- **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>`; a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form; `generateMetadata` in the server page turns the search parameters into og:image, the pre-built picture of the nearest place of that view's fractal, or the static card when there is no view; `previewFor` reads a tour link first, so a walk previews as its first stop; see the Version Notes of 2026-10-10 (fr-cr5, fr-d3u, fr-xnl)
+- **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>` and Copy tour link copies a walk the same way (`copyTourUrl`); a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form, a tour link in either counting as a link; `generateMetadata` in the server page turns the search parameters into og:image, the pre-built picture of the nearest place of that view's fractal, or the static card when there is no view; `previewFor` reads a tour link first, so a walk previews as its first stop; see the Version Notes of 2026-10-10 (fr-cr5, fr-d3u, fr-xnl, fr-bo2)
 - **Tour link** (`src/lib/tourLink.ts`): Up to eight views in order in one fragment — one column per codec field (`v=1&t.f=mandelbrot~julia&t.x=…`), each stop written and read by `viewLink`'s own encoder and decoder, so a stop is judged exactly as a single view is; a stop carries no canvas size and no count when its zoom picks one; see the Version Note of 2026-10-10 (fr-d3u)
+- **Tour playlist** (`src/lib/tourPlaylist.ts`): Playing a tour link — the stops still to show and the view on screen (`PlaylistState`), `createPlaylist`, `nextPlaylistStop` (which skips a stop that is the view already up, and answers null when the walk is over so the ordinary tour takes over), `stopPlaylist` (stopping is final), `sameView` (every field but the canvas size) and `playlistStops`, the places a journey would be shared as; the page reads a walk on load, applies its first stop, and hops through the rest with the tour's own crossfade and dwell; see the Version Note of 2026-10-10 (fr-bo2)
 - **Site text** (`src/lib/siteText.ts`): The app's own words about itself — the document title, the description built from `FRACTAL_TYPES` labels, the social card's tagline and title lines, and the card's alt text — so the page's head and `scripts/make-og-card.mjs` read one place; see the Version Note of 2026-10-10 (fr-3y2)
 - **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Math/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
@@ -300,6 +301,138 @@ _Last updated: 2026-10-10_
   how to regenerate, why), its Project Structure (`ogImage.ts`, `public/og/`,
   `make-og-previews.mjs`) and its regenerating paragraphs; the
   `guided-exploration.md` As-built entry; and this note.
+
+### Share a tour: Copy tour link, and opening one plays the walk (2026-10-10)
+
+- fr-bo2. The tour link codec landed in fr-d3u (write, read and preview a walk
+  of up to eight views) with nothing that produced or played one. Both halves
+  are here: a **Copy tour link** button beside Copy link in the Settings
+  drawer's Navigation card, which copies the places just visited as a walk, and
+  a page that reads a tour link, puts its first stop on screen and takes the
+  rest of the stops in order before carrying on as the ordinary tour.
+- **`src/lib/tourPlaylist.ts`** is the new module and the whole of the walk's
+  logic, pure and with no clock of its own, in the shape of `tour.ts`.
+  `PlaylistState` is `{ stops, view }` — the stops still to show, and the view
+  on screen that the next one is judged against; `PlaylistStep` is a stop and
+  the walk after showing it. `createPlaylist(stops, view)` is null for fewer
+  than `MIN_TOUR_STOPS` (two), so a link of one view is not a walk.
+  `nextPlaylistStop(state)` walks forward, **skipping any stop that is the view
+  on screen** — which is how the link's own first stop, already put up by the
+  page, is not shown twice — and answers null when there is nothing left, which
+  is the handover to the wandering tour. `stopPlaylist(state)` throws the
+  remaining stops away, so **stopping is final**: `nextPlaylistStop` of it is
+  null for good. `sameView(a, b)` is the comparison behind both — every field
+  but the canvas size, which is the page's own and not the view's. Nothing is
+  mutated, so a walk asked twice answers the same way.
+- **`playlistStops(fragments, current)`** builds the stops a tour link would
+  name from a journey: the entries walked, oldest first, with the view on screen
+  last (it may not have reached the journey's record yet, and a walk ends where
+  the visitor is), a place visited twice kept once at the later visit, and more
+  than `MAX_TOUR_STOPS` cut to the most recent eight. An entry of `""` — the
+  page opened with no fragment — is the view it opened on, not nothing, because
+  `viewLinkUpdatesFrom("")` is that view.
+- **`journey.ts` gained `get visited()`**: the entries up to and including the
+  step the page is on, as a copy. A step Forward has not been taken is not a
+  place the visitor went, and this is what the button is made of.
+- **`viewQuery.ts` gained `copyTourUrl(origin, pathname, stops)`**, the same
+  origin-and-path query shape `copyLinkUrl` writes (and calling it, so the page
+  still has one `copyLinkUrl(` in it) and null for fewer than two stops. Its
+  `isViewQuery` now also accepts a query `decodeTourLink` can read, which is
+  what makes a `?v=1&t.f=…` load be read as a walk at all: `decodeView` sees
+  none of a tour's `t.`-prefixed columns, so without this the query stayed in
+  the address bar and the page opened on its default view.
+- **The page** (`FractalExplorer.tsx`). `applyViewLink` reads `decodeTourLink`
+  *before* the view codec; for a walk it applies the first stop through the same
+  setters (but **not** the canvas size: a stop carries none, so a walk does not
+  resize the picture), then `createPlaylist(stops, stops[0])` into
+  `playlistRef` — a ref, since only a hop reads it — and asks the clock for a
+  tour through `hashTour()`, the same ask `tour=1` makes. A refused start (a
+  drawer or a field has the user's attention) drops the walk, so nothing waits
+  to be walked by a tour nobody asked for.
+- **A hop** asks the walk first: `nextPlaylistStop`, then `showStop(stop)` —
+  `startCrossfade(target, TOUR_CROSSFADE_MS)` and the stop's fields through the
+  setters, with the target link built from the stop and the page's own canvas.
+  It is nobody's jump, as a hop to a place is not, so the tour's end still
+  counts the one history entry. When the walk runs out the ref is cleared and
+  the handler falls through to `nextTourStop`, so the tour wanders on from the
+  last stop. **The tour's first hop holds the walk's first stop**: an ordinary
+  tour hops at the start, which for a walk would show its first stop for no
+  dwell at all, so the first hop only makes the `writeLeavingView()` the address
+  bar needs and returns, and the dwell runs from there.
+- **Stopping drops the walk**, at the two places the page sees a tour end:
+  `giveUpWalk()` calls `stopPlaylist` on the ref, and it is called from the
+  input listener (when the clock is `playing`, before `activity()`) and from the
+  `hashchange` listener (after `tourMode.stop()`, before `applyViewLink`, since
+  the fragment arriving may name a walk of its own). Those are every way a tour
+  ends: input, a change of fragment, and a dialog opening — and a dialog is
+  opened by input, which is the first. Doing it at stop sites rather than
+  following `tourState` is what keeps a walk put up *while* a tour is running
+  out of being given up with it: a link applied mid-tour sets the ref and then
+  asks for a tour, and a state effect would run after both and throw the new
+  walk away. It also keeps the ref out of `TourMode`'s `onChange` (passing a ref
+  into that constructor is a render-time ref read, which `react-hooks/refs`
+  refuses). The old claim that the engine's own stops are the page's to catch
+  does not hold: `tabHidden` suspends a hop rather than ending a tour.
+- **The button** is beside Copy link and is disabled with `COPY_TOUR_HINT`
+  ("Visit a couple of places first") under it until there are two stops to walk.
+  `tourStops` is `playlistStops(journey.visited, viewLinkUpdatesFrom('#' +
+  currentLink))` in a `useMemo` on `[journey, currentLink]`: the journey is a
+  plain object no render follows, but nothing that changes these stops changes
+  without the view moving too, so the view is the dependency that keeps them
+  current. The clipboard path is one function, `copyUrl(url)`, which both
+  buttons go through — so the manual fallback field and the "Link copied"
+  confirmation are Copy link's, and there is still one `clipboard.writeText` in
+  the page. Copy tour link does **not** write the address bar (the bar names the
+  view on screen; this link names several).
+- **Not changed**: the tour link codec (`tourLink.ts`), the single-view codec,
+  `#tour` and `tour=1`, `TOUR_IDLE_START_MS` and the idle start, `/api/og`, and
+  `previewFor` — which already previews a tour link's first stop (fr-d3u), so a
+  copied walk's card is right with no change here.
+- **Verified in headless Chrome** (CDP against the standalone production build
+  on port 3100, real `Input.dispatchMouseEvent`, 10 checks all passing): the
+  button is in the drawer, off on a fresh page with "Visit a couple of places
+  first" under it and on after two fractal switches; it copied
+  `/?v=1&t.f=mandelbrot~julia~newton&t.k=~Classic~&t.x=-0.75~0~0&t.y=0~0~0&t.z=1~3~8&t.s=classic~classic~rainbow`
+  — the opening view, the Julia place and the Newton place, oldest first — and
+  said "Link copied". Opening that URL in a new tab settled the address bar on
+  the first stop's own hash (`#v=1&f=mandelbrot&x=-0.75&y=0&z=1&s=classic&i=auto&w=800&h=600`),
+  dropped the query, and played the walk: sampling the canvas every 500 ms, it
+  changed at 0.5, 9.1 and 17.2 s — one stop per 8 s dwell plus the 1.5 s
+  crossfade — and then at 25.8 and 33.8 s, which is the ordinary tour wandering
+  on from the last stop. A mouse move stopped it and the picture held identical
+  over the next 6 s, with the "Tour playing" line gone, and the hash form
+  `#v=1&t.f=mandelbrot~julia&...` played the same way. The head a crawler gets
+  for a copied URL is the walk's first stop: `og:title` "Tour of 3 views,
+  starting at Mandelbrot set, 1x", and `og:image` that stop's nearest place's
+  pre-built picture (`/og/mandelbrot-whole.jpg` for the copied walk above) —
+  `previewFor`'s tour branch, which fr-xnl's landing gave a picture to with no
+  change here. The check was re-run against the rebased tree, since fr-xnl
+  touches the same head.
+- Tests: the new `src/lib/__tests__/tourPlaylist.test.ts` (sameView over the
+  canvas and over two places; `createPlaylist` refusing none and one; the stops
+  in order with the walk spent as they are shown; the link's own first stop not
+  shown twice; a stop that is the view on screen skipped; null when it has run
+  out; the state not mutated and the answer deterministic; stopping final and
+  the older walk untouched; `playlistStops` in order with the view last, the
+  entry a page opened with, a repeat kept at the later visit, the view not
+  counted twice, two canvas sizes being one place, the most recent eight and one
+  stop for a journey that has not moved), the new cases in `journey.test.ts`
+  (`visited` in order, without the steps ahead, empty, and a copy), the new
+  cases in `viewQuery.test.ts` (`copyTourUrl`'s shape and round trip, null for
+  fewer than two stops; a tour link read from the query and from the hash, and a
+  one-column query not being one), and the new
+  `src/__tests__/tour-link-panel.test.ts` (sources: the button beside Copy link
+  and nowhere else, disabled with its reason, the stops from `journey.visited`
+  and the view on screen, the shared clipboard path with one `writeText`, no
+  address-bar write, `decodeTourLink` read before the view codec, the canvas
+  kept, the walk created and the refused start, the hop through
+  `nextPlaylistStop`/`showStop` and the handover to `nextTourStop`, the first
+  stop held, the crossfade and the no-jump rule, `giveUpWalk` called from the
+  input listener before `activity()` and from the `hashchange` listener before
+  `applyViewLink`, and the Help and README rows). `make gate` is green.
+- Docs: the README's Tour and Shareable Links bullets, its Project Structure
+  (`tourPlaylist.ts`, `viewQuery.ts`) and its Link preview paragraph; a "Copy
+  tour link" row in the Help overlay; and this note.
 
 ### A link that names a fractal and no centre opens on that fractal's frame (2026-10-10)
 

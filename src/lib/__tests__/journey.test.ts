@@ -143,6 +143,41 @@ describe("Journey", () => {
     });
   });
 
+  describe("visited", () => {
+    it("is the entries walked, oldest first, with the one the page is on", () => {
+      const journey = journeyOf("#a", "#b", "#c");
+
+      expect(journey.visited).toEqual(["#a", "#b", "#c"]);
+
+      journey.back();
+
+      expect(journey.visited).toEqual(["#a", "#b"]);
+    });
+
+    it("leaves out a step Forward has not taken", () => {
+      const journey = journeyOf("#a", "#b", "#c");
+
+      journey.back();
+      journey.back();
+
+      expect(journey.visited).toEqual(["#a"]);
+    });
+
+    it("is empty before there is an entry at all", () => {
+      expect(new Journey().visited).toEqual([]);
+    });
+
+    it("is a copy, so a caller cannot change the journey through it", () => {
+      const journey = journeyOf("#a", "#b");
+      const visited = journey.visited as string[];
+
+      visited.push("#c");
+
+      expect(journey.length).toBe(2);
+      expect(journey.visited).toEqual(["#a", "#b"]);
+    });
+  });
+
   describe("arrive", () => {
     it("ignores the fragment already current", () => {
       const journey = journeyOf("#a", "#b");
