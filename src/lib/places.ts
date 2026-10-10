@@ -569,15 +569,26 @@ export function placesForFractal(fractal: string): Place[] {
  *   in a field of one colour, which is what the constant chips are for.
  * - Burning Ship: the Armada. Masts standing on the hull's silhouette, the one
  *   view that reads as a ship; the closer views are textures.
- * - Tricorn: the star on an antenna. A three-pointed star with its filaments
- *   in full colour, the set's own three-fold shape in small; the whole-set
- *   views are a thin figure in a flat field and the bulbs are Mandelbrot-like.
+ * - Tricorn: along the left arm (fr-6oi). The star on an antenna (fr-vpv's
+ *   first pick) is a flat bright-green field with one thin black arm in the
+ *   classic scheme, so a click on Tricorn led with an empty picture. All nine
+ *   places were drawn in their own schemes, the whole set and the star also in
+ *   rainbow, and the arm's bulb with its antennae in rainbow was the one
+ *   that shows form and colour together: a black bulb, a chain of smaller ones
+ *   and yellow-green filaments on red, only 13% one colour at 64x48 (the star:
+ *   29%). The others lost: the whole set is the opening view; two bulbs, the
+ *   left-arm bulb and the upper-arm bulb are black blobs on deep blue; the
+ *   frayed edge, the body meeting an arm and the small Tricorn are fields of
+ *   one colour or a texture with no outline.
+ *
+ * The other three were redrawn and kept: each is at most 21% one colour (the
+ * guard in `places.test.ts` holds every one under 60%).
  */
 export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   mandelbrot: "mandelbrot-seahorse-valley",
   julia: "julia-classic-spirals",
   "burning-ship": "burning-ship-armada",
-  tricorn: "tricorn-star",
+  tricorn: "tricorn-along-the-arm",
 };
 
 /**

@@ -6,7 +6,11 @@ import {
   defaultViewFor,
   resolveFractalKind,
 } from "../fractalTypes";
-import { isBlankImage } from "../blankView";
+import {
+  FEATURED_MAX_UNIFORM_SHARE,
+  isBlankImage,
+  nearUniformShare,
+} from "../blankView";
 import { JULIA_CONSTANTS, parseJuliaConstant } from "../julia";
 import {
   MAX_ZOOM,
@@ -616,6 +620,12 @@ describe("featuredPlace", () => {
       expect(
         differingFromCorner(pixels(), WIDTH, HEIGHT),
       ).toBeGreaterThanOrEqual(FEATURED_DETAIL_SHARE);
+      // And not a flat field: the one colour may hold at most 60% of it, so a
+      // gradient or a thin shape in an empty field fails by place id.
+      expect(
+        nearUniformShare(pixels(), WIDTH, HEIGHT),
+        `${featured.id} is ${Math.round(nearUniformShare(pixels(), WIDTH, HEIGHT) * 100)}% one colour`,
+      ).toBeLessThanOrEqual(FEATURED_MAX_UNIFORM_SHARE);
     });
   });
 

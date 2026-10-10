@@ -179,6 +179,24 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-10_
 
+### Featured places are held to a flat-field guard (2026-10-10)
+
+- The Tricorn button landed on `tricorn-star`, which in the classic scheme is a
+  flat bright-green field with one thin black arm. Every place was drawn on a
+  contact sheet (`node scripts/make-og-card.mjs --sheet out.png --places
+  id[:scheme],...`) and the Tricorn's featured place is now
+  `tricorn-along-the-arm` (rainbow): a black bulb, a chain of smaller ones and
+  filaments on red. Seahorse Valley, the Classic spirals and the armada were
+  redrawn and kept. `FEATURED_PLACE_IDS`'s comment records what was compared.
+- `nearUniformShare(pixels, width, height)` in `blankView.ts` is the share of
+  the 32x24 sample grid within `BLANK_COLOR_DISTANCE` of the commonest sample
+  (`isBlankImage` is that share at least 98%). `places.test.ts` fails a
+  featured place above `FEATURED_MAX_UNIFORM_SHARE` (0.6), naming its id. The
+  measure counts one exact colour as the base, so a smooth gradient field can
+  score lower than it looks (`tricorn-star` scored 29%); it catches flat
+  fields and big black or empty areas, and the contact sheet is still the
+  judge of a good picture.
+
 ### Tricorn: a fourth fractal (2026-10-10)
 
 - The Tricorn (the Mandelbar set), owner-approved 2026-10-10 ("add more
@@ -228,9 +246,8 @@ _Last updated: 2026-10-10_
   body meets an arm, a small Tricorn (a baby copy at about -1.768 on the real
   axis), a bulb on the upper arm, and a star on an antenna. The set repeats a
   feature on each of its three arms, so some frames run diagonally. The
-  featured place is `tricorn-star`, a three-pointed star with filaments in the
-  classic scheme (the comment on `FEATURED_PLACE_IDS` says why it beat the bulbs
-  and the whole-set frames). A candidate drawn far out on the real axis (a speck
+  featured place was first `tricorn-star`; it is `tricorn-along-the-arm` now
+  (see the featured-places note above). A candidate drawn far out on the real axis (a speck
   at -1.94, zoom 200) was dropped: too dark to read even at the thumbnail size.
   Thumbnails, Surprise me, Tour and Auto-wander hops pick the new places up with
   no further code; `tour.test.ts` now expects four fractals.
