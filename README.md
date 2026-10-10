@@ -24,7 +24,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 - **Fractal Types**: Draw the Mandelbrot set, the Burning Ship or a Julia set, and pick the Julia constant from four named ones or choose Custom and type your own Real and Imaginary parts (each from -2 to 2, written as plain decimals like `-0.8` and `0.156`); an entry that is empty, not a number or out of range shows a message under the boxes and leaves the picture as it was, and a view link carries the point as `k=custom:<re>,<im>`
 - **Real-time Rendering**: Smooth fractal generation with optimized performance
-- **Zoom Controls**: Zoom with the mouse wheel, the Zoom In/Out buttons and the Zoom Level slider, which is logarithmic — equal slider steps are equal zoom ratios from 1x to 10000x
+- **Zoom Controls**: Zoom with the mouse wheel, a two-finger pinch on a touch screen, the Zoom In/Out buttons and the Zoom Level slider, which is logarithmic — equal slider steps are equal zoom ratios from 1x to 10000x
 - **Pan Navigation**: Click and drag to explore different regions, or drag with one finger on a touch screen
 - **Keyboard Navigation**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
 - **Help Overlay**: A Help button in the top bar, or the `?` key from anywhere on the page, opens a dialog listing every way to drive the explorer — mouse and touch, keyboard, nearby places and Surprise me, Auto-wander, and the views and links
@@ -181,7 +181,7 @@ dependencies and needs nothing else.
 - **The Page**: The picture fills the window, with a slim bar over it holding the title, Surprise me, Back, Forward, Help and Settings. The bar fades after two seconds without a pointer move, key press or touch and comes back on any of them, and it stays up while Settings is open or one of its buttons has keyboard focus. Settings opens a drawer down the right-hand side — a bottom sheet on a narrow screen — holding every control the page has: Presets, Navigation, Auto-wander, Coordinates, Rendering Parameters, Canvas Resolution, Manual Coordinates, saved views and Download PNG. Escape, its Close button and a click outside it close it, and opening it does not interrupt a render
 - **Nearby strip**: Along the bottom of the picture, "Nearby, worth a look" shows up to six places near the view for the fractal you are on, each a small picture in your current colour scheme. Hover or Tab to a tile to read its name, and click it (or press Enter) to fly there: the old picture fades into the new one over about 0.4 s (no fade if your system asks for reduced motion), the place is drawn at the iteration count Auto picks for its zoom and in its own colours, and the move adds one history entry. More swaps in the next six, wrapping back to the first. The suggestions are worked out again once the picture has been drawn after a jump — a preset, applying coordinates, picking another fractal or Julia constant, a tile, a pasted link, Back or Forward — and not while you drag, wheel or key about, so the strip does not shuffle under your pointer. The thumbnails wait while the main picture renders. Like the top bar the strip fades after two seconds without input, but it stays up while one of its tiles has keyboard focus
 - **Back and Forward**: The top bar's Back and Forward buttons are the browser's own, moving along the places you jumped to; each is disabled when there is nothing in that direction, which is always so on a freshly opened page until the first jump
-- **Zoom In/Out**: Use the mouse wheel, the Zoom In/Out buttons, or the Zoom Level slider
+- **Zoom In/Out**: Use the mouse wheel, the Zoom In/Out buttons, or the Zoom Level slider. On a touch screen, pinch with two fingers: moving them apart zooms in and bringing them together zooms out, about the point between them, within the same 1x to 10000x range. Moving both fingers together pans as well, and lifting one finger carries on as a one-finger pan. A pinch, like a wheel or a drag, rewrites the current history entry and adds none
 - **Pan**: Click and drag to move around the fractal, or drag with one finger on a touch screen
 - **Keyboard**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
 - **Reset View**: Return to the default view with the Reset View button
@@ -251,6 +251,7 @@ dependencies and needs nothing else.
 │   │   ├── mandelbrot.ts           # Mandelbrot iteration and coordinates
 │   │   ├── manualBounds.ts         # Checks the Manual Coordinates boxes
 │   │   ├── nearbyStrip.ts          # When the Nearby suggestions refresh, which show, the crossfade time
+│   │   ├── pinch.ts                # Pinch helpers: finger distance, midpoint, scale about a point
 │   │   ├── placeThumbnails.ts      # Off-screen place pictures: LRU cache, queue, cancel and pause
 │   │   ├── places.ts               # Catalogue of named places, and suggest() for the ones near a view
 │   │   ├── presets.ts              # Built-in and saved presets

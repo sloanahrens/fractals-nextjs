@@ -48,6 +48,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         keys: "One-finger drag",
         action: "Pan the view on a touch screen",
       },
+      {
+        keys: "Two-finger pinch",
+        action:
+          "Zoom in and out about the point between your fingers on a touch screen; move both fingers together to pan as well",
+      },
     ],
   },
   {

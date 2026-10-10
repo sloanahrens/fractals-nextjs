@@ -259,18 +259,191 @@ describe("attachCanvasNavigation", () => {
     expect(views[0].centerY).toBeCloseTo(-(150 / 600) * 3, 12);
   });
 
-  it("leaves a multi-touch gesture to the browser", () => {
+  it("zooms in as two fingers move apart, about their midpoint", () => {
     const { canvas, views } = createHarness();
 
     canvas.dispatch("touchstart", {
-      touches: [touchAt(400, 300), touchAt(500, 300)],
+      touches: [touchAt(300, 300), touchAt(500, 300)],
     });
     const { prevented } = canvas.dispatch("touchmove", {
-      touches: [touchAt(400, 450), touchAt(500, 350)],
+      touches: [touchAt(200, 300), touchAt(600, 300)],
+    });
+
+    // The page does not zoom or scroll under the fingers.
+    expect(prevented).toBe(true);
+    expect(views).toHaveLength(1);
+    expect(views[0].scale).toBeCloseTo(2, 12);
+    expect(views[0].centerX).toBeCloseTo(-0.75, 12);
+    expect(views[0].centerY).toBeCloseTo(0, 12);
+  });
+
+  it("zooms out as two fingers close, within the zoom limits", () => {
+    const start = calculateZoomBounds(-0.75, 0, 8);
+    const { canvas, views } = createHarness(FULL_SIZE_RECT, start, pageZoom);
+
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(200, 300), touchAt(600, 300)],
+    });
+    canvas.dispatch("touchmove", {
+      touches: [touchAt(350, 300), touchAt(450, 300)],
+    });
+    expect(views[0].scale).toBeCloseTo(2, 12);
+
+    // Closing the fingers past the widest view stops at the widest view.
+    canvas.dispatch("touchmove", {
+      touches: [touchAt(399, 300), touchAt(401, 300)],
+    });
+    expect(views[1].scale).toBeCloseTo(1, 12);
+  });
+
+  it("keeps the picture under the midpoint of the fingers", () => {
+    const start = calculateZoomBounds(-0.7453, 0.1127, 20);
+    const { canvas, current } = createHarness(FULL_SIZE_RECT, start, pageZoom);
+    const at = (x: number, y: number) => {
+      const bounds = current();
+      return {
+        real:
+          bounds.minReal + (x / CANVAS_WIDTH) * (bounds.maxReal - bounds.minReal),
+        imaginary:
+          bounds.minImaginary +
+          (y / CANVAS_HEIGHT) * (bounds.maxImaginary - bounds.minImaginary),
+      };
+    };
+
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(500, 200), touchAt(700, 400)],
+    });
+    // The point under the midpoint (600, 300) is the one to follow.
+    const anchored = at(600, 300);
+    canvas.dispatch("touchmove", {
+      touches: [touchAt(450, 150), touchAt(750, 450)],
+    });
+
+    const after = at(600, 300);
+    expect(after.real).toBeCloseTo(anchored.real, 12);
+    expect(after.imaginary).toBeCloseTo(anchored.imaginary, 12);
+  });
+
+  it("also pans as the pair of fingers travels together", () => {
+    const { canvas, views } = createHarness();
+
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(300, 300), touchAt(500, 300)],
+    });
+    canvas.dispatch("touchmove", {
+      touches: [touchAt(400, 300), touchAt(600, 300)],
+    });
+
+    expect(views[0].scale).toBeCloseTo(1, 12);
+    expect(views[0].centerX).toBeCloseTo(-0.75 - (100 / 800) * 4, 12);
+  });
+
+  it("reports a pinch as one gesture and nothing before its fingers are up", () => {
+    const { canvas, gestures } = createHarness();
+
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(300, 300), touchAt(500, 300)],
+    });
+    canvas.dispatch("touchmove", {
+      touches: [touchAt(250, 300), touchAt(550, 300)],
+    });
+    canvas.dispatch("touchmove", {
+      touches: [touchAt(200, 300), touchAt(600, 300)],
+    });
+    expect(gestures).toEqual(["start"]);
+
+    canvas.dispatch("touchend", { touches: [] });
+    expect(gestures).toEqual(["start", "end"]);
+  });
+
+  it("keeps one gesture when a second finger lands on a pan", () => {
+    const { canvas, gestures } = createHarness();
+
+    canvas.dispatch("touchstart", { touches: [touchAt(300, 300)] });
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(300, 300), touchAt(500, 300)],
+    });
+    canvas.dispatch("touchend", { touches: [] });
+
+    expect(gestures).toEqual(["start", "end"]);
+  });
+
+  it("hands over to a pan when one finger of a pinch lifts", () => {
+    const { canvas, gestures, views } = createHarness();
+
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(300, 300), touchAt(500, 300)],
+    });
+    canvas.dispatch("touchmove", {
+      touches: [touchAt(200, 300), touchAt(600, 300)],
+    });
+    const zoomed = views[views.length - 1];
+
+    // One finger lifts; the one that stays is at (200, 300).
+    canvas.dispatch("touchend", { touches: [touchAt(200, 300)] });
+    // The gesture is still going: only the last finger ends it.
+    expect(gestures).toEqual(["start"]);
+
+    const { prevented } = canvas.dispatch("touchmove", {
+      touches: [touchAt(200, 300)],
+    });
+    const still = views[views.length - 1];
+    expect(prevented).toBe(true);
+    // No jump: the finger has not moved, so the view is where the pinch left it.
+    expect(still.centerX).toBeCloseTo(zoomed.centerX, 12);
+    expect(still.centerY).toBeCloseTo(zoomed.centerY, 12);
+    expect(still.scale).toBeCloseTo(zoomed.scale, 12);
+
+    // Moving it pans, at the zoom the pinch reached.
+    canvas.dispatch("touchmove", { touches: [touchAt(300, 300)] });
+    const panned = views[views.length - 1];
+    expect(panned.scale).toBeCloseTo(zoomed.scale, 12);
+    expect(panned.centerX).toBeCloseTo(
+      zoomed.centerX - (100 / 800) * (4 / zoomed.scale),
+      12,
+    );
+
+    canvas.dispatch("touchend", { touches: [] });
+    expect(gestures).toEqual(["start", "end"]);
+  });
+
+  it("ends the gesture once when a pinch is cancelled", () => {
+    const { canvas, gestures, manager } = createHarness();
+
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(300, 300), touchAt(500, 300)],
+    });
+    // A cancel can still list fingers; none of them is ours any more.
+    canvas.dispatch("touchcancel", { touches: [touchAt(300, 300)] });
+    canvas.dispatch("touchend", { touches: [] });
+
+    expect(gestures).toEqual(["start", "end"]);
+    expect(manager.isPinching()).toBe(false);
+    expect(manager.isPanning()).toBe(false);
+  });
+
+  it("starts a new gesture for a touch after the last one ended", () => {
+    const { canvas, gestures } = createHarness();
+
+    canvas.dispatch("touchstart", {
+      touches: [touchAt(300, 300), touchAt(500, 300)],
+    });
+    canvas.dispatch("touchend", { touches: [] });
+    canvas.dispatch("touchstart", { touches: [touchAt(400, 300)] });
+    canvas.dispatch("touchend", { touches: [] });
+
+    expect(gestures).toEqual(["start", "end", "start", "end"]);
+  });
+
+  it("does not take a one-finger move for a reason to block the page", () => {
+    const { canvas } = createHarness();
+
+    // One finger with no touch behind it is not ours, so nothing is prevented.
+    const { prevented } = canvas.dispatch("touchmove", {
+      touches: [touchAt(400, 300)],
     });
 
     expect(prevented).toBe(false);
-    expect(views).toHaveLength(0);
   });
 
   it("listens for the two gestures it has to cancel as non-passive", () => {
@@ -339,17 +512,6 @@ describe("attachCanvasNavigation", () => {
     canvas.dispatch("touchend", { touches: [] });
 
     expect(gestures).toEqual(["start", "end"]);
-  });
-
-  it("leaves a multi-touch gesture out of the reporting", () => {
-    const { canvas, gestures } = createHarness();
-
-    canvas.dispatch("touchstart", {
-      touches: [touchAt(400, 300), touchAt(500, 300)],
-    });
-    canvas.dispatch("touchend", { touches: [] });
-
-    expect(gestures).toEqual([]);
   });
 
   describe("wheel", () => {

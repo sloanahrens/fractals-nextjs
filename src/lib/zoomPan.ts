@@ -4,6 +4,19 @@ import {
   calculateZoomBounds,
   boundsToView,
 } from "./mandelbrot";
+import {
+  PixelPoint,
+  pinchFactor,
+  scaleAboutPoint,
+  touchDistance,
+  touchMidpoint,
+} from "./pinch";
+
+/** Where the two fingers of a pinch were at its last step, in canvas pixels. */
+interface PinchState {
+  distance: number;
+  midpoint: PixelPoint;
+}
 
 /**
  * Zoom and pan manager for fractal navigation
@@ -16,6 +29,7 @@ import {
 export class ZoomPanManager {
   private zoomState: ZoomState;
   private panState: PanState;
+  private pinchState: PinchState | null = null;
   private canvasWidth: number;
   private canvasHeight: number;
 
@@ -226,7 +240,32 @@ export class ZoomPanManager {
   }
 
   /**
+   * Read the first two touches as a pinch baseline
+   *
+   * A third finger is not part of the gesture: the pinch is the first two.
+   */
+  private measurePinch(
+    touches: TouchList,
+    target: EventTarget | null,
+  ): PinchState {
+    const first = this.pixelFrom(touches[0].clientX, touches[0].clientY, target);
+    const second = this.pixelFrom(
+      touches[1].clientX,
+      touches[1].clientY,
+      target,
+    );
+
+    return {
+      distance: touchDistance(first, second),
+      midpoint: touchMidpoint(first, second),
+    };
+  }
+
+  /**
    * Handle touch events for mobile support
+   *
+   * One finger pans. A second finger lands and the gesture becomes a pinch;
+   * the pan it replaces is dropped, so the two never move the view at once.
    */
   handleTouchStart(event: TouchEvent): void {
     if (event.touches.length === 1) {
@@ -234,6 +273,9 @@ export class ZoomPanManager {
       const pixel = this.pixelFrom(touch.clientX, touch.clientY, event.target);
 
       this.startPan(pixel.x, pixel.y);
+    } else if (event.touches.length >= 2) {
+      this.endPan();
+      this.pinchState = this.measurePinch(event.touches, event.target);
     }
   }
 
@@ -241,6 +283,32 @@ export class ZoomPanManager {
     event: TouchEvent,
     currentBounds: FractalBounds,
   ): FractalBounds | null {
+    if (event.touches.length >= 2) {
+      const next = this.measurePinch(event.touches, event.target);
+      const previous = this.pinchState;
+      this.pinchState = next;
+
+      // A pinch the listener missed the start of (the canvas was attached with
+      // fingers already down) takes this step as its baseline rather than
+      // jumping by whatever distance it finds.
+      if (!previous) return null;
+
+      // Scale by how much the distance changed, about the point between the
+      // fingers, and carry the view along with that point: the part of the
+      // picture under the midpoint stays under the midpoint.
+      const bounds = scaleAboutPoint(
+        currentBounds,
+        previous.midpoint,
+        next.midpoint,
+        pinchFactor(previous.distance, next.distance),
+        this.canvasWidth,
+        this.canvasHeight,
+      );
+      this.zoomState = boundsToView(bounds);
+
+      return bounds;
+    }
+
     if (event.touches.length === 1 && this.panState.isDragging) {
       event.preventDefault();
       const touch = event.touches[0];
@@ -251,8 +319,42 @@ export class ZoomPanManager {
     return null;
   }
 
-  handleTouchEnd(): void {
+  /**
+   * A finger left the screen, or the whole gesture was cancelled
+   * @param event - The touchend. With fingers still down it says which gesture
+   * carries on; without it every gesture is over.
+   */
+  handleTouchEnd(event?: TouchEvent): void {
+    const remaining = event?.touches?.length ?? 0;
+    const wasPinching = this.pinchState !== null;
+
+    if (event && wasPinching && remaining >= 2) {
+      // Three fingers down and one lifted: still a pinch, but of a different
+      // pair, so measure it afresh or the next step would jump.
+      this.pinchState = this.measurePinch(event.touches, event.target);
+      return;
+    }
+
+    this.pinchState = null;
+
+    if (event && wasPinching && remaining === 1) {
+      // One finger of a pinch lifted: the other carries on as a pan from where
+      // it is, so the view does not move until that finger does.
+      const touch = event.touches[0];
+      const pixel = this.pixelFrom(touch.clientX, touch.clientY, event.target);
+
+      this.startPan(pixel.x, pixel.y);
+      return;
+    }
+
     this.endPan();
+  }
+
+  /**
+   * Check if currently pinching
+   */
+  isPinching(): boolean {
+    return this.pinchState !== null;
   }
 
   /**
@@ -275,6 +377,7 @@ export class ZoomPanManager {
    */
   reset(defaultBounds: FractalBounds): void {
     this.zoomState = boundsToView(defaultBounds);
+    this.pinchState = null;
     this.endPan();
   }
 

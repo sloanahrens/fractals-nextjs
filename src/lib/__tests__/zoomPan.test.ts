@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateZoomBounds, getDefaultBounds } from "../mandelbrot";
+import {
+  MIN_ZOOM,
+  boundsToView,
+  calculateZoomBounds,
+  getDefaultBounds,
+} from "../mandelbrot";
 import { ZoomPanManager } from "../zoomPan";
 
 const BOUNDS = getDefaultBounds();
@@ -281,26 +286,267 @@ describe("pointer events on a canvas CSS has resized", () => {
     expect(panned!.minImaginary).toBeCloseTo(-1.5 - (300 / 600) * 3, 12);
   });
 
-  it("ignores a two-finger move", () => {
-    const manager = createManager();
-    const target = fakeTarget();
+});
 
-    manager.handleTouchStart({
-      touches: [{ clientX: 10, clientY: 20 }],
-      target,
-    } as unknown as TouchEvent);
-    const panned = manager.handleTouchMove(
-      {
-        touches: [
-          { clientX: 10, clientY: 170 },
-          { clientX: 20, clientY: 170 },
-        ],
-        target,
-        preventDefault: () => {},
-      } as unknown as TouchEvent,
+describe("pinch", () => {
+  // The box is the canvas at half size offset by (10, 20): client (x, y) is
+  // canvas pixel (2(x - 10), 2(y - 20)).
+  const touchEvent = (
+    touches: Array<[number, number]>,
+    extra: Record<string, unknown> = {},
+  ) =>
+    ({
+      touches: touches.map(([clientX, clientY]) => ({ clientX, clientY })),
+      target: fakeTarget(),
+      preventDefault: () => {},
+      ...extra,
+    }) as unknown as TouchEvent;
+
+  // Two fingers 100 CSS px (200 canvas px) apart about the box's middle,
+  // client (210, 170), which is the canvas's middle.
+  const START: Array<[number, number]> = [
+    [160, 170],
+    [260, 170],
+  ];
+
+  it("starts a pinch on a second finger and drops the pan it replaces", () => {
+    const manager = createManager();
+
+    manager.handleTouchStart(touchEvent([[160, 170]]));
+    expect(manager.isPanning()).toBe(true);
+    expect(manager.isPinching()).toBe(false);
+
+    manager.handleTouchStart(touchEvent(START));
+
+    expect(manager.isPinching()).toBe(true);
+    expect(manager.isPanning()).toBe(false);
+  });
+
+  it("starts a pinch from two fingers that land together", () => {
+    const manager = createManager();
+
+    manager.handleTouchStart(touchEvent(START));
+
+    expect(manager.isPinching()).toBe(true);
+    expect(manager.isPanning()).toBe(false);
+  });
+
+  it("zooms in as the fingers move apart, about their midpoint", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+
+    const zoomed = manager.handleTouchMove(
+      touchEvent([
+        [110, 170],
+        [310, 170],
+      ]),
       BOUNDS,
     );
 
-    expect(panned).toBeNull();
+    // The gap doubled, the midpoint did not move: zoom 2 about the centre.
+    expect(zoomed).not.toBeNull();
+    expect(boundsToView(zoomed!).scale).toBeCloseTo(2, 12);
+    expect((zoomed!.minReal + zoomed!.maxReal) / 2).toBeCloseTo(-0.75, 12);
+    expect((zoomed!.minImaginary + zoomed!.maxImaginary) / 2).toBeCloseTo(0, 12);
+    expect(manager.getZoomState().scale).toBeCloseTo(2, 12);
+  });
+
+  it("zooms out as the fingers close", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+
+    const zoomed = manager.handleTouchMove(
+      touchEvent([
+        [185, 170],
+        [235, 170],
+      ]),
+      DEEP_BOUNDS,
+    );
+
+    expect(boundsToView(zoomed!).scale).toBeCloseTo(50, 9);
+  });
+
+  it("keeps the picture under the midpoint as the fingers travel", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+
+    // Same gap, both fingers 50 CSS px (100 canvas px) to the right.
+    const panned = manager.handleTouchMove(
+      touchEvent([
+        [210, 170],
+        [310, 170],
+      ]),
+      BOUNDS,
+    );
+
+    expect(boundsToView(panned!).scale).toBeCloseTo(1, 12);
+    expect(panned!.minReal).toBeCloseTo(-2.75 - (100 / 800) * 4, 12);
+  });
+
+  it("measures each step from the one before, not from the start", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+
+    const first = manager.handleTouchMove(
+      touchEvent([
+        [135, 170],
+        [285, 170],
+      ]),
+      BOUNDS,
+    );
+    const second = manager.handleTouchMove(
+      touchEvent([
+        [110, 170],
+        [310, 170],
+      ]),
+      first!,
+    );
+
+    // 100 -> 150 -> 200 CSS px: 1.5 then 4/3, which compound to 2.
+    expect(boundsToView(first!).scale).toBeCloseTo(1.5, 12);
+    expect(boundsToView(second!).scale).toBeCloseTo(2, 12);
+  });
+
+  it("stays at the zoom limits while the fingers keep going", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+
+    const out = manager.handleTouchMove(
+      touchEvent([
+        [195, 170],
+        [225, 170],
+      ]),
+      BOUNDS,
+    );
+
+    expect(boundsToView(out!).scale).toBeCloseTo(MIN_ZOOM, 12);
+  });
+
+  it("does not move the view for fingers that sit on one point", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+
+    const together = manager.handleTouchMove(
+      touchEvent([
+        [210, 170],
+        [210, 170],
+      ]),
+      DEEP_BOUNDS,
+    );
+    // A zero gap asks for no zoom, and the next step starts over from it.
+    expect(boundsToView(together!).scale).toBeCloseTo(100, 9);
+    expect(Number.isFinite(together!.minReal)).toBe(true);
+
+    const apart = manager.handleTouchMove(
+      touchEvent([
+        [160, 170],
+        [260, 170],
+      ]),
+      together!,
+    );
+    expect(boundsToView(apart!).scale).toBeCloseTo(100, 9);
+  });
+
+  it("takes a move with no start as its baseline instead of jumping", () => {
+    const manager = createManager();
+
+    const first = manager.handleTouchMove(touchEvent(START), BOUNDS);
+    expect(first).toBeNull();
+
+    const second = manager.handleTouchMove(
+      touchEvent([
+        [110, 170],
+        [310, 170],
+      ]),
+      BOUNDS,
+    );
+    expect(boundsToView(second!).scale).toBeCloseTo(2, 12);
+  });
+
+  it("hands over to a pan from the finger that stays, without a jump", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+    const zoomed = manager.handleTouchMove(
+      touchEvent([
+        [110, 170],
+        [310, 170],
+      ]),
+      BOUNDS,
+    )!;
+
+    // The right-hand finger lifts; the left one is still down at (110, 170).
+    manager.handleTouchEnd(touchEvent([[110, 170]]));
+
+    expect(manager.isPinching()).toBe(false);
+    expect(manager.isPanning()).toBe(true);
+
+    // It has not moved, so neither has the view.
+    const still = manager.handleTouchMove(touchEvent([[110, 170]]), zoomed);
+    expect(still!.minReal).toBeCloseTo(zoomed.minReal, 12);
+    expect(still!.maxReal).toBeCloseTo(zoomed.maxReal, 12);
+
+    // And when it does move it pans, at the zoom the pinch left.
+    const panned = manager.handleTouchMove(touchEvent([[160, 170]]), zoomed);
+    expect(boundsToView(panned!).scale).toBeCloseTo(2, 12);
+    expect(panned!.minReal).toBeCloseTo(
+      zoomed.minReal - (100 / 800) * (zoomed.maxReal - zoomed.minReal),
+      12,
+    );
+  });
+
+  it("measures a fresh pair when one of three fingers lifts", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+    manager.handleTouchEnd(
+      touchEvent([
+        [310, 170],
+        [110, 170],
+      ]),
+    );
+
+    expect(manager.isPinching()).toBe(true);
+    const next = manager.handleTouchMove(
+      touchEvent([
+        [310, 170],
+        [110, 170],
+      ]),
+      BOUNDS,
+    );
+    // The pair now is 200 CSS px apart and has not moved since it was
+    // measured, so the first step changes nothing.
+    expect(boundsToView(next!).scale).toBeCloseTo(1, 12);
+  });
+
+  it("ends everything when the last finger lifts or the touch is cancelled", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+    manager.handleTouchEnd(touchEvent([]));
+    expect(manager.isPinching()).toBe(false);
+    expect(manager.isPanning()).toBe(false);
+
+    manager.handleTouchStart(touchEvent(START));
+    manager.handleTouchEnd();
+    expect(manager.isPinching()).toBe(false);
+    expect(manager.isPanning()).toBe(false);
+  });
+
+  it("does not pan from a finger that was never ours when a pinch is not running", () => {
+    const manager = createManager();
+
+    // A touchend with a finger still down but no pinch behind it ends the pan
+    // rather than starting one from a finger that is somewhere else.
+    manager.handleTouchStart(touchEvent([[160, 170]]));
+    manager.handleTouchEnd(touchEvent([[300, 300]]));
+
+    expect(manager.isPanning()).toBe(false);
+  });
+
+  it("forgets a pinch when the view is reset", () => {
+    const manager = createManager();
+    manager.handleTouchStart(touchEvent(START));
+
+    manager.reset(BOUNDS);
+
+    expect(manager.isPinching()).toBe(false);
   });
 });
