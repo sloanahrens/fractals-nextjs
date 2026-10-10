@@ -64,6 +64,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
 - **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
+- **Export size** (`src/lib/exportSize.ts`): The sizes the Download PNG controls offer — the canvas, 2x and 4x, with the largest whole multiple within 12 megapixels standing in for a candidate the cap rules out — the `_2x`/`_4x` an export file is named with, and the 250 ms throttle on the button's progress text
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **Pinch** (`src/lib/pinch.ts`): The pure helpers behind two-finger zoom — finger distance, midpoint, the zoom factor between two steps, and scale-about-a-point
 - **Wheel zoom** (`src/lib/wheelZoom.ts`): The zoom factor one wheel event asks for — an exponential of how far it scrolled
@@ -188,6 +189,93 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Export size: Download PNG at 2x or 4x, drawn off-screen (2026-10-10)
+
+- fr-xhr. Download PNG can now save a larger picture than the screen holds —
+  wallpapers, prints — without disturbing what is on screen. It replaces fr-gqe,
+  whose branch (`polecat/cantor/fr-gqe+mv15zrxa`, 83f3c345) was built against the
+  page before the canvas-first redesign and could not land; the behaviour spec is
+  the same and its pure helper is reused nearly verbatim. The bead was assigned
+  against a tree that already had fr-3m5, fr-l62 and fr-3y2 landed.
+- **`src/lib/exportSize.ts`** is the pure half, and the only new module.
+  `exportSizes(canvasWidth, canvasHeight, maxPixels = EXPORT_MAX_PIXELS)` returns
+  ascending `{ label, scale, width, height }` for the candidates `[1, 2, 4]`:
+  the screen size always (the cap is about the larger options, and a canvas
+  4000 x 3000 can afford nothing bigger), a larger candidate only when the whole
+  image fits the cap (12,000,000 pixels, about 48 MB of ImageData), and — when
+  the cap rules a candidate out — the largest whole multiple that fits, so the
+  list never stops short of what the machine can draw. The boundary is a
+  ceiling, not a strict bound: 1000 x 750 at 4x is exactly 12,000,000 and is
+  offered, where 1000 x 751 is 12,016,000 and gets 3x instead. `exportFileName`
+  marks the size before the extension (`mandelbrot_-0.75_0_1x_2x.png`) and
+  returns the name unchanged at scale 1, so the screen-size save is byte for byte
+  what it was. `exportProgressDue(now, last, 250)` is the throttle.
+  `EXPORT_FAILED_MESSAGE` is "Could not create that size".
+- **The page** (`src/app/FractalExplorer.tsx`) holds the rest. The old
+  `handleDownload` body — the `toBlob`, the object URL, the anchor click, the
+  `setTimeout(revokeObjectURL, 0)` — is now the module-level `saveCanvasPng(canvas,
+  name, onSettled)`, which both saves go through; the screen-size branch of
+  `handleDownload` calls it with `canvasRef.current` and the `downloadFileName`
+  name, exactly as before. A larger size calls `runExport(size)` instead.
+- `exportSizeOptions` is `exportSizes(canvasWidth, canvasHeight)` memoized, and
+  `exportScale` falls back to 1 during the render that sees a list without it,
+  because a `<select>` whose value is not among its options paints blank and the
+  canvas size is a control the user can move at any moment.
+- `runExport` captures the view *when it is called* — `bounds`,
+  `effectiveMaxIterations`, `colorScheme`, `fractalKind`, and the centre/zoom/
+  fractal the name is built from — into a `FractalConfig`, builds a detached
+  `document.createElement("canvas")` at the chosen size, and draws it with a
+  `FractalRenderer` of its own. The canvas on screen is never referenced in that
+  function (a test asserts it): it is neither read nor resized, so it keeps its
+  size and its content and the two renders do not touch. Changing the view,
+  fractal or colours while an export draws therefore does not alter it.
+- Progress is throttled in the render's own callback: `exportReportedAtRef`
+  holds the last time the text changed and `exportProgressDue` gates it, so a
+  3200 x 2400 render reports hundreds of times and the button text changes at
+  most twice a second. The button reads `` `Exporting... ${Math.round(progress *
+  100)}%` `` and a Cancel button appears beside it while `exportState.kind ===
+  "running"`; `downloadDisabled` is `exporting || (exportScale === 1 &&
+  isRendering)`, so a screen-size save still waits for the render that may be
+  half painting the canvas it reads while an export does not — the one place the
+  old "Download PNG keeps the lock" rule narrows.
+- Cancelling and racing are one token. `exportTokenRef` is bumped by
+  `handleCancelExport` (which also calls `cancelRender()` on the export's
+  renderer and releases it) and by the unmount effect, and checked twice in
+  `runExport`: before `saveCanvasPng` (a picture that arrives after a cancel is
+  dropped rather than saved) and inside the blob callback (a save cancelled
+  while the browser was making the blob). `handleDownload` returns early when an
+  export is running, so one export runs at a time.
+- Memory. `releaseExport()` drops both refs and sets the detached canvas's
+  `width` and `height` to 0 — the renderer's `ImageData` goes with the
+  reference, the canvas's own copy with the resize — and it runs once the
+  browser has taken the blob, never while it is still reading it. A failed
+  canvas (`new FractalRenderer` throwing where the browser will not give an image
+  buffer, or a `toBlob` that yields null) sets `exportState` to
+  `{ kind: "error", text: EXPORT_FAILED_MESSAGE }`, which the card shows in a
+  `role="status"` paragraph inside a `min-h-5` container; nothing is drawn,
+  nothing is saved and the page carries on. Every failure path logs with
+  `console.error`, as the page's other render paths do.
+- The controls are in the Settings drawer's Download card only — an Export size
+  `Select` above the button and the Cancel button beside it, with the status
+  region under both. Nothing was added to the canvas, the top bar or the
+  switcher (a test asserts each).
+- Tests: `src/lib/__tests__/exportSize.test.ts` (the three sizes for 800 x 600,
+  the 3x that stands in for a 1200 x 900 canvas's unaffordable 4x, 400 x 300
+  stopping at 4x although 8x would fit, the cap as a ceiling at 1000 x 750 and
+  751, a list that is whole scales in ascending order with the pixels on every
+  label, the budget as an argument, the file names, the throttle) and
+  `src/__tests__/export-panel.test.ts` (sources: the control in the drawer and
+  nowhere else, the options from the canvas size, the selection fallback, the
+  screen-size branch calling `saveCanvasPng` and never `exportFileName`, the
+  detached canvas with no `canvasRef` in `runExport`, the token check before the
+  save, the one-export guard, the memory handed back after the blob, the two
+  catch sites and the status region).
+- Docs: the README's Download PNG and Saving an Image bullets, its Controls Stay
+  Usable line and its Project Structure (`exportSize.ts`), the Help entry for
+  Download PNG, the Export size bullet in Project Architecture, and the two
+  superseding clauses added to the `og` bounds note and the 2026-10-08
+  "Controls stay usable during a render" note. `make gate` is green.
 
 ### The probe holds while the pointer is on the Math card (2026-10-10)
 
@@ -689,7 +777,9 @@ _Last updated: 2026-10-10_
   view's colours, being count over cap, differ a little from the page's).
 - Bounds, which the bead asked to be documented. The page draws
   `calculateZoomBounds(centre, zoom)`, 4/zoom by 3/zoom of the plane, onto a canvas
-  of that 4:3 shape, and Download PNG saves that canvas. The card is 1.91:1, so
+  of that 4:3 shape, and Download PNG saves that canvas (a larger Export size
+  draws the same 4:3 view at more pixels — see the Export size note at the top of
+  Version Notes). The card is 1.91:1, so
   `cardBounds` keeps that rule's height (3/zoom) and centre and widens to 1200:630:
   square pixels, and the whole 4:3 view a visitor had is inside the card, centred,
   with more plane at the sides. Cropping the 4:3 view to the card's height would
@@ -2553,7 +2643,9 @@ stays gone instead of measuring its classes._
   Reset View and twenty other controls greyed out and a drag was the only way
   back. Using a control now does exactly what a wheel or a drag does: it starts
   a render of the new view. Download PNG keeps the lock, because the canvas it
-  reads may be half drawn.
+  reads may be half drawn. (Superseded in part by the Export size note at the top
+  of Version Notes: the lock is the screen-size save's alone — a larger export
+  draws on a canvas of its own and is not held back by the render on screen.)
 - `FractalRenderer` cancels the run it replaces with a run token (`runToken`),
   a counter, where a single `shouldCancel` flag served both of the two states it
   has to tell apart. The older run checks the token at the top of each row and
