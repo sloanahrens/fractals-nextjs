@@ -25,12 +25,16 @@ const PAGE_PATH = fileURLToPath(new URL("../app/page.tsx", import.meta.url));
 const DIALOG_PATH = fileURLToPath(
   new URL("../components/ui/HelpDialog.tsx", import.meta.url),
 );
+const TOP_BAR_PATH = fileURLToPath(
+  new URL("../components/ui/TopBar.tsx", import.meta.url),
+);
 const CANVAS_NAVIGATION_PATH = fileURLToPath(
   new URL("../lib/canvasNavigation.ts", import.meta.url),
 );
 
 const page = readFileSync(PAGE_PATH, "utf8");
 const dialog = readFileSync(DIALOG_PATH, "utf8");
+const topBar = readFileSync(TOP_BAR_PATH, "utf8");
 const canvasNavigation = readFileSync(CANVAS_NAVIGATION_PATH, "utf8");
 
 /**
@@ -68,16 +72,16 @@ function effectBody(source: string, marker: string): string {
 }
 
 describe("the help button", () => {
-  it("sits with the heading, above the canvas it explains", () => {
-    const button = page.search(/>\s*Help\s*</);
-    const heading = page.indexOf(">Fractal Explorer<");
-    const canvas = page.indexOf("<canvas");
+  it("sits in the top bar beside the title, above the canvas it explains", () => {
+    const heading = topBar.indexOf(">Fractal Explorer<");
+    const button = topBar.search(/>\s*Help\s*</);
 
     expect(heading).toBeGreaterThan(-1);
     expect(button).toBeGreaterThan(heading);
-    expect(canvas).toBeGreaterThan(button);
+    expect(page.indexOf("<canvas")).toBeGreaterThan(page.indexOf("<TopBar"));
     // It opens the same overlay the `?` key does, rather than a second one.
-    expect(page).toContain("onClick={() => setHelpOpen(true)}");
+    expect(page).toContain("onHelp={() => setHelpOpen(true)}");
+    expect(topBar).toContain("onClick={onHelp}");
   });
 });
 
