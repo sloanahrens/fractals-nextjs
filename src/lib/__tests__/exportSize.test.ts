@@ -4,6 +4,7 @@ import {
   EXPORT_FAILED_MESSAGE,
   EXPORT_MAX_PIXELS,
   EXPORT_PROGRESS_INTERVAL_MS,
+  appendToFileName,
   exportFileName,
   exportProgressDue,
   exportSizes,
@@ -187,6 +188,24 @@ describe("exportFileName", () => {
     for (const scale of [1, 2, 3, 4]) {
       expect(exportFileName(view, scale)).toMatch(/^[A-Za-z0-9._-]+$/);
     }
+  });
+});
+
+describe("appendToFileName", () => {
+  it("puts the part in front of the extension", () => {
+    expect(appendToFileName("mandelbrot_0_0_1x.png", "16x9_3840x2160")).toBe(
+      "mandelbrot_0_0_1x_16x9_3840x2160.png",
+    );
+  });
+
+  it("appends to a name with no extension rather than inventing one", () => {
+    expect(appendToFileName("mandelbrot_0_0_1x", "2x")).toBe(
+      "mandelbrot_0_0_1x_2x",
+    );
+  });
+
+  it("marks the last dot, so a dotted stem keeps its dots", () => {
+    expect(appendToFileName("view.one.png", "2x")).toBe("view.one_2x.png");
   });
 });
 

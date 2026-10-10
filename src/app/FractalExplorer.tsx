@@ -55,8 +55,15 @@ import {
   exportFileName,
   exportProgressDue,
   exportSizes,
-  type ExportSize,
 } from "../lib/exportSize";
+import {
+  EXPORT_SHAPES,
+  SCREEN_SHAPE_ID,
+  exportFrame,
+  exportShapeFor,
+  wallpaperFileName,
+  type ExportShape,
+} from "../lib/exportShape";
 import {
   FRACTAL_TYPES,
   defaultViewFor,
@@ -222,6 +229,45 @@ function saveCanvasPng(
 
     onSettled(blob !== null);
   }, "image/png");
+}
+
+/**
+ * One choice of the Export size select: a whole multiple of the canvas, which
+ * is the screen shape's sizes, or one of a wallpaper shape's own pixel sizes.
+ * The page tells them apart by `kind`, so the download path never has to work
+ * out which list the choice came from.
+ */
+type ExportSizeOption =
+  | {
+      kind: "canvas";
+      /** The select's value. */
+      key: string;
+      label: string;
+      /** Multiple of the canvas this size draws. */
+      scale: number;
+      width: number;
+      height: number;
+    }
+  | {
+      kind: "wallpaper";
+      key: string;
+      label: string;
+      /** The shape being saved, which names the file. */
+      shape: ExportShape;
+      width: number;
+      height: number;
+    };
+
+/**
+ * One picture to draw off-screen and save: the size to draw it at, the region
+ * of the plane to draw there, and the name to save it under. A screen size
+ * larger than the canvas and a wallpaper alike come through here.
+ */
+interface ExportJob {
+  width: number;
+  height: number;
+  bounds: FractalBounds;
+  name: string;
 }
 
 export default function Home() {
@@ -1360,19 +1406,46 @@ export default function Home() {
   };
 
   // Export sizes: the screen size saves the canvas on screen, and a larger one
-  // draws the same view again on a canvas of its own. The list follows the
-  // canvas size, so a size the budget no longer affords leaves the select —
-  // and the selection falls back to the screen size in the render that sees
-  // the new list, because a <select> whose value is not among its options
-  // paints blank.
-  const exportSizeOptions = useMemo(
-    () => exportSizes(canvasWidth, canvasHeight),
-    [canvasWidth, canvasHeight],
-  );
-  const [exportScale, setExportScale] = useState(1);
-  if (!exportSizeOptions.some((size) => size.scale === exportScale)) {
-    setExportScale(1);
+  // draws the same view again on a canvas of its own. The Shape select says
+  // what the picture is shaped like: the screen's own 4:3, whose sizes follow
+  // the canvas, or a wallpaper shape at one of its published pixel sizes.
+  const [exportShapeId, setExportShapeId] = useState(SCREEN_SHAPE_ID);
+  const exportShape = exportShapeFor(exportShapeId);
+
+  // The list the Export size select shows. It follows the canvas size for the
+  // screen and the shape for a wallpaper, and the selection falls back to the
+  // list's first entry in the render that sees a new list — because a <select>
+  // whose value is not among its options paints blank, and switching shape
+  // changes every option there is.
+  const exportSizeOptions = useMemo<ExportSizeOption[]>(() => {
+    if (exportShape.id !== SCREEN_SHAPE_ID) {
+      return exportShape.sizes.map((size) => ({
+        kind: "wallpaper",
+        key: `${size.width}x${size.height}`,
+        label: `${size.width} x ${size.height}`,
+        shape: exportShape,
+        width: size.width,
+        height: size.height,
+      }));
+    }
+
+    return exportSizes(canvasWidth, canvasHeight).map((size) => ({
+      kind: "canvas",
+      key: String(size.scale),
+      label: size.label,
+      scale: size.scale,
+      width: size.width,
+      height: size.height,
+    }));
+  }, [exportShape, canvasWidth, canvasHeight]);
+
+  const [exportSizeKey, setExportSizeKey] = useState("1");
+  if (!exportSizeOptions.some((option) => option.key === exportSizeKey)) {
+    setExportSizeKey(exportSizeOptions[0].key);
   }
+  const exportSize =
+    exportSizeOptions.find((option) => option.key === exportSizeKey) ??
+    exportSizeOptions[0];
 
   // What the export panel is doing: nothing, a picture still being drawn, or a
   // short message about one that could not be.
@@ -1406,32 +1479,29 @@ export default function Home() {
     }
   }, []);
 
-  // Draw the current view at a size larger than the canvas, on a canvas of its
-  // own, and save it. The canvas on screen is neither read nor resized, so it
-  // keeps its size and its content, and the page goes on responding while this
-  // draws — the two renders are separate renderers, and the view, the fractal
-  // and the settings are the ones captured here, when the export was asked for.
+  // Draw a picture on a canvas of its own and save it: a size larger than the
+  // canvas on screen, or a wallpaper at a shape of its own. The canvas on
+  // screen is neither read nor resized, so it keeps its size and its content,
+  // and the page goes on responding while this draws — the two renders are
+  // separate renderers, and the view, the fractal and the settings are the
+  // ones captured in the job, when the export was asked for.
   const runExport = useCallback(
-    async (size: ExportSize) => {
+    async (job: ExportJob) => {
       const config: FractalConfig = {
-        bounds,
+        bounds: job.bounds,
         maxIterations: effectiveMaxIterations,
-        width: size.width,
-        height: size.height,
+        width: job.width,
+        height: job.height,
         colorScheme,
       };
-      const name = exportFileName(
-        downloadFileName(centerX, centerY, zoomLevel, fractalType),
-        size.scale,
-      );
 
       const token = ++exportTokenRef.current;
       const canvas = document.createElement("canvas");
 
       let renderer: FractalRenderer;
       try {
-        canvas.width = size.width;
-        canvas.height = size.height;
+        canvas.width = job.width;
+        canvas.height = job.height;
         renderer = new FractalRenderer(canvas, fractalKind);
       } catch (error) {
         // A canvas that big can be refused: no drawing context, or no memory
@@ -1471,7 +1541,7 @@ export default function Home() {
       // dropped rather than saved.
       if (token !== exportTokenRef.current) return;
 
-      saveCanvasPng(canvas, name, (saved) => {
+      saveCanvasPng(canvas, job.name, (saved) => {
         // A save cancelled while the browser was making the blob is one
         // nobody is waiting for, and the canvas has gone back already.
         if (token !== exportTokenRef.current) return;
@@ -1484,17 +1554,7 @@ export default function Home() {
         );
       });
     },
-    [
-      bounds,
-      effectiveMaxIterations,
-      colorScheme,
-      fractalKind,
-      centerX,
-      centerY,
-      zoomLevel,
-      fractalType,
-      releaseExport,
-    ],
+    [effectiveMaxIterations, colorScheme, fractalKind, releaseExport],
   );
 
   const handleCancelExport = useCallback(() => {
@@ -1507,18 +1567,17 @@ export default function Home() {
     setExportState({ kind: "idle" });
   }, [releaseExport]);
 
-  // Save what is on the canvas, or draw and save a larger version of it. The
-  // canvas holds the render at its full pixel size, so a screen-size save is
-  // the image the user is looking at rather than a screenshot of the page
-  // around it, named exactly as this button has always named it.
+  // Save what is on the canvas, or draw and save a version of it elsewhere: a
+  // larger multiple of the canvas, or a shape of its own. The canvas holds the
+  // render at its full pixel size, so a screen-size save is the image the user
+  // is looking at rather than a screenshot of the page around it, named
+  // exactly as this button has always named it.
   const handleDownload = useCallback(() => {
     if (exportState.kind === "running") return;
 
-    const size =
-      exportSizeOptions.find((option) => option.scale === exportScale) ??
-      exportSizeOptions[0];
+    const baseName = downloadFileName(centerX, centerY, zoomLevel, fractalType);
 
-    if (size.scale === 1) {
+    if (exportSize.kind === "canvas" && exportSize.scale === 1) {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -1528,19 +1587,39 @@ export default function Home() {
 
       // A canvas can decline to produce an image. There is nothing to save
       // then, and the page carries on as before.
-      saveCanvasPng(
-        canvas,
-        downloadFileName(centerX, centerY, zoomLevel, fractalType),
-        () => {},
-      );
+      saveCanvasPng(canvas, baseName, () => {});
       return;
     }
 
-    void runExport(size);
+    // A canvas multiple draws the view the canvas has, to the pixel; a
+    // wallpaper draws the frame its shape asks for, which contains that view
+    // and is drawn at the same iteration count and in the same colours.
+    void runExport({
+      width: exportSize.width,
+      height: exportSize.height,
+      bounds:
+        exportSize.kind === "canvas"
+          ? bounds
+          : exportFrame(
+              centerX,
+              centerY,
+              zoomLevel,
+              exportSize.width / exportSize.height,
+            ),
+      name:
+        exportSize.kind === "canvas"
+          ? exportFileName(baseName, exportSize.scale)
+          : wallpaperFileName(
+              baseName,
+              exportSize.shape,
+              exportSize.width,
+              exportSize.height,
+            ),
+    });
   }, [
     exportState.kind,
-    exportScale,
-    exportSizeOptions,
+    exportSize,
+    bounds,
     centerX,
     centerY,
     zoomLevel,
@@ -1553,7 +1632,8 @@ export default function Home() {
   // one. Both wait for an export already running, because there is one button
   // and one export at a time.
   const exporting = exportState.kind === "running";
-  const downloadDisabled = exporting || (exportScale === 1 && isRendering);
+  const savesCanvas = exportSize.kind === "canvas" && exportSize.scale === 1;
+  const downloadDisabled = exporting || (savesCanvas && isRendering);
 
   // An export left running when the page goes away has nobody to hand its
   // picture to, so it is stopped along with the rest of the page's work.
@@ -2620,13 +2700,22 @@ export default function Home() {
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <div className="space-y-4">
             <Select
-              label="Export size"
-              value={exportScale.toString()}
-              options={exportSizeOptions.map((size) => ({
-                value: size.scale.toString(),
-                label: size.label,
+              label="Shape"
+              value={exportShapeId}
+              options={EXPORT_SHAPES.map((shape) => ({
+                value: shape.id,
+                label: shape.label,
               }))}
-              onChange={(value) => setExportScale(Number(value))}
+              onChange={(value) => setExportShapeId(value)}
+            />
+            <Select
+              label="Export size"
+              value={exportSizeKey}
+              options={exportSizeOptions.map((option) => ({
+                value: option.key,
+                label: option.label,
+              }))}
+              onChange={(value) => setExportSizeKey(value)}
             />
             <div className="text-center">
               <Button

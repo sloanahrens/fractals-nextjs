@@ -84,6 +84,25 @@ export function exportSizes(
 }
 
 /**
+ * A name with a part marked on it, before the extension.
+ *
+ * What an export is named after — the multiple, or a wallpaper shape and its
+ * pixels (`exportShape.ts`) — goes in front of `.png`, so a folder holding
+ * several saves of one view says which is which. A name with no extension gets
+ * the part appended rather than an invented one.
+ *
+ * @param name - The name for the view, from `downloadFileName`
+ * @param part - What to mark the name with, without a leading underscore
+ * @returns The marked name
+ */
+export function appendToFileName(name: string, part: string): string {
+  const extension = name.lastIndexOf(".");
+  if (extension === -1) return `${name}_${part}`;
+
+  return `${name.slice(0, extension)}_${part}${name.slice(extension)}`;
+}
+
+/**
  * The name an export is saved under: the name the screen-size save uses, with
  * the size marked before the extension, so a folder holding a 1x and a 4x of
  * the same view says which is which.
@@ -98,10 +117,7 @@ export function exportSizes(
 export function exportFileName(name: string, scale: number): string {
   if (scale === 1) return name;
 
-  const extension = name.lastIndexOf(".");
-  if (extension === -1) return `${name}_${scale}x`;
-
-  return `${name.slice(0, extension)}_${scale}x${name.slice(extension)}`;
+  return appendToFileName(name, `${scale}x`);
 }
 
 /**

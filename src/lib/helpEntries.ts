@@ -162,7 +162,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Download PNG",
         action:
-          "Save the canvas at its full resolution, or pick a larger Export size — 2x, 4x or the largest whole multiple that fits — to draw the same view again off-screen at that size and save that, with the size in the file name. The list shows how far along the export is and offers a Cancel button; the picture on screen is untouched",
+          "Save the canvas at its full resolution, or pick a Shape and an Export size — 2x, 4x or the largest whole multiple that fits, or a wallpaper shape (Desktop 16:9, Phone 9:19.5, Square 1:1) at one of its own pixel sizes — to draw the same view again off-screen, framed for that shape, and save that, with the size in the file name. The card shows how far along the export is and offers a Cancel button; the picture on screen is untouched",
       },
       {
         keys: "Math",
