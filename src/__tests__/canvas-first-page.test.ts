@@ -26,8 +26,8 @@ const css = source("../app/globals.css");
 /** The cards the right-hand column held, in the order it held them. */
 const CARDS_IN_ORDER = [
   "<PresetSelector",
-  'label="Center X (Real)"',
-  "<ZoomDisplay",
+  'label="Zoom Level"',
+  "describeView(bounds)",
   'label="Fractal"',
   "Canvas Resolution",
   "Manual Coordinates",
@@ -95,6 +95,24 @@ describe("the Settings drawer", () => {
       expect(at, marker).toBeGreaterThan(last);
       last = at;
     }
+  });
+
+  it("offers position and zoom once: no Center sliders, no View Info card", () => {
+    const body = page.slice(
+      page.indexOf("<SettingsDrawer"),
+      page.indexOf("</SettingsDrawer>"),
+    );
+
+    expect(body).not.toContain("Center X");
+    expect(body).not.toContain("Center Y");
+    expect(body).not.toContain("View Info");
+    expect(page).not.toContain("ZoomDisplay");
+    // The Zoom Level slider is the one slider left for the view, and the
+    // read-out sits above the Center Coordinates boxes it reports on.
+    expect(body.match(/label="Zoom Level"/g)).toHaveLength(1);
+    expect(body).toMatch(
+      /<p role="status"[^>]*>\s*\{describeView\(bounds\)\}\s*<\/p>\s*<CenterControls/,
+    );
   });
 
   it("holds Download PNG and the build footer", () => {
