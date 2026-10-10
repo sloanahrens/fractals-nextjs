@@ -6,7 +6,7 @@
  * `placeThumbnails.test.ts`'s. What a Node suite with no DOM cannot render is
  * the component and the page wiring, so this reads the sources the way the
  * canvas-first page and journey tests here do: the label, the tile buttons and
- * their names, the More tile, the focus hold, the pause while a render runs,
+ * their names, the More tile, no fade and the `hidden` prop, the pause while a render runs,
  * what a click on a tile sets, the crossfade, and Back and Forward.
  */
 import { readFileSync } from "node:fs";
@@ -80,14 +80,36 @@ describe("the Nearby strip", () => {
     expect(page).toContain("nextNearbyOffset(previous.pool.length");
   });
 
-  it("fades on the top bar's idle clock and stays up while a tile has focus", () => {
-    expect(strip).toContain("useIdleVisibility(false, listKey)");
-    expect(strip).toContain("{...focusProps}");
-    expect(strip).toContain('shown ? "opacity-100" : "opacity-0"');
-    // A faded strip takes no pointer events on its tiles.
+  it("never fades: only the top bar does", () => {
+    expect(strip).toContain('data-visible="true"');
+    expect(strip).not.toContain("useIdleVisibility");
+    expect(strip).not.toContain("idleFade");
+    expect(strip).not.toContain("focusProps");
+    expect(strip).not.toContain("shown");
+    expect(strip).not.toContain("transitionDuration");
+    // The tiles' row takes pointer events all the time.
     expect(strip).toContain(
-      'shown ? "pointer-events-auto" : "pointer-events-none"',
+      '<div className="pointer-events-auto flex gap-2 overflow-x-auto pb-1">',
     );
+    // The bar keeps its own fade.
+    expect(topBar).toContain("useIdleVisibility(settingsOpen)");
+  });
+
+  it("takes an optional hidden prop that renders nothing and asks for no pictures", () => {
+    expect(strip).toContain("hidden?: boolean;");
+    expect(strip).toContain("hidden = false,");
+    // Hooks run first, then the early return, so no tile mounts and no tile
+    // can ask the store for a picture.
+    expect(strip).toContain("if (hidden || places.length === 0) return null;");
+    expect(strip.indexOf("if (hidden ||")).toBeLessThan(
+      strip.indexOf("<Tile"),
+    );
+    // What was queued before it was hidden is dropped.
+    expect(strip).toContain(
+      "useEffect(() => () => store.cancelAll(), [store, listKey, hidden]);",
+    );
+    // Only the tiles ask the store.
+    expect(strip.match(/store\.request\(/g)).toHaveLength(1);
   });
 
   it("draws each picture in the scheme its click applies, with the flat placeholder for a failure", () => {
@@ -115,7 +137,7 @@ describe("the Nearby strip", () => {
 
   it("drops what is queued when the list changes or the strip goes", () => {
     expect(strip).toMatch(
-      /useEffect\(\(\) => \(\) => store\.cancelAll\(\), \[store, listKey\]\)/,
+      /useEffect\(\(\) => \(\) => store\.cancelAll\(\), \[store, listKey, hidden\]\)/,
     );
     // Tiles are keyed by the list, so a changed list asks for its pictures again.
     expect(strip).toContain("key={`${listKey}|${place.id}`}");
@@ -133,7 +155,7 @@ describe("the Nearby strip", () => {
   });
 
   it("renders nothing for an empty list", () => {
-    expect(strip).toContain("if (places.length === 0) return null;");
+    expect(strip).toContain("places.length === 0) return null;");
   });
 });
 

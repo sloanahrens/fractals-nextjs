@@ -5,7 +5,7 @@ import { useEffect, useState, type FocusEvent } from "react";
 import { createIdleFade, TOP_BAR_ACTIVITY_EVENTS } from "../../lib/idleFade";
 
 /**
- * The idle fade of a floating bar, as the top bar and the Nearby strip share it.
+ * The idle fade of the floating top bar.
  *
  * The bar is visible while there is input and gone after `TOP_BAR_IDLE_MS`
  * without any (`createIdleFade` is the clock). Two things hold it up regardless:
@@ -14,14 +14,9 @@ import { createIdleFade, TOP_BAR_ACTIVITY_EVENTS } from "../../lib/idleFade";
  * button is never looking at an invisible one. The clock is remade whenever the
  * hold changes, which is what gives the bar a full wait after the hold ends.
  *
- * `resetKey` is for a bar whose contents arrive late: when it changes the bar
- * is shown and gets a full wait, as if there had been input. The Nearby strip
- * passes its list, which only exists once the first render has settled and
- * would otherwise come in already faded.
- *
  * Spread `focusProps` on the element that holds the controls.
  */
-export function useIdleVisibility(hold = false, resetKey = "") {
+export function useIdleVisibility(hold = false) {
   const [visible, setVisible] = useState(true);
   const [focusWithin, setFocusWithin] = useState(false);
 
@@ -31,10 +26,8 @@ export function useIdleVisibility(hold = false, resetKey = "") {
   // visible during the render that sees the change, against the hold it last
   // saw, rather than from the effect that restarts the clock.
   const [seenHeld, setSeenHeld] = useState(held);
-  const [seenResetKey, setSeenResetKey] = useState(resetKey);
-  if (held !== seenHeld || resetKey !== seenResetKey) {
+  if (held !== seenHeld) {
     setSeenHeld(held);
-    setSeenResetKey(resetKey);
     setVisible(true);
   }
 
@@ -52,7 +45,7 @@ export function useIdleVisibility(hold = false, resetKey = "") {
       }
       fade.dispose();
     };
-  }, [held, resetKey]);
+  }, [held]);
 
   const shown = held || visible;
 
