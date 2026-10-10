@@ -55,11 +55,13 @@ const LISTED_POINTS = 3;
  *
  * Play walks the orbit a step at a time, off until it is asked for and disabled
  * for a reader who has asked for less motion; the orbit is drawn whole without
- * it. Moving the pointer re-reads the point, which hands the plot a new orbit,
- * and the animation is tied to the orbit it started on, so a move stops it
- * without a listener of its own. The plot is read-only and its numbers — the
- * last few points written as a + bi — sit under it, so the picture has a text
- * form beside it as the probe's rows have.
+ * it. Moving the pointer over the picture re-reads the point, which hands the
+ * plot a new orbit, and the animation is tied to the orbit it started on, so a
+ * move stops it without a listener of its own — while the pointer on its way
+ * to Play crosses from the picture onto this card, the page holds the probe,
+ * so the plot stays mounted and a walk already running is not reset. The plot
+ * is read-only and its numbers — the last few points written as a + bi — sit
+ * under it, so the picture has a text form beside it as the probe's rows have.
  */
 export function OrbitPlot({
   fractalType,

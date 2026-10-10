@@ -6,8 +6,9 @@
  * render is the row the card draws and the listeners the page attaches, so
  * this reads the sources the way the other panel tests here do: the work lives
  * in one animation frame's callback, it is guarded on the card being expanded
- * and on screen, the pointer leaving clears it, and a view that moves under a
- * resting pointer re-reads the same place rather than showing the old view's.
+ * and on screen, the pointer leaving for anywhere but the card clears it, and a
+ * view that moves under a resting pointer re-reads the same place rather than
+ * showing the old view's.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -125,14 +126,51 @@ describe("the listeners", () => {
     );
   });
 
-  it("clear the probe when the pointer leaves the picture", () => {
+  it("clear the probe when the pointer leaves the picture for anything but the card", () => {
     const leave = probe.slice(
       probe.indexOf("const handleLeave"),
-      probe.indexOf("canvas.addEventListener"),
+      probe.indexOf("const handleCardLeave"),
     );
 
-    expect(leave).toContain("pointerRef.current = null;");
-    expect(leave).toContain("setProbe(null);");
+    expect(leave).toContain(
+      "shouldClearProbe(event.relatedTarget, [mathCardPanelRef.current])",
+    );
+    expect(leave).toContain("clearProbe();");
+    expect(leave).not.toContain("setProbe(null);");
+  });
+
+  it("watch the card too, so the plot and a running Play outlive the crossing", () => {
+    // The card is drawn over the picture and the plot and its Play control are
+    // on it: a pointer on its way there holds the probe, and one that comes
+    // back onto the picture resumes live probing there.
+    const leave = probe.slice(
+      probe.indexOf("const handleCardLeave"),
+      probe.indexOf("const panel = mathCardPanelRef.current"),
+    );
+
+    expect(leave).toContain("shouldClearProbe(event.relatedTarget, [canvas])");
+    expect(leave).toContain("clearProbe();");
+    expect(page).toContain(
+      'panel?.addEventListener("pointerleave", handleCardLeave)',
+    );
+    expect(page).toContain(
+      'panel?.removeEventListener("pointerleave", handleCardLeave)',
+    );
+  });
+
+  it("clear it when the pointer leaves both, and keep a touch's point", () => {
+    const clear = probe.slice(
+      probe.indexOf("const clearProbe"),
+      probe.indexOf("const handleLeave"),
+    );
+
+    expect(clear).toContain("pointerRef.current = null;");
+    expect(clear).toContain("throttle.cancel();");
+    expect(clear).toContain("setProbe(null);");
+
+    // A finger lifting is the touch ending, not a pointer moving away, so
+    // neither a lift on the picture nor one on the card drops the point.
+    expect(probe.match(/event\.pointerType === "touch"/g)).toHaveLength(2);
   });
 
   it("are taken off again when the probe stops", () => {
@@ -172,6 +210,17 @@ describe("the card's row", () => {
 
     expect(expanded).toBeGreaterThan(0);
     expect(rows).toBeGreaterThan(expanded);
+  });
+});
+
+describe("the card's panel", () => {
+  it("is published to the page, which watches it for the pointer", () => {
+    // The page cannot reach into the card, so the card hands it the element —
+    // the inner panel, not the wrapper, which takes no pointer events.
+    expect(page).toContain("panelRef={mathCardPanelRef}");
+    expect(card).toContain("panelRef?: React.RefObject<HTMLElement | null>;");
+    expect(card).toContain("ref={setCardRef}");
+    expect(card).toContain("if (panelRef) panelRef.current = node;");
   });
 });
 

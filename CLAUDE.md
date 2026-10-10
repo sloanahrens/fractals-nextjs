@@ -83,7 +83,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
 - **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
 - **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers, the probe's rows and the orbit plot (`OrbitPlot.tsx`); it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
-- **Math probe** (`src/lib/mathProbe.ts`, `escapeInfo` on `FractalKind` in `src/types/fractal.ts`): The number under the pointer, what its orbit did and the colour the picture paints it, shown in the expanded Math card — `probePoint(kind, point, maxIterations, scheme)` reads the count from the kind (whole steps for the words, the smooth count for the colour) and `describeProbe(fractalId, info, cap)` words it; every kind ships `escapeInfo(point, maxIterations)`, an optional method the probe falls back to the count for; `createFrameThrottle` is the one-point-per-frame rule and `pointerToCanvasPixel` the CSS-to-canvas scaling. **A kind's `escapeInfo` must agree with its `iterations`** — `escapeInfo.test.ts` and the pixel parity in `mathProbe.test.ts` hold it to a drawn view
+- **Math probe** (`src/lib/mathProbe.ts`, `escapeInfo` on `FractalKind` in `src/types/fractal.ts`): The number under the pointer, what its orbit did and the colour the picture paints it, shown in the expanded Math card — `probePoint(kind, point, maxIterations, scheme)` reads the count from the kind (whole steps for the words, the smooth count for the colour) and `describeProbe(fractalId, info, cap)` words it; every kind ships `escapeInfo(point, maxIterations)`, an optional method the probe falls back to the count for; `createFrameThrottle` is the one-point-per-frame rule and `pointerToCanvasPixel` the CSS-to-canvas scaling; `shouldClearProbe` is the rule that holds the probe while the pointer is on the Math card rather than the picture, so the plot and its Play control stay reachable. **A kind's `escapeInfo` must agree with its `iterations`** — `escapeInfo.test.ts` and the pixel parity in `mathProbe.test.ts` hold it to a drawn view
 - **Orbit plot** (`src/lib/orbitPlot.ts`, `src/components/ui/OrbitPlot.tsx`, `orbit` on `FractalKind` in `src/types/fractal.ts`): The path that point took, drawn under the probe's rows in the expanded Math card — `orbit` is the points the kind's own loop visits (optional, as `escapeInfo` is; `orbitFor` answers the point alone for a kind without it), the probe keeps 60 steps of it in `PointProbe.orbit`, `orbitToPlot(orbit, size, minExtent)` places them in a square plot (frame never inside the escape circle nor past twice it, values that are not numbers read as the origin), `describeOrbit(fractalId, info, steps)` is the `aria-label`, `orbitStepColour` paints a dot through the picture's own mapping, and a Play control walks it a step every 120 ms (off under `prefers-reduced-motion`). **A kind's `orbit` must be the same walk as its `iterations` and `escapeInfo`** — `orbit.test.ts` holds the path to the count for every kind
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
@@ -188,6 +188,50 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### The probe holds while the pointer is on the Math card (2026-10-10)
+
+- fr-3m5. The orbit plot and its Play control live on the Math card, which is
+  drawn over the picture, and the page cleared the probe on the canvas's
+  `pointerleave` — so moving from the picture toward Play left the canvas, the
+  probe went to null, the plot unmounted (the card's height jumped, which read
+  as flashing) and Play was gone before the pointer arrived. Owner report: "the
+  orbit box gets flaky when I move the cursor into the math box column".
+- `shouldClearProbe(relatedTarget, holders)` in `src/lib/mathProbe.ts` is that
+  decision as a pure function: a pointer that has gone into any holder keeps the
+  probe (a holder contains itself, so arriving at the element counts as well as
+  at something inside it), and anywhere else ends it — as does a pointer that
+  left the window, which reports no target at all. The holders are passed in
+  rather than looked up, so a Node suite hands it stand-ins with a `contains`.
+- The page wires it twice. The canvas's `pointerleave` passes the card's panel
+  as the holder, so a crossing onto the card holds the point; the card's own
+  `pointerleave` passes the canvas, so a pointer going back onto the picture
+  keeps the probe and resumes live probing on the next move, while one that
+  leaves the card for the top bar or the strip ends it. `clearProbe()` — the ref
+  forgotten, the frame dropped, the state nulled — is now one function both
+  handlers call. The touch guard stays in both: a finger lifting is the touch
+  ending and not a pointer moving away, so a lift keeps the point on the picture
+  and on the card alike.
+- `MathCard` publishes its panel element through a new optional `panelRef` prop,
+  assigned by the same callback ref that fills its own `cardRef` (the `section`,
+  which takes pointer events; the wrapper around it does not). The page holds
+  `mathCardPanelRef` and attaches the card's listener to whatever it finds there
+  when the probe effect runs — always a live element, since the card is rendered
+  whenever the probe can be live. The effect's dependencies are unchanged: the
+  panel is mounted before the card can be expanded, and a card that is not
+  mounted has `probeLive` false anyway.
+- Play needed no change: its state is keyed on the orbit's identity, and nothing
+  on the canvas fires a move while the pointer is on the card, so the plot stays
+  mounted through the crossing and a walk already running is not reset. What the
+  probe computes, the orbit drawing, the card's size and position and the Tour
+  are untouched.
+- Tests: `shouldClearProbe` in `mathProbe.test.ts` (onto the card and onto the
+  picture, anywhere else, no target at all, no holder at all, and a part of a
+  holder), and `math-probe-panel.test.ts` (the picture's leave holding for the
+  card and clearing elsewhere, the card's own leave listener and its cleanup,
+  the one `clearProbe` and both touch guards, and `MathCard`'s `panelRef`).
+  Docs: the README's Math card feature line, detail paragraph and Project
+  Structure, and this note.
 
 ### Orbit plot: the path the point under the pointer takes (2026-10-10)
 

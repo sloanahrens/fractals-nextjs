@@ -283,3 +283,36 @@ export function probeAtPointer(
     scheme,
   );
 }
+
+/**
+ * Whether a pointer leaving one of the probe's surfaces ends the probe.
+ *
+ * The probe follows a pointer over the picture, and the Math card is drawn over
+ * the picture, so the pointer has to be able to cross from one to the other
+ * without the point it was reading being thrown away: the orbit plot and its
+ * Play control live on the card, and a probe cleared at the edge would take
+ * them away before they could be reached. A pointer that has gone into any of
+ * the given holders keeps the probe — the holders are the card's panel and the
+ * canvas itself, so a crossing in either direction is held, and a move back
+ * onto the picture resumes live probing there. Anywhere else ends it, and so
+ * does a pointer that has left the window, which reports no target at all.
+ *
+ * The holders are passed in rather than looked up so the decision is pure: a
+ * Node suite hands it stand-ins with a `contains`, and the page hands it the
+ * elements it holds refs to.
+ * @param relatedTarget - Where the pointer went, as the leave event reports it
+ * @param holders - What keeps the probe: the card's panel, and the canvas
+ * @returns Whether the probe should be cleared
+ */
+export function shouldClearProbe(
+  relatedTarget: EventTarget | null,
+  holders: readonly (Element | null | undefined)[],
+): boolean {
+  if (!relatedTarget) return true;
+
+  // A holder contains itself, so a pointer that has arrived at the canvas or
+  // the panel, and not only at something inside one, is held.
+  return !holders.some(
+    (holder) => holder?.contains(relatedTarget as Node) ?? false,
+  );
+}

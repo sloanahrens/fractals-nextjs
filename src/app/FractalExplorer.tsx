@@ -143,6 +143,7 @@ import {
   type PointProbe,
   createFrameThrottle,
   probeAtPointer,
+  shouldClearProbe,
 } from "../lib/mathProbe";
 import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
@@ -1079,6 +1080,9 @@ export default function Home() {
     getServerMathCardSnapshot,
   );
   const mathButtonRef = useRef<HTMLButtonElement>(null);
+  // The Math card's panel, which the probe watches for the pointer leaving the
+  // picture onto it. The card puts the element here as it mounts.
+  const mathCardPanelRef = useRef<HTMLElement | null>(null);
   const closeMath = useCallback(() => setMathCardOpen(false), []);
   const toggleMath = useCallback(
     () => setMathCardOpen(!getMathCardSnapshot().open),
@@ -1626,6 +1630,13 @@ export default function Home() {
 
     const throttle = createFrameThrottle(run);
 
+    // The one way the probe ends: the point is forgotten so nothing re-reads
+    // it, the frame it was waiting for is dropped, and the card loses it.
+    const clearProbe = () => {
+      pointerRef.current = null;
+      throttle.cancel();
+      setProbe(null);
+    };
     const handleMove = (event: PointerEvent) => {
       pointerRef.current = { x: event.clientX, y: event.clientY };
       throttle.request();
@@ -1633,17 +1644,31 @@ export default function Home() {
     const handleLeave = (event: PointerEvent) => {
       // A finger lifting is the touch ending, not a pointer moving away: the
       // point it was on stays up to be read. A mouse or a pen leaving the
-      // picture clears the probe.
+      // picture clears the probe, unless it has moved onto the Math card,
+      // where the plot and its Play control are — the probe holds there so
+      // they can be reached.
       if (event.pointerType === "touch") return;
+      if (!shouldClearProbe(event.relatedTarget, [mathCardPanelRef.current])) {
+        return;
+      }
 
-      pointerRef.current = null;
-      throttle.cancel();
-      setProbe(null);
+      clearProbe();
+    };
+    // The other half of the crossing: a pointer that goes from the card back
+    // onto the picture keeps the probe and resumes live probing on the next
+    // move; one that leaves the card for anywhere else ends it.
+    const handleCardLeave = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      if (!shouldClearProbe(event.relatedTarget, [canvas])) return;
+
+      clearProbe();
     };
 
+    const panel = mathCardPanelRef.current;
     canvas.addEventListener("pointermove", handleMove, { passive: true });
     canvas.addEventListener("pointerdown", handleMove, { passive: true });
     canvas.addEventListener("pointerleave", handleLeave);
+    panel?.addEventListener("pointerleave", handleCardLeave);
 
     // A view that has moved under a resting pointer reports no move of its
     // own, and the ref still holds where the pointer was, so read that place
@@ -1654,6 +1679,7 @@ export default function Home() {
       canvas.removeEventListener("pointermove", handleMove);
       canvas.removeEventListener("pointerdown", handleMove);
       canvas.removeEventListener("pointerleave", handleLeave);
+      panel?.removeEventListener("pointerleave", handleCardLeave);
       throttle.cancel();
     };
   }, [probeLive, fractalKind, bounds, effectiveMaxIterations, colorScheme]);
@@ -1956,6 +1982,7 @@ export default function Home() {
               // collapsed.
               probe={probeLive ? probe : null}
               stepAside={blankHintShown}
+              panelRef={mathCardPanelRef}
               onClose={closeMath}
               returnFocusRef={mathButtonRef}
             />
