@@ -80,7 +80,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia chips land
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
 - **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
-- **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers. **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
+- **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers; it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -184,6 +184,83 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Math card is on by default, collapsed, and remembered (2026-10-10)
+
+- The owner liked the Math card (fr-1tk) and wants it up from the first visit
+  (fr-iln). A visitor with empty storage now sees it collapsed to its one line
+  under the switcher, with the Math button `aria-pressed` true; More expands it,
+  the Math button or Escape closes it, and both choices are remembered.
+- One small versioned record in **localStorage** replaces fr-1tk's
+  `sessionStorage` "expanded" flag and the page's `useState(false)` for "open":
+  `fractals.mathCard.v1` = `{"v":1,"open":true,"expanded":false}`
+  (`src/lib/mathCard.ts`). `DEFAULT_MATH_CARD_STATE` is `{ open: true, expanded:
+  false }`. `parseMathCardState(raw)` returns null for text that is not JSON, not
+  an object or not `v: 1`, and otherwise judges each field alone, so a missing or
+  non-boolean field keeps its default. `loadMathCardState(local, legacySession?)`
+  takes the versioned value if it parses, else reads the old
+  `fractals.mathCard.expanded` ("1"/"0") from sessionStorage once as `expanded`
+  (`LEGACY_EXPANDED_KEY`; nothing writes it any more), else the default; every
+  read is in try/catch, so a storage that throws, is missing or holds junk is the
+  default, and `saveMathCardState` swallows a failed write. A user who closes the
+  card stays closed on later visits until they press Math; a fresh visit writes
+  nothing.
+- The store behind `useSyncExternalStore` is now `subscribeToMathCard` /
+  `getMathCardSnapshot` / `getServerMathCardSnapshot` / `setMathCardOpen` /
+  `setMathCardExpanded` (the old `*Expanded` names are gone). The snapshot is one
+  object loaded once and replaced only by a change, so its identity is stable; a
+  setter that changes nothing writes and notifies nothing; the server snapshot is
+  the default, so the prerendered HTML already has the card and a returning
+  visitor who closed it sees it leave on hydration, not a mismatch. Both
+  `page.tsx` (for `mathOpen`, the Math button's `onMath = toggleMath`) and
+  `MathCard` (for `expanded`) read the same store, so there is no second copy of
+  the flag. The tour and the drawer/Help still hide the card without changing the
+  choice, and it returns as it was.
+- Escape. Now that the card is up by default, a window-wide Escape would close
+  it from anywhere. It closes the card only when focus is inside the card or on
+  the Math button (`active !== returnFocusRef.current` returns early), so Escape
+  elsewhere does nothing here; dialogs already hide the card and keep Escape.
+- Fit, measured in headless Chrome (a DevTools session, dev server restarted
+  first, since it served stale classes) at 1280x800 (canvas 1003x752) and 375x667
+  (375x281), for Mandelbrot, Julia (Classic and a custom constant) and
+  Multibrot, collapsed and expanded, with and without the blank hint:
+  - The collapsed card is 40 px tall and 158 to 285 px wide: 16 to 28% of the
+    desktop picture, 76% at most at 375. Expanded it is 352 wide (35%).
+  - Chip-row offset: `top-[5.25rem]` under `sm` and `sm:top-[5.75rem]` from
+    `sm` (the chip row ends at 80 px of canvas on a phone and 88 on desktop), so
+    at 375 the Julia card is 301 to 341 against the Auto-wander pill at 346 and
+    the strip at 348, and clear of the switcher everywhere. `min-h-11` stays on
+    the wrapper (it was the cause of fr-1tk's 9 px overlap with chips; the card
+    itself is 40 px).
+  - Phone: the collapsed line is `max-sm:truncate` (an ellipsis, never a second
+    line) and the wrapper is `max-w-[calc(100%-1.5rem)]`. The `<p>` is plain
+    inline flow with a space after the comma, not a flex row, because
+    `text-overflow` does not apply to flex items.
+  - Blank hint. At the same height as the card at the top centre, it would sit
+    on it. `BlankHint` takes `mathCard: "hidden" | "collapsed" | "expanded"`:
+    collapsed, it drops below the card's line (`top-[6.75rem]`, or
+    `top-[8.75rem]` with chips); expanded, from `sm` it centres in the width to
+    the right of the card (`sm:pl-[23rem]`). Under 640 px the canvas is 281 px
+    tall and cannot hold the switcher, the card and a two-line hint above the
+    strip, so there the card steps aside while the hint shows (`MathCard`'s
+    `stepAside`, `max-sm:hidden`, fed by the page's `blankHintShown`, which is
+    also the hint's `show`) and the hint keeps its old place (`max-sm:top-14` /
+    `max-sm:top-24`). The card returns when the view moves.
+- Docs: the README feature line and Math card paragraph, the Help entry for
+  Math (the card starts shown; the button hides it; remembered), and
+  `docs/design/guided-exploration.md`'s As built entry say the card starts open.
+  The fr-1tk note below says "session" and "not kept" for these choices; this
+  note supersedes those two sentences.
+- Tests: `mathCard.test.ts` (the default, `parseMathCardState` over JSON junk,
+  other shapes and versions and partly valid values, `loadMathCardState` with an
+  empty, missing, corrupt, legacy and throwing storage and the versioned value
+  winning, the single versioned key written and the old one never, the store's
+  snapshot, stability, notifications and no-op setters, and blocked storage),
+  `math-card-panel.test.ts` (sources: `aria-pressed` on the button and the
+  toggle, the page reading the default from the store with no `useState(false)`
+  left, Escape's focus rule, the phone's ellipsis and `stepAside`, the hint's
+  `mathCard` prop and classes, the help entry's wording), and the two blank-hint
+  source tests now name `blankHintShown`.
 
 ### Image route: /api/og draws a view as a 1200x630 PNG (2026-10-10)
 
@@ -302,8 +379,8 @@ _Last updated: 2026-10-10_
 
 ### Math card: the rule, the settings and the view's numbers (2026-10-10)
 
-- A Math button in the top bar (beside Help, `aria-pressed`) toggles a card over
-  the left of the canvas that shows the mathematics of the picture: layer 1 of 3
+- A Math button in the top bar (beside Help, `aria-pressed`) toggles a card (up
+  from the first visit since fr-iln) over the left of the canvas that shows the mathematics of the picture: layer 1 of 3
   of the owner-approved math design (fr-1tk; the pointer probe and the orbit plot
   are separate beads). Every fractal is one small formula plus a handful of
   numbers, and the card reads the same state the renderer uses (the page's
@@ -360,15 +437,17 @@ _Last updated: 2026-10-10_
   it back as it was (`mathOpen` is not reset), it is never over a dialog, and its
   Escape listener (on the window; it hands focus back to the Math button when
   focus was inside the card) exists only while the card is on screen. It sits in
-  the canvas's wrapper after the switcher: `left-3`, `top-14`, or `top-24` while
-  the switcher shows its chip row (`belowChips`, as the blank hint does), and
+  the canvas's wrapper after the switcher: `left-3`, `top-14`, or (fr-iln) a
+  little higher, `top-[5.25rem]` / `sm:top-[5.75rem]`, while the switcher shows
+  its chip row (`belowChips`), and
   `bottom-[9.75rem]`, 150 px of strip plus a gap, with `min-h-11` so the
   collapsed line always has room. The wrapper takes no pointer events (the canvas
   around the card still pans); the card scrolls (`max-h-full overflow-y-auto`)
   when the picture is too short to hold it. On a 375x667 phone the canvas is 281
   px tall: the Mandelbrot card expanded is 69 px of scrolling area clear of the
   strip, and with the chip row (Julia, Multibrot) the one-line card overlaps the
-  strip's top 9 px, which is the price of `min-h-11`; at 1280x800 the expanded
+  strip's top 9 px, which is the price of `min-h-11` (fr-iln moved the chip-row
+  offset up and it no longer does); at 1280x800 the expanded
   card is 352x460 and clear. Measured in headless Chrome with an iframe harness
   (so the viewport is the iframe's), not by eye.
 - The numbers are throttled to the link writer's cadence (`MATH_CARD_UPDATE_MS =
@@ -378,14 +457,11 @@ _Last updated: 2026-10-10_
   once (`Shown.key`), so the rule and the centre never disagree for a frame. The
   state changes only in the timer's callback, never in an effect body
   (`react-hooks/set-state-in-effect`).
-- Expanded or collapsed is kept for the session: `getExpandedSnapshot` /
-  `setExpanded` / `subscribeToExpanded` are the external store behind a
-  `useSyncExternalStore` (server snapshot: collapsed), over `sessionStorage` under
-  `fractals.mathCard.expanded` ("1"/"0"), every access behind try/catch (merely
-  reaching `window.sessionStorage` can throw) and the last choice also held in
-  memory, so the button works for the life of the page where storage refuses.
-  Whether the card is open at all is page state and not kept: a reload starts
-  with it closed, as the Settings drawer does.
+- _Superseded by the note above (fr-iln):_ expanded or collapsed was kept for the
+  session in `sessionStorage` under `fractals.mathCard.expanded` ("1"/"0"), and
+  whether the card was open at all was page state, not kept, so a reload
+  started with it closed. Both are now one localStorage record and the card
+  starts open.
 - The top bar needed room. Seven buttons were 401 px wide at 375 px (the last one
   ended 26 px past the edge), so under `sm` the buttons are `px-1.5` (was `px-2`),
   the groups `gap-0.5`, the bar `px-1` and `gap-1`; the last button now ends at

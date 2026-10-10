@@ -86,7 +86,8 @@ describe("hiding every control while a tour plays", () => {
 
   it("hides the progress line and the blank-picture hint too", () => {
     expect(page).toContain("{isRendering && !tourPlaying && (");
-    expect(page).toMatch(/<BlankHint\s+show=\{\s*!tourPlaying/);
+    expect(page).toMatch(/const blankHintShown =\s*!tourPlaying/);
+    expect(page).toMatch(/<BlankHint\s+show=\{blankHintShown\}/);
   });
 
   it("marks the stage so the pointer and the focus ring go too", () => {

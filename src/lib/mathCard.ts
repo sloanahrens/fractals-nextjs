@@ -1,6 +1,6 @@
 /**
  * The Math card's pure parts: the view's numbers as text, how often they
- * refresh, and the card's collapsed-or-expanded choice.
+ * refresh, and what the card remembers: shown or hidden, collapsed or expanded.
  *
  * `MathCard.tsx` draws; everything it decides is here so a Node suite can drive
  * it. The rule and the setting come from `fractalMath.ts`, the place the view
@@ -81,84 +81,180 @@ export function mathCardDelayMs(nowMs: number, lastShownMs: number): number {
   return linkWriteDelayMs(nowMs, lastShownMs);
 }
 
-/** The sessionStorage key for whether the card is expanded. */
-export const MATH_CARD_STORAGE_KEY = "fractals.mathCard.expanded";
+/** The localStorage key for the card's remembered choices; the suffix is the format's version. */
+export const MATH_CARD_STORAGE_KEY = "fractals.mathCard.v1";
+
+/** fr-1tk kept only "expanded", in sessionStorage, under this key. Read once, never written. */
+export const LEGACY_EXPANDED_KEY = "fractals.mathCard.expanded";
 
 /** The part of `Storage` the card uses, so a test can hand in a fake. */
 export type MathCardStorage = Pick<Storage, "getItem" | "setItem">;
 
+/** What the card remembers: whether it is shown at all, and how much of it. */
+export interface MathCardState {
+  /** The card is on the picture; the Math button is pressed. */
+  open: boolean;
+  /** The card shows the view's numbers and the blurb, not just its one line. */
+  expanded: boolean;
+}
+
+/** A first visit: the card shown, collapsed to its one line. */
+export const DEFAULT_MATH_CARD_STATE: Readonly<MathCardState> = Object.freeze({
+  open: true,
+  expanded: false,
+});
+
 /**
- * Whether the card was left expanded this session.
- * @param storage - sessionStorage, or a stand-in; undefined when the browser has none
- * @returns True only for a stored "1"; false for anything else, including a storage that throws
+ * A stored value read as a state.
+ *
+ * The value is JSON, `{"v":1,"open":true,"expanded":false}`. Each field is
+ * judged on its own and a field that is missing or not a boolean keeps its
+ * default, so a hand-edited or half-written value costs only what it got wrong.
+ * @param raw - What `getItem` returned
+ * @returns The state, or null when the text is not a version-1 object at all
  */
-export function readExpanded(storage: MathCardStorage | undefined): boolean {
+export function parseMathCardState(raw: string | null): MathCardState | null {
+  if (raw === null) return null;
+
+  let value: unknown;
   try {
-    return storage?.getItem(MATH_CARD_STORAGE_KEY) === "1";
+    value = JSON.parse(raw);
   } catch {
-    return false;
+    return null;
   }
+  if (typeof value !== "object" || value === null) return null;
+
+  const fields = value as Record<string, unknown>;
+  if (fields.v !== 1) return null;
+
+  return {
+    open:
+      typeof fields.open === "boolean"
+        ? fields.open
+        : DEFAULT_MATH_CARD_STATE.open,
+    expanded:
+      typeof fields.expanded === "boolean"
+        ? fields.expanded
+        : DEFAULT_MATH_CARD_STATE.expanded,
+  };
 }
 
 /**
- * Remember whether the card is expanded. A storage that is missing or throws
- * (private windows, blocked site data) is ignored: the choice then lasts as
- * long as the page does.
- * @param storage - sessionStorage, or a stand-in
- * @param expanded - The choice to keep
+ * What the card was left as.
+ *
+ * The versioned key wins. Without one, fr-1tk's session value ("1" or "0",
+ * only for expanded) is read so a choice made before this landed is not lost;
+ * everything else is the default. A storage that is missing or throws (private
+ * windows, blocked site data) is the default too.
+ * @param local - localStorage, or a stand-in; undefined when the browser has none
+ * @param legacySession - sessionStorage, or a stand-in, for the old key
+ * @returns A fresh state, never the shared default object
  */
-export function writeExpanded(
-  storage: MathCardStorage | undefined,
-  expanded: boolean,
+export function loadMathCardState(
+  local: MathCardStorage | undefined,
+  legacySession?: MathCardStorage,
+): MathCardState {
+  try {
+    const stored = parseMathCardState(
+      local?.getItem(MATH_CARD_STORAGE_KEY) ?? null,
+    );
+    if (stored) return stored;
+  } catch {
+    // Fall through to the old key and then the default.
+  }
+
+  try {
+    const legacy = legacySession?.getItem(LEGACY_EXPANDED_KEY);
+    if (legacy === "1" || legacy === "0") {
+      return { ...DEFAULT_MATH_CARD_STATE, expanded: legacy === "1" };
+    }
+  } catch {
+    // Nothing readable: the default.
+  }
+
+  return { ...DEFAULT_MATH_CARD_STATE };
+}
+
+/**
+ * Remember the card's state. A storage that is missing or throws is ignored:
+ * the choice then lasts as long as the page does.
+ * @param local - localStorage, or a stand-in
+ * @param state - The choices to keep
+ */
+export function saveMathCardState(
+  local: MathCardStorage | undefined,
+  state: MathCardState,
 ): void {
   try {
-    storage?.setItem(MATH_CARD_STORAGE_KEY, expanded ? "1" : "0");
+    local?.setItem(
+      MATH_CARD_STORAGE_KEY,
+      JSON.stringify({ v: 1, open: state.open, expanded: state.expanded }),
+    );
   } catch {
     // Nothing to do: the card still works, it just forgets on reload.
   }
 }
 
-// The store `useSyncExternalStore` reads. The choice is also held in memory,
-// so a toggle works in a browser whose storage refuses the write, and the
-// snapshot is a boolean, so its identity is stable between changes.
-let remembered: boolean | null = null;
+// The store `useSyncExternalStore` reads. The state is loaded once and held in
+// memory, so a toggle works in a browser whose storage refuses the write and
+// the snapshot's identity is stable between changes.
+let current: MathCardState | null = null;
 const listeners = new Set<() => void>();
 
-function sessionStore(): MathCardStorage | undefined {
+function browserStorage(
+  name: "localStorage" | "sessionStorage",
+): MathCardStorage | undefined {
   try {
-    return typeof window === "undefined" ? undefined : window.sessionStorage;
+    return typeof window === "undefined" ? undefined : window[name];
   } catch {
-    // Merely reaching sessionStorage can throw when site data is blocked.
+    // Merely reaching a storage can throw when site data is blocked.
     return undefined;
   }
 }
 
-/** Subscribe to the choice changing; returns the unsubscribe. */
-export function subscribeToExpanded(listener: () => void): () => void {
+/** Subscribe to the state changing; returns the unsubscribe. */
+export function subscribeToMathCard(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
 }
 
-/** The choice now: this page's own last change, else the session's. */
-export function getExpandedSnapshot(): boolean {
-  return remembered ?? readExpanded(sessionStore());
+/** The state now: this page's own last change, else what storage holds. */
+export function getMathCardSnapshot(): MathCardState {
+  current ??= loadMathCardState(
+    browserStorage("localStorage"),
+    browserStorage("sessionStorage"),
+  );
+  return current;
 }
 
-/** The choice on the server, where nothing has been kept: collapsed. */
-export function getServerExpandedSnapshot(): boolean {
-  return false;
+/** The state on the server, where nothing has been kept: the default. */
+export function getServerMathCardSnapshot(): MathCardState {
+  return DEFAULT_MATH_CARD_STATE;
 }
 
-/** Keep the choice for the session and tell the card. */
-export function setExpanded(expanded: boolean): void {
-  remembered = expanded;
-  writeExpanded(sessionStore(), expanded);
+function changeMathCardState(change: Partial<MathCardState>): void {
+  const before = getMathCardSnapshot();
+  const next = { ...before, ...change };
+  if (next.open === before.open && next.expanded === before.expanded) return;
+
+  current = next;
+  saveMathCardState(browserStorage("localStorage"), next);
   listeners.forEach((listener) => listener());
 }
 
-/** Forget this page's own choice. For tests, which share the module. */
-export function resetExpandedMemory(): void {
-  remembered = null;
+/** Show or hide the card, keeping whether it is expanded. */
+export function setMathCardOpen(open: boolean): void {
+  changeMathCardState({ open });
+}
+
+/** Expand or collapse the card, keeping whether it is shown. */
+export function setMathCardExpanded(expanded: boolean): void {
+  changeMathCardState({ expanded });
+}
+
+/** Forget what this page loaded or changed. For tests, which share the module. */
+export function resetMathCardMemory(): void {
+  current = null;
 }
