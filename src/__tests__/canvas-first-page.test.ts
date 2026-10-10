@@ -29,6 +29,7 @@ const css = source("../app/globals.css");
 const CARDS_IN_ORDER = [
   "<PresetSelector",
   'label="Zoom Level"',
+  'label="Auto-wander"',
   "describeView(bounds)",
   'label="Fractal"',
   "Canvas Resolution",

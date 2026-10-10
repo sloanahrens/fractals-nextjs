@@ -14,6 +14,10 @@ interface TopBarProps {
   canGoBack: boolean;
   /** Whether the journey has an entry after this one; Forward is disabled without. */
   canGoForward: boolean;
+  /** Goes to a random place near the view, as a Nearby tile does. */
+  onSurprise: () => void;
+  /** Whether there is a place to go to; Surprise me is disabled without. */
+  canSurprise: boolean;
   /** Opens the help overlay. */
   onHelp: () => void;
   /** Opens the Settings drawer. */
@@ -25,11 +29,17 @@ interface TopBarProps {
 }
 
 const BUTTON_CLASSES =
-  "rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10";
+  "rounded-lg bg-white/10 px-2 py-1.5 text-xs font-medium sm:px-3 sm:text-sm text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10";
+
+// Drawn from `sm` up; below it the title is for a screen reader only, which
+// leaves the width to the five buttons.
+const TITLE_CLASSES = "sr-only text-lg font-semibold sm:not-sr-only";
 
 /**
- * The floating bar over the canvas: the title on the left, then Back, Forward,
- * Help and Settings on the right.
+ * The floating bar over the canvas: the title on the left, Surprise me in the
+ * middle, then Back, Forward, Help and Settings on the right. Under `sm` the
+ * title stays in the page for a screen reader but is not drawn, so the five
+ * buttons fit a phone's width.
  *
  * Back and Forward retrace the journey — the views the user jumped to — through
  * the browser's own history; the page says whether there is anywhere to go, and
@@ -40,6 +50,9 @@ const BUTTON_CLASSES =
  * or touch, and any of those brings it back. The drawer being open, and focus
  * being on a control inside the bar, hold it up (`useIdleVisibility`).
  *
+ * Surprise me takes the user to one of the places the Nearby strip would
+ * offer, chosen at random; it is disabled when there are none.
+ *
  * A faded bar takes no pointer events: the touch that brings it back should
  * not also press whatever button is under the finger.
  */
@@ -48,6 +61,8 @@ export function TopBar({
   onForward,
   canGoBack,
   canGoForward,
+  onSurprise,
+  canSurprise,
   onHelp,
   onSettings,
   settingsOpen,
@@ -60,12 +75,20 @@ export function TopBar({
       data-visible={shown}
       {...focusProps}
       style={{ transitionDuration: `${TOP_BAR_FADE_MS}ms` }}
-      className={`fixed inset-x-0 top-0 z-20 flex h-[var(--top-bar-height)] items-center justify-between bg-gray-900/80 px-4 text-white backdrop-blur transition-opacity ${
+      className={`fixed inset-x-0 top-0 z-20 flex h-[var(--top-bar-height)] items-center justify-between gap-2 bg-gray-900/80 px-2 text-white backdrop-blur transition-opacity sm:grid sm:grid-cols-[1fr_auto_1fr] sm:px-4 ${
         shown ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
-      <h1 className="text-lg font-semibold">Fractal Explorer</h1>
-      <div className="flex gap-2">
+      <h1 className={TITLE_CLASSES}>Fractal Explorer</h1>
+      <button
+        type="button"
+        onClick={onSurprise}
+        disabled={!canSurprise}
+        className={BUTTON_CLASSES}
+      >
+        Surprise me
+      </button>
+      <div className="flex gap-1 sm:justify-self-end sm:gap-2">
         <button
           type="button"
           onClick={onBack}

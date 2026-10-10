@@ -48,8 +48,9 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Julia sets** (`src/lib/julia.ts`): The four named Julia constants, the `custom:<re>,<im>` spelling that names any other point, and the factory that turns one into a fractal kind
 - **Custom constant input** (`src/lib/customConstantInput.ts`): The Real and Imaginary boxes' text turned into a `custom:<re>,<im>` name or the sentence that says why not, and the Custom option's select value
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
-- **Wander step** (`src/lib/wander.ts`): One random-walk step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
-- **Wander controller** (`src/lib/wanderController.ts`): The walk's clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
+- **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
+- **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
+- **Wander controller** (`src/lib/wanderController.ts`): The Auto-wander clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, and a decoder that judges every value on its own and leaves out what it cannot read
 - **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
@@ -165,6 +166,37 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### Surprise me; Random walk becomes Auto-wander (2026-10-09)
+
+- The top bar has a centre button, "Surprise me" (`TopBar.tsx`): under `sm`
+  the bar is a flex row with the title drawn only for a screen reader (still
+  the page's `<h1>`), from `sm` up a three-column grid with the button in the
+  middle. A press picks one place at random and goes there through
+  `handlePlaceSelect`, the Nearby tile's own handler, so the crossfade and the
+  single history entry are the tile's; `handleSurprise` has no setters or push
+  of its own.
+- `src/lib/surprise.ts`: `surpriseTarget(view, places, pick = Math.random)`
+  takes `suggest(view, places, SURPRISE_CANDIDATES)` (6, the strip's lead
+  page) and indexes it with `pick()`. `suggest` already leaves out the place
+  the view is, so a surprise is never where you are; a `pick` outside [0, 1)
+  or not a number is held to the ends of the list; an empty list is `null`.
+  The page asks it with `() => 0` whether any place exists and disables the
+  button when none does (`canSurprise`). It reads the view from the page's
+  state (`placeView`), at the press, so a second press right after the first
+  starts from the place the first chose and the renderer cancels the old
+  render the way any other move does.
+- The Random walk checkbox, its seconds box and the countdown line left the
+  Navigation card for a card of their own, headed "Auto-wander", right after
+  it; the checkbox reads "Auto-wander". `wander.ts` and `wanderController.ts`
+  are untouched, and so is every other word of the control. The Help overlay's
+  group is "Auto-wander" and has a "Surprise me" row in Nearby places; the
+  README says the same.
+- `surprise.test.ts` drives the helper (never the current place, respects
+  `pick`, empty and unmeasurable cases); `surprise-panel.test.ts` reads the
+  sources for the button's name and place, the handler going through the
+  tile's, and the Auto-wander card; the card order test in
+  `canvas-first-page.test.ts` includes it.
 
 ### Nearby strip, Back and Forward (2026-10-09)
 
@@ -548,7 +580,8 @@ stays gone instead of measuring its classes._
   own `close` event — fired by Escape as well as by `close()` — is the one exit
   all three ways report through. `aria-labelledby` points at the heading.
 - `src/lib/helpEntries.ts` holds `HELP_SECTIONS`, the four groups the dialog
-  renders (Mouse and touch, Keyboard, Random walk, Views and links) as
+  renders (Mouse and touch, Keyboard, Random walk, Views and links; later
+  Nearby places was added and Random walk became Auto-wander) as
   `{ title, entries: { keys, action }[] }[]`. It lists only what this build
   really does — one-finger drag but no pinch, since `zoomPan.ts` ignores a
   touch with more than one finger.
