@@ -64,7 +64,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
 - **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
-- **Export size** (`src/lib/exportSize.ts`): The sizes the Download PNG controls offer — the canvas, 2x and 4x, with the largest whole multiple within 12 megapixels standing in for a candidate the cap rules out — the `_2x`/`_4x` an export file is named with, and the 250 ms throttle on the button's progress text
+- **Export size** (`src/lib/exportSize.ts`): The sizes the Download PNG controls offer — the canvas, 2x and 4x, with the largest whole multiple within 12 megapixels standing in for a candidate the cap rules out — the `_2x`/`_4x` an export file is named with, the shared part-before-the-extension rule (`appendToFileName`), and the 250 ms throttle on the button's progress text
+- **Export shape** (`src/lib/exportShape.ts`): The wallpaper shapes the Shape select offers — Screen (4:3), Desktop 16:9, Phone 9:19.5, Square 1:1, with their own pixel sizes — `exportFrame(centerX, centerY, zoom, aspect)`, the region a picture of that shape draws, which contains the screen's 4:3 view rather than cropping it, and the `_16x9_3840x2160` a wallpaper file is named with
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **Pinch** (`src/lib/pinch.ts`): The pure helpers behind two-finger zoom — finger distance, midpoint, the zoom factor between two steps, and scale-about-a-point
 - **Wheel zoom** (`src/lib/wheelZoom.ts`): The zoom factor one wheel event asks for — an exponential of how far it scrolled
@@ -190,6 +191,76 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-10_
 
+### Wallpaper shapes: export the view as Desktop, Phone or Square (2026-10-10)
+
+- fr-jux. Download PNG can save the picture in the shape of a real screen. The
+  Settings drawer's Download card gained a **Shape** select above Export size,
+  offering Screen (4:3), Desktop 16:9, Phone 9:19.5 and Square 1:1, and a
+  wallpaper shape lists its own pixel sizes in the Export size select in place
+  of the canvas multiples.
+- **`src/lib/exportShape.ts`** is the new module. `EXPORT_SHAPES` is the
+  catalogue the select renders (`{ id, label, slug, aspect, sizes }`): `screen`
+  with no sizes of its own (its sizes are whole multiples of the canvas),
+  `desktop` (1920 x 1080, 2560 x 1440, 3840 x 2160), `phone` (1170 x 2532,
+  1290 x 2796) and `square` (1080 x 1080, 2160 x 2160) — 1.2 to 8.3
+  megapixels, inside the 12-megapixel budget the canvas multiples are held to.
+  `exportShapeFor(id)` looks one up and answers the screen for an id this build
+  does not know, as `resolveFractalKind` does for a fractal.
+- **Framing, which is where this landing departs from the bead's wording, and
+  why.** `exportFrame(centerX, centerY, zoom, aspect)` returns the region a
+  picture of that shape draws: the centre is the view's centre, and the frame
+  contains the screen's 4:3 view — a shape wider than 4:3 keeps the view's
+  height and widens about it, a taller one keeps its width and heightens about
+  it, and the screen's own shape returns `calculateZoomBounds`'s bounds
+  exactly. The bead's description has the anchoring the other way round ("for a
+  landscape or square shape the horizontal span of the screen view is kept, for
+  a portrait shape the vertical span is kept"), which crops: at 16:9 it would
+  cut a quarter off the top and bottom of the view, and at 9:19.5 it would keep
+  a 1.4-unit-wide sliver of a 4-unit view. That reading contradicts the goal
+  stated in the same sentence — "what the visitor sees on screen is always
+  inside the wallpaper and never cropped" — and the app's own precedent
+  (`cardBounds` in `ogView.ts` keeps the height and widens to the card's
+  1.91:1, noting that cropping the height "would cut off the top and bottom of
+  what the link names"). So the frame was built to the goal. Square is the one
+  shape both readings agree about: it keeps the width and gains room above and
+  below.
+- The frame's aspect is the published size's own rather than the shape's
+  nominal one, so the pixels are square: a 1170 x 2532 phone is 9:19.52, and
+  the shape's `aspect` is what the shape is called, not what it draws at.
+  `exportFrame` also takes a zoom or an aspect it cannot use as the screen's
+  own (`MIN_ZOOM`, 4:3), so a value from outside can never put a NaN or an
+  infinity into the renderer.
+- `src/lib/exportSize.ts` gained `appendToFileName(name, part)` — the
+  insert-before-the-extension half `exportFileName` already had, now shared —
+  and `wallpaperFileName(name, shape, width, height)` marks the shape and the
+  size (`mandelbrot_-0.75_0_1x_16x9_3840x2160.png`). The screen shape's names
+  are byte for byte what they were.
+- **The page** (`src/app/FractalExplorer.tsx`). `exportSizeOptions` is now the
+  options of one select for either shape, an `ExportSizeOption` union of
+  `{ kind: "canvas" }` (a canvas multiple, with its scale) and
+  `{ kind: "wallpaper" }` (a shape and a pixel size); the selection is one
+  string key, so the existing fallback rule covers both a canvas that changed
+  size and a shape that replaced every option, resetting to the list's first
+  entry. `runExport` now takes an `ExportJob` — `{ width, height, bounds, name
+  }` — instead of a size, so a canvas multiple and a wallpaper go through one
+  detached-canvas path with the same progress, throttle, Cancel token, memory
+  release and failure message as before. The screen-size save, and the screen
+  shape's larger sizes, take exactly the path they took before: the frame is
+  the page's own `bounds` and the name is `exportFileName`'s. What the button
+  waits for is unchanged in effect — only the screen shape's own size waits for
+  the render on screen.
+- Tests: `src/lib/__tests__/exportShape.test.ts` (the catalogue and its guards,
+  the 4:3 frame byte for byte against `calculateZoomBounds`, the
+  wider/taller/square anchoring, the centre kept, the screen view inside the
+  frame for seven aspects, the asked-for aspect out, every published size's own
+  aspect, finiteness at `MAX_ZOOM`, a zoom or an aspect that cannot be used,
+  and the file names), `appendToFileName` in `exportSize.test.ts`, and the
+  Shape select, the per-shape size list, the framing call and the wallpaper
+  naming in `export-panel.test.ts`. `make gate` is green.
+- Docs: the README's Download PNG bullet, its Saving an Image paragraph, its
+  Controls Stay Usable line and its Project Structure; the Help entry for
+  Download PNG; the Export shape bullet in Project Architecture; and this note.
+
 ### Export size: Download PNG at 2x or 4x, drawn off-screen (2026-10-10)
 
 - fr-xhr. Download PNG can now save a larger picture than the screen holds —
@@ -217,14 +288,19 @@ _Last updated: 2026-10-10_
   `setTimeout(revokeObjectURL, 0)` — is now the module-level `saveCanvasPng(canvas,
   name, onSettled)`, which both saves go through; the screen-size branch of
   `handleDownload` calls it with `canvasRef.current` and the `downloadFileName`
-  name, exactly as before. A larger size calls `runExport(size)` instead.
+  name, exactly as before. A larger size calls `runExport(...)` instead (the
+  Wallpaper shapes note above turned that argument into an `ExportJob`).
 - `exportSizeOptions` is `exportSizes(canvasWidth, canvasHeight)` memoized, and
   `exportScale` falls back to 1 during the render that sees a list without it,
   because a `<select>` whose value is not among its options paints blank and the
-  canvas size is a control the user can move at any moment.
+  canvas size is a control the user can move at any moment. _Superseded by the
+  Wallpaper shapes note above: the list is now one select's options for either
+  shape, chosen by the string `exportSizeKey`, and the fallback resets to the
+  list's first entry._
 - `runExport` captures the view *when it is called* — `bounds`,
   `effectiveMaxIterations`, `colorScheme`, `fractalKind`, and the centre/zoom/
-  fractal the name is built from — into a `FractalConfig`, builds a detached
+  fractal the name is built from — into a `FractalConfig` (the Wallpaper shapes
+  note above names that capture the `ExportJob`), builds a detached
   `document.createElement("canvas")` at the chosen size, and draws it with a
   `FractalRenderer` of its own. The canvas on screen is never referenced in that
   function (a test asserts it): it is neither read nor resized, so it keeps its
@@ -236,9 +312,10 @@ _Last updated: 2026-10-10_
   most twice a second. The button reads `` `Exporting... ${Math.round(progress *
   100)}%` `` and a Cancel button appears beside it while `exportState.kind ===
   "running"`; `downloadDisabled` is `exporting || (exportScale === 1 &&
-  isRendering)`, so a screen-size save still waits for the render that may be
-  half painting the canvas it reads while an export does not — the one place the
-  old "Download PNG keeps the lock" rule narrows.
+  isRendering)` (now `exporting || (savesCanvas && isRendering)`, the same rule
+  under the Wallpaper shapes note's names), so a screen-size save still waits
+  for the render that may be half painting the canvas it reads while an export
+  does not — the one place the old "Download PNG keeps the lock" rule narrows.
 - Cancelling and racing are one token. `exportTokenRef` is bumped by
   `handleCancelExport` (which also calls `cancelRender()` on the export's
   renderer and releases it) and by the unmount effect, and checked twice in
@@ -778,8 +855,9 @@ _Last updated: 2026-10-10_
 - Bounds, which the bead asked to be documented. The page draws
   `calculateZoomBounds(centre, zoom)`, 4/zoom by 3/zoom of the plane, onto a canvas
   of that 4:3 shape, and Download PNG saves that canvas (a larger Export size
-  draws the same 4:3 view at more pixels — see the Export size note at the top of
-  Version Notes). The card is 1.91:1, so
+  draws the same 4:3 view at more pixels — see the Export size note above).
+  A wallpaper shape draws a frame of its own rather than that 4:3 view (see the
+  Wallpaper shapes note). The card is 1.91:1, so
   `cardBounds` keeps that rule's height (3/zoom) and centre and widens to 1200:630:
   square pixels, and the whole 4:3 view a visitor had is inside the card, centred,
   with more plane at the sides. Cropping the 4:3 view to the card's height would
@@ -2643,9 +2721,9 @@ stays gone instead of measuring its classes._
   Reset View and twenty other controls greyed out and a drag was the only way
   back. Using a control now does exactly what a wheel or a drag does: it starts
   a render of the new view. Download PNG keeps the lock, because the canvas it
-  reads may be half drawn. (Superseded in part by the Export size note at the top
-  of Version Notes: the lock is the screen-size save's alone — a larger export
-  draws on a canvas of its own and is not held back by the render on screen.)
+  reads may be half drawn. (Superseded in part by the Export size note above: the
+  lock is the screen-size save's alone — a larger export, or a wallpaper, draws
+  on a canvas of its own and is not held back by the render on screen.)
 - `FractalRenderer` cancels the run it replaces with a run token (`runToken`),
   a counter, where a single `shouldCancel` flag served both of the two states it
   has to tell apart. The older run checks the token at the top of each row and
