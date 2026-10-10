@@ -59,6 +59,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 - **Containerized Deployment**: Docker-based deployment with multi-stage builds
 - **Deploy Contract**: Root `Dockerfile`, server on `$PORT` (8080), `/api/health` route for probes
+- **Image Route**: `GET /api/og?<view link>` draws that view as a 1200x630 PNG on the server with the app's own maths, behind a cache, a one-render-at-a-time gate and an 8 s budget; the first half of per-view link previews, so nothing in the page uses it yet
 - **Quality Gate**: `make gate` runs install, lint, typecheck, build and the test suite
 - **Integration Tier**: `make integration STAGING_URL=<url>` checks a deployment that is already up (see [Integration Tests](#integration-tests))
 - **ESLint + TypeScript**: `make check` runs ESLint and `tsc --noEmit`
@@ -156,7 +157,7 @@ Two environment variables, and no others:
   tier evidence that the commit just built is the commit live. Without it, the
   check only asks that the endpoint answers with a `commit` field at all.
 
-Six checks, a `GET` or two each, read-only, 15 s per request and one retry:
+Seven checks, a `GET` or two each, read-only, 15 s per request and one retry:
 
 - `GET /api/health` is 200 and `{"status":"healthy"}`.
 - `GET /` is 200 and carries the `<h1>Fractal Explorer</h1>` and the document
@@ -170,6 +171,9 @@ Six checks, a `GET` or two each, read-only, 15 s per request and one retry:
 - `GET /og-card.png` is 200, `image/png`, 1200x630 by its IHDR chunk and under
   300 KB. It is the social card `src/app/layout.tsx` points its metadata at,
   and it is served out of `public/` by the `Dockerfile`.
+- `GET /api/og?<view link>` is 200, `image/png`, 1200x630 by its IHDR chunk and
+  `Cache-Control: public, max-age=31536000, immutable`; a request that is not a
+  view (no query, `v=1&x=banana`, `v=2&f=julia`) is 400.
 - The favicon and the Apple touch icon the page's head links (`/icon.png`,
   `/apple-icon.png`) answer 200 with `image/png`.
 
@@ -232,6 +236,7 @@ dependencies and needs nothing else.
 │   │   ├── globals.css     # Global styles
 │   │   └── api/
 │   │       ├── health/route.ts  # Health check endpoint
+│   │       ├── og/route.ts      # GET /api/og?<view link>: the view as a 1200x630 PNG, drawn on the server (a shell over lib/ogRoute.ts)
 │   │       └── version/route.ts # Build, deploy time, commit and revision as JSON
 │   ├── components/ui/      # UI components
 │   │   ├── __tests__/              # Tests for the form controls' labels
@@ -278,11 +283,16 @@ dependencies and needs nothing else.
 │   │   ├── multibrot.ts            # Multibrot iteration (z^d + c for d = 3 to 5) and the power parser
 │   │   ├── nearbyStrip.ts          # When the Nearby suggestions refresh, which show, the crossfade time
 │   │   ├── newton.ts               # Newton fractal of z^3 - 1: the root and the speed packed into one number
+│   │   ├── ogLimits.ts             # /api/og's limits: the 40-PNG LRU cache, the one-at-a-time render gate with a queue of 2, the 8 s budget
+│   │   ├── ogRoute.ts              # /api/og's handler: 400, 200, 503, with its cache, gate, clock and renderer injectable
+│   │   ├── ogView.ts               # The view an /api/og query names: judged strictly, the 1200x630 card bounds, iterations capped at 400, the canonical key
 │   │   ├── pinch.ts                # Pinch helpers: finger distance, midpoint, scale about a point
 │   │   ├── placeThumbnails.ts      # Off-screen place pictures: LRU cache, queue, cancel and pause
 │   │   ├── places.ts               # Catalogue of named places, suggest() for the ones near a view, and each fractal's featured place
 │   │   ├── presets.ts              # Built-in and saved presets
+│   │   ├── pngEncode.ts            # A minimal PNG encoder on node:zlib alone (server only)
 │   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
+│   │   ├── renderRgba.ts           # A view as raw RGBA pixels with no canvas, shared by FractalRenderer and /api/og
 │   │   ├── siteOrigin.ts           # The origin a request was served from, for the page's absolute URLs
 │   │   ├── surprise.ts             # Where Surprise me goes: one of the six nearest suggestions, picked at random
 │   │   ├── tour.ts                 # Where an unattended tour goes next (seeded, with a recent window)

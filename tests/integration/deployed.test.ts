@@ -14,6 +14,8 @@ const VERSION = "/api/version";
 // The social card src/app/layout.tsx points its metadata at, which the
 // Dockerfile serves out of public/.
 const CARD = "/og-card.png";
+// The image route: GET /api/og?<view link> draws that view as a 1200x630 PNG.
+const OG = "/api/og";
 
 const url = (path: string) => requestUrl(target.baseUrl, path);
 
@@ -74,6 +76,28 @@ describe(`the deployment at ${target.baseUrl}`, () => {
     expect(body.readUInt32BE(16)).toBe(1200);
     expect(body.readUInt32BE(20)).toBe(630);
     expect(body.length).toBeLessThan(300 * 1024);
+  });
+
+  it("draws a view as a 1200x630 PNG at /api/og, and refuses what is not a view", async () => {
+    const view = "v=1&f=mandelbrot&x=-0.75&y=0&z=1&s=classic&i=auto";
+
+    const drawn = await get(url(`${OG}?${view}`));
+
+    expect(drawn.status).toBe(200);
+    expect(drawn.headers.get("content-type")).toContain("image/png");
+    expect(drawn.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+    const body = Buffer.from(await drawn.arrayBuffer());
+    expect(body.subarray(1, 4).toString("latin1")).toBe("PNG");
+    expect(body.readUInt32BE(16)).toBe(1200);
+    expect(body.readUInt32BE(20)).toBe(630);
+
+    for (const bad of ["", "?v=1&x=banana", "?v=2&f=julia"]) {
+      const refused = await get(url(`${OG}${bad}`));
+      expect(refused.status, `${OG}${bad}`).toBe(400);
+      await refused.body?.cancel();
+    }
   });
 
   it("links the favicon and the touch icon from the page", async () => {
