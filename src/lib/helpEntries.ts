@@ -132,7 +132,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Auto-wander",
         action:
-          "Tick it in the Auto-wander card of the Settings drawer and the view moves every few seconds: three small steps nearby, then a hop to a place from the catalogue, which may be on another fractal, and a step that lands on an empty picture hops at once",
+          "Press the Auto-wander pill at the bottom right of the picture, or tick Auto-wander in the Settings drawer, and the view moves every few seconds: three small steps nearby, then a hop to a place from the catalogue, which may be on another fractal, and a step that lands on an empty picture hops at once. While it is on the pill says Wandering and counts the seconds to the next step; press it again to stop",
       },
       {
         keys: "Seconds between steps",

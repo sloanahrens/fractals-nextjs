@@ -133,6 +133,8 @@ import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
 import { BlankHint } from "../components/ui/BlankHint";
 import { NearbyStrip } from "../components/ui/NearbyStrip";
+import { WanderControl } from "../components/ui/WanderControl";
+import { useWanderNudge } from "../components/ui/useWanderNudge";
 
 // The four manual coordinate boxes. A field is present only once the user has
 // typed in it; while it is absent the box shows the current view.
@@ -1515,6 +1517,13 @@ export default function Home() {
     tourMode.setConditions({ overlayOpen: tourOverlayOpen });
   }, [tourMode, tourOverlayOpen]);
 
+  // The Auto-wander pill's one-time offer to a visitor who has not found it.
+  const wanderNudge = useWanderNudge({
+    wanderOn,
+    tourPlaying,
+    overlayOpen: tourOverlayOpen,
+  });
+
   // What only the browser knows: whether the tab is showing, whether the window
   // has focus, whether a field has it, and whether anyone is here. Input on the
   // window, in the capture phase, so nothing on the page can keep it from being
@@ -1786,6 +1795,18 @@ export default function Home() {
               hasMoreNearby(nearby.pool.length) ? handleNearbyMore : undefined
             }
           />
+
+          {/* The Auto-wander switch, after the strip so it paints over the
+              strip's gradient when it stacks above it. It shares
+              handleWanderChange with the Settings checkbox. */}
+          <WanderControl
+            on={wanderOn}
+            countdown={wanderCountdown}
+            rendering={isRendering}
+            onToggle={handleWanderChange}
+            nudge={wanderNudge}
+            hidden={tourPlaying || tourOverlayOpen}
+          />
         </div>
       </main>
 
@@ -1885,6 +1906,9 @@ export default function Home() {
               checked={wanderOn}
               onChange={handleWanderChange}
             />
+            <p className="text-sm text-gray-600">
+              The same switch is on the picture, at the bottom right.
+            </p>
             <Input
               label="Seconds between steps"
               value={wanderIntervalDraft ?? String(wanderInterval)}
