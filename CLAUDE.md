@@ -74,6 +74,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia chips land
+- **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
 - **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn buttons, and Julia's constant chips, drawn over the top left of the canvas and never faded
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
@@ -178,6 +179,51 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Auto-wander pill on the picture (2026-10-10)
+
+- The only switch for Auto-wander was a checkbox in Settings, so a first-time
+  visitor could neither find it nor turn it back on. `WanderControl.tsx` is a
+  compact pill over the bottom right of the canvas: off, a play glyph and
+  "Auto-wander"; on, a pause glyph and "Wandering", with " · N s" from the
+  controller's countdown while it runs and plain "Wandering" while
+  `isRendering` (`wanderPillLabel` in `src/lib/wanderControl.ts`, pure). It is an
+  `aria-pressed` button named "Auto-wander" in both states, at least 44 x 36 px,
+  with a focus ring and inline SVG glyphs. It never fades, and is hidden by
+  `tourPlaying || tourOverlayOpen` like the switcher.
+- One state, one handler: the pill's `onToggle` is `handleWanderChange`, the
+  Settings checkbox's `onChange`. The Settings card keeps the checkbox and the
+  seconds box and now says the same switch is on the picture. The page draws the
+  pill after `NearbyStrip`, so it paints over the strip's gradient when it
+  stacks above it.
+- Placement is measured, not guessed from the viewport: the component watches
+  its overlay (the wrapper's size) with a `ResizeObserver` and asks
+  `wanderPlacement(width)`. At least `NEARBY_STRIP_MAX_WIDTH` (six 96 px tiles,
+  More, gaps and padding: 744) plus the pill and a gap, it sits `beside` the
+  tiles in the corner; narrower, or unmeasured, it is `above`, 114 px up
+  (`bottom-[7.25rem]`, over the strip's heading line, the strip being 150 px
+  tall). A canvas that is narrow because the window is short and wide gets the
+  stacked form too.
+- The first-run nudge. `useWanderNudge({ wanderOn, tourPlaying, overlayOpen })`
+  returns true for `WANDER_NUDGE_SHOW_MS` (6 s) once, after the page has been open
+  `WANDER_NUDGE_AFTER_MS` (15 s) with no wander used and no tour started
+  (`decideNudge`: `show`, `later` or `never`). The flag
+  (`WANDER_NUDGE_STORAGE_KEY`) is written to localStorage as the tooltip appears,
+  through `readNudgeSeen`/`markNudgeSeen`, which swallow a throwing or missing
+  storage, so the page then nudges on every visit. An open drawer or Help defers
+  it; any `pointerdown` or `keydown` ends it. The pulse is the `wander-nudge-pulse`
+  CSS animation in `globals.css` (two beats), switched off by
+  `prefers-reduced-motion`, which leaves the "Let it wander for you" tooltip.
+  State is set only from timers and events, never in an effect body
+  (`react-hooks/set-state-in-effect`).
+- Not changed: the interval box, what a step does, the Tour (which hides the
+  pill and holds wander as before), Surprise me, and the keyboard.
+- Tests: `wanderControl.test.ts` (label in each state, the countdown hidden
+  during a render or when not a number, placement at 320 to 1003 px, the storage
+  helpers with a throwing storage, `decideNudge` at 14.999 s and 15 s, overlays,
+  used wander or tour, seen) and `wander-control-panel.test.ts` (sources: the
+  pressed button and fixed name, one shared handler, the hiding rule, the draw
+  order, the nudge's try/catch storage and reduced-motion CSS).
 
 ### Featured places are held to a flat-field guard (2026-10-10)
 
