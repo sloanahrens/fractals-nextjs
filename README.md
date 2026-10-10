@@ -61,7 +61,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 - **Containerized Deployment**: Docker-based deployment with multi-stage builds
 - **Deploy Contract**: Root `Dockerfile`, server on `$PORT` (8080), `/api/health` route for probes
-- **Image Route**: `GET /api/og?<view link>` draws that view as a 1200x630 PNG on the server with the app's own maths, behind a cache, a one-render-at-a-time gate and an 8 s budget. Superseded by the pre-built previews (see Link preview): no page points at it any more, and a later change redirects it and deletes the renderer
+- **Image Route**: `GET /api/og?<view link>` no longer draws anything. It answers `308` to the pre-built picture the view previews as (`/og/<place-id>.jpg`), or to the static card for a query that is not a view, so a preview URL a crawler cached before the pre-built previews still shows a picture without the server spending CPU on a render
 - **Quality Gate**: `make gate` runs install, lint, typecheck, build and the test suite
 - **Integration Tier**: `make integration STAGING_URL=<url>` checks a deployment that is already up (see [Integration Tests](#integration-tests))
 - **ESLint + TypeScript**: `make check` runs ESLint and `tsc --noEmit`
@@ -176,9 +176,10 @@ Eight checks, a `GET` or two each, read-only, 15 s per request and one retry:
 - `GET /og/<place-id>.jpg` — the pre-built preview a shared view link names —
   is 200, `image/jpeg`, a JPEG by its own marker, and
   `Cache-Control: public, max-age=86400, ...`.
-- `GET /api/og?<view link>` is 200, `image/png`, 1200x630 by its IHDR chunk and
-  `Cache-Control: public, max-age=31536000, immutable`; a request that is not a
-  view (no query, `v=1&x=banana`, `v=2&f=julia`) is 400.
+- `GET /api/og?<view link>` is 308, `Cache-Control: public, max-age=86400`,
+  `Location` the pre-built picture the view previews as (`/og/<place-id>.jpg`);
+  a request that is not a view (no query, `v=1&x=banana`, `v=2&f=julia`) is 308
+  to `/og-card-2.png`. Both follow on to a picture the server does not draw.
 - The favicon and the Apple touch icon the page's head links (`/icon.png`,
   `/apple-icon.png`) answer 200 with `image/png`.
 
@@ -245,7 +246,7 @@ dependencies and needs nothing else.
 │   │   ├── globals.css     # Global styles
 │   │   └── api/
 │   │       ├── health/route.ts  # Health check endpoint
-│   │       ├── og/route.ts      # GET /api/og?<view link>: the view as a 1200x630 PNG, drawn on the server (a shell over lib/ogRoute.ts)
+│   │       ├── og/route.ts      # GET /api/og?<view link>: 308 to the pre-built picture that view previews as, or to the static card
 │   │       └── version/route.ts # Build, deploy time, commit and revision as JSON
 │   ├── components/ui/      # UI components
 │   │   ├── __tests__/              # Tests for the form controls' labels
@@ -299,10 +300,8 @@ dependencies and needs nothing else.
 │   │   ├── multibrot.ts            # Multibrot iteration (z^d + c for d = 3 to 5) and the power parser
 │   │   ├── nearbyStrip.ts          # When the Nearby suggestions refresh, which show, the crossfade time
 │   │   ├── newton.ts               # Newton fractal of z^3 - 1: the root and the speed packed into one number
-│   │   ├── ogLimits.ts             # /api/og's limits: the 40-PNG LRU cache, the one-at-a-time render gate with a queue of 2, the 8 s budget
-│   │   ├── ogRoute.ts              # /api/og's handler: 400, 200, 503, with its cache, gate, clock and renderer injectable
 │   │   ├── ogImage.ts              # Which picture a preview points at: one pre-built file per place, or the static card
-│   │   ├── ogView.ts               # The view an /api/og query names: judged strictly, the 1200x630 card bounds, iterations capped at 400, the canonical key
+│   │   ├── ogView.ts               # The view an /api/og query names: judged strictly, and the 1200x630 card frame the preview generator draws in
 │   │   ├── orbitPlot.ts            # The orbit plot's scaling, dot colours and words: the frame, the clamping, the aria-label
 │   │   ├── pageMetadata.ts         # The page's head: the static card, or the nearest place's pre-built preview, og:url and one line about it
 │   │   ├── paletteControls.ts      # Reverse and Shift as the controls read them: percent against fraction of a turn, the defaults, the slider's keys
@@ -310,9 +309,8 @@ dependencies and needs nothing else.
 │   │   ├── placeThumbnails.ts      # Off-screen place pictures: LRU cache, queue, cancel and pause
 │   │   ├── places.ts               # Catalogue of named places, suggest() for the ones near a view, nearestPlace() for a picture, and each fractal's featured place
 │   │   ├── presets.ts              # Built-in and saved presets
-│   │   ├── pngEncode.ts            # A minimal PNG encoder on node:zlib alone (server only)
 │   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
-│   │   ├── renderRgba.ts           # A view as raw RGBA pixels with no canvas, shared by FractalRenderer, /api/og and the preview generator
+│   │   ├── renderRgba.ts           # A view as raw RGBA pixels with no canvas, shared by FractalRenderer and the preview generator
 │   │   ├── siteOrigin.ts           # The origin a request was served from, for the page's absolute URLs
 │   │   ├── siteText.ts             # The app's own words: title, the description built from FRACTAL_TYPES, the card's tagline and alt text
 │   │   ├── surprise.ts             # Where Surprise me goes: one of the six nearest suggestions, picked at random
@@ -533,7 +531,8 @@ card, because a crawler never sees the part of an address after the `#`.
 A link that carries its view in the query (`/?v=1&f=julia&k=Dendrite&...`, the
 form Copy link copies) previews as that view. `generateMetadata` in
 `src/app/page.tsx` (a layout is not given the search parameters) reads them;
-when `parseOgQuery` accepts them, the way `/api/og` itself would, `og:image` and
+when `parseOgQuery` accepts them — the strict reader `/api/og` uses too —
+`og:image` and
 `twitter:image` become `<origin>/og/<place-id>.jpg` — a picture built ahead of
 time, not a render of the request — `og:url` becomes `<origin>/?<fragment>`,
 and the title and descriptions gain one line built from the decoded view ("Julia
@@ -541,8 +540,8 @@ set, Dendrite, 400x"). The fragment is the view *re-encoded from the decoded
 state* (`previewFor` in `src/lib/viewPreview.ts`), so only known fields reach
 the URL and the line is made of this build's own labels and numbers; nothing a
 visitor typed is echoed. A repeated key counts by its first value, as the page
-reads it. With no parameters, a query that is not a view, or one `/api/og` would
-refuse, the head is exactly the static card's (`pageMetadata` in
+reads it. With no parameters, a query that is not a view, or one the strict
+reader refuses, the head is exactly the static card's (`pageMetadata` in
 `src/lib/pageMetadata.ts`, shared with the layout). The integration tier checks
 all three cases against a deployment.
 
@@ -566,8 +565,8 @@ set".
 
 The pictures come from `npm run make-og-previews`
 (`scripts/make-og-previews.mjs`), which draws every place through the app's own
-pixel pipeline — `renderRgba`, the same function the canvas and the image route
-use — at `cardBounds`, the 1.91:1 frame the route drew a card in, in the
+pixel pipeline — `renderRgba`, the same function the canvas uses — at
+`cardBounds`, the 1.91:1 frame the on-demand card used to draw in, in the
 place's own colour scheme, at the iteration count Auto picks for its zoom, with
 smooth counts: the picture the page draws when a visitor lands on that place. It
 encodes JPEG with `sharp` — the encoder `make-og-card.mjs` already uses,
@@ -586,8 +585,11 @@ and the set is about 4.6 MB across the 69 places, committed. `/og/*` is served
 by a `headers()` rule in `next.config.js` with
 `Cache-Control: public, max-age=86400, stale-while-revalidate=604800`, since
 these change only when the generator is run; every other path keeps the headers
-it had. `/api/og` is unchanged and still answers, but no page points at it any
-more (a later change redirects it and deletes the renderer).
+it had. `/api/og` no longer draws anything: a preview URL a crawler cached
+before these pictures existed is answered with a 308 to the same picture the
+page's head names for the view (`previewForQuery`), or to the static card for a
+query that is not a view, so an old cached link still shows a picture and no
+request can make the server render (fr-5om).
 
 A link may name a fractal and no place in it (`/?v=1&f=julia&k=Dendrite&z=400`,
 a hand-written or truncated link). Its card is that fractal's whole view at the

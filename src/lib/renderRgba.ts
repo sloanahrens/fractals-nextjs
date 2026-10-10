@@ -17,10 +17,11 @@
  * draws, byte for byte.
  *
  * `FractalRenderer` calls {@link renderRgbaRows} a row at a time and copies each
- * row into its canvas, and the `/api/og` route calls {@link renderRgba} for a
- * whole picture on the server, so a view is the same pixels in the browser and
- * in a link preview, by construction rather than by two loops kept in step.
- * `fractalRenderer.test.ts` holds the two to byte equality for every fractal.
+ * row into its canvas, and `scripts/make-og-previews.mjs` calls
+ * {@link renderRgba} for a whole picture, so a place is the same pixels in the
+ * browser and in a link preview, by construction rather than by two loops kept
+ * in step. `fractalRenderer.test.ts` holds the two to byte equality for every
+ * fractal.
  *
  * Nothing here touches the DOM, `window` or any Node module, so it runs in both.
  */

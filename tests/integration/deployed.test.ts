@@ -17,7 +17,9 @@ const VERSION = "/api/version";
 // Dockerfile serves out of public/. The name carries a 2 so a chat app that
 // cached the old card fetches this one (fr-3y2).
 const CARD = "/og-card-2.png";
-// The image route: GET /api/og?<view link> draws that view as a 1200x630 PNG.
+// The image route: GET /api/og?<view link> now redirects to the pre-built
+// picture the view previews as, so an old cached preview URL still works
+// without the server drawing anything (fr-5om).
 const OG = "/api/og";
 // The pre-built previews: one picture per catalogue place, served as a static
 // file out of public/og (fr-xnl). A view previews as the nearest place's.
@@ -86,25 +88,32 @@ describe(`the deployment at ${target.baseUrl}`, () => {
     expect(body.length).toBeLessThan(300 * 1024);
   });
 
-  it("draws a view as a 1200x630 PNG at /api/og, and refuses what is not a view", async () => {
+  it("redirects an old /api/og URL to the pre-built picture, and anything else to the card", async () => {
+    const origin = new URL(target.baseUrl).origin;
     const view = "v=1&f=mandelbrot&x=-0.75&y=0&z=1&s=classic&i=auto";
 
+    // A valid view: the request follows the 308 to the picture the page's head
+    // names for the same link, and the server draws nothing.
     const drawn = await get(url(`${OG}?${view}`));
+    const final = new URL(drawn.url);
 
+    expect(drawn.redirected).toBe(true);
+    expect(final.origin).toBe(origin);
+    expect(final.pathname).toBe("/og/mandelbrot-whole.jpg");
     expect(drawn.status).toBe(200);
-    expect(drawn.headers.get("content-type")).toContain("image/png");
-    expect(drawn.headers.get("cache-control")).toBe(
-      "public, max-age=31536000, immutable",
-    );
-    const body = Buffer.from(await drawn.arrayBuffer());
-    expect(body.subarray(1, 4).toString("latin1")).toBe("PNG");
-    expect(body.readUInt32BE(16)).toBe(1200);
-    expect(body.readUInt32BE(20)).toBe(630);
+    expect(drawn.headers.get("content-type")).toContain("image/jpeg");
+    expect(drawn.headers.get("cache-control")).toContain("max-age=86400");
+    await drawn.body?.cancel();
 
+    // Not a view: the static card, rather than a broken image in an old cache.
     for (const bad of ["", "?v=1&x=banana", "?v=2&f=julia"]) {
-      const refused = await get(url(`${OG}${bad}`));
-      expect(refused.status, `${OG}${bad}`).toBe(400);
-      await refused.body?.cancel();
+      const toCard = await get(url(`${OG}${bad}`));
+
+      expect(toCard.redirected, `${OG}${bad}`).toBe(true);
+      expect(new URL(toCard.url).pathname, `${OG}${bad}`).toBe(
+        "/og-card-2.png",
+      );
+      await toCard.body?.cancel();
     }
   });
 
