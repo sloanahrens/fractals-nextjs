@@ -1,6 +1,7 @@
 "use client";
 
 import React, {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -50,6 +51,12 @@ interface MathCardProps {
    * sits below it or beside it instead (`BlankHint`).
    */
   stepAside?: boolean;
+  /**
+   * The card's own panel element, for the page. It is the only thing drawn
+   * over the picture that a probe survives a pointer's move onto, so the page
+   * needs the element to watch it (`shouldClearProbe`).
+   */
+  panelRef?: React.RefObject<HTMLElement | null>;
   /** Closes the card: Escape calls it. */
   onClose: () => void;
   /** The Math button, so Escape can hand focus back to it. */
@@ -90,9 +97,12 @@ const ROW_LABEL = "text-xs font-medium uppercase tracking-wide text-white/60";
  *
  * Expanded it also carries the live probe: with the pointer over the picture,
  * the number under it, how its orbit ended and a swatch of the colour it is
- * painted. The page computes it (`src/lib/mathProbe.ts`) and hands it down,
- * only while the card is expanded and on screen; the row says where to point
- * when there is none.
+ * painted, and under those the path it took. The page computes it
+ * (`src/lib/mathProbe.ts`) and hands it down, only while the card is expanded
+ * and on screen; the row says where to point when there is none. The probe
+ * holds while the pointer is on the card rather than the picture, so it can be
+ * moved onto the plot's Play control without the plot vanishing on the way —
+ * which is why the panel element is published to the page through `panelRef`.
  *
  * The numbers follow the live view, throttled to the link writer's cadence.
  * It starts shown and collapsed, and both choices are kept in the browser
@@ -113,6 +123,7 @@ export function MathCard({
   belowChips,
   probe = null,
   stepAside = false,
+  panelRef,
   onClose,
   returnFocusRef,
 }: MathCardProps) {
@@ -123,7 +134,16 @@ export function MathCard({
   );
   const headingId = useId();
   const detailsId = useId();
-  const cardRef = useRef<HTMLElement>(null);
+  const cardRef = useRef<HTMLElement | null>(null);
+  // One element, two readers: the card's own Escape rule, and the page, which
+  // watches it for the pointer leaving the picture onto it.
+  const setCardRef = useCallback(
+    (node: HTMLElement | null) => {
+      cardRef.current = node;
+      if (panelRef) panelRef.current = node;
+    },
+    [panelRef],
+  );
 
   const { centerX, centerY, zoom, iterations, autoIterations, colorScheme } =
     view;
@@ -204,7 +224,7 @@ export function MathCard({
       } ${stepAside ? "max-sm:hidden" : ""}`}
     >
       <section
-        ref={cardRef}
+        ref={setCardRef}
         role="region"
         aria-labelledby={headingId}
         className="pointer-events-auto max-h-full min-w-0 max-w-[22rem] overflow-y-auto rounded-lg bg-gray-900/85 px-3 py-2 text-sm text-white shadow backdrop-blur"

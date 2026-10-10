@@ -27,6 +27,7 @@ import {
   pointerToCanvasPixel,
   probeAtPointer,
   probePoint,
+  shouldClearProbe,
 } from "../mathProbe";
 import { createMultibrotKind } from "../multibrot";
 import { newtonKind } from "../newton";
@@ -173,6 +174,54 @@ describe("describeProbe", () => {
 describe("colourCss", () => {
   it("writes a colour the swatch can be painted with", () => {
     expect(colourCss({ r: 0, g: 128, b: 255 })).toBe("rgb(0, 128, 255)");
+  });
+});
+
+describe("shouldClearProbe", () => {
+  /** Something the pointer can be over, standing in for a DOM node. */
+  function target(): EventTarget {
+    return {} as EventTarget;
+  }
+
+  /** An element standing in for one the page holds: itself and its parts. */
+  function element(...parts: unknown[]): Element {
+    const holder = {
+      contains: (node: unknown) => node === holder || parts.includes(node),
+    };
+
+    return holder as unknown as Element;
+  }
+
+  it("holds the probe for a pointer that moved onto the card", () => {
+    // Leaving the picture for the card: the related target is the panel, or
+    // something inside it such as the Play button.
+    const card = element();
+    const play = target();
+
+    expect(shouldClearProbe(card, [card])).toBe(false);
+    expect(shouldClearProbe(play, [element(play)])).toBe(false);
+  });
+
+  it("holds it for a pointer that moved back onto the picture", () => {
+    const canvas = element();
+
+    expect(shouldClearProbe(canvas, [canvas])).toBe(false);
+  });
+
+  it("clears it for a pointer that went anywhere else", () => {
+    const elsewhere = target();
+
+    expect(shouldClearProbe(elsewhere, [element()])).toBe(true);
+    expect(shouldClearProbe(elsewhere, [element(), element()])).toBe(true);
+  });
+
+  it("clears it for a pointer that left the window, which names no target", () => {
+    expect(shouldClearProbe(null, [element()])).toBe(true);
+    expect(shouldClearProbe(null, [element(), element()])).toBe(true);
+  });
+
+  it("has nothing to hold with no holder at all", () => {
+    expect(shouldClearProbe(target(), [null, undefined])).toBe(true);
   });
 });
 
