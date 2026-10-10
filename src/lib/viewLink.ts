@@ -44,6 +44,13 @@
  * fragment, not for a percent sign that ends the string, not for a 600
  * character paste — so a bad link is a page looking the way it did before,
  * never an error screen.
+ *
+ * Several of these views in order are a *tour link* (`tourLink.ts`): the module
+ * writes the same fields under one column per field, so a stop of a tour is
+ * this codec's view and is written and read by these functions. The other
+ * meaning of the word in this file is {@link decodeTour} below, the `#tour`
+ * fragment that asks a page for a wandering tour rather than naming views to
+ * walk.
  */
 
 import type { ColorScheme } from "../types/fractal";
@@ -436,6 +443,10 @@ export function linkWithoutColour(fragment: string): string {
  * another version, or one past {@link MAX_FRAGMENT_LENGTH}, asks for nothing,
  * and so does any other value of `tour`. The view a `#tour` link opens on is
  * the page's default, because the fragment carries no field of a view.
+ *
+ * This is the *wandering* tour, which carries no views. A link that names the
+ * views to walk is a tour link (`tourLink.ts`), whose columns this function
+ * does not read; the two are told apart by their own limits and keys.
  *
  * @param fragment - The link, with or without its leading `#`
  * @returns True when the link asks for a tour; false for anything else,

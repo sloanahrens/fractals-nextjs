@@ -75,7 +75,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
 - **Site origin** (`src/lib/siteOrigin.ts`, read per request by `src/app/requestOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `pageMetadata` (`src/lib/pageMetadata.ts`, called by `generateMetadata` in `src/app/layout.tsx` and `src/app/page.tsx`) puts on og:image, twitter:image and og:url
-- **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>`; a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form; `generateMetadata` in the server page turns the search parameters into a view-specific og:image at `/api/og` or, for no view, the static card; see the Version Note of 2026-10-10 (fr-cr5)
+- **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>`; a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form; `generateMetadata` in the server page turns the search parameters into a view-specific og:image at `/api/og` or, for no view, the static card; `previewFor` reads a tour link first, so a walk previews as its first stop; see the Version Notes of 2026-10-10 (fr-cr5, fr-d3u)
+- **Tour link** (`src/lib/tourLink.ts`): Up to eight views in order in one fragment — one column per codec field (`v=1&t.f=mandelbrot~julia&t.x=…`), each stop written and read by `viewLink`'s own encoder and decoder, so a stop is judged exactly as a single view is; a stop carries no canvas size and no count when its zoom picks one; see the Version Note of 2026-10-10 (fr-d3u)
 - **Site text** (`src/lib/siteText.ts`): The app's own words about itself — the document title, the description built from `FRACTAL_TYPES` labels, the social card's tagline and title lines, and the card's alt text — so the page's head and `scripts/make-og-card.mjs` read one place; see the Version Note of 2026-10-10 (fr-3y2)
 - **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Math/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
@@ -192,6 +193,99 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Tour links in the library: up to eight views in one fragment, and a preview of them (2026-10-10)
+
+- fr-d3u. A link can now name a short walk rather than one view: up to eight
+  views in order, written and read by one new module, and previewed as its first
+  stop. This is the library half — the page that plays a tour link and the
+  button that copies one follow (fr-bo2), and nothing a visitor can do produces
+  or follows one yet.
+- **`src/lib/tourLink.ts`** is the whole of it, and it is built out of the view
+  codec rather than beside it: every stop is encoded by `encodeView` and read
+  back by `decodeView`, under the codec's own keys, so a stop is judged exactly
+  as a single view is and there is no second set of rules to keep in step.
+  `encodeTourLink(stops)` returns the fragment text or null (fewer than two
+  stops is no tour; more than eight are cut to the last eight *distinct* stops,
+  a stop being the fields the codec wrote); `decodeTourLink(text)` returns the
+  stops or null.
+- **The form is the view link's own query string laid side by side** rather than
+  one stop after another: one column per field, each column holding what that
+  field is in every stop, separated by `~`, under a `t.` prefix —
+  `v=1&t.f=mandelbrot~julia&t.k=~Dendrite&t.x=-0.75~-0.5&t.y=0~0.25&t.z=1~400&t.s=classic~fire`.
+  The columnar shape is what keeps a full tour short: the eight longest stops
+  this build can name, every field present, come to 397 characters where one
+  field-per-stop-per-stop would be 896 — over the limit. The `t.` prefix is
+  load-bearing rather than decorative: without it a query carrying both a tour
+  link and a single view would have the two colliding on identical keys (`f`,
+  `x`, …) and `URLSearchParams.get` would hand each reader the other's text.
+  With it, each reader sees only its own keys and a mixed query is read as both,
+  the tour winning (`previewFor`).
+- **The columns are joined by hand, with each value percent-encoded on its own**
+  by `encodeURIComponent`, not by `URLSearchParams.toString()`. The serializer
+  would escape the `~` that holds a column together (`t.f=a%7Eb`), leaving
+  nothing to split on; the codec's own writer escapes `~` too, so a value the
+  codec produced can never contain one and the separator is safe. On the way
+  back, a stop's values are put under their own keys again with
+  `URLSearchParams` and handed to `decodeView`, which decodes once — the same
+  once the encoder encoded them, so a custom Julia constant
+  (`k=custom%3A-1.234567%2C-1.234567`) round-trips byte for byte.
+- **A stop carries what a view carries except the canvas size** — how big the
+  page's canvas is is the page's business, not the walk's — **and the iteration
+  setting when the zoom picks it**: a stop with no count is drawn at the count
+  its zoom asks for, so writing `auto` would be writing the default. Everything
+  else travels, the colour scheme's two own settings (`r`, `o`) among them.
+- **`MAX_TOUR_LINK_LENGTH` is 900 and `MAX_FRAGMENT_LENGTH` stays 500.** The two
+  readers are held apart by their limits so a paste cannot be half of one and
+  half of the other. The version is the codec's own (`v=1`): a stop is a
+  version-1 view and the columns are that view's fields, so `decodeView` on a
+  tour link reads the version and then finds none of its keys — an empty view,
+  which is how `isViewQuery` and `parseOgQuery` already treat a fragment that
+  names no view. `decodeTourLink` on a view link finds no `t.` column and
+  answers null. The name is `decodeTourLink`, not the bead's `decodeTour`,
+  because `viewLink.decodeTour` is the `#tour` request — the *wandering* tour,
+  which carries no views — and two functions of one name in one landing is how a
+  reader gets them mixed up.
+- **Reading is the suspicious half**, as it is for a view: nothing throws (a
+  truncated paste, a trailing `%`, a percent sign at the end, five thousand
+  characters, nested encodings, script-looking text, a repeated key), the
+  version and the length are checked before anything else, and every field is
+  judged by the codec, which leaves out what it cannot read. A stop with no
+  readable field at all is dropped and the walk around it is kept — a tour is a
+  list of views, and one bad name in it is not the end of the list — and fewer
+  than two stops left is null, which is what makes a "tour" of one view
+  decodable as no tour.
+- **The preview** (`src/lib/viewPreview.ts`): `previewFor` reads a tour link
+  *before* the single-view path, so a query carrying both previews as the walk;
+  it returns og:image's fragment as `encodeView` of the first stop (re-encoded
+  from the decoded state, never the tour link's text, so the card is one
+  `/api/og` will draw) and the line `describeTourLine` builds — "Tour of 5
+  views, starting at Julia set, Dendrite, 400x". An unreadable tour link falls
+  through to the view beside it, or to the static card. `pageMetadata` and
+  `src/app/page.tsx` needed no change: they call `previewFor`, and `ogUrl` does
+  too, so og:url becomes `<origin>/?<the first stop's link>`.
+- **Not changed**: the single-view codec (a view link is byte for byte what it
+  was), `decodeTour` and the `#tour` and `tour=1` spellings, `viewQuery.ts` and
+  so what a page load does with a query — the page half of tour links is fr-bo2 —
+  the `/api/og` route, and any UI.
+- Tests: `src/lib/__tests__/tourLink.test.ts` (the exact link for two stops; the
+  canvas size and the auto count left out; the scheme's settings and a named
+  count carried; fewer than two stops refused; ten stops cut to the last eight
+  distinct; a full tour under the limit, with the longest custom constant and
+  ten-digit centres, round-tripped; two, five and eight stops round-tripped in
+  order, with and without the leading `#`; a stop judged by the codec, the bad
+  one dropped and its neighbours kept; missing fields filled from the page's
+  defaults; fewer than two, another version, and a link past the limit all null;
+  only the first eight of a longer link read; a list of hostile inputs, none
+  throwing and each null or an array; a stop whose fractal cannot draw its
+  variant; script-looking text never reaching a value; and the two readers never
+  confusing a view link with a tour link),
+  `viewPreview.test.ts` (a tour previews as its first stop and its phrase says
+  how long the walk is; a tour link beats a single view in one query; an
+  unreadable tour link falls back to the view or to the static card; a two-stop
+  link and one past the limit; `describeTourLine`), and `pageMetadata.test.ts`
+  (the image, og:url, title, descriptions and alt for a tour link, and the
+  static head for one that cannot be read). `make gate` is green.
 
 ### Palette options: a scheme can be reversed and shifted, in links, renders and previews (2026-10-10)
 
