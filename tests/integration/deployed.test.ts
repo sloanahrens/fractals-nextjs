@@ -19,6 +19,9 @@ const VERSION = "/api/version";
 const CARD = "/og-card-2.png";
 // The image route: GET /api/og?<view link> draws that view as a 1200x630 PNG.
 const OG = "/api/og";
+// The pre-built previews: one picture per catalogue place, served as a static
+// file out of public/og (fr-xnl). A view previews as the nearest place's.
+const PREVIEW = "/og/julia-dendrite-whole.jpg";
 
 const url = (path: string) => requestUrl(target.baseUrl, path);
 
@@ -105,7 +108,7 @@ describe(`the deployment at ${target.baseUrl}`, () => {
     }
   });
 
-  it("previews a query link as that view: og:image is /api/og for it, on the same origin", async () => {
+  it("previews a query link as the nearest place's pre-built picture, on the same origin", async () => {
     const origin = new URL(target.baseUrl).origin;
     const view = encodeView({
       fractalType: "julia",
@@ -122,16 +125,35 @@ describe(`the deployment at ${target.baseUrl}`, () => {
     const html = await (await get(url(`${HOME}?${view}`))).text();
     const image = metaContent(html, "og:image");
 
-    expect(image).toBe(`${origin}${OG}?${view}`);
+    // The Dendrite set's one catalogue place: a deep view of the same set is
+    // shown as its whole set. Nothing in the head renders anything, which is
+    // what the address names.
+    expect(image).toBe(`${origin}${PREVIEW}`);
     expect(metaContent(html, "twitter:image")).toBe(image);
     expect(metaContent(html, "og:url")).toBe(`${origin}/?${view}`);
+    expect(metaContent(html, "og:image:type")).toBe("image/jpeg");
     expect(html).toMatch(/<title>\s*Julia set, Dendrite, 400x - /);
+    expect(html).toMatch(/a picture of Dendrite: the whole set/);
+    expect(html).not.toContain(`${OG}?`);
 
-    // The card the preview names is drawn, not a dead link.
+    // The picture the preview names is there, cached for a day.
     const drawn = await get(image as string);
     expect(drawn.status).toBe(200);
-    expect(drawn.headers.get("content-type")).toContain("image/png");
+    expect(drawn.headers.get("content-type")).toContain("image/jpeg");
+    expect(drawn.headers.get("cache-control")).toContain("max-age=86400");
     await drawn.body?.cancel();
+  });
+
+  it("serves the pre-built previews as static files, cached for a day", async () => {
+    const response = await get(url(PREVIEW));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/jpeg");
+    expect(response.headers.get("cache-control")).toContain("max-age=86400");
+    const body = Buffer.from(await response.arrayBuffer());
+    // JPEG: the start-of-image marker, then the marker that follows it.
+    expect([...body.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
+    expect(body.length).toBeGreaterThan(1024);
   });
 
   it("serves the static card for a query that is not a view, and for no query", async () => {
@@ -180,15 +202,16 @@ describe(`the deployment at ${target.baseUrl}`, () => {
     );
 
     const html = await (await get(copied)).text();
+    const url_ = new URL(metaContent(html, "og:url") as string);
     const image = new URL(metaContent(html, "og:image") as string);
 
-    expect(image.pathname).toBe(OG);
-    expect(decodeView(image.search.slice(1))).toEqual(
+    // The address the link is on carries the whole view, and the picture is a
+    // pre-built file rather than a render of it.
+    expect(decodeView(url_.search.slice(1))).toEqual(
       decodeView(encodeView(view)),
     );
-    expect(new URL(metaContent(html, "og:url") as string).search).toBe(
-      image.search,
-    );
+    expect(image.pathname).toBe("/og/multibrot-4-whole.jpg");
+    expect(image.origin).toBe(new URL(target.baseUrl).origin);
   });
 
   it("links the favicon and the touch icon from the page", async () => {

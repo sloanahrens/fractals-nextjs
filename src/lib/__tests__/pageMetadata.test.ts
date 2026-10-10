@@ -74,13 +74,27 @@ describe("ogUrl", () => {
 });
 
 describe("pageMetadata with a view", () => {
-  it("points og:image and twitter:image at /api/og for the re-encoded view", () => {
+  it("points og:image and twitter:image at the nearest place's picture", () => {
     const metadata = pageMetadata(ORIGIN, VIEW);
     const { og, twitter } = images(metadata);
 
-    expect(og.url).toBe(`${ORIGIN}/api/og?${FRAGMENT}`);
+    // The only Dendrite place in the catalogue, which is what a view of any
+    // part of the Dendrite set is shown as.
+    expect(og.url).toBe(`${ORIGIN}/og/julia-dendrite-whole.jpg`);
     expect(twitter.url).toBe(og.url);
-    expect(og.alt).toBe("Julia set, Dendrite, 400x, drawn by Fractal Explorer");
+    expect(og.alt).toBe(
+      "Julia set, Dendrite, 400x, a picture of Dendrite: the whole set",
+    );
+  });
+
+  it("declares the picture a JPEG of the card's shape", () => {
+    const og = pageMetadata(ORIGIN, VIEW).openGraph as {
+      images: { type: string; width: number; height: number }[];
+    };
+
+    expect(og.images[0].type).toBe("image/jpeg");
+    expect(og.images[0].width).toBe(1200);
+    expect(og.images[0].height).toBe(630);
   });
 
   it("adds one short line to the title and the descriptions", () => {
@@ -96,21 +110,12 @@ describe("pageMetadata with a view", () => {
     );
   });
 
-  it("keeps the card's declared size, which /api/og draws", () => {
-    const og = pageMetadata(ORIGIN, VIEW).openGraph as {
-      images: { width: number; height: number }[];
-    };
-
-    expect(og.images[0].width).toBe(1200);
-    expect(og.images[0].height).toBe(630);
-  });
-
   it("stays on the origin it was given", () => {
     const local = pageMetadata("http://localhost:3000", VIEW);
 
-    expect(
-      images(local).og.url.startsWith("http://localhost:3000/api/og?"),
-    ).toBe(true);
+    expect(images(local).og.url.startsWith("http://localhost:3000/og/")).toBe(
+      true,
+    );
   });
 });
 
@@ -158,9 +163,9 @@ describe("pageMetadata with a tour link", () => {
     const metadata = pageMetadata(ORIGIN, params(TOUR));
     const { og, twitter } = images(metadata);
 
-    expect(og.url).toBe(`${ORIGIN}/api/og?${FIRST}`);
+    expect(og.url).toBe(`${ORIGIN}/og/julia-dendrite-whole.jpg`);
     expect(twitter.url).toBe(og.url);
-    expect(og.alt).toBe(`${LINE}, drawn by Fractal Explorer`);
+    expect(og.alt).toBe(`${LINE}, a picture of Dendrite: the whole set`);
     expect(metadata.title).toBe(`${LINE} - ${TITLE}`);
     expect(metadata.description).toBe(`${LINE}. ${DESCRIPTION}`);
     expect((metadata.twitter as { description: string }).description).toMatch(
@@ -207,7 +212,9 @@ describe("pageMetadata with hostile parameters", () => {
     expect(JSON.stringify(metadata)).not.toMatch(
       /<script|javascript|alert\(|evil|<b>/,
     );
-    expect(images(metadata).og.url).toBe(`${ORIGIN}/api/og?${FRAGMENT}`);
+    expect(images(metadata).og.url).toBe(
+      `${ORIGIN}/og/julia-dendrite-whole.jpg`,
+    );
   });
 
   it("does not decode a nested encoding a second time", () => {

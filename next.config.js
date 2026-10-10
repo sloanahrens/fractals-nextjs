@@ -12,6 +12,29 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
+  // The pre-built link previews under public/og (fr-xnl): one picture per
+  // catalogue place, a static file Next would otherwise serve with
+  // `Cache-Control: public, max-age=0` and an ETag, so a crawler or a browser
+  // revalidates one on every share. They change only when
+  // `scripts/make-og-previews.mjs` is run, so they can be cached for a day and
+  // served stale for a week while that happens.
+  //
+  // This rule covers `/og/...` and nothing else: the page, the health route
+  // and every other asset keep the headers they had (`next.config` caching is
+  // not something to widen without knowing what is behind it).
+  async headers() {
+    return [
+      {
+        source: "/og/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

@@ -61,7 +61,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 - **Containerized Deployment**: Docker-based deployment with multi-stage builds
 - **Deploy Contract**: Root `Dockerfile`, server on `$PORT` (8080), `/api/health` route for probes
-- **Image Route**: `GET /api/og?<view link>` draws that view as a 1200x630 PNG on the server with the app's own maths, behind a cache, a one-render-at-a-time gate and an 8 s budget; the first half of per-view link previews, so nothing in the page uses it yet
+- **Image Route**: `GET /api/og?<view link>` draws that view as a 1200x630 PNG on the server with the app's own maths, behind a cache, a one-render-at-a-time gate and an 8 s budget. Superseded by the pre-built previews (see Link preview): no page points at it any more, and a later change redirects it and deletes the renderer
 - **Quality Gate**: `make gate` runs install, lint, typecheck, build and the test suite
 - **Integration Tier**: `make integration STAGING_URL=<url>` checks a deployment that is already up (see [Integration Tests](#integration-tests))
 - **ESLint + TypeScript**: `make check` runs ESLint and `tsc --noEmit`
@@ -159,7 +159,7 @@ Two environment variables, and no others:
   tier evidence that the commit just built is the commit live. Without it, the
   check only asks that the endpoint answers with a `commit` field at all.
 
-Seven checks, a `GET` or two each, read-only, 15 s per request and one retry:
+Eight checks, a `GET` or two each, read-only, 15 s per request and one retry:
 
 - `GET /api/health` is 200 and `{"status":"healthy"}`.
 - `GET /` is 200 and carries the `<h1>Fractal Explorer</h1>` and the document
@@ -173,6 +173,9 @@ Seven checks, a `GET` or two each, read-only, 15 s per request and one retry:
 - `GET /og-card-2.png` is 200, `image/png`, 1200x630 by its IHDR chunk and
   under 300 KB. It is the social card `src/app/layout.tsx` points its metadata
   at, and it is served out of `public/` by the `Dockerfile`.
+- `GET /og/<place-id>.jpg` — the pre-built preview a shared view link names —
+  is 200, `image/jpeg`, a JPEG by its own marker, and
+  `Cache-Control: public, max-age=86400, ...`.
 - `GET /api/og?<view link>` is 200, `image/png`, 1200x630 by its IHDR chunk and
   `Cache-Control: public, max-age=31536000, immutable`; a request that is not a
   view (no query, `v=1&x=banana`, `v=2&f=julia`) is 400.
@@ -208,7 +211,7 @@ dependencies and needs nothing else.
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button in the Settings drawer saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom. A Shape above the Export size says what the picture is shaped like: Screen (4:3) is the canvas itself, and Desktop 16:9, Phone 9:19.5 and Square 1:1 are wallpapers. For the screen, an Export size above the screen size — 2x, 4x, or the largest whole multiple of the canvas that fits 12 megapixels, each option labelled by the pixels it draws — draws the same view again off-screen at that size, in the same colours and at the same iteration count, and saves that. A wallpaper shape offers its own pixel sizes instead — 1920 x 1080, 2560 x 1440 and 3840 x 2160 for Desktop; 1170 x 2532 and 1290 x 2796 for Phone; 1080 x 1080 and 2160 x 2160 for Square, none over the 12-megapixel budget — and the export draws the view framed for that shape, at the same iteration count as the picture on screen: the centre is the view's centre, and the whole 4:3 view on screen stays inside the frame, with the extra plane at the sides for a shape wider than 4:3 and above and below for a taller one, so nothing you were looking at is cropped away. The frame takes the published size's own shape, so its pixels are square. The canvas on screen is neither read nor resized, so it keeps its size and its content. The view, the fractal and the settings are the ones captured when the button was pressed, so changing any of them while an export draws does not alter it. The button reads "Exporting... 37%" while it draws (at most one update every 250 ms) with a Cancel button beside it that stops the render and throws it away, and only one export runs at a time: the button is disabled while one does. The file is named as the screen-size save is, with `_2x` or `_4x` before the extension, or the shape and the size — `_16x9_3840x2160` — for a wallpaper. If the browser cannot give a canvas that size, or declines to make the image, the card says "Could not create that size" and the page carries on
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
-- **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Settings drawer's Navigation card copies the view as a query on this page's own address (`https://host/?v=1&f=julia&k=Dendrite&x=…`; the same text the codec writes after the `#`) and says "Link copied" for two seconds; a browser that will not take a clipboard write shows that URL in a read-only field with the text already selected. The query form is what makes a shared link preview as its view (see Link preview). The colour scheme travels with its two own settings: `r=1` when it is reversed, and `o` how far round the palette it starts (`s=fire&r=1&o=0.25`, two decimals), each written only when it is asking for something, so a link of a view that touches neither — every link older builds wrote — is byte for byte what it always was, and a link that carries them draws them here and in the card `/api/og` makes of it. The address bar itself keeps showing the hash form, and old `#v=1&…` links work as before: a page opened with a query reads it through the same decoder and validation (a field it cannot read keeps its default), rewrites the address bar to `/#v=1&…` at once with `history.replaceState`, and drops the query, so the bar and every later write behave as they always have. A hash beats a query when both are present; a query that is not a view link (`?utm_source=…`, `?v=1` alone, another version) is left where it is. A link shows the view it names — the fields it carries applied together, the page's defaults left standing for the rest — whether it is opened as the page loads or pasted into the address bar of a page already open, where it changes that page's view without a reload; either way the fields the link could not be read for are the page's defaults rather than a refusal, so the URL is the view and the address bar is rewritten to match it. A link that names a fractal and no centre or zoom — a hand-written or truncated one, like `#v=1&f=julia&k=Dendrite&z=400` — opens on that fractal's own default view rather than the Mandelbrot set's, which is the frame the fractal switcher would have opened on; the preview image and the page agree about it because both fill a link's missing fields through the one call (`viewLinkToUpdates`), and a link naming no fractal at all is still exactly the page's opening view. A link names no preset
+- **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Settings drawer's Navigation card copies the view as a query on this page's own address (`https://host/?v=1&f=julia&k=Dendrite&x=…`; the same text the codec writes after the `#`) and says "Link copied" for two seconds; a browser that will not take a clipboard write shows that URL in a read-only field with the text already selected. The query form is what makes a shared link preview as its view (see Link preview). The colour scheme travels with its two own settings: `r=1` when it is reversed, and `o` how far round the palette it starts (`s=fire&r=1&o=0.25`, two decimals), each written only when it is asking for something, so a link of a view that touches neither — every link older builds wrote — is byte for byte what it always was, and a link that carries them draws them here and in the preview it shares (see Link preview). The address bar itself keeps showing the hash form, and old `#v=1&…` links work as before: a page opened with a query reads it through the same decoder and validation (a field it cannot read keeps its default), rewrites the address bar to `/#v=1&…` at once with `history.replaceState`, and drops the query, so the bar and every later write behave as they always have. A hash beats a query when both are present; a query that is not a view link (`?utm_source=…`, `?v=1` alone, another version) is left where it is. A link shows the view it names — the fields it carries applied together, the page's defaults left standing for the rest — whether it is opened as the page loads or pasted into the address bar of a page already open, where it changes that page's view without a reload; either way the fields the link could not be read for are the page's defaults rather than a refusal, so the URL is the view and the address bar is rewritten to match it. A link that names a fractal and no centre or zoom — a hand-written or truncated one, like `#v=1&f=julia&k=Dendrite&z=400` — opens on that fractal's own default view rather than the Mandelbrot set's, which is the frame the fractal switcher would have opened on; the preview image and the page agree about it because both fill a link's missing fields through the one call (`viewLinkToUpdates`), and a link naming no fractal at all is still exactly the page's opening view. A link names no preset
   The browser's Back and Forward buttons, and the top bar's, retrace jumps: choosing a preset, applying coordinates, picking another fractal or Julia constant from its select or from the fractal switcher, or choosing a Nearby tile adds a history entry, while dragging, zooming, the keys, the sliders and Auto-wander only update the current one.
 - **Blank-picture hint**: A deep zoom can land somewhere with nothing to see, a field of one colour. When a full render has settled on a picture that is nearly one colour (98% of an evenly spaced sample within a small colour distance of the commonest one) and has stood for 0.6 s, a small pill appears at the top centre of the picture: "Nothing to see here. Try a nearby place, or go back." with a Back button that does what the top bar's Back does. It only says so, never moves the view, and takes no pointer events outside its own box; the Back button is left out when there is nowhere to go back to. It goes as soon as the view changes or a render starts. No default view or catalogue place shows it; the Newton fractal's three-basin view is not blank, because three colour families show (its commonest colour holds 16 to 37% of the picture across the five schemes), while a deep view inside a single basin is one colour family and does show it
 - **Math card**: A card over the left of the picture, under the switcher's rows and above the Nearby strip, is shown from the first visit, collapsed to its one line. The top bar's Math button (`aria-pressed` while the card is up) hides and shows it. It is a labelled region with a More / Less button (`aria-expanded`) and no focus trap; Escape closes it only while focus is in the card or on the Math button, so Escape keeps closing dialogs first, and it is not drawn while a tour plays or Settings or Help is open. Under 640 px the collapsed line is clipped with an ellipsis rather than wrapped, and the card steps aside while the blank-picture hint shows (the hint sits below it, or beside it when expanded, from 640 px up). Every fractal has a descriptor in `src/lib/fractalMath.ts` (`describeFractalMath(fractalId, variant)`): the rule as a small formula tree, where each point starts, the one setting with its real value, how a point is judged, and a blurb of two or three plain sentences. The Mandelbrot set is `z → z² + c` from `z₀ = 0` with `c` the pixel's point; Julia is the same rule from `z₀ =` the pixel's point with `c =` the chosen constant written a + bi; the Burning Ship is `z → (|Re z| + i|Im z|)² + c`; the Tricorn `z → z̄² + c`; the Multibrot `z → z^d + c` with `d = 3`, `4` or `5`; Newton `z → z − (z³ − 1)/(3z²)` from the pixel's point, coloured by which of the three cube roots of 1 it settles on. The expanded card lists the centre, the width of the view in the plane (4 over the zoom), the zoom, the iteration cap and the colour scheme, read from the same state the renderer draws, refreshed at most twice a second while the view moves (the address-bar writer's cadence), and the catalogue place's name when the view is within 1% of its centre and zoom. Whether it is shown and whether it is expanded are remembered in localStorage under `fractals.mathCard.v1` (`{"v":1,"open":true,"expanded":false}`; a field that is missing or not a boolean keeps its default, and fr-1tk's session value is read once as a fallback). With storage blocked or corrupt each visit starts shown and collapsed, and the choices last as long as the page. The expanded card also carries the live probe (`src/lib/mathProbe.ts`): point at the picture and it names the complex number under the pointer, what its orbit did — "Escaped at step 7", "Inside the set", or for Newton "Settles on root 2 after 6 steps" — and a swatch of the colour the picture paints that pixel, which the parity test holds to the drawn bytes. The point is read with `pixelToComplex` and the bounds on screen, the count comes from the kind's own `escapeInfo(point, maxIterations)` (an optional method on `FractalKind`, implemented by every kind this build ships and read off the count for a kind that lacks it), and the swatch from the colour mapping at the count a full render paints. Under those two rows the card draws the path itself (`src/components/ui/OrbitPlot.tsx`, `src/lib/orbitPlot.ts`): a 220 px square SVG with the axes and their unit ticks, the radius of 2 drawn faintly for every fractal that escapes, the orbit as dots joined by a line and coloured through the picture's own palette from the first step to the last, the start ringed and the escaping point solid white. The dots are the sequence `FractalKind.orbit(point, maxSteps)` hands back — another optional method, implemented by every kind this build ships and answered with the point alone by a kind that cannot walk one — capped at 60 steps (`ORBIT_MAX_STEPS`), so a point inside the set spirals for sixty steps while a point outside it stops on the last point that left the radius of 2. `orbitToPlot(orbit, size, minExtent)` is the pure scaling: the frame is the orbit's own reach but never smaller than the escape circle and never more than twice it, a point past the frame is pinned to the edge rather than dropped, and every coordinate out is a finite number, so the values a blown-up orbit is full of cannot put a NaN on the page. The plot is a `role="img"` with the sentence `describeOrbit` builds ("Orbit of the point, 7 steps, escaped", "first 60 steps, stays inside" when the walk stopped short of the orbit, and Newton's own wording for settling on a root), and the last three points are written out as a + bi under it. A Play control walks the orbit a step every 120 ms, off until it is asked for and disabled under `prefers-reduced-motion`, and a pointer move over the picture re-reads the point — handing the plot a new orbit — which stops it without a listener of its own. It runs only while the card is expanded and on screen: no listener is attached and nothing is computed while it is collapsed or hidden, the work is one point per animation frame at most (never in the pointer handler), it re-reads the same place when the view moves under a resting pointer, and it clears when the pointer leaves the picture for anywhere but the card. The card is drawn over the picture, so crossing from one to the other holds the point — and with it the plot and a walk already running, which is what makes the Play button reachable. `shouldClearProbe(relatedTarget, holders)` in `src/lib/mathProbe.ts` is that decision as a pure function; the page wires it to the picture's own `pointerleave` (the card's panel holds the probe) and to a `pointerleave` on the card, whose panel element `MathCard` publishes through its `panelRef` (a pointer that goes back onto the picture keeps the probe and resumes live probing; one that leaves the card for anywhere else ends it). A finger lifting still keeps the point it was on, on the picture and on the card alike. The card is read-only
@@ -227,7 +230,9 @@ dependencies and needs nothing else.
 │   ├── design/             # guided-exploration.md: the design the page was rebuilt to, and where the build differs
 │   └── plans/              # Earlier design plans
 ├── public/                 # Static assets: og-card-2.png, the 1200x630 social card
+│   └── og/                 # One pre-built 1200x630 preview per catalogue place: <place-id>.jpg
 ├── scripts/make-og-card.mjs  # One-off generator of the social card and icons (not in the gate or the image)
+├── scripts/make-og-previews.mjs # One-off generator of public/og's previews, one per place (not in the gate or the image)
 ├── scripts/release/        # Release scripts a release runs
 ├── src/
 │   ├── app/                # Next.js App Router pages
@@ -296,17 +301,18 @@ dependencies and needs nothing else.
 │   │   ├── newton.ts               # Newton fractal of z^3 - 1: the root and the speed packed into one number
 │   │   ├── ogLimits.ts             # /api/og's limits: the 40-PNG LRU cache, the one-at-a-time render gate with a queue of 2, the 8 s budget
 │   │   ├── ogRoute.ts              # /api/og's handler: 400, 200, 503, with its cache, gate, clock and renderer injectable
+│   │   ├── ogImage.ts              # Which picture a preview points at: one pre-built file per place, or the static card
 │   │   ├── ogView.ts               # The view an /api/og query names: judged strictly, the 1200x630 card bounds, iterations capped at 400, the canonical key
 │   │   ├── orbitPlot.ts            # The orbit plot's scaling, dot colours and words: the frame, the clamping, the aria-label
-│   │   ├── pageMetadata.ts         # The page's head: the static card, or a view's own /api/og image, og:url and one line about it
+│   │   ├── pageMetadata.ts         # The page's head: the static card, or the nearest place's pre-built preview, og:url and one line about it
 │   │   ├── paletteControls.ts      # Reverse and Shift as the controls read them: percent against fraction of a turn, the defaults, the slider's keys
 │   │   ├── pinch.ts                # Pinch helpers: finger distance, midpoint, scale about a point
 │   │   ├── placeThumbnails.ts      # Off-screen place pictures: LRU cache, queue, cancel and pause
-│   │   ├── places.ts               # Catalogue of named places, suggest() for the ones near a view, and each fractal's featured place
+│   │   ├── places.ts               # Catalogue of named places, suggest() for the ones near a view, nearestPlace() for a picture, and each fractal's featured place
 │   │   ├── presets.ts              # Built-in and saved presets
 │   │   ├── pngEncode.ts            # A minimal PNG encoder on node:zlib alone (server only)
 │   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
-│   │   ├── renderRgba.ts           # A view as raw RGBA pixels with no canvas, shared by FractalRenderer and /api/og
+│   │   ├── renderRgba.ts           # A view as raw RGBA pixels with no canvas, shared by FractalRenderer, /api/og and the preview generator
 │   │   ├── siteOrigin.ts           # The origin a request was served from, for the page's absolute URLs
 │   │   ├── siteText.ts             # The app's own words: title, the description built from FRACTAL_TYPES, the card's tagline and alt text
 │   │   ├── surprise.ts             # Where Surprise me goes: one of the six nearest suggestions, picked at random
@@ -527,16 +533,60 @@ A link that carries its view in the query (`/?v=1&f=julia&k=Dendrite&...`, the
 form Copy link copies) previews as that view. `generateMetadata` in
 `src/app/page.tsx` (a layout is not given the search parameters) reads them;
 when `parseOgQuery` accepts them, the way `/api/og` itself would, `og:image` and
-`twitter:image` become `<origin>/api/og?<fragment>`, `og:url` becomes
-`<origin>/?<fragment>`, and the title and descriptions gain one line built from
-the decoded view ("Julia set, Dendrite, 400x"). The fragment is the view
-*re-encoded from the decoded state* (`previewFor` in `src/lib/viewPreview.ts`),
-so only known fields reach the URL and the line is made of this build's own
-labels and numbers; nothing a visitor typed is echoed. A repeated key counts by
-its first value, as the page reads it. With no parameters, a query that is not a
-view, or one `/api/og` would refuse, the head is exactly the static card's
-(`pageMetadata` in `src/lib/pageMetadata.ts`, shared with the layout). The
-integration tier checks all three cases against a deployment.
+`twitter:image` become `<origin>/og/<place-id>.jpg` — a picture built ahead of
+time, not a render of the request — `og:url` becomes `<origin>/?<fragment>`,
+and the title and descriptions gain one line built from the decoded view ("Julia
+set, Dendrite, 400x"). The fragment is the view *re-encoded from the decoded
+state* (`previewFor` in `src/lib/viewPreview.ts`), so only known fields reach
+the URL and the line is made of this build's own labels and numbers; nothing a
+visitor typed is echoed. A repeated key counts by its first value, as the page
+reads it. With no parameters, a query that is not a view, or one `/api/og` would
+refuse, the head is exactly the static card's (`pageMetadata` in
+`src/lib/pageMetadata.ts`, shared with the layout). The integration tier checks
+all three cases against a deployment.
+
+### Pre-built previews
+
+A preview used to be a picture `/api/og` drew for the request. That route is an
+unauthenticated CPU endpoint, so any stranger could ask it for renders; instead
+every picture a preview can name is drawn ahead of time and served as a static
+file (fr-xnl). There is one 1200x630 JPEG per catalogue place, in
+`public/og/<place-id>.jpg`, and a view previews as the picture of **the nearest
+place of its own fractal** — nearest by the centre's distance on the screen the
+link names, with a place of the same Julia constant or Multibrot power preferred
+where the catalogue has one, so the card always shows the same kind of fractal
+the link does and never another constant's shape (`nearestPlace` in
+`src/lib/places.ts`, `ogImageFor` in `src/lib/ogImage.ts`). A view that is a
+place — within 1% in centre and in zoom — previews as that place exactly. The
+mapping is deterministic, so a shared link always names the same picture and a
+fetcher caches one image per place; its alt text says so, in the same line the
+title carries: "Julia set, Dendrite, 400x, a picture of Dendrite: the whole
+set".
+
+The pictures come from `npm run make-og-previews`
+(`scripts/make-og-previews.mjs`), which draws every place through the app's own
+pixel pipeline — `renderRgba`, the same function the canvas and the image route
+use — at `cardBounds`, the 1.91:1 frame the route drew a card in, in the
+place's own colour scheme, at the iteration count Auto picks for its zoom, with
+smooth counts: the picture the page draws when a visitor lands on that place. It
+encodes JPEG with `sharp` — the encoder `make-og-card.mjs` already uses,
+installed with Next.js, so `package.json` gains nothing and the runtime bundle
+gains nothing — asking for quality 80 and stepping the quality down only as far
+as it must to fit the 200 KB a picture is allowed; it refuses to write a picture
+that is nearly one colour (the blank guard) and deletes a `.jpg` no place names,
+so what is committed always matches the catalogue.
+`src/__tests__/og-previews.test.ts` holds the committed set to all of that: a
+place with no file, a file no place names, a file that is not a JPEG, or one
+past the weight budget fails the gate, which is what makes running the script
+after a catalogue change part of the change.
+
+The generator is a manual step — not `make gate`, not the Docker build, not CI —
+and the set is about 4.6 MB across the 69 places, committed. `/og/*` is served
+by a `headers()` rule in `next.config.js` with
+`Cache-Control: public, max-age=86400, stale-while-revalidate=604800`, since
+these change only when the generator is run; every other path keeps the headers
+it had. `/api/og` is unchanged and still answers, but no page points at it any
+more (a later change redirects it and deletes the renderer).
 
 A link may name a fractal and no place in it (`/?v=1&f=julia&k=Dendrite&z=400`,
 a hand-written or truncated link). Its card is that fractal's whole view at the
@@ -549,9 +599,10 @@ always was.
 
 A *tour link* — up to eight views in order, in one fragment
 (`src/lib/tourLink.ts`) — previews as the first of them, because a card is one
-picture: og:image is `/api/og` for that stop, the title and descriptions carry
-"Tour of 5 views, starting at Julia set, Dendrite, 400x", and the fragment in
-the URL is that stop re-encoded, never the tour link's own text. The tour link
+picture: og:image is that stop's nearest place's pre-built picture, the title
+and descriptions carry "Tour of 5 views, starting at Julia set, Dendrite, 400x",
+and the fragment in the URL is that stop re-encoded, never the tour link's own
+text. The tour link
 is written as one column per field (`v=1&t.f=mandelbrot~julia&t.x=…`), so a
 query that carries both a tour link and a single view is read as both and the
 tour wins; one this build cannot read (fewer than two stops, another version,
@@ -571,9 +622,15 @@ the Inter font, adds nothing to `package.json`, and is part of neither
 `make gate` nor the Docker image. The text on the card is `src/lib/siteText.ts`'s,
 so editing it there changes the card, the page's description and its alt text
 together. A re-cut card goes to a new file (`CARD_FILE` in the script,
-`CARD_PATH` in `src/lib/pageMetadata.ts` and `CARD` in the integration tier all
+`CARD_PATH` in `src/lib/ogImage.ts` and `CARD` in the integration tier all
 name it), because a chat app that has already cached the old card will not ask
 for it again; the old file is deleted in the same landing.
+
+To change the per-place previews — a new place, a re-framed one, a change to the
+drawing — run `npm run make-og-previews` and commit `public/og` with the change;
+the header of that script says what it draws and why the files weigh what they
+do. It needs no browser and no network, adds nothing to the runtime bundle, and
+is part of neither `make gate` nor the Docker image.
 
 ### Local Docker
 
