@@ -51,6 +51,13 @@ import {
 } from "../lib/presets";
 import { downloadFileName } from "../lib/download";
 import {
+  EXPORT_FAILED_MESSAGE,
+  exportFileName,
+  exportProgressDue,
+  exportSizes,
+  type ExportSize,
+} from "../lib/exportSize";
+import {
   FRACTAL_TYPES,
   defaultViewFor,
   fractalVariants,
@@ -180,6 +187,42 @@ type CopyState =
 
 /** How long the "Link copied" confirmation stays up, in milliseconds. */
 const LINK_COPIED_MS = 2000;
+
+/**
+ * Hand a canvas to the browser as a PNG download.
+ *
+ * Both saves go through here: the screen-size one reads the canvas on screen,
+ * an export reads a canvas of its own. `onSettled` is called once the browser
+ * has taken the blob — or has declined to make one — which is the moment the
+ * caller may let the canvas go.
+ *
+ * @param canvas - The canvas holding the picture to save
+ * @param name - The filename the browser is asked to write
+ * @param onSettled - Called once the blob exists, with whether there was one
+ */
+function saveCanvasPng(
+  canvas: HTMLCanvasElement,
+  name: string,
+  onSettled: (saved: boolean) => void,
+): void {
+  canvas.toBlob((blob) => {
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      // Firefox only follows a click on an anchor that is in the document.
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // The browser reads the blob off the URL as the download starts, so
+      // releasing it in this same tick can cancel the save before it begins.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    onSettled(blob !== null);
+  }, "image/png");
+}
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1316,36 +1359,211 @@ export default function Home() {
     setColorScheme("classic");
   };
 
-  // Save what is on the canvas. The canvas holds the render at its full pixel
-  // size, so this is the image the user is looking at rather than a screenshot
-  // of the page around it.
-  const handleDownload = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Export sizes: the screen size saves the canvas on screen, and a larger one
+  // draws the same view again on a canvas of its own. The list follows the
+  // canvas size, so a size the budget no longer affords leaves the select —
+  // and the selection falls back to the screen size in the render that sees
+  // the new list, because a <select> whose value is not among its options
+  // paints blank.
+  const exportSizeOptions = useMemo(
+    () => exportSizes(canvasWidth, canvasHeight),
+    [canvasWidth, canvasHeight],
+  );
+  const [exportScale, setExportScale] = useState(1);
+  if (!exportSizeOptions.some((size) => size.scale === exportScale)) {
+    setExportScale(1);
+  }
 
-    canvas.toBlob((blob) => {
+  // What the export panel is doing: nothing, a picture still being drawn, or a
+  // short message about one that could not be.
+  const [exportState, setExportState] = useState<
+    | { kind: "idle" }
+    | { kind: "running"; progress: number }
+    | { kind: "error"; text: string }
+  >({ kind: "idle" });
+
+  // The export's own renderer and canvas, held so Cancel has something to stop
+  // and the memory can be handed back once the picture is done with.
+  const exportRendererRef = useRef<FractalRenderer | null>(null);
+  const exportCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Which export is the current one. Cancel moves it on, so a render that
+  // finishes afterwards is a picture nobody is waiting for.
+  const exportTokenRef = useRef(0);
+  // When the button's text last changed, for the progress throttle.
+  const exportReportedAtRef = useRef(0);
+
+  const releaseExport = useCallback(() => {
+    const canvas = exportCanvasRef.current;
+
+    exportRendererRef.current = null;
+    exportCanvasRef.current = null;
+
+    // Dropping the last reference frees the renderer's image buffer; shrinking
+    // the canvas is what frees the canvas's own copy of it.
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  }, []);
+
+  // Draw the current view at a size larger than the canvas, on a canvas of its
+  // own, and save it. The canvas on screen is neither read nor resized, so it
+  // keeps its size and its content, and the page goes on responding while this
+  // draws — the two renders are separate renderers, and the view, the fractal
+  // and the settings are the ones captured here, when the export was asked for.
+  const runExport = useCallback(
+    async (size: ExportSize) => {
+      const config: FractalConfig = {
+        bounds,
+        maxIterations: effectiveMaxIterations,
+        width: size.width,
+        height: size.height,
+        colorScheme,
+      };
+      const name = exportFileName(
+        downloadFileName(centerX, centerY, zoomLevel, fractalType),
+        size.scale,
+      );
+
+      const token = ++exportTokenRef.current;
+      const canvas = document.createElement("canvas");
+
+      let renderer: FractalRenderer;
+      try {
+        canvas.width = size.width;
+        canvas.height = size.height;
+        renderer = new FractalRenderer(canvas, fractalKind);
+      } catch (error) {
+        // A canvas that big can be refused: no drawing context, or no memory
+        // for the image buffer behind it. Nothing has been drawn or saved, so
+        // the page stays exactly as it is and says why.
+        console.error("Error creating export canvas:", error);
+        setExportState({ kind: "error", text: EXPORT_FAILED_MESSAGE });
+        return;
+      }
+
+      exportRendererRef.current = renderer;
+      exportCanvasRef.current = canvas;
+      exportReportedAtRef.current = 0;
+      setExportState({ kind: "running", progress: 0 });
+
+      const onProgress = (value: number) => {
+        if (token !== exportTokenRef.current) return;
+
+        const now = Date.now();
+        if (!exportProgressDue(now, exportReportedAtRef.current)) return;
+
+        exportReportedAtRef.current = now;
+        setExportState({ kind: "running", progress: value });
+      };
+
+      try {
+        await renderer.renderFractal(config, onProgress);
+      } catch (error) {
+        console.error("Error rendering export:", error);
+        releaseExport();
+        setExportState({ kind: "error", text: EXPORT_FAILED_MESSAGE });
+        return;
+      }
+
+      // Cancel has already moved the token on and put the panel back to idle.
+      // A picture that arrives after that is one nobody asked for: it is
+      // dropped rather than saved.
+      if (token !== exportTokenRef.current) return;
+
+      saveCanvasPng(canvas, name, (saved) => {
+        // A save cancelled while the browser was making the blob is one
+        // nobody is waiting for, and the canvas has gone back already.
+        if (token !== exportTokenRef.current) return;
+
+        releaseExport();
+        setExportState(
+          saved
+            ? { kind: "idle" }
+            : { kind: "error", text: EXPORT_FAILED_MESSAGE },
+        );
+      });
+    },
+    [
+      bounds,
+      effectiveMaxIterations,
+      colorScheme,
+      fractalKind,
+      centerX,
+      centerY,
+      zoomLevel,
+      fractalType,
+      releaseExport,
+    ],
+  );
+
+  const handleCancelExport = useCallback(() => {
+    // Take the token first. The render is between checkpoints, and the
+    // progress it would otherwise report — or the picture it would otherwise
+    // hand over — belongs to nobody once the user has said stop.
+    exportTokenRef.current++;
+    exportRendererRef.current?.cancelRender();
+    releaseExport();
+    setExportState({ kind: "idle" });
+  }, [releaseExport]);
+
+  // Save what is on the canvas, or draw and save a larger version of it. The
+  // canvas holds the render at its full pixel size, so a screen-size save is
+  // the image the user is looking at rather than a screenshot of the page
+  // around it, named exactly as this button has always named it.
+  const handleDownload = useCallback(() => {
+    if (exportState.kind === "running") return;
+
+    const size =
+      exportSizeOptions.find((option) => option.scale === exportScale) ??
+      exportSizeOptions[0];
+
+    if (size.scale === 1) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      // Whatever the last export had to say is about that export, not this
+      // save.
+      setExportState({ kind: "idle" });
+
       // A canvas can decline to produce an image. There is nothing to save
       // then, and the page carries on as before.
-      if (!blob) return;
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = downloadFileName(
-        centerX,
-        centerY,
-        zoomLevel,
-        fractalType,
+      saveCanvasPng(
+        canvas,
+        downloadFileName(centerX, centerY, zoomLevel, fractalType),
+        () => {},
       );
-      // Firefox only follows a click on an anchor that is in the document.
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      // The browser reads the blob off the URL as the download starts, so
-      // releasing it in this same tick can cancel the save before it begins.
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-    }, "image/png");
-  }, [centerX, centerY, zoomLevel, fractalType]);
+      return;
+    }
+
+    void runExport(size);
+  }, [
+    exportState.kind,
+    exportScale,
+    exportSizeOptions,
+    centerX,
+    centerY,
+    zoomLevel,
+    fractalType,
+    runExport,
+  ]);
+
+  // The screen-size save reads the canvas on screen, so it waits for the render
+  // drawing there; an export draws a canvas of its own and is not held back by
+  // one. Both wait for an export already running, because there is one button
+  // and one export at a time.
+  const exporting = exportState.kind === "running";
+  const downloadDisabled = exporting || (exportScale === 1 && isRendering);
+
+  // An export left running when the page goes away has nobody to hand its
+  // picture to, so it is stopped along with the rest of the page's work.
+  useEffect(
+    () => () => {
+      exportTokenRef.current++;
+      exportRendererRef.current?.cancelRender();
+    },
+    [],
+  );
 
   // Preset handlers
   const handlePresetSelect = (preset: FractalPreset) => {
@@ -2396,17 +2614,50 @@ export default function Home() {
           />
         </div>
 
-        {/* Download PNG keeps its lock while a render runs: the canvas it reads
-            may be half drawn. */}
-        <div className="bg-white p-6 rounded-lg shadow-lg text-center">
-          <Button
-            onClick={handleDownload}
-            disabled={isRendering}
-            variant="secondary"
-            size="sm"
-          >
-            Download PNG
-          </Button>
+        {/* Download PNG keeps its lock while the render it reads is drawing,
+            because the canvas on screen may be half drawn; a larger export
+            draws a canvas of its own and has nothing to wait for. */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <div className="space-y-4">
+            <Select
+              label="Export size"
+              value={exportScale.toString()}
+              options={exportSizeOptions.map((size) => ({
+                value: size.scale.toString(),
+                label: size.label,
+              }))}
+              onChange={(value) => setExportScale(Number(value))}
+            />
+            <div className="text-center">
+              <Button
+                onClick={handleDownload}
+                disabled={downloadDisabled}
+                variant="secondary"
+                size="sm"
+              >
+                {exportState.kind === "running"
+                  ? `Exporting... ${Math.round(exportState.progress * 100)}%`
+                  : "Download PNG"}
+              </Button>
+              {exporting && (
+                <Button
+                  onClick={handleCancelExport}
+                  variant="outline"
+                  size="sm"
+                  className="ml-2"
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
+            <div className="min-h-5 text-center">
+              {exportState.kind === "error" && (
+                <p role="status" className="text-xs text-red-600">
+                  {exportState.text}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         <VersionFooter />
