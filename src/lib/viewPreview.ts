@@ -1,17 +1,22 @@
 /**
  * What a shared view link says about itself to a crawler.
  *
- * `previewFor` turns the query of a request into the link a preview is built
- * from, or null. It is the server's half of `viewQuery.ts`: the same text, read
- * by the same decoder, and it is strict in the way `/api/og` is, because a link
- * the codec cannot read is not a view and a preview of half of one is a broken
- * card. So a query previews only when `parseOgQuery` accepts it, and what
- * reaches the URL is the view *re-encoded from the decoded state*: only known
- * fields, in the codec's order, never the visitor's text. The sentence about
- * the view is built from the same state out of this build's own labels and
- * formatted numbers, so no input is echoed into the page's head. The picture is
- * a pre-built one — the nearest place of the view's fractal (`ogImage.ts`) —
- * so nothing a request asks for is drawn for it.
+ * `previewForQuery` turns a request's query into the link a preview is built
+ * from, or null; `previewFor` is the same for the shape Next hands a page's
+ * `searchParams`. It is the server's half of `viewQuery.ts`: the same text,
+ * read by the same decoder, and it is strict — a link the codec cannot read is
+ * not a view and a preview of half of one is a broken card. So a query previews
+ * only when `parseOgQuery` accepts it, and what reaches the URL is the view
+ * *re-encoded from the decoded state*: only known fields, in the codec's order,
+ * never the visitor's text. The sentence about the view is built from the same
+ * state out of this build's own labels and formatted numbers, so no input is
+ * echoed into the page's head. The picture is a pre-built one — the nearest
+ * place of the view's fractal (`ogImage.ts`) — so nothing a request asks for is
+ * drawn for it.
+ *
+ * The route an old `/api/og` URL now lands on (`src/app/api/og/route.ts`) is
+ * this same function, fed the request's own search string, so the picture a
+ * cached preview URL is redirected to is the one the page's head names for it.
  *
  * A tour link (`tourLink.ts`) previews as its first stop — the card can draw one
  * picture, so it draws the one the walk begins at — and its sentence says how
@@ -29,8 +34,8 @@ import { PLACES, nearestPlace, type PlaceView } from "./places";
 import { formatZoom } from "./presets";
 import { CARD_ALT } from "./siteText";
 import { decodeTourLink } from "./tourLink";
-import { decodeView, encodeView } from "./viewLink";
-import { viewLinkToUpdates, type ViewLinkUpdates } from "./viewLinkState";
+import { encodeView } from "./viewLink";
+import type { ViewLinkUpdates } from "./viewLinkState";
 
 /** A route's `searchParams`, as Next hands them over. */
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -164,22 +169,30 @@ function imageFor(
 }
 
 /**
- * The preview a request's query asks for.
+ * The preview a request's query asks for, from the query string itself.
  *
- * @param searchParams - The route's search parameters
- * @returns The link, phrase and picture for a view the query codec can read —
- *   a tour link's being its first stop — or null for no parameters, for
- *   garbage, and for anything the codec would refuse
+ * This is the whole rule, and `previewFor` is the same thing for the shape Next
+ * hands a page's `searchParams`. Both exist because two callers ask the same
+ * question in two forms: the page's `generateMetadata` has the parameters
+ * object, and the redirect that an old `/api/og` URL lands on (`route.ts`) has
+ * only the request's own search string. Reading one and picking the picture in
+ * the other would be two rules that have to be kept in step, and the picture
+ * the redirect sends a crawler to has to be the one the page's head names.
+ *
+ * @param query - A query string, with or without its `?`
+ * @returns The link, phrase and picture for a view the codec can read — a tour
+ *   link's being its first stop — or null for no query, for garbage, and for
+ *   anything the codec would refuse
  */
-export function previewFor(searchParams: SearchParams): ViewPreview | null {
-  const query = queryOf(searchParams);
-  if (query === "") return null;
+export function previewForQuery(query: string): ViewPreview | null {
+  const text = query.startsWith("?") ? query.slice(1) : query;
+  if (text === "") return null;
 
   // A tour before a view, because a link that names a walk is about the walk:
   // the card is one picture, so it is the picture the walk begins at, and the
   // phrase says how many views follow. The two are read from one query without
   // either key being taken for the other's (`tourLink.ts`).
-  const stops = decodeTourLink(query);
+  const stops = decodeTourLink(text);
   if (stops !== null) {
     const first = stops[0];
     const line = describeTourLine(stops.length, describeViewLine(first));
@@ -187,10 +200,24 @@ export function previewFor(searchParams: SearchParams): ViewPreview | null {
     return { fragment: encodeView(first), line, ...imageFor(first, line) };
   }
 
-  if (!parseOgQuery(query).ok) return null;
+  const parsed = parseOgQuery(text);
+  if (!parsed.ok) return null;
 
-  const view = viewLinkToUpdates(decodeView(query));
-  const line = describeViewLine(view);
+  const line = describeViewLine(parsed.view);
 
-  return { fragment: encodeView(view), line, ...imageFor(view, line) };
+  return {
+    fragment: encodeView(parsed.view),
+    line,
+    ...imageFor(parsed.view, line),
+  };
+}
+
+/**
+ * The preview a page's search parameters ask for.
+ *
+ * @param searchParams - The route's search parameters
+ * @returns What {@link previewForQuery} gives for their query
+ */
+export function previewFor(searchParams: SearchParams): ViewPreview | null {
+  return previewForQuery(queryOf(searchParams));
 }

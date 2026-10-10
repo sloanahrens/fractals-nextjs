@@ -42,8 +42,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 ### Core Rendering System
 
 - **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support, and the counts of the render that finished: `recolour(scheme, maxIterations)` repaints the canvas from them in another scheme, computing no orbit, and answers false when it has kept none; the page uses it for a colour change, which is the one redraw that does not have to count the view again
-- **renderRgba** (`src/lib/renderRgba.ts`): A view as raw RGBA bytes with no canvas, in two steps — `countRgbaRows` (each pixel's point to its count through the kind) and `colourRgbaRows` (the count to a colour through the scheme and its `ColorOptions`) — with `renderRgbaRows` (some rows into a buffer) and `renderRgba` (the whole picture) as the two composed, so a picture is exactly its counts, coloured, and a colour change is the second step alone. `FractalRenderer` draws every row through it, and so does `/api/og`
-- **Image route** (`src/app/api/og/route.ts`, a shell over `src/lib/ogRoute.ts`, `ogView.ts`, `ogLimits.ts`) and **PNG encoder** (`src/lib/pngEncode.ts`): `GET /api/og?<view link>` draws a view as a 1200x630 PNG on the server, in the colours the link names — scheme, reversal and shift; nothing points at it any more (fr-xnl) and a later change redirects it and deletes the renderer; see the Version Notes of 2026-10-10 (fr-c4z, fr-q7x)
+- **renderRgba** (`src/lib/renderRgba.ts`): A view as raw RGBA bytes with no canvas, in two steps — `countRgbaRows` (each pixel's point to its count through the kind) and `colourRgbaRows` (the count to a colour through the scheme and its `ColorOptions`) — with `renderRgbaRows` (some rows into a buffer) and `renderRgba` (the whole picture) as the two composed, so a picture is exactly its counts, coloured, and a colour change is the second step alone. `FractalRenderer` draws every row through it, and so does the preview generator
+- **Image route** (`src/app/api/og/route.ts`, over `parseOgQuery` in `src/lib/ogView.ts` and `previewForQuery` in `src/lib/viewPreview.ts`): `GET /api/og?<view link>` no longer draws anything. It answers 308 to the pre-built picture the view previews as (`/og/<place-id>.jpg`, `ogImage.ts`), or to the static card when the query is not a view, so a preview URL a crawler cached before the pre-built previews still shows a picture and no request can make the server render; the origin comes from the request, validated (`siteOrigin`); see the Version Notes of 2026-10-10 (fr-c4z, fr-xnl, fr-5om)
 - **Pre-built previews** (`src/lib/ogImage.ts`, `nearestPlace` in `src/lib/places.ts`, `scripts/make-og-previews.mjs`, `public/og/`): one 1200x630 JPEG per catalogue place, drawn ahead of time through the app's own pipeline, and the rule that says which one a shared link previews as — the nearest place of the view's own fractal, same variant preferred, or the static card; `next.config.js` caches `/og/*` for a day; see the Version Notes of 2026-10-10 (fr-xnl)
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
@@ -198,6 +198,86 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-10_
 
+### /api/og stops rendering: a 308 to the pre-built picture, and the renderer is gone (2026-10-10)
+
+- fr-5om. The follow-on fr-xnl named, and the owner's concern of 2026-10-10:
+  `/api/og` was an unauthenticated endpoint that drew a PNG per request, so any
+  stranger could ask the service to spend CPU. It draws nothing now. A request
+  is answered with a **308** to the picture the view previews as, so a preview
+  URL a crawler or chat app cached before the pre-built pictures existed still
+  shows a picture; a query that is not a view — empty, garbage, a tour link
+  this build cannot read — is answered with a 308 to the static card rather
+  than a 404, so an old cached URL never shows a broken image. Both carry
+  `Cache-Control: public, max-age=86400`.
+- **One rule picks the picture, and it is the page's own.** The route is a
+  dozen lines: `previewForQuery(new URL(request.url).search)?.image ??
+  CARD_PATH`, and the origin from `siteOrigin((name) =>
+  request.headers.get(name), env)` — validated, never the raw `Host`, as
+  `requestOrigin` reads it for the page. `previewForQuery` is new in
+  `viewPreview.ts` and is the whole of `previewFor` moved onto a query string;
+  `previewFor(searchParams)` is now `previewForQuery(queryOf(searchParams))`, so
+  the page's head and this route choose the picture through the same code and
+  cannot disagree. That is the constraint's "the same pure function the page
+  uses" made structural rather than checked. `viewPreview.ts` imports no
+  renderer, so nothing the route reaches can draw.
+- **What is gone.** `src/lib/ogRoute.ts` (the handler, the injected cache, gate
+  and clock, the single-flight map and the sliced renderer), `src/lib/ogLimits.ts`
+  (`LruCache`, `RenderGate`, `startBudget`, `OG_CACHE_ENTRIES`,
+  `OG_QUEUE_LIMIT`, `OG_RENDER_BUDGET_MS`), `src/lib/pngEncode.ts` (`encodePng`,
+  the only thing on `node:zlib`), and their three test files. The route's
+  `runtime = "nodejs"` went with the encoder — it is runtime-agnostic now, and
+  `dynamic = "force-dynamic"` is what remains (it still reads the query).
+  `renderRgba.ts` is **kept**: `FractalRenderer` draws every row through it and
+  so does `scripts/make-og-previews.mjs`, so it is untouched, `BYTES_PER_PIXEL`
+  and all.
+- **`ogView.ts` is now just the reader.** `parseOgQuery` returns
+  `{ ok: true, view }` where `view` is the filled `ViewLinkUpdates` the picture
+  is chosen from — the strict key-by-key validation is unchanged (a key present
+  and refused still names the key; a too-long or wrong-version query is still
+  "Not a view"), and the sentence still never echoes a value. Everything that
+  was only for drawing is gone with the renderer: the `OgView` type's `key`,
+  `kind`, `bounds`, `maxIterations` and `colorOptions`, `OG_MAX_ITERATIONS`, the
+  canonical-key round trip and the `resolveFractalKind`/`autoIterations`
+  imports. `OG_WIDTH`, `OG_HEIGHT` and `cardBounds` stay, because
+  `make-og-previews.mjs` bundles them and frames every place with them.
+  `viewPreview.previewForQuery` reads `parseOgQuery`'s view instead of decoding
+  the query a second time, which is why the two cannot mean different things.
+- **The property is pinned twice.** `src/__tests__/og-route.test.ts` walks
+  `route.ts`'s source and fails if it names any of `ogRoute`, `ogLimits`,
+  `pngEncode`, `renderRgba`, `node:zlib`, `LruCache`, `RenderGate`, `encodePng`,
+  `renderOgPng`, `createOgHandler`, `renderRgbaRows` or `FractalRenderer`; and
+  it drives the handler over a valid view (Dendrite at 400x → the whole
+  Dendrite's picture), the whole Mandelbrot set, an empty query, `v=1` alone,
+  `v=2`, an unreadable field, a 600-character value, a script-looking fractal,
+  `&&&` and a bare `%`, asserting 308 with the expected `Location` and an empty
+  body every time — never anything drawn. It also checks the origin is read
+  from a forwarded host and that a forwarded host which is not a plain hostname
+  and port (`evil.example.com/steal?x=`) is not echoed.
+- **Verified against the standalone production build** (`node
+  .next/standalone/server.js`, 127.0.0.1): `?v=1&f=julia&k=Dendrite&z=400` →
+  `308` `Location: http://127.0.0.1:3137/og/julia-dendrite-whole.jpg`;
+  `?v=1&f=mandelbrot&x=-0.75&y=0&z=1&s=classic&i=auto` →
+  `/og/mandelbrot-whole.jpg`; no query, `?v=1&x=banana` and a hostile
+  `x-forwarded-host` → `/og-card-2.png` (the hostile host not echoed); following
+  each redirect gives the file itself (23,985 bytes `image/jpeg`, 149,648 bytes
+  `image/png`).
+- **Not changed**: the pre-built images and the place choice, the page's head
+  (`fr-xnl` left it pointing at `/og/*`), the `/og/*` caching rule in
+  `next.config.js`, `renderRgba`'s draw, and the route's path.
+- Docs: the README's Image Route bullet, its integration list, its Project
+  Structure (three modules removed, the route, `ogView.ts` and `renderRgba.ts`
+  reworded) and its Link preview section; the design doc's As built; the
+  `ogView.ts` and `viewPreview.ts` module comments; and this note.
+- Tests: the rewritten `src/lib/__tests__/ogView.test.ts` (the reader: the
+  codec's own query with and without its `?`, a reversed or shifted scheme, the
+  fill-from-frame rule including the fr-99q Dendrite link, every refusal by
+  name, one good field beside a bad one, the length ceiling, no value echoed,
+  the zoom clamp, agreement with the decoder, and `cardBounds`'s three geometry
+  cases) and the rewritten `src/__tests__/og-route.test.ts` above; the
+  integration tier's image-route check follows the 308 to
+  `/og/mandelbrot-whole.jpg` and the card for a query that is not a view.
+  `make gate` is green.
+
 ### Static link previews: one pre-built picture per place, nothing drawn on request (2026-10-10)
 
 - fr-xnl. A shared view used to preview as a picture `/api/og` drew for the
@@ -273,6 +353,8 @@ _Last updated: 2026-10-10_
   keep the headers they had.
 - **`/api/og` is untouched** — route, limits, cache and renderer as they were,
   and no page points at it. Removing it is fr-5om, the bead this one blocks.
+  _Superseded by the note above (fr-5om): the route now redirects and the
+  renderer, limits and encoder are gone._
 - Tests: `src/lib/__tests__/ogImage.test.ts` (`ogImagePath`; every place
   previews as its own picture; a view between two gives the nearer; a Dendrite
   view at the Classic spirals' own centre is a Dendrite picture and a power-5
@@ -1638,6 +1720,10 @@ _Last updated: 2026-10-10_
   source tests now name `blankHintShown`.
 
 ### Image route: /api/og draws a view as a 1200x630 PNG (2026-10-10)
+
+_Superseded: `/api/og` no longer draws. See the note at the top of this section
+(fr-5om): the route redirects to a pre-built picture, and the renderer, the
+limits and the PNG encoder described below are removed._
 
 - `GET /api/og?<view link>` is the first half of per-view link previews
   (owner-approved 2026-10-10, fr-c4z); the next bead (fr-cr5, done: see the note above) makes Copy link and

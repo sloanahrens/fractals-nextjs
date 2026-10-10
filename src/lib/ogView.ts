@@ -1,122 +1,41 @@
 /**
- * The view a `/api/og` request names, judged and turned into what the shared
- * renderer takes.
+ * The view a `/api/og` query names, judged strictly.
  *
  * The query is exactly what the link codec writes after the `#`
  * (`v=1&f=julia&k=Classic&x=-0.644&y=-0.094&z=2.56&s=fire&i=auto&w=800&h=600`),
  * and it is read with the codec's own decoder, so there is one description of
  * what a view link means. Where the page is forgiving of a link (a field it
  * cannot read keeps its default, because a page that looks a little different
- * is better than an error screen), this route is strict, because it is an
- * unauthenticated CPU endpoint and a card that quietly shows another place than
- * the link names is worse than a 400: a query that names no view, or whose
- * known keys carry a value the decoder refuses, is rejected before any work.
+ * is better than an error screen), this reader is strict: a query that names no
+ * view, or whose known keys carry a value the decoder refuses, is not a view.
+ * The page's own head uses the same reader (`viewPreview.ts`), so an old
+ * `/api/og` URL and the page it was shared from agree about what it names.
  *
- * What the route draws, and how it differs from the page:
- *
- * - The picture is always 1200x630 (`OG_WIDTH` x `OG_HEIGHT`, the Open Graph
- *   card). `w` and `h` are read and checked like every key but change nothing,
- *   and they are left out of the canonical query, so two links that differ only
- *   in canvas size share one cached image.
- * - Bounds. The page draws `calculateZoomBounds(centre, zoom)` onto a canvas of
- *   the same 4:3 shape, and the Download PNG button saves that canvas, so a
- *   download shows 4/zoom by 3/zoom of the plane. The 1.91:1 card keeps that
- *   rule's height (3/zoom) and centre and widens to the card's shape, so its
- *   pixels are square and the whole 4:3 view a visitor had is inside the card,
- *   centred, with extra plane at the sides (`cardBounds`). Cropping the 4:3 view
- *   to the card's height instead would cut off the top and bottom of what the
- *   link names.
- * - Colour. The scheme and its two settings travel together: `r` and `o`
- *   (`viewLink.ts`) are read like every other key, kept in the canonical query
- *   and handed to the renderer, so a shared reversed or shifted scheme previews
- *   in the colours the link names. A key that is present and refused — `o=2`,
- *   `r=2` — is a 400 like any other.
- * - Iterations. The page's rule, then a cap: Auto picks `autoIterations(zoom)`
- *   (a multiple of 10 from 50 to 1000), a count the link names is taken as it is,
- *   and either is held to `OG_MAX_ITERATIONS` (400) so one render has a bounded
- *   cost. Colour is the count over the cap, so a deep view's colours differ a
- *   little from the page's at the same view; that is the price of the limit.
+ * The route no longer draws anything (fr-5om): it answers with the pre-built
+ * picture the view previews as, so all this has to decide is *whether* a query
+ * is a view — the picture itself comes from `ogImage.ts`. That is why nothing
+ * here resolves a kind or works out an iteration count any more; `cardBounds`
+ * is the one piece of geometry that remains, because the preview generator
+ * (`scripts/make-og-previews.mjs`) frames every place with it.
  */
 
-import type {
-  ColorOptions,
-  ColorScheme,
-  FractalBounds,
-  FractalKind,
-} from "../types/fractal";
-import { resolveFractalKind } from "./fractalTypes";
-import { BASE_HEIGHT, autoIterations, calculateZoomBounds } from "./mandelbrot";
+import type { FractalBounds } from "../types/fractal";
+import { BASE_HEIGHT, calculateZoomBounds } from "./mandelbrot";
 import {
   MAX_FRAGMENT_LENGTH,
   VIEW_LINK_VERSION,
   decodeView,
-  encodeView,
   type ViewLinkState,
 } from "./viewLink";
-import { viewLinkToUpdates } from "./viewLinkState";
+import { viewLinkToUpdates, type ViewLinkUpdates } from "./viewLinkState";
 
-/** The card's size in pixels: the Open Graph image shape. */
+/** The shape every preview picture is drawn at: the Open Graph card's. */
 export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
 
-/** The most iterations one render may run. */
-export const OG_MAX_ITERATIONS = 400;
-
-/** A view ready to draw. */
-export interface OgView {
-  /**
-   * The canonical query for the view: the link codec's own encoding of the
-   * resolved view, with Auto replaced by the count it picks and the canvas size
-   * left out. Two requests that draw the same picture have the same key, and
-   * the picture is drawn from this text, so the key names the image exactly.
-   */
-  key: string;
-  /** The formula to iterate. */
-  kind: FractalKind;
-  /** The region of the plane the card covers. */
-  bounds: FractalBounds;
-  /** Iteration cap, 400 at most. */
-  maxIterations: number;
-  /** Colour scheme to draw in. */
-  colorScheme: ColorScheme;
-  /**
-   * Reverse and shift of that scheme, exactly as the link carried them, so the
-   * card is the shared picture and not the same view in the default palette.
-   */
-  colorOptions: ColorOptions;
-}
-
-/** What reading a query comes to: a view, or one sentence on why not. */
+/** What reading a query comes to: the view it names, or why it does not. */
 export type OgParse =
-  { ok: true; view: OgView } | { ok: false; message: string };
-
-/**
- * The bounds the 1.91:1 card draws for a view: the page's 4:3 view widened to
- * the card's shape, keeping its centre and height (see the module note).
- *
- * @param centerX - Real part of the centre
- * @param centerY - Imaginary part of the centre
- * @param zoom - Magnification, 1 being the whole base view
- * @param width - Picture width in pixels
- * @param height - Picture height in pixels
- */
-export function cardBounds(
-  centerX: number,
-  centerY: number,
-  zoom: number,
-  width: number = OG_WIDTH,
-  height: number = OG_HEIGHT,
-): FractalBounds {
-  const view = calculateZoomBounds(centerX, centerY, zoom);
-  const halfWidth = ((BASE_HEIGHT / zoom) * (width / height)) / 2;
-
-  return {
-    minReal: centerX - halfWidth,
-    maxReal: centerX + halfWidth,
-    minImaginary: view.minImaginary,
-    maxImaginary: view.maxImaginary,
-  };
-}
+  { ok: true; view: ViewLinkUpdates } | { ok: false; message: string };
 
 /**
  * Whether every key the query carries was read.
@@ -154,7 +73,12 @@ function unreadableKey(
 }
 
 /**
- * Read a request's query into a view to draw.
+ * Read a request's query into the view it names.
+ *
+ * The values are filled the way the page fills them (`viewLinkToUpdates`), so a
+ * link that names a fractal and no centre means that fractal's own frame here
+ * and in the browser, and the picture the route sends a crawler to is the one
+ * the page's own head names for the same query.
  *
  * @param search - The URL's query string, with or without its `?`
  * @returns The view, or a short sentence on why the query is not one. The
@@ -187,45 +111,37 @@ export function parseOgQuery(search: string): OgParse {
   // `v=1` and nothing else: a version and no view.
   if (Object.keys(decoded).length === 0) return notAView;
 
-  const updates = viewLinkToUpdates(decoded);
-  const maxIterations = Math.min(
-    OG_MAX_ITERATIONS,
-    updates.autoIterationsOn
-      ? autoIterations(updates.zoomLevel)
-      : updates.maxIterations,
-  );
+  return { ok: true, view: viewLinkToUpdates(decoded) };
+}
 
-  // Round-trip through the codec once so the key names the image: the codec
-  // writes ten significant digits, and the render uses what it wrote.
-  const key = encodeView({
-    fractalType: updates.fractalType,
-    variant: updates.variant,
-    centerX: updates.centerX,
-    centerY: updates.centerY,
-    zoomLevel: updates.zoomLevel,
-    colorScheme: updates.colorScheme,
-    reverse: updates.reverse,
-    shift: updates.shift,
-    autoIterationsOn: false,
-    maxIterations,
-    canvasWidth: OG_WIDTH,
-    canvasHeight: OG_HEIGHT,
-  });
-  const canonical = viewLinkToUpdates(decodeView(key));
+/**
+ * The bounds the 1.91:1 card draws for a view: the page's 4:3 view widened to
+ * the card's shape, keeping its centre and height.
+ *
+ * The pre-built previews are framed with this (`scripts/make-og-previews.mjs`),
+ * which is the frame the on-demand card drew in, so a picture cannot drift from
+ * the app's own view of the place.
+ *
+ * @param centerX - Real part of the centre
+ * @param centerY - Imaginary part of the centre
+ * @param zoom - Magnification, 1 being the whole base view
+ * @param width - Picture width in pixels
+ * @param height - Picture height in pixels
+ */
+export function cardBounds(
+  centerX: number,
+  centerY: number,
+  zoom: number,
+  width: number = OG_WIDTH,
+  height: number = OG_HEIGHT,
+): FractalBounds {
+  const view = calculateZoomBounds(centerX, centerY, zoom);
+  const halfWidth = ((BASE_HEIGHT / zoom) * (width / height)) / 2;
 
   return {
-    ok: true,
-    view: {
-      key,
-      kind: resolveFractalKind(canonical.fractalType, canonical.variant),
-      bounds: cardBounds(
-        canonical.centerX,
-        canonical.centerY,
-        canonical.zoomLevel,
-      ),
-      maxIterations,
-      colorScheme: canonical.colorScheme,
-      colorOptions: { reverse: canonical.reverse, shift: canonical.shift },
-    },
+    minReal: centerX - halfWidth,
+    maxReal: centerX + halfWidth,
+    minImaginary: view.minImaginary,
+    maxImaginary: view.maxImaginary,
   };
 }
