@@ -51,6 +51,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
 - **Wander controller** (`src/lib/wanderController.ts`): The Auto-wander clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
+- **Blank view** (`src/lib/blankView.ts`) and **BlankHint** (`src/components/ui/BlankHint.tsx`): The detector for a nearly one-colour picture, and the quiet "Nothing to see here" pill with a Back button
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, and a decoder that judges every value on its own and leaves out what it cannot read
 - **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
@@ -172,6 +173,35 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### A blank picture says so (2026-10-10)
+
+- A deep scroll can land in a region with nothing to see (the owner reached 127x
+  in a uniform field outside the set with no hint what to do). When a full
+  render has settled on a nearly one-colour picture, `BlankHint.tsx` shows a
+  small pill at the top centre of the canvas, "Nothing to see here. Try a nearby
+  place, or go back.", with a Back button that is the top bar's `handleBack`
+  (left out when `historyState.canGoBack` is false, leaving the text). The
+  wrapper takes no pointer events, only the pill does, so the canvas under it
+  still pans. It is a hint, not an automatic jump: nothing moves the view.
+- `src/lib/blankView.ts`: `isBlankImage(pixels, width, height)` samples a 32x24
+  evenly spaced grid, takes the commonest sampled colour, and is true when at
+  least 98% of the samples are within 24 (sum of channel differences) of it. 15
+  of the 768 samples off is blank, 16 is not. `canvasIsBlank(canvas)` reads the
+  canvas down to 64x48 with `drawImage` and asks it, answering null (no hint)
+  when the canvas cannot be read.
+- `page.tsx` holds `blankLink`, the link of the view found blank, not a flag:
+  the hint shows when it equals `currentLink`, so a view that moved on never
+  shows the last one's hint. The effect asks only when `!isRendering` and
+  `renderedLink === currentLink` (a settled full render, never a gesture's
+  preview), after `BLANK_HINT_DELAY_MS` (600) so a flicker between renders or
+  the 400 ms crossfade never shows it. Its cleanup clears `blankLink`, so a
+  render or gesture starting hides the hint at once and the delay starts over.
+- `blankView.test.ts` has the boundary cases and renders every catalogue place,
+  and each fractal's default view in each colour scheme, at 64x48 through the
+  renderer, asserting none is blank; it also shows the inside of the set and the
+  field outside it are. `blank-hint-panel.test.ts` reads the sources for the
+  wiring.
 
 ### Nearby tiles show what the click shows (2026-10-10)
 

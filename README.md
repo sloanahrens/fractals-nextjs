@@ -194,6 +194,7 @@ dependencies and needs nothing else.
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
 - **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Settings drawer's Navigation card copies the current URL and says "Link copied" for two seconds; a browser that will not take a clipboard write shows the URL in a read-only field with the text already selected. A link shows the view it names — the fields it carries applied together, the page's defaults left standing for the rest — whether it is opened as the page loads or pasted into the address bar of a page already open, where it changes that page's view without a reload; either way the fields the link could not be read for are the page's defaults rather than a refusal, so the URL is the view and the address bar is rewritten to match it. A link names no preset
   The browser's Back and Forward buttons, and the top bar's, retrace jumps: choosing a preset, applying coordinates, picking another fractal or Julia constant from its select, or choosing a Nearby tile adds a history entry, while dragging, zooming, the keys, the sliders and Auto-wander only update the current one.
+- **Blank-picture hint**: A deep zoom can land somewhere with nothing to see, a field of one colour. When a full render has settled on a picture that is nearly one colour (98% of an evenly spaced sample within a small colour distance of the commonest one) and has stood for 0.6 s, a small pill appears at the top centre of the picture: "Nothing to see here. Try a nearby place, or go back." with a Back button that does what the top bar's Back does. It only says so, never moves the view, and takes no pointer events outside its own box; the Back button is left out when there is nowhere to go back to. It goes as soon as the view changes or a render starts. No default view or catalogue place shows it
 - **Surprise me**: The top bar's centre button picks one place at random from the six the Nearby strip would lead with and goes there exactly as a tile click does, so the transition is the same and the jump is one history entry. It never picks the place the view already is, so pressing it again right away always goes somewhere new, and it is disabled when no place is near enough to offer
 - **Auto-wander**: Tick Auto-wander in the Auto-wander card of the Settings drawer (it was the Random walk checkbox in the Navigation card) and set the seconds between steps (1 to 120, 5 by default). Once each render finishes, the view waits that long and then moves one step, staying on the selected fractal; the line under the controls counts the wait down. Untick the box to stop, and move the view by hand — drag, wheel, key, button or preset — to start the interval again. Auto-wander pauses while the tab is in the background
 
@@ -219,6 +220,7 @@ dependencies and needs nothing else.
 │   │       └── version/route.ts # Build, deploy time, commit and revision as JSON
 │   ├── components/ui/      # UI components
 │   │   ├── __tests__/              # Tests for the form controls' labels
+│   │   ├── BlankHint.tsx           # The "Nothing to see here" pill with a Back button
 │   │   ├── Button.tsx              # Button
 │   │   ├── CenterControls.tsx      # The Real (X) and Imaginary (Y) centre boxes with Apply and Reset
 │   │   ├── Checkbox.tsx            # Checkbox
@@ -235,6 +237,7 @@ dependencies and needs nothing else.
 │   │   └── VersionFooter.tsx       # Which build is being served, from /api/version
 │   ├── lib/                # Core logic and utilities
 │   │   ├── __tests__/              # Unit tests for the modules below
+│   │   ├── blankView.ts            # Whether a settled picture is nearly one colour
 │   │   ├── burningShip.ts          # Burning Ship iteration
 │   │   ├── canvasNavigation.ts     # Wheel, drag, touch and key listeners
 │   │   ├── colorMapping.ts         # Color schemes

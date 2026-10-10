@@ -65,6 +65,7 @@ import {
   JULIA_CONSTANTS,
   parseJuliaConstant,
 } from "../lib/julia";
+import { BLANK_HINT_DELAY_MS, canvasIsBlank } from "../lib/blankView";
 import { createRng, nextWanderView } from "../lib/wander";
 import {
   DEFAULT_WANDER_INTERVAL_SECONDS,
@@ -110,6 +111,7 @@ import { VersionFooter } from "../components/ui/VersionFooter";
 import { HelpDialog } from "../components/ui/HelpDialog";
 import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
+import { BlankHint } from "../components/ui/BlankHint";
 import { NearbyStrip } from "../components/ui/NearbyStrip";
 
 // The four manual coordinate boxes. A field is present only once the user has
@@ -801,6 +803,33 @@ export default function Home() {
     overlay.style.opacity = "0";
   }, [currentLink, renderedLink]);
 
+  // Whether the picture the canvas holds is nearly one colour, as the link of
+  // the view it was found blank on. Held as a link rather than a flag so a view
+  // that has moved on never shows the hint of the one it left. It is asked only
+  // of a full render that has settled on the view, and only after the picture
+  // has stood for BLANK_HINT_DELAY_MS, so the end of a crossfade or a flicker
+  // between two renders never shows it. The cleanup clears it the moment a
+  // gesture or a render starts, and the delay starts over when the next one
+  // settles.
+  const [blankLink, setBlankLink] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isRendering || renderedLink === "" || renderedLink !== currentLink) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const canvas = canvasRef.current;
+      const blank = canvas ? canvasIsBlank(canvas) : null;
+      setBlankLink(blank ? currentLink : null);
+    }, BLANK_HINT_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      setBlankLink(null);
+    };
+  }, [isRendering, renderedLink, currentLink]);
+
   // The address bar follows the view — an auto-wander step, a control, a wheel,
   // a preset, a link — but only once that view has been drawn, which is also
   // what keeps a drag from rewriting it while the gesture is still moving.
@@ -1404,6 +1433,14 @@ export default function Home() {
           <p role="status" className="sr-only">
             {isRendering && `Rendering... ${Math.round(progress * 100)}%`}
           </p>
+
+          {/* Said when the settled picture has nothing in it, with the way
+              back; it takes no pointer events outside its own box. */}
+          <BlankHint
+            show={blankLink !== null && blankLink === currentLink}
+            onBack={handleBack}
+            canGoBack={historyState.canGoBack}
+          />
 
           {/* Places worth a look near this view. The thumbnails wait for a
               render in flight, so the strip never slows the picture the user
