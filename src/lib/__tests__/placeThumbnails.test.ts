@@ -746,7 +746,7 @@ describe("createCanvasThumbnailRender", () => {
     const canvas = createFakeCanvas(64, 48);
     const renderer = new FractalRenderer(
       canvas,
-      resolveFractalKind(candidate.fractal, candidate.juliaConstant ?? ""),
+      resolveFractalKind(candidate.fractal, candidate.variant ?? ""),
     );
 
     await renderer.renderFractal(

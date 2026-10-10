@@ -206,7 +206,7 @@ describe("suggest", () => {
       place("ship-place", { fractal: "burning-ship", centerX: 0.01, zoom: 40 }),
       place("julia-place", {
         fractal: "julia",
-        juliaConstant: "Classic",
+        variant: "Classic",
         centerX: 0.01,
         zoom: 40,
       }),
@@ -278,7 +278,7 @@ describe("suggest", () => {
 describe("suggest on a Julia view", () => {
   const JULIA_VIEW: PlaceView = {
     fractal: "julia",
-    juliaConstant: "Classic",
+    variant: "Classic",
     centerX: 0,
     centerY: 0,
     zoom: 10,
@@ -287,7 +287,7 @@ describe("suggest on a Julia view", () => {
   function julia(id: string, constant: string, overrides: Partial<Place> = {}) {
     return place(id, {
       fractal: "julia",
-      juliaConstant: constant,
+      variant: constant,
       ...overrides,
     });
   }
@@ -332,7 +332,7 @@ describe("suggest on a Julia view", () => {
   });
 
   it("recognises one constant under two spellings", () => {
-    const view = { ...JULIA_VIEW, juliaConstant: "custom:0.50,0.500" };
+    const view = { ...JULIA_VIEW, variant: "custom:0.50,0.500" };
     const catalogue = [
       julia("other", "Classic", { centerX: 0.1, zoom: 40 }),
       julia("same", "custom:0.5,0.5", { centerX: 3, zoom: 40 }),
@@ -342,7 +342,7 @@ describe("suggest on a Julia view", () => {
   });
 
   it("lists every place after the first group when the view has no constant", () => {
-    const view: PlaceView = { ...JULIA_VIEW, juliaConstant: undefined };
+    const view: PlaceView = { ...JULIA_VIEW, variant: undefined };
     const catalogue = [
       julia("b", "Classic", { centerX: 0.2, zoom: 40 }),
       julia("a", "Dendrite", { centerX: 0.1, zoom: 40 }),
@@ -352,10 +352,10 @@ describe("suggest on a Julia view", () => {
   });
 
   it("ignores the constant for a fractal that has none", () => {
-    const view: PlaceView = { ...VIEW, juliaConstant: "Classic" };
+    const view: PlaceView = { ...VIEW, variant: "Classic" };
     const catalogue = [
       place("a", { centerX: 0.1, zoom: 40 }),
-      place("b", { centerX: 0.2, zoom: 40, juliaConstant: "Dendrite" }),
+      place("b", { centerX: 0.2, zoom: 40, variant: "Dendrite" }),
     ];
 
     expect(ids(suggest(view, catalogue, 5))).toEqual(["a", "b"]);
@@ -398,9 +398,7 @@ describe("PLACES", () => {
   });
 
   it("spreads the Julia places over the four named constants and at least two custom ones", () => {
-    const constants = placesForFractal("julia").map(
-      (entry) => entry.juliaConstant,
-    );
+    const constants = placesForFractal("julia").map((entry) => entry.variant);
 
     for (const { name } of JULIA_CONSTANTS) {
       expect(constants, name).toContain(name);
@@ -415,9 +413,9 @@ describe("PLACES", () => {
   it("names a constant for a Julia place and for no other", () => {
     for (const entry of PLACES) {
       if (entry.fractal === "julia") {
-        expect(entry.juliaConstant, entry.id).toBeTypeOf("string");
+        expect(entry.variant, entry.id).toBeTypeOf("string");
       } else {
-        expect(entry.juliaConstant, entry.id).toBeUndefined();
+        expect(entry.variant, entry.id).toBeUndefined();
       }
     }
   });
@@ -488,15 +486,12 @@ describe("PLACES", () => {
     "%s",
     (_id, entry) => {
       it("resolves to the kind of its fractal, with a constant the build reads", () => {
-        const kind = resolveFractalKind(
-          entry.fractal,
-          entry.juliaConstant ?? "",
-        );
+        const kind = resolveFractalKind(entry.fractal, entry.variant ?? "");
 
         expect(kind.id).toBe(entry.fractal);
 
         if (entry.fractal === "julia") {
-          expect(parseJuliaConstant(entry.juliaConstant)).not.toBeNull();
+          expect(parseJuliaConstant(entry.variant)).not.toBeNull();
         }
       });
 
@@ -510,7 +505,7 @@ describe("PLACES", () => {
       it("keeps its centre and zoom through a link", () => {
         const link = encodeView({
           fractalType: entry.fractal,
-          juliaConstant: entry.juliaConstant,
+          variant: entry.variant,
           centerX: entry.centerX,
           centerY: entry.centerY,
           zoomLevel: entry.zoom,
@@ -525,14 +520,14 @@ describe("PLACES", () => {
         expect(decoded.centerX).toBe(entry.centerX);
         expect(decoded.centerY).toBe(entry.centerY);
         expect(decoded.zoomLevel).toBe(entry.zoom);
-        expect(decoded.juliaConstant).toBe(entry.juliaConstant);
+        expect(decoded.variant).toBe(entry.variant);
       });
 
       it("renders a picture, not a blank", async () => {
         const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
         const renderer = new FractalRenderer(
           element,
-          resolveFractalKind(entry.fractal, entry.juliaConstant ?? ""),
+          resolveFractalKind(entry.fractal, entry.variant ?? ""),
         );
 
         await renderer.renderFractal(
@@ -596,7 +591,7 @@ describe("featuredPlace", () => {
       const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
       const renderer = new FractalRenderer(
         element,
-        resolveFractalKind(featured.fractal, featured.juliaConstant ?? ""),
+        resolveFractalKind(featured.fractal, featured.variant ?? ""),
       );
 
       await renderer.renderFractal(
@@ -637,7 +632,7 @@ describe("wholeSetPlaceFor", () => {
 
       expect(found).not.toBeNull();
       expect(found?.fractal).toBe("julia");
-      expect(found?.juliaConstant).toBe(constant.name);
+      expect(found?.variant).toBe(constant.name);
       expect(found?.centerX).toBe(opening.centerX);
       expect(found?.centerY).toBe(opening.centerY);
       expect(found?.zoom).toBe(opening.zoom);

@@ -78,7 +78,7 @@ describe("the Surprise me button", () => {
 
     for (const field of [
       "fractal: fractalType",
-      "juliaConstant",
+      "variant",
       "centerX",
       "centerY",
       "zoom: zoomLevel",

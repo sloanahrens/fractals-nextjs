@@ -87,7 +87,7 @@ function pickOne<T>(items: readonly T[], rng: () => number): T {
 function viewOf(place: Place): PlaceView {
   return {
     fractal: place.fractal,
-    juliaConstant: place.juliaConstant,
+    variant: place.variant,
     centerX: place.centerX,
     centerY: place.centerY,
     zoom: place.zoom,

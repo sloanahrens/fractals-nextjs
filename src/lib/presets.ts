@@ -18,7 +18,12 @@ export interface FractalPreset {
    * a Mandelbrot view, because that is the only thing the app could draw then.
    */
   fractal?: string;
-  /** Julia constant this view was saved against; read only for a Julia view. */
+  /**
+   * The fractal's variant (see `fractalVariants`) this view was saved against;
+   * read only for a Julia view, where it is the Julia constant. The page calls
+   * it `variant`; the stored name stays `juliaConstant` so saved views from
+   * before variants still load.
+   */
   juliaConstant?: string;
 }
 
@@ -323,24 +328,26 @@ export function presetsForFractal(
  * The fractal fields a view saved right now should carry.
  *
  * A view belongs to the fractal on the canvas when it is saved, and the
- * constant belongs to a Julia view and to nothing else: a Mandelbrot or Burning
+ * variant belongs to a Julia view and to nothing else: a Mandelbrot or Burning
  * Ship entry gets no `juliaConstant` key at all, so its stored JSON stays the
- * shape it had before this field existed.
+ * shape it had before this field existed. The key keeps its Julia name in
+ * storage so views saved before variants still load.
  * @param fractalId - Id of the fractal on the canvas
- * @param juliaConstantName - Constant on the canvas; written only for Julia
+ * @param variant - Variant on the canvas; written only for Julia
  * @returns The fields to merge into the saved preset
  */
 export function presetFractalFields(
   fractalId: string,
-  juliaConstantName: string,
+  variant: string,
 ): { fractal: string; juliaConstant?: string } {
   return fractalId === "julia"
-    ? { fractal: fractalId, juliaConstant: juliaConstantName }
+    ? { fractal: fractalId, juliaConstant: variant }
     : { fractal: fractalId };
 }
 
 /**
- * The Julia constant a view names.
+ * The variant a view names: its Julia constant, the only variant a saved view
+ * carries.
  *
  * A preset that names a constant this build cannot read cannot be loaded as
  * written: the picker would sit on a name it has no option for. A custom name
@@ -350,7 +357,7 @@ export function presetFractalFields(
  * name, so naming it here keeps the select and the canvas describing the same
  * picture.
  */
-export function presetJuliaConstant(preset: FractalPreset): string {
+export function presetVariant(preset: FractalPreset): string {
   return isJuliaConstantName(preset.juliaConstant)
     ? preset.juliaConstant
     : JULIA_CONSTANTS[0].name;

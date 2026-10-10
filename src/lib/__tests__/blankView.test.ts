@@ -229,7 +229,7 @@ describe("what the detector says of real pictures", () => {
         id: `default-${id}`,
         name: id,
         fractal: id,
-        ...(id === "julia" ? { juliaConstant: "Classic" } : {}),
+        ...(id === "julia" ? { variant: "Classic" } : {}),
         ...defaultViewFor(id),
       };
       const picture = await pictureOf(opening, scheme);

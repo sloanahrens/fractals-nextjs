@@ -40,24 +40,22 @@ describe("the handlers that make a history entry", () => {
   it.each([
     "applyManualCoordinates",
     "handleFractalTypeChange",
-    "handleJuliaSelect",
+    "handleVariantSelect",
     "handlePresetSelect",
   ])("%s begins a jump", (handler) => {
     expect(functionBody(handler)).toContain("beginJump()");
   });
 
   it("begins a jump for a named constant but not for a custom one typed in", () => {
-    const select = functionBody("handleJuliaSelect");
+    const select = functionBody("handleVariantSelect");
 
     // The named pick is a jump; the Custom option changes the controls and not
     // the picture, so it is not one.
     expect(select.indexOf("beginJump()")).toBeLessThan(
-      select.indexOf("handleJuliaConstantChange(value)"),
+      select.indexOf("handleVariantChange(value)"),
     );
     // Every readable keystroke reaches this handler, so it makes no entry.
-    expect(functionBody("handleJuliaConstantChange")).not.toContain(
-      "beginJump",
-    );
+    expect(functionBody("handleVariantChange")).not.toContain("beginJump");
     expect(functionBody("editJuliaInput")).not.toContain("beginJump");
   });
 

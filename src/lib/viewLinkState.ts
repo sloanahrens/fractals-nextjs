@@ -29,8 +29,7 @@
  */
 
 import type { ColorScheme } from "../types/fractal";
-import { defaultViewFor } from "./fractalTypes";
-import { JULIA_CONSTANTS, isJuliaConstantName } from "./julia";
+import { defaultVariant, defaultViewFor, isVariantValue } from "./fractalTypes";
 import { decodeView, type ViewLinkState } from "./viewLink";
 
 /**
@@ -42,8 +41,12 @@ import { decodeView, type ViewLinkState } from "./viewLink";
 export interface ViewLinkUpdates {
   /** Id of the fractal to draw, from {@link FRACTAL_TYPES} */
   fractalType: string;
-  /** Name of the Julia constant: a named one, or a custom spelling of a point */
-  juliaConstant: string;
+  /**
+   * The fractal's variant: for Julia a constant, named or a custom spelling of
+   * a point. One string for every fractal, kept across a change of fractal, so
+   * it opens on Julia's default whatever fractal the page opens on.
+   */
+  variant: string;
   /** Real part of the centre of the view */
   centerX: number;
   /** Imaginary part of the centre of the view */
@@ -76,7 +79,7 @@ const DEFAULT_VIEW = defaultViewFor("mandelbrot");
  */
 export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
   fractalType: "mandelbrot",
-  juliaConstant: JULIA_CONSTANTS[0].name,
+  variant: defaultVariant("julia"),
   centerX: DEFAULT_VIEW.centerX,
   centerY: DEFAULT_VIEW.centerY,
   zoomLevel: DEFAULT_VIEW.zoom,
@@ -95,8 +98,8 @@ export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
  * leaves out what it cannot read, so a fragment from another build, or from
  * nowhere at all, decodes to no fields and leaves every default standing.
  *
- * The Julia constant is only applied to a Julia view, which is the codec's own
- * rule seen from this side: it writes `k` only beside `f=julia`, because the
+ * The variant is only applied to a fractal that takes one, which is the codec's
+ * own rule seen from this side: it writes `k` only beside `f=julia`, because the
  * fractal and its constant are one choice. A link naming the Mandelbrot set
  * and a constant is a link about the Mandelbrot set, with a field in it that
  * means nothing. The name is judged once more on the way in, because of all
@@ -116,10 +119,9 @@ export function viewLinkToUpdates(
 
   return {
     fractalType,
-    juliaConstant:
-      fractalType === "julia" && isJuliaConstantName(decoded.juliaConstant)
-        ? decoded.juliaConstant
-        : defaults.juliaConstant,
+    variant: isVariantValue(fractalType, decoded.variant)
+      ? decoded.variant
+      : defaults.variant,
     centerX: decoded.centerX ?? defaults.centerX,
     centerY: decoded.centerY ?? defaults.centerY,
     zoomLevel: decoded.zoomLevel ?? defaults.zoomLevel,

@@ -386,7 +386,7 @@ export function createCanvasThumbnailRender(
     const canvas = createCanvas(width, height);
     const renderer = new FractalRenderer(
       canvas as HTMLCanvasElement,
-      resolveFractalKind(place.fractal, place.juliaConstant ?? ""),
+      resolveFractalKind(place.fractal, place.variant ?? ""),
     );
     const stop = () => renderer.cancelRender();
 

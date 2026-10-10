@@ -4,7 +4,11 @@ import type { ComplexNumber } from "../../types/fractal";
 import { burningShipKind } from "../burningShip";
 import {
   FRACTAL_TYPES,
+  defaultVariant,
   defaultViewFor,
+  fractalVariants,
+  isCustomVariant,
+  isVariantValue,
   resolveFractalKind,
 } from "../fractalTypes";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
@@ -155,7 +159,11 @@ describe("defaultViewFor", () => {
   it("frames a Julia set about the origin", () => {
     // A Julia set is symmetric about the origin whatever its constant, so
     // centring it anywhere else shows a corner of it.
-    expect(defaultViewFor("julia")).toEqual({ centerX: 0, centerY: 0, zoom: 1 });
+    expect(defaultViewFor("julia")).toEqual({
+      centerX: 0,
+      centerY: 0,
+      zoom: 1,
+    });
   });
 
   it("frames the ship where the whole of it sits", () => {
@@ -175,5 +183,77 @@ describe("defaultViewFor", () => {
       centerY: 0,
       zoom: 1,
     });
+  });
+});
+
+describe("fractalVariants", () => {
+  it("gives Julia the captioned row of its four named constants and a Custom choice", () => {
+    const variants = fractalVariants("julia");
+
+    expect(variants?.label).toBe("Julia constant");
+    expect(variants?.allowsCustom).toBe(true);
+    expect(variants?.options).toEqual(
+      JULIA_CONSTANTS.map((constant) => ({
+        value: constant.name,
+        label: constant.name,
+      })),
+    );
+  });
+
+  it("gives the Mandelbrot set, the Burning Ship and an unknown id no row", () => {
+    expect(fractalVariants("mandelbrot")).toBeNull();
+    expect(fractalVariants("burning-ship")).toBeNull();
+    expect(fractalVariants("newton")).toBeNull();
+  });
+
+  it("describes only Julia among the picker's fractals", () => {
+    expect(
+      FRACTAL_TYPES.filter((type) => fractalVariants(type.id) !== null).map(
+        (type) => type.id,
+      ),
+    ).toEqual(["julia"]);
+  });
+});
+
+describe("defaultVariant", () => {
+  it("is Julia's first named constant and empty for a fractal with no variant", () => {
+    expect(defaultVariant("julia")).toBe(JULIA_CONSTANTS[0].name);
+    expect(defaultVariant("mandelbrot")).toBe("");
+    expect(defaultVariant("burning-ship")).toBe("");
+    expect(defaultVariant("newton")).toBe("");
+  });
+
+  it("is always one of the fractal's own options", () => {
+    const values = fractalVariants("julia")?.options.map((o) => o.value);
+
+    expect(values).toContain(defaultVariant("julia"));
+  });
+});
+
+describe("isVariantValue", () => {
+  it("accepts a named constant and a readable custom one for Julia", () => {
+    expect(isVariantValue("julia", "Dendrite")).toBe(true);
+    expect(isVariantValue("julia", "custom:-0.8,0.156")).toBe(true);
+  });
+
+  it("refuses an unreadable value, and every value of a fractal with no variant", () => {
+    expect(isVariantValue("julia", "Newton")).toBe(false);
+    expect(isVariantValue("julia", "custom:9,9")).toBe(false);
+    expect(isVariantValue("julia", undefined)).toBe(false);
+    expect(isVariantValue("mandelbrot", "Classic")).toBe(false);
+    expect(isVariantValue("burning-ship", "")).toBe(false);
+  });
+});
+
+describe("isCustomVariant", () => {
+  it("is true only for a readable value that is not a named option", () => {
+    expect(isCustomVariant("julia", "custom:-0.8,0.156")).toBe(true);
+    expect(isCustomVariant("julia", "Classic")).toBe(false);
+    expect(isCustomVariant("julia", "garbage")).toBe(false);
+  });
+
+  it("is false for a fractal that allows no custom value, whatever the page holds", () => {
+    expect(isCustomVariant("mandelbrot", "custom:-0.8,0.156")).toBe(false);
+    expect(isCustomVariant("burning-ship", "custom:-0.8,0.156")).toBe(false);
   });
 });

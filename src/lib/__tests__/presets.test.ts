@@ -22,7 +22,7 @@ import {
   getServerCustomPresetsSnapshot,
   presetFractal,
   presetFractalFields,
-  presetJuliaConstant,
+  presetVariant,
   presetsForFractal,
   saveCustomPreset,
   subscribeToCustomPresets,
@@ -206,7 +206,7 @@ function measurePreset(
 function kindForPreset(preset: FractalPreset): FractalKind {
   return resolveFractalKind(
     presetFractal(preset) ?? DEFAULT_PRESET_FRACTAL,
-    presetJuliaConstant(preset),
+    presetVariant(preset),
   );
 }
 
@@ -357,7 +357,6 @@ describe("BUILTIN_PRESETS", () => {
       expect(preset.description).not.toBe("");
     }
   });
-
 });
 
 describe("getPresetById", () => {
@@ -555,22 +554,22 @@ describe("the fractal fields a view is saved with", () => {
 
 describe("the Julia constant a saved view names", () => {
   it("names the constant the view was saved against", () => {
-    expect(presetJuliaConstant(JULIA_PRESET)).toBe("Dendrite");
+    expect(presetVariant(JULIA_PRESET)).toBe("Dendrite");
   });
 
   it("falls back to the first constant for a name this build does not know", () => {
     // The renderer draws the first constant for a name it cannot resolve, so
     // the picker has to sit on the same one or the select and the canvas
     // describe different pictures.
-    expect(
-      presetJuliaConstant({ ...JULIA_PRESET, juliaConstant: "Newton" }),
-    ).toBe(JULIA_CONSTANTS[0].name);
+    expect(presetVariant({ ...JULIA_PRESET, juliaConstant: "Newton" })).toBe(
+      JULIA_CONSTANTS[0].name,
+    );
   });
 
   it("falls back for a Julia view that names no constant at all", () => {
-    expect(
-      presetJuliaConstant({ ...JULIA_PRESET, juliaConstant: undefined }),
-    ).toBe(JULIA_CONSTANTS[0].name);
+    expect(presetVariant({ ...JULIA_PRESET, juliaConstant: undefined })).toBe(
+      JULIA_CONSTANTS[0].name,
+    );
   });
 
   it("keeps a custom constant, which is a name and not a lookup", () => {
@@ -578,7 +577,7 @@ describe("the Julia constant a saved view names", () => {
     // rather than looked up among the four: a view framed on a point the
     // picker has no option for still loads as the picture it was saved on.
     expect(
-      presetJuliaConstant({
+      presetVariant({
         ...JULIA_PRESET,
         juliaConstant: "custom:-0.8,0.156",
       }),
@@ -595,7 +594,7 @@ describe("the Julia constant a saved view names", () => {
       "Custom:0,0",
     ]) {
       expect(
-        presetJuliaConstant({ ...JULIA_PRESET, juliaConstant }),
+        presetVariant({ ...JULIA_PRESET, juliaConstant }),
         juliaConstant,
       ).toBe(JULIA_CONSTANTS[0].name);
     }
@@ -606,7 +605,7 @@ describe("the Julia constant a saved view names", () => {
 
     for (const named of ["Dendrite", "Newton", undefined]) {
       expect(names).toContain(
-        presetJuliaConstant({ ...JULIA_PRESET, juliaConstant: named }),
+        presetVariant({ ...JULIA_PRESET, juliaConstant: named }),
       );
     }
   });
@@ -632,6 +631,32 @@ describe("reading views out of storage", () => {
     ]);
   });
 
+  it("loads a stored Julia view that names its constant under `juliaConstant` into the variant", () => {
+    // The page calls the value a variant, but storage keeps the field's old
+    // name: a view saved before variants existed has to load, and a view saved
+    // now has to stay readable by older builds.
+    const stored = JSON.stringify([
+      {
+        ...JSON.parse(LEGACY_PRESETS_JSON)[0],
+        fractal: "julia",
+        juliaConstant: "Douady rabbit",
+      },
+    ]);
+    localStorage.setItem(STORAGE_KEY, stored);
+
+    const [view] = getCustomPresets();
+
+    expect(presetFractal(view)).toBe("julia");
+    expect(presetVariant(view)).toBe("Douady rabbit");
+    expect(presetFractalFields("julia", "Douady rabbit")).toEqual({
+      fractal: "julia",
+      juliaConstant: "Douady rabbit",
+    });
+    expect(Object.keys(presetFractalFields("burning-ship", "Classic"))).toEqual(
+      ["fractal"],
+    );
+  });
+
   it("round-trips a Julia view saved now back to its fractal and constant", () => {
     saveCustomPreset({
       ...CUSTOM_PRESET,
@@ -641,7 +666,7 @@ describe("reading views out of storage", () => {
     const [stored] = getCustomPresets();
 
     expect(presetFractal(stored)).toBe("julia");
-    expect(presetJuliaConstant(stored)).toBe("Dendrite");
+    expect(presetVariant(stored)).toBe("Dendrite");
     expect(presetsForFractal(getCustomPresets(), "julia")).toEqual([stored]);
     expect(presetsForFractal(getCustomPresets(), "mandelbrot")).toEqual([]);
   });
@@ -668,7 +693,7 @@ describe("reading views out of storage", () => {
     ];
 
     expect(stored.juliaConstant).toBe("custom:-0.8,0.156");
-    expect(presetJuliaConstant(stored)).toBe("custom:-0.8,0.156");
+    expect(presetVariant(stored)).toBe("custom:-0.8,0.156");
     expect(presetsForFractal(getCustomPresets(), "julia")).toEqual([stored]);
 
     for (const point of points) {

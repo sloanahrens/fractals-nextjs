@@ -44,7 +44,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
-- **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, and the choice-to-kind and choice-to-default-view resolvers
+- **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, the choice-to-kind and choice-to-default-view resolvers, and the per-fractal variant descriptor (`fractalVariants`, `defaultVariant`)
 - **Julia sets** (`src/lib/julia.ts`): The four named Julia constants, the `custom:<re>,<im>` spelling that names any other point, and the factory that turns one into a fractal kind
 - **Custom constant input** (`src/lib/customConstantInput.ts`): The Real and Imaginary boxes' text turned into a `custom:<re>,<im>` name or the sentence that says why not, and the Custom option's select value
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
@@ -176,6 +176,52 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Fractal variants (2026-10-10)
+
+- A fractal can take one setting, its *variant*; only Julia does today, and its
+  variant is the Julia constant. This is a refactor so the next fractal that
+  takes a setting (a Multibrot power) needs a descriptor and no new controls.
+  Nothing a visitor does changes; the one visible difference is the switcher's
+  second row, which now opens with a quiet caption, "Julia constant".
+- `fractalVariants(fractalId)` in `fractalTypes.ts` returns `{ label, options:
+  { value, label }[], allowsCustom }` or `null`: Julia gets the label "Julia
+  constant", the four `JULIA_CONSTANTS` and `allowsCustom: true`; the Mandelbrot
+  set, the Burning Ship and any id this build does not know get `null`.
+  `defaultVariant(fractalId)` is Julia's first constant and `""` for the rest.
+  `isVariantValue(fractalId, value)` says whether a value is one the fractal can
+  be drawn with, and `isCustomVariant(fractalId, value)` whether it is the
+  fractal's custom choice.
+- The page, `viewLinkState.ts`, `viewLink.ts`, `places.ts`, `tour.ts` and
+  `FractalSwitcher` call it `variant` (`ViewLinkUpdates.variant`,
+  `ViewLinkState.variant`, `Place.variant`, the switcher's `variant` and
+  `onSelectVariant`, the page's `variant`/`setVariant`/`handleVariantChange`/
+  `handleVariantSelect`). The page still holds one string that survives a change
+  of fractal, as the Julia constant always did, so Julia ↔ Mandelbrot through the
+  Fractal select keeps the constant, and a fresh page opens it on
+  `defaultVariant("julia")`.
+- The wire and storage formats are unchanged, byte for byte. A link still writes
+  `k=<value>` only beside `f=julia` and reads it on its own; `presets.ts` keeps
+  the stored field name `juliaConstant` (commented there) so every saved view
+  still loads and a view saved now is still readable by an older build.
+  `presetVariant(preset)` reads it, `presetFractalFields(fractal, variant)`
+  writes it. The built-in presets and the catalogue keep their values.
+- `FractalSwitcher` draws its second row from `fractalVariants(fractalType)`: a
+  caption (`aria-hidden`, the group carries the same label), a chip per option,
+  a Custom chip only when `allowsCustom`, and no row when the descriptor is
+  `null`. The Settings select is drawn from the same descriptor and shows only
+  when it exists; the Real and Imaginary boxes show for `isCustomVariant`. The
+  custom-constant behaviour itself (`custom:<re>,<im>`, validation messages, the
+  Custom chip opening Settings at Real) is untouched. The page declares
+  `variants` just before its `return`: declared after the render-phase
+  `setSyncedVariant` block, the React Compiler lint reports `applyView`'s
+  memoization as not preserved.
+- Tests: `fractalTypes.test.ts` (descriptor, defaults, `isVariantValue`,
+  `isCustomVariant`), `viewLinkState.test.ts` (a Julia variant, named and
+  custom, round-trips through `k=` and nothing is written for another fractal),
+  `presets.test.ts` (a stored view with `juliaConstant` loads into the variant);
+  the source-reading panel tests follow the renamed identifiers and read the
+  switcher and select for the descriptor.
 
 ### Auto-wander hops; a stopped Tour resumes after 15 s (2026-10-10)
 

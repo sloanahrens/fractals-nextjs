@@ -132,7 +132,7 @@ describe("the address bar", () => {
 
     for (const setter of [
       "setFractalType(",
-      "setJuliaConstant(",
+      "setVariant(",
       "setCenterX(",
       "setCenterY(",
       "setZoomLevel(",
