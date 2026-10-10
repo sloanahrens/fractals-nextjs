@@ -140,7 +140,7 @@ function createHarness(
 }
 
 /**
- * What `src/app/page.tsx` does with the zoom a gesture reports: the zoom level
+ * What `src/app/FractalExplorer.tsx` does with the zoom a gesture reports: the zoom level
  * runs from the full view to the deepest zoom the sliders offer.
  */
 const pageZoom = (scale: number) => Math.min(10000, Math.max(1, scale));

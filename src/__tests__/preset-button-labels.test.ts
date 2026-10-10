@@ -18,7 +18,7 @@ function source(path: string): string {
 }
 
 const selector = source("../components/ui/PresetSelector.tsx");
-const page = source("../app/page.tsx");
+const page = source("../app/FractalExplorer.tsx");
 
 describe("the Presets card", () => {
   it("keeps its dropdown, listing built-in and saved views", () => {

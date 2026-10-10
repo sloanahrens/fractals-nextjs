@@ -18,7 +18,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIRECTORY = fileURLToPath(new URL("..", import.meta.url));
-const PAGE_PATH = fileURLToPath(new URL("../app/page.tsx", import.meta.url));
+const PAGE_PATH = fileURLToPath(
+  new URL("../app/FractalExplorer.tsx", import.meta.url),
+);
 const page = readFileSync(PAGE_PATH, "utf8");
 
 /**
@@ -47,7 +49,7 @@ function functionBody(source: string, name: string): string {
 
 describe("the manual coordinates panel", () => {
   it("reads the page it is checking", () => {
-    expect(relative(SRC_DIRECTORY, PAGE_PATH)).toBe("app/page.tsx");
+    expect(relative(SRC_DIRECTORY, PAGE_PATH)).toBe("app/FractalExplorer.tsx");
     expect(page.length).toBeGreaterThan(1000);
   });
 

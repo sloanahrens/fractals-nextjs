@@ -21,7 +21,9 @@ import { describe, expect, it } from "vitest";
 import { HELP_SECTIONS } from "../lib/helpEntries";
 
 const SRC_DIRECTORY = fileURLToPath(new URL("..", import.meta.url));
-const PAGE_PATH = fileURLToPath(new URL("../app/page.tsx", import.meta.url));
+const PAGE_PATH = fileURLToPath(
+  new URL("../app/FractalExplorer.tsx", import.meta.url),
+);
 const DIALOG_PATH = fileURLToPath(
   new URL("../components/ui/HelpDialog.tsx", import.meta.url),
 );
@@ -144,7 +146,7 @@ describe("the dialog", () => {
 
 describe("what this test reads", () => {
   it("is the app, not an empty directory", () => {
-    expect(relative(SRC_DIRECTORY, PAGE_PATH)).toBe("app/page.tsx");
+    expect(relative(SRC_DIRECTORY, PAGE_PATH)).toBe("app/FractalExplorer.tsx");
     expect(page.length).toBeGreaterThan(1000);
     expect(dialog.length).toBeGreaterThan(1000);
     expect(canvasNavigation.length).toBeGreaterThan(1000);

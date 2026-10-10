@@ -17,7 +17,7 @@ function source(path: string): string {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 }
 
-const page = source("../app/page.tsx");
+const page = source("../app/FractalExplorer.tsx");
 
 /** The `useEffect` that contains `needle`, up to the end of the file's next effect. */
 function effectContaining(needle: string): string {

@@ -19,7 +19,7 @@ function source(path: string): string {
 }
 
 const strip = source("../components/ui/NearbyStrip.tsx");
-const page = source("../app/page.tsx");
+const page = source("../app/FractalExplorer.tsx");
 const topBar = source("../components/ui/TopBar.tsx");
 
 /** The body of the page's handler `name`, up to the next top-level `const`. */

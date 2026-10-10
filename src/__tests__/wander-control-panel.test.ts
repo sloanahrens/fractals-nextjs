@@ -16,7 +16,7 @@ function source(path: string): string {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 }
 
-const page = source("../app/page.tsx");
+const page = source("../app/FractalExplorer.tsx");
 const pill = source("../components/ui/WanderControl.tsx");
 const nudge = source("../components/ui/useWanderNudge.ts");
 const css = source("../app/globals.css");

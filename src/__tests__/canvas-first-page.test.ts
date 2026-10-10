@@ -18,7 +18,7 @@ function source(path: string): string {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 }
 
-const page = source("../app/page.tsx");
+const page = source("../app/FractalExplorer.tsx");
 const drawer = source("../components/ui/SettingsDrawer.tsx");
 const topBar = source("../components/ui/TopBar.tsx");
 // The idle clock's glue is shared with the Nearby strip, so it lives in a hook.

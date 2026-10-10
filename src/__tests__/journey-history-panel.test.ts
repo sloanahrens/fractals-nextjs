@@ -4,7 +4,7 @@
  * Which handlers make a history entry, that the entry is written once the jump
  * has been drawn and not before, that Back and Forward come in by the same path
  * a pasted link does, and that a refused `pushState` is not an error are all
- * decided in `page.tsx`. The suite runs in Node with no DOM to render into, so
+ * decided in `FractalExplorer.tsx`. The suite runs in Node with no DOM to render into, so
  * this reads the page source, the way the share link tests here do. What the
  * journey itself does is `journey.test.ts`'s business.
  */
@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const page = readFileSync(
-  fileURLToPath(new URL("../app/page.tsx", import.meta.url)),
+  fileURLToPath(new URL("../app/FractalExplorer.tsx", import.meta.url)),
   "utf8",
 );
 
@@ -147,7 +147,7 @@ describe("Back and Forward", () => {
   });
 
   it("start from the entry the page opened on", () => {
-    expect(page).toContain("journey.replace(window.location.hash)");
+    expect(page).toContain("journey.replace(link.fragment)");
   });
 
   it("see the follower's rewrites as the current entry changing", () => {

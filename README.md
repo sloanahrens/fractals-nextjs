@@ -206,7 +206,7 @@ dependencies and needs nothing else.
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button in the Settings drawer saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
-- **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Settings drawer's Navigation card copies the current URL and says "Link copied" for two seconds; a browser that will not take a clipboard write shows the URL in a read-only field with the text already selected. A link shows the view it names — the fields it carries applied together, the page's defaults left standing for the rest — whether it is opened as the page loads or pasted into the address bar of a page already open, where it changes that page's view without a reload; either way the fields the link could not be read for are the page's defaults rather than a refusal, so the URL is the view and the address bar is rewritten to match it. A link names no preset
+- **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Settings drawer's Navigation card copies the view as a query on this page's own address (`https://host/?v=1&f=julia&k=Dendrite&x=…`; the same text the codec writes after the `#`) and says "Link copied" for two seconds; a browser that will not take a clipboard write shows that URL in a read-only field with the text already selected. The query form is what makes a shared link preview as its view (see Link preview). The address bar itself keeps showing the hash form, and old `#v=1&…` links work as before: a page opened with a query reads it through the same decoder and validation (a field it cannot read keeps its default), rewrites the address bar to `/#v=1&…` at once with `history.replaceState`, and drops the query, so the bar and every later write behave as they always have. A hash beats a query when both are present; a query that is not a view link (`?utm_source=…`, `?v=1` alone, another version) is left where it is. A link shows the view it names — the fields it carries applied together, the page's defaults left standing for the rest — whether it is opened as the page loads or pasted into the address bar of a page already open, where it changes that page's view without a reload; either way the fields the link could not be read for are the page's defaults rather than a refusal, so the URL is the view and the address bar is rewritten to match it. A link names no preset
   The browser's Back and Forward buttons, and the top bar's, retrace jumps: choosing a preset, applying coordinates, picking another fractal or Julia constant from its select or from the fractal switcher, or choosing a Nearby tile adds a history entry, while dragging, zooming, the keys, the sliders and Auto-wander only update the current one.
 - **Blank-picture hint**: A deep zoom can land somewhere with nothing to see, a field of one colour. When a full render has settled on a picture that is nearly one colour (98% of an evenly spaced sample within a small colour distance of the commonest one) and has stood for 0.6 s, a small pill appears at the top centre of the picture: "Nothing to see here. Try a nearby place, or go back." with a Back button that does what the top bar's Back does. It only says so, never moves the view, and takes no pointer events outside its own box; the Back button is left out when there is nowhere to go back to. It goes as soon as the view changes or a render starts. No default view or catalogue place shows it; the Newton fractal's three-basin view is not blank, because three colour families show (its commonest colour holds 16 to 37% of the picture across the five schemes), while a deep view inside a single basin is one colour family and does show it
 - **Math card**: A card over the left of the picture, under the switcher's rows and above the Nearby strip, is shown from the first visit, collapsed to its one line. The top bar's Math button (`aria-pressed` while the card is up) hides and shows it. It is a labelled region with a More / Less button (`aria-expanded`) and no focus trap; Escape closes it only while focus is in the card or on the Math button, so Escape keeps closing dialogs first, and it is not drawn while a tour plays or Settings or Help is open. Under 640 px the collapsed line is clipped with an ellipsis rather than wrapped, and the card steps aside while the blank-picture hint shows (the hint sits below it, or beside it when expanded, from 640 px up). Every fractal has a descriptor in `src/lib/fractalMath.ts` (`describeFractalMath(fractalId, variant)`): the rule as a small formula tree, where each point starts, the one setting with its real value, how a point is judged, and a blurb of two or three plain sentences. The Mandelbrot set is `z → z² + c` from `z₀ = 0` with `c` the pixel's point; Julia is the same rule from `z₀ =` the pixel's point with `c =` the chosen constant written a + bi; the Burning Ship is `z → (|Re z| + i|Im z|)² + c`; the Tricorn `z → z̄² + c`; the Multibrot `z → z^d + c` with `d = 3`, `4` or `5`; Newton `z → z − (z³ − 1)/(3z²)` from the pixel's point, coloured by which of the three cube roots of 1 it settles on. The expanded card lists the centre, the width of the view in the plane (4 over the zoom), the zoom, the iteration cap and the colour scheme, read from the same state the renderer draws, refreshed at most twice a second while the view moves (the address-bar writer's cadence), and the catalogue place's name when the view is within 1% of its centre and zoom. Whether it is shown and whether it is expanded are remembered in localStorage under `fractals.mathCard.v1` (`{"v":1,"open":true,"expanded":false}`; a field that is missing or not a boolean keeps its default, and fr-1tk's session value is read once as a fallback). With storage blocked or corrupt each visit starts shown and collapsed, and the choices last as long as the page. The card is read-only
@@ -232,7 +232,9 @@ dependencies and needs nothing else.
 │   │   ├── layout.tsx      # Root layout; generateMetadata puts the request's own origin on og:image, og:url
 │   │   ├── icon.png        # Favicon (192x192), picked up by Next's file convention
 │   │   ├── apple-icon.png  # Apple touch icon (180x180), likewise
-│   │   ├── page.tsx        # Main fractal viewer page
+│   │   ├── page.tsx        # Server page: generateMetadata reads the search parameters (a shared view's preview), renders FractalExplorer
+│   │   ├── FractalExplorer.tsx # The fractal viewer, a client component (the page's state and every control)
+│   │   ├── requestOrigin.ts # The origin of the request in flight, read from the proxy's headers
 │   │   ├── globals.css     # Global styles
 │   │   └── api/
 │   │       ├── health/route.ts  # Health check endpoint
@@ -286,6 +288,7 @@ dependencies and needs nothing else.
 │   │   ├── ogLimits.ts             # /api/og's limits: the 40-PNG LRU cache, the one-at-a-time render gate with a queue of 2, the 8 s budget
 │   │   ├── ogRoute.ts              # /api/og's handler: 400, 200, 503, with its cache, gate, clock and renderer injectable
 │   │   ├── ogView.ts               # The view an /api/og query names: judged strictly, the 1200x630 card bounds, iterations capped at 400, the canonical key
+│   │   ├── pageMetadata.ts         # The page's head: the static card, or a view's own /api/og image, og:url and one line about it
 │   │   ├── pinch.ts                # Pinch helpers: finger distance, midpoint, scale about a point
 │   │   ├── placeThumbnails.ts      # Off-screen place pictures: LRU cache, queue, cancel and pause
 │   │   ├── places.ts               # Catalogue of named places, suggest() for the ones near a view, and each fractal's featured place
@@ -302,6 +305,8 @@ dependencies and needs nothing else.
 │   │   ├── viewReadout.ts          # The "Zoom 400x at -0.7453, 0.1127" line above the coordinate boxes
 │   │   ├── viewLink.ts             # A view as a URL fragment, and back
 │   │   ├── viewLinkState.ts        # What a link means for the page, and the address-bar throttle
+│   │   ├── viewPreview.ts          # A request's search parameters to the validated, re-encoded view link and its one-line description, or null
+│   │   ├── viewQuery.ts            # The query form of a view link: the Copy link URL, and which of query and hash a page load reads
 │   │   ├── wakeLock.ts             # Best-effort screen wake lock held while a tour plays
 │   │   ├── wander.ts               # One Auto-wander step
 │   │   ├── wanderControl.ts        # The Auto-wander pill's words, placement and first-run nudge decision
@@ -309,7 +314,7 @@ dependencies and needs nothing else.
 │   │   ├── wheelZoom.ts            # The zoom factor one wheel event asks for, from how far it scrolled
 │   │   ├── zoomPan.ts              # Zoom and pan manager
 │   │   └── zoomScale.ts            # Logarithmic zoom slider mapping, coordinate formatting
-│   ├── __tests__/          # Route tests, and tests that read page.tsx and the Makefile
+│   ├── __tests__/          # Route tests, and tests that read FractalExplorer.tsx and the Makefile
 │   └── types/              # TypeScript type definitions (fractal.ts: FractalKind, bounds; mathml.d.ts: JSX typings for the MathML elements)
 ├── tests/integration/      # Integration tier: checks against a deployed app
 │                           #   (deployed.test.ts is the checks, http.ts the request helper)
@@ -492,7 +497,23 @@ origin from the request (`siteOrigin` in `src/lib/siteOrigin.ts`: the proxy's
 `x-forwarded-host`, else `host`, checked to be a plain hostname and port before
 it is used) and puts it on `og:image`, `twitter:image` and `og:url`, so staging
 previews with the staging host and production with its own. A link carrying a
-`#v=...` view previews the same card. The favicon and the Apple touch icon are
+`#v=...` view previews the same card, because a crawler never sees the part of
+an address after the `#`.
+
+A link that carries its view in the query (`/?v=1&f=julia&k=Dendrite&...`, the
+form Copy link copies) previews as that view. `generateMetadata` in
+`src/app/page.tsx` (a layout is not given the search parameters) reads them;
+when `parseOgQuery` accepts them, the way `/api/og` itself would, `og:image` and
+`twitter:image` become `<origin>/api/og?<fragment>`, `og:url` becomes
+`<origin>/?<fragment>`, and the title and descriptions gain one line built from
+the decoded view ("Julia set, Dendrite, 400x"). The fragment is the view
+*re-encoded from the decoded state* (`previewFor` in `src/lib/viewPreview.ts`),
+so only known fields reach the URL and the line is made of this build's own
+labels and numbers; nothing a visitor typed is echoed. A repeated key counts by
+its first value, as the page reads it. With no parameters, a query that is not a
+view, or one `/api/og` would refuse, the head is exactly the static card's
+(`pageMetadata` in `src/lib/pageMetadata.ts`, shared with the layout). The
+integration tier checks all three cases against a deployment. The favicon and the Apple touch icon are
 `src/app/icon.png` and `src/app/apple-icon.png`.
 
 To change the card or the icons, run `node scripts/make-og-card.mjs` from the

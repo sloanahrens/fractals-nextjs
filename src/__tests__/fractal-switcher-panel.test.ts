@@ -20,7 +20,7 @@ function source(path: string): string {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
 }
 
-const page = source("../app/page.tsx");
+const page = source("../app/FractalExplorer.tsx");
 const switcher = source("../components/ui/FractalSwitcher.tsx");
 const hint = source("../components/ui/BlankHint.tsx");
 const help = source("../lib/helpEntries.ts");
