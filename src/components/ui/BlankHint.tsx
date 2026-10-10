@@ -7,10 +7,13 @@ interface BlankHintProps {
   onBack: () => void;
   /** Whether the journey has an entry before this one; without it only the text shows. */
   canGoBack: boolean;
+  /** Whether the switcher's constant chips are showing, which need a second row cleared. */
+  belowChips?: boolean;
 }
 
 /**
- * A small pill at the top centre of the canvas, under the bar, that says the
+ * A small pill at the top centre of the canvas, under the bar and under the
+ * fractal switcher's rows (a second one while Julia's chips show), that says the
  * picture has nothing in it and offers the way back. It never takes control:
  * the wrapper takes no pointer events, so the canvas under it still pans and
  * zooms, and only the pill's own box does.
@@ -18,12 +21,19 @@ interface BlankHintProps {
  * The status region stays mounted so a screen reader hears the text when it
  * appears; the pill inside is what comes and goes.
  */
-export function BlankHint({ show, onBack, canGoBack }: BlankHintProps) {
+export function BlankHint({
+  show,
+  onBack,
+  canGoBack,
+  belowChips = false,
+}: BlankHintProps) {
   return (
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center px-3"
+      className={`pointer-events-none absolute inset-x-0 z-10 flex justify-center px-3 ${
+        belowChips ? "top-24" : "top-14"
+      }`}
     >
       {show && (
         <p className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full bg-gray-900/80 py-1.5 pl-4 pr-2 text-xs text-white backdrop-blur sm:text-sm">

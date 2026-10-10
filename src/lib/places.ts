@@ -1,4 +1,5 @@
 import type { ColorScheme } from "../types/fractal";
+import { defaultViewFor } from "./fractalTypes";
 import { parseJuliaConstant } from "./julia";
 import { BASE_WIDTH } from "./mandelbrot";
 
@@ -457,6 +458,72 @@ export const PLACES: readonly Place[] = [
  */
 export function placesForFractal(fractal: string): Place[] {
   return PLACES.filter((place) => place.fractal === fractal);
+}
+
+/**
+ * The one place each fractal's switcher button lands on, by catalogue id.
+ *
+ * Picked from a contact sheet of the whole catalogue, every place drawn at
+ * 200x150 in its own scheme: the place a visitor should see after one click on
+ * a fractal's name, so it has to read as that fractal at a glance and be full
+ * of detail. A fractal's "whole" place is left out on purpose, since that is
+ * the view the page opens on and a switch should go somewhere.
+ *
+ * - Mandelbrot: Seahorse Valley. The set's best-known place, deep blue
+ *   filigree with the seahorse spirals filling the frame. Elephant Valley and
+ *   the top bulb are washes of one colour and the seahorse tail is too dense
+ *   to read.
+ * - Julia: Classic spirals. The Classic constant at zoom 3 shows two spirals
+ *   and the set's lobes in full colour; the "whole set" views are a small shape
+ *   in a field of one colour, which is what the constant chips are for.
+ * - Burning Ship: the Armada. Masts standing on the hull's silhouette, the one
+ *   view that reads as a ship; the closer views are textures.
+ */
+export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
+  mandelbrot: "mandelbrot-seahorse-valley",
+  julia: "julia-classic-spirals",
+  "burning-ship": "burning-ship-armada",
+};
+
+/**
+ * The place a fractal's switcher button goes to.
+ *
+ * @param fractal - A `FRACTAL_TYPES` id
+ * @returns That fractal's featured place; the Mandelbrot set's for an id the
+ *   catalogue has none for, as every other lookup here falls back
+ */
+export function featuredPlace(fractal: string): Place {
+  const id = FEATURED_PLACE_IDS[fractal] ?? FEATURED_PLACE_IDS.mandelbrot;
+  const found = PLACES.find((place) => place.id === id);
+  if (found === undefined) throw new Error(`no featured place ${id}`);
+
+  return found;
+}
+
+/**
+ * Where a Julia constant chip goes: the whole of that constant's set.
+ *
+ * A Julia set is symmetric about the origin whatever its constant, so its whole
+ * set is the Julia default view, and a place counts as one when it is that view
+ * of that constant. Constants are compared as points, so a custom spelling of a
+ * named constant finds the same place.
+ *
+ * @param constant - A named constant or a `custom:<re>,<im>` name
+ * @returns The catalogue's whole-set place for it, or null when it has none
+ */
+export function wholeSetPlaceFor(constant: string): Place | null {
+  const whole = defaultViewFor("julia");
+
+  return (
+    PLACES.find(
+      (place) =>
+        place.fractal === "julia" &&
+        sameConstant(place.juliaConstant, constant) &&
+        place.centerX === whole.centerX &&
+        place.centerY === whole.centerY &&
+        place.zoom === whole.zoom,
+    ) ?? null
+  );
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   defaultViewFor,
   resolveFractalKind,
 } from "../fractalTypes";
+import { isBlankImage } from "../blankView";
 import { JULIA_CONSTANTS, parseJuliaConstant } from "../julia";
 import {
   MAX_ZOOM,
@@ -15,10 +16,13 @@ import {
 } from "../mandelbrot";
 import type { ColorScheme } from "../../types/fractal";
 import {
+  FEATURED_PLACE_IDS,
   PLACES,
+  featuredPlace,
   placeColorScheme,
   placesForFractal,
   suggest,
+  wholeSetPlaceFor,
   type Place,
   type PlaceView,
 } from "../places";
@@ -556,8 +560,115 @@ describe("PLACES", () => {
   );
 });
 
+describe("featuredPlace", () => {
+  it("names one place for each fractal the picker offers, and no other", () => {
+    expect(Object.keys(FEATURED_PLACE_IDS).sort()).toEqual(
+      FRACTAL_TYPES.map((type) => type.id).sort(),
+    );
+  });
+
+  describe.each(FRACTAL_TYPES.map((type) => type.id))("%s", (fractal) => {
+    it("is a place in the catalogue, of that fractal", () => {
+      const featured = featuredPlace(fractal);
+
+      expect(PLACES).toContain(featured);
+      expect(featured.id).toBe(FEATURED_PLACE_IDS[fractal]);
+      expect(featured.fractal).toBe(fractal);
+    });
+
+    it("is not the opening view, so a switch goes somewhere", () => {
+      const featured = featuredPlace(fractal);
+      const opening = defaultViewFor(fractal);
+
+      expect(
+        featured.centerX === opening.centerX &&
+          featured.centerY === opening.centerY &&
+          featured.zoom === opening.zoom,
+      ).toBe(false);
+    });
+
+    it("names its colours, so the landing looks the way it was picked", () => {
+      expect(featuredPlace(fractal).colorScheme).toBeDefined();
+    });
+
+    it("is not blank, at the count Auto draws it at", async () => {
+      const featured = featuredPlace(fractal);
+      const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
+      const renderer = new FractalRenderer(
+        element,
+        resolveFractalKind(featured.fractal, featured.juliaConstant ?? ""),
+      );
+
+      await renderer.renderFractal(
+        {
+          bounds: calculateZoomBounds(
+            featured.centerX,
+            featured.centerY,
+            featured.zoom,
+          ),
+          maxIterations: autoIterations(featured.zoom),
+          width: WIDTH,
+          height: HEIGHT,
+          colorScheme: featured.colorScheme ?? "classic",
+        },
+        undefined,
+        false,
+      );
+
+      expect(isBlankImage(pixels(), WIDTH, HEIGHT)).toBe(false);
+      // Past "not one colour": a featured place should be full of detail.
+      expect(
+        differingFromCorner(pixels(), WIDTH, HEIGHT),
+      ).toBeGreaterThanOrEqual(FEATURED_DETAIL_SHARE);
+    });
+  });
+
+  it("falls back to the Mandelbrot set's for an id it does not know", () => {
+    expect(featuredPlace("no-such-fractal")).toBe(featuredPlace("mandelbrot"));
+  });
+});
+
+describe("wholeSetPlaceFor", () => {
+  it("finds the whole-set place of each named constant, at the Julia opening view", () => {
+    const opening = defaultViewFor("julia");
+
+    for (const constant of JULIA_CONSTANTS) {
+      const found = wholeSetPlaceFor(constant.name);
+
+      expect(found).not.toBeNull();
+      expect(found?.fractal).toBe("julia");
+      expect(found?.juliaConstant).toBe(constant.name);
+      expect(found?.centerX).toBe(opening.centerX);
+      expect(found?.centerY).toBe(opening.centerY);
+      expect(found?.zoom).toBe(opening.zoom);
+    }
+  });
+
+  it("is never a deeper place of the constant", () => {
+    expect(wholeSetPlaceFor("Classic")?.id).toBe("julia-classic-whole");
+  });
+
+  it("finds a place by the point, whatever spelling names it", () => {
+    expect(wholeSetPlaceFor("custom:-1,0")?.id).toBe("julia-basilica");
+    expect(wholeSetPlaceFor("custom:-1.000,0.0")?.id).toBe("julia-basilica");
+    expect(wholeSetPlaceFor("custom:-0.8,0.156")?.id).toBe(
+      "julia-classic-whole",
+    );
+  });
+
+  it("is null for a point the catalogue has no whole set of, and for a name it cannot read", () => {
+    expect(wholeSetPlaceFor("custom:0.123,0.456")).toBeNull();
+    expect(wholeSetPlaceFor("custom:9,9")).toBeNull();
+    expect(wholeSetPlaceFor("")).toBeNull();
+    expect(wholeSetPlaceFor("Nonsense")).toBeNull();
+  });
+});
+
 const WIDTH = 64;
 const HEIGHT = 48;
+
+/** A featured place has to beat the blank guard by a clear margin. */
+const FEATURED_DETAIL_SHARE = 0.2;
 
 /** A picture is blank when fewer than this share of it differs from its corner. */
 const BLANK_SHARE = 0.05;

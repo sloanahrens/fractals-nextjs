@@ -135,8 +135,15 @@ describe("the Settings drawer", () => {
       "const [settingsOpen, setSettingsOpen] = useState(false)",
     );
     expect(page).toContain("onClose={() => setSettingsOpen(false)}");
-    // The drawer's state stays out of everything that draws.
-    expect(page).not.toMatch(/\[[^\]]*settingsOpen[^\]]*\]\)/);
+    // The drawer's state stays out of everything that draws. The one effect
+    // that lists it moves focus into the Real box for the switcher's Custom
+    // chip, and draws nothing.
+    const focusEffect =
+      /useEffect\(\(\) => \{\n\s+if \(!settingsOpen \|\| !focusJuliaRealRef[\s\S]*?\}, \[settingsOpen\]\);/;
+    expect(page).toMatch(focusEffect);
+    expect(page.replace(focusEffect, "")).not.toMatch(
+      /\[[^\]]*settingsOpen[^\]]*\]\)/,
+    );
   });
 });
 

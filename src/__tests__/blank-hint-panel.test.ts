@@ -24,7 +24,7 @@ describe("the hint's markup", () => {
   it("is a polite status region that takes no pointer events outside its pill", () => {
     expect(hint).toContain('role="status"');
     expect(hint).toContain('aria-live="polite"');
-    expect(hint).toMatch(/className="pointer-events-none absolute/);
+    expect(hint).toMatch(/className=\{`pointer-events-none absolute/);
     expect(hint).toMatch(/pointer-events-auto/);
   });
 

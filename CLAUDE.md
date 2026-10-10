@@ -71,7 +71,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
-- **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — and `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in
+- **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia chips land
+- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship buttons, and Julia's constant chips, drawn over the top left of the canvas and never faded
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -175,6 +176,65 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Fractal switcher (2026-10-10)
+
+- Changing fractal was Settings, Rendering Parameters, the Fractal select, and
+  for Julia a second select; the owner found that too hard. Three buttons,
+  Mandelbrot, Julia and Burning Ship, now sit over the top left of the canvas
+  (`FractalSwitcher.tsx`, inside the canvas's own wrapper at `top-3 left-3`,
+  `z-10`, under the bar's `z-20`), the current one `aria-pressed` and lit. While
+  Julia is current a second row of chips follows it: Classic, Dendrite, Douady
+  rabbit, Siegel disk (`JULIA_CONSTANTS`) and Custom. The row scrolls sideways
+  (`overflow-x-auto`, `shrink-0 whitespace-nowrap`) and never wraps over the
+  picture. The labels are never shortened: "Burning Ship" at `text-xs` fits
+  320 px, so the bead's "Mandel / Ship" fallback was not needed.
+- The component holds no state and is told `fractalType` and `juliaConstant`,
+  so the Settings selects (kept as they were) and the switcher are two views of
+  the same two values. A chip is pressed by the select's own rule: a named chip
+  when `juliaConstant` is that name, Custom when `isCustomJuliaConstant`. Only
+  the buttons take pointer events, so the canvas around them still pans. It
+  does not fade: the bar's `useIdleVisibility` is the bar's alone. `hidden`
+  (`tourPlaying || tourOverlayOpen`) renders nothing, for a tour and for the
+  drawer or Help being open.
+- A fractal button calls `handleSwitchFractal`, which is
+  `handlePlaceSelect(featuredPlace(typeId))` and nothing else, and returns for
+  the fractal already shown. It ends in the same state as the Fractal select —
+  fractal, view, Julia constant — but as a place, so it has the crossfade, the
+  place's own scheme and constant and Auto iterations, and the one history entry
+  `beginJump` counts; Back returns to the previous fractal and view. The select
+  still goes through `handleFractalTypeChange` to the fractal's default view.
+- `FEATURED_PLACE_IDS` (`places.ts`) names one catalogue place per fractal:
+  `mandelbrot-seahorse-valley`, `julia-classic-spirals` and
+  `burning-ship-armada`, chosen from a contact sheet of the catalogue drawn at
+  200x150 (the comment on the constant says why each won). A fractal's "whole"
+  place is not used, since that is the opening view. `featuredPlace(fractal)`
+  looks the id up and falls back to the Mandelbrot one for an id it does not
+  know; it throws only if the id names no place, which the tests rule out.
+- A named chip calls `handleSwitchConstant`: `wholeSetPlaceFor(name)` (the Julia
+  place of that constant at `defaultViewFor("julia")`, compared as points) goes
+  through `handlePlaceSelect`; with none, only the constant changes and the view
+  stays. All four named constants have one (`julia-<name>-whole`). The chip of
+  the constant already shown does nothing. Custom calls `handleSwitchCustom`:
+  `handleJuliaSelect(CUSTOM_OPTION_VALUE)` (the select's own pick: the same
+  point spelled as a custom name, no jump, no render), then opens the drawer
+  with `focusJuliaRealRef` set; an effect on `settingsOpen` focuses the Real box
+  (`Input` gained an `inputRef` prop) after the drawer's own effect has focused
+  Close, since a child's effects run first. Opening the drawer by the Settings
+  button leaves the flag false and focus where it was.
+- `BlankHint` takes `belowChips` and sits at `top-14`, or `top-24` while the
+  chips show, so it never lands on the switcher at any canvas width.
+- `places.test.ts` tests `FEATURED_PLACE_IDS` and `featuredPlace` (one per
+  picker fractal, in the catalogue, of that fractal, not the opening view, names
+  its scheme, not blank at 64x48 and at least 20% of pixels off the corner) and
+  `wholeSetPlaceFor`. `fractal-switcher-panel.test.ts` reads the sources: three
+  buttons from `FRACTAL_TYPES`, `aria-pressed`, chips only for Julia, the stack
+  level under the bar, hidden for a tour and the dialogs, the handlers, the Real
+  box focus and the selects kept. `canvas-first-page.test.ts` lets the one
+  focus effect list `settingsOpen`; nothing that draws may. Checked in headless
+  Chrome at 1280x800 and 375x667: one entry per switch and Back returning,
+  the selects following, Custom landing focus in Real, and the switcher gone
+  while the drawer is open.
 
 ### Tour mode (2026-10-10)
 
