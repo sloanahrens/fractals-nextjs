@@ -57,6 +57,10 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
+- **Canvas navigation** (`src/lib/canvasNavigation.ts`): The wheel, drag, touch and key listeners on the canvas, and the key-to-bounds switch
+- **Render quality** (`src/lib/renderQuality.ts`): Whether a redraw is a low-resolution preview or a full-resolution render
+- **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
+- **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
 - **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Back/Forward/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus and shares the clock with the Nearby strip
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
@@ -77,7 +81,7 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 
 ### Component Structure
 
-- **UI Components** (`src/components/ui/`): Reusable form controls (Slider, Select, Input, Button)
+- **UI Components** (`src/components/ui/`): Reusable form controls (Slider, Select, Input, Checkbox, Button), plus the page furniture listed above (TopBar, NearbyStrip, SettingsDrawer, HelpDialog, VersionFooter)
 - **View read-out** (`src/lib/viewReadout.ts`): The "Zoom 400x at -0.7453, 0.1127" line above the coordinate boxes
 - **Specialized Controls**: CenterControls, PresetSelector, CustomPresetManager
 - **Layout**: Single-page application, canvas-first: the picture fills the viewport under a floating top bar (`TopBar.tsx`: title, Help, Settings), and every control sits in the Settings drawer (`SettingsDrawer.tsx`) — see the Version Note of 2026-10-09
@@ -166,6 +170,20 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### Guided-exploration design is in the repo (2026-10-09)
+
+- `docs/design/guided-exploration.md` is the design the canvas-first page, the
+  Nearby strip, Surprise me, Back and Forward, and the Settings drawer were
+  built to, as approved on 2026-10-09. Its "As built" section lists where the
+  code differs from the text (the top bar's order, no pinch, the strip's six
+  tiles from a pool of 18, thumbnails paused rather than started late, no
+  in-memory history fallback); the code is the truth.
+- README, this file and the Help entries were audited against the code in the
+  same landing. The README's Project Structure tree now names every module
+  under `src/components/ui` and `src/lib`, including `surprise.ts`, and the
+  Help overlay gained a Settings row (`helpEntries.ts`), the one control the
+  top bar has that it did not name.
 
 ### Surprise me; Random walk becomes Auto-wander (2026-10-09)
 

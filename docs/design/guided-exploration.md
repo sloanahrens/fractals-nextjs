@@ -1,0 +1,94 @@
+# Guided exploration UX for the fractal explorer
+
+Status: implemented; this file is the design as approved on 2026-10-09 and the code is the truth where they differ.
+
+## Problem
+
+The page is a control panel with a picture beside it. About five stacked cards (Presets, Navigation, View Info, Rendering Parameters) hold duplicate controls: position is a pair of sliders, a readout and two number boxes; presets are a dropdown and a row of buttons; zoom is a slider, buttons and the wheel. Nothing connects one interesting view to the next, there is no way to retrace a path, and the one guided feature (Random walk) is a checkbox. Preset button labels are also clipped (fr-wtk).
+
+## Goals
+
+- A casual visitor is delighted within seconds with almost no controls (owner pick: casual wanderer first).
+- The picture is the interface: it fills the page and is driven by drag, wheel, pinch and keys.
+- "What is interesting near here" is always visible, and clicking it takes you there.
+- You can retrace your steps (Back, Forward) and the browser's own Back works.
+- Every existing capability stays reachable. Nothing is removed, only moved.
+
+## Non-goals
+
+Accounts, shared galleries, server storage, new cloud services, new fractal types, a guided tour with captions, a gallery-first home page.
+
+## Design
+
+### Screen
+
+- The canvas fills the viewport in a 4:3 frame that keeps its aspect ratio.
+- A slim top bar floats over it: Back and Forward (left), Surprise me (centre), Settings and Help (right). It fades after about two seconds without input and returns on pointer movement or touch.
+- A bottom strip, "Nearby, worth a look", shows 5 or 6 thumbnails (about 64 px wide) in the current colour scheme, plus a "more" tile.
+- Settings is one drawer (a bottom sheet on narrow screens) holding what exists today: fractal, Julia constant with Custom, colour scheme, iterations and Auto iterations, centre and bounds coordinates, Download PNG (and export sizes if fr-gqe lands), saved views, Copy link, Auto-wander. The position sliders and the View Info card are dropped; their information lives in the coordinate boxes.
+
+### Interactions
+
+- Drag, wheel, pinch, arrow keys, `+` and `-` behave as today.
+- Clicking a thumbnail flies the canvas to that place. First version is a crossfade between the old and new picture; a rendered smooth zoom is a later bead.
+- Every move (a click, a Surprise, a preset, a manual jump) is a history entry. Back and Forward step through them. Browser Back works because the view is already in the URL hash (view links, fr-14o).
+- Surprise me flies to a random suggestion. It replaces the Random walk checkbox; Auto-wander (the old walk) moves into Settings.
+- Narrow screens: the strip is a horizontally scrolling row; Settings is a bottom sheet.
+
+### Places
+
+A place is `{ id, name, fractal, juliaConstant?, centre, zoom, scheme? }`. It is a built-in preset by another name, so presets, saved views and the link codec are reused rather than replaced.
+
+### Suggestions
+
+`suggest(view, catalogue, n)` is a pure function. It ranks places by closeness (centre distance scaled by zoom), prefers slightly deeper zooms so each click is a step in, never returns the current place, and returns the top n. Surprise me picks one at random from the result. Step 1 is a curated catalogue: roughly 15 to 25 places for the Mandelbrot set and 8 to 12 each for Julia and Burning Ship, chosen from live contact sheets and measured, as the current presets were. Step 2 (later) adds computed suggestions behind the same function: probe a grid of candidate views at tiny resolution, score by edge or detail density, keep a few that differ from each other and from the curated ones. The UI does not change when step 2 lands.
+
+### Thumbnails
+
+Each tile renders on demand into a small off-screen canvas (64x48) with the existing renderer at low iterations, cached by place and colour scheme. They start only after the main picture settles and cancel on navigation like any render. A failed or cancelled thumbnail shows a flat colour placeholder and stays clickable.
+
+### Failure handling
+
+- Storage or history disabled: the strip works and Back and Forward use in-memory history.
+- Garbage link: default view, as today.
+- A place that fails validation is rejected by the catalogue guard test, never at run time.
+
+## Testing
+
+- Node-only vitest for the pure parts: `suggest` (ordering, ties, empty catalogue, a view far from every place), history (push, back, forward, forward list truncated by a new move), place validation (each place resolves with `resolveFractalKind` and is within the precision limit).
+- A catalogue guard test renders each place at low resolution and fails if the picture is nearly blank.
+- UI behaviour by source-walk tests in the existing style; each landing is checked live on staging in the browser.
+
+## Work breakdown (one landing each)
+
+1. Places catalogue and `suggest`, with tests, no UI. (independent)
+2. Journey history on top of link state and browser history, no UI change. (independent)
+3. New shell: canvas-first layout, floating top bar, Settings drawer; old panels move into it whole. Depends on nothing but is the largest; the old layout works until 4 and 5 land.
+4. Nearby strip: thumbnails, caching, click-to-fly with crossfade. Depends on 1, 2, 3.
+5. Surprise me replaces the Random walk checkbox; mobile bottom sheet polish. Depends on 1, 3.
+6. Docs refresh (README, CLAUDE.md, Help overlay entries).
+7. Later: computed suggestions; smooth-zoom flights.
+
+Folds in fr-wtk (clipped preset buttons) as the preset UI is replaced. fr-gqe (export sizes) lands independently and its control moves into Settings.
+
+## Release
+
+No feature flag. Beads 1 and 2 are invisible; 3 changes the layout without losing a control; 4 and 5 add the strip and Surprise. The release tag stays the owner's call.
+
+## As built
+
+Where the build differs from the text above. The code is the truth.
+
+- **Top bar order.** The bar holds the title on the left, Surprise me in the centre, and Back, Forward, Help and Settings together on the right (`src/components/ui/TopBar.tsx`). The design put Back and Forward on the left. Under `sm` (640 px) the title is drawn for a screen reader only, to leave the width to the five buttons.
+- **Pinch.** There is no pinch zoom. `src/lib/zoomPan.ts` ignores a touch with more than one finger; a touch screen pans with one finger. The wheel, `+` and `-` zoom, as do the Zoom In, Zoom Out and Zoom Level controls in Settings.
+- **Place fields.** A place is `{ id, name, fractal, juliaConstant?, centerX, centerY, zoom, colorScheme? }` (`src/lib/places.ts`): the centre is two numbers and the scheme is `colorScheme`. The catalogue is 19 Mandelbrot, 10 Julia and 10 Burning Ship places.
+- **Strip size.** The strip shows six tiles at a time from a pool of 18, and the More tile rotates to the next six, wrapping (`src/lib/nearbyStrip.ts`). The design said 5 or 6. The suggestions are worked out again only after a deliberate move (a preset, typed coordinates, a fractal or Julia constant pick, a tile, Surprise me, a link, Back or Forward), not while dragging, wheeling or keying.
+- **Thumbnail timing.** Thumbnails do not wait for the picture to settle by starting late. They are asked for as the tiles mount and the store is paused while a full render is in flight (`paused={isRendering}`), so a picture already running is never slowed. The one render in flight when the pause starts is allowed to finish. A thumbnail draws at half the main picture's Auto iteration count (`thumbnailIterations`).
+- **Surprise me.** It picks at random from the first six suggestions (`SURPRISE_CANDIDATES` in `src/lib/surprise.ts`), not from a longer list, and goes through the Nearby tile's own click handler, so it has the tile's crossfade and its single history entry. The button is disabled when no place is near enough to offer.
+- **History.** `src/lib/journey.ts` is the page's record of its entries; the browser holds the entries themselves, and Back and Forward call `history.back()` and `history.forward()`. If `pushState` throws (a sandboxed frame, a browser cap) the page writes the fragment with `replaceState` instead and keeps the step in its record. The design's in-memory history for a browser with history disabled was not built; Back and Forward always go through the browser's.
+- **Moves that make an entry.** A preset, Apply Coordinates, a pick from the Fractal select, a pick from the Julia constant select, and a Nearby tile or Surprise me. Typing in the Real and Imaginary boxes of a custom constant does not, and neither does a drag, wheel, key, slider or Auto-wander step; those rewrite the current entry.
+- **Settings contents.** The drawer holds, in order, the cards Presets, Navigation (Zoom Level, Zoom Out, Zoom In, Reset View, Copy link), Auto-wander, Coordinates (a read-out line over the Real (X) and Imaginary (Y) boxes), Rendering Parameters (Fractal, Julia constant with Custom, Auto iterations, Maximum Iterations, Color Scheme), Canvas Resolution, Manual Coordinates, saved views (Custom Presets) and Download PNG. Copy link sits in the Navigation card. There are no export sizes: the Canvas Resolution card has Width and Height boxes and three size buttons.
+- **Auto-wander** is its own card, headed "Auto-wander", directly after Navigation, rather than a line among the others.
+- **Presets.** The Presets card is the dropdown alone, listing the built-in and saved views for the fractal on the canvas (six Mandelbrot, five Julia and two Burning Ship built-ins). The row of preset buttons, and the clipped labels of fr-wtk with it, are gone.
+- **Failure handling.** The catalogue guard test (`src/lib/__tests__/places.test.ts`) holds every place to the link round trip and a 64x48 render of at least 5% non-corner pixels, as designed. A thumbnail that fails to render caches a flat grey placeholder for the life of the store and its tile stays clickable.
+- **Not built.** Computed suggestions (step 2 of Suggestions) and the smooth-zoom flight are still later work; a flight is the crossfade, and it is skipped when the system asks for reduced motion.
