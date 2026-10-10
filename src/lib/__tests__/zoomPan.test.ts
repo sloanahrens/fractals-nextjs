@@ -5,7 +5,15 @@ import {
   boundsToView,
   calculateZoomBounds,
   getDefaultBounds,
+  pixelToComplex,
 } from "../mandelbrot";
+import type { FractalBounds } from "../../types/fractal";
+import {
+  CTRL_WHEEL_ZOOM_RATE,
+  DOM_DELTA_LINE,
+  MAX_WHEEL_DELTA,
+  WHEEL_ZOOM_RATE,
+} from "../wheelZoom";
 import { ZoomPanManager } from "../zoomPan";
 
 const BOUNDS = getDefaultBounds();
@@ -223,6 +231,120 @@ describe("handleWheel", () => {
     expect(manager.handleWheel(event, BOUNDS)).toBeNull();
     expect(prevented).toBe(false);
   });
+
+  function wheel(deltaY: number, extra: Record<string, unknown> = {}) {
+    const state = { prevented: false };
+    const event = {
+      clientX: 210,
+      clientY: 170,
+      deltaY,
+      target: fakeTarget(),
+      preventDefault: () => {
+        state.prevented = true;
+      },
+      ...extra,
+    } as unknown as WheelEvent;
+    return { event, state };
+  }
+
+  const widthOf = (bounds: FractalBounds) => bounds.maxReal - bounds.minReal;
+
+  it("zooms a 100-unit notch by about 1.17x", () => {
+    const manager = createManager();
+
+    const zoomed = manager.handleWheel(wheel(-100).event, BOUNDS)!;
+
+    expect(widthOf(BOUNDS) / widthOf(zoomed)).toBeCloseTo(
+      Math.exp(100 * WHEEL_ZOOM_RATE),
+      12,
+    );
+    expect(widthOf(BOUNDS) / widthOf(zoomed)).toBeGreaterThan(1.1);
+    expect(widthOf(BOUNDS) / widthOf(zoomed)).toBeLessThan(1.25);
+  });
+
+  it("zooms a light trackpad swipe of 30 small events by under 1.2x in all", () => {
+    const manager = createManager();
+    let bounds = BOUNDS;
+
+    for (let i = 0; i < 30; i++) {
+      bounds = manager.handleWheel(wheel(-3).event, bounds)!;
+    }
+
+    expect(widthOf(BOUNDS) / widthOf(bounds)).toBeLessThan(1.2);
+    expect(widthOf(BOUNDS) / widthOf(bounds)).toBeGreaterThan(1);
+  });
+
+  it("returns to the original bounds when zoomed in then out by the same events", () => {
+    const manager = createManager();
+    const deltas = [-3, -40, -100, -7, -120];
+    let bounds = BOUNDS;
+
+    for (const delta of deltas) {
+      bounds = manager.handleWheel(wheel(delta).event, bounds)!;
+    }
+    for (const delta of [...deltas].reverse()) {
+      bounds = manager.handleWheel(wheel(-delta).event, bounds)!;
+    }
+
+    expect(bounds.minReal).toBeCloseTo(BOUNDS.minReal, 12);
+    expect(bounds.maxReal).toBeCloseTo(BOUNDS.maxReal, 12);
+    expect(bounds.minImaginary).toBeCloseTo(BOUNDS.minImaginary, 12);
+    expect(bounds.maxImaginary).toBeCloseTo(BOUNDS.maxImaginary, 12);
+  });
+
+  it("still centres the zoom on the complex point under the cursor", () => {
+    const manager = createManager();
+    // (110, 95) in the half-size box is canvas pixel (200, 150), off centre.
+    const { event } = wheel(-100, { clientX: 110, clientY: 95 });
+    const target = pixelToComplex(200, 150, 800, 600, BOUNDS);
+
+    const zoomed = manager.handleWheel(event, BOUNDS)!;
+
+    expect((zoomed.minReal + zoomed.maxReal) / 2).toBeCloseTo(target.real, 12);
+    expect((zoomed.minImaginary + zoomed.maxImaginary) / 2).toBeCloseTo(
+      target.imaginary,
+      12,
+    );
+  });
+
+  it("reads a line-mode wheel as 16 pixels a line", () => {
+    const manager = createManager();
+
+    const lines = manager.handleWheel(
+      wheel(-3, { deltaMode: DOM_DELTA_LINE }).event,
+      BOUNDS,
+    )!;
+    const pixels = manager.handleWheel(wheel(-48).event, BOUNDS)!;
+
+    expect(widthOf(lines)).toBeCloseTo(widthOf(pixels), 12);
+  });
+
+  it("prevents a Control+wheel event and zooms it with the larger rate", () => {
+    const manager = createManager();
+    const plain = wheel(-5);
+    const pinch = wheel(-5, { ctrlKey: true });
+
+    const plainZoom = manager.handleWheel(plain.event, BOUNDS)!;
+    const pinchZoom = manager.handleWheel(pinch.event, BOUNDS)!;
+
+    expect(pinch.state.prevented).toBe(true);
+    expect(widthOf(BOUNDS) / widthOf(pinchZoom)).toBeCloseTo(
+      Math.exp(5 * CTRL_WHEEL_ZOOM_RATE),
+      12,
+    );
+    expect(widthOf(pinchZoom)).toBeLessThan(widthOf(plainZoom));
+  });
+
+  it("holds an enormous event to the per-event clamp", () => {
+    const manager = createManager();
+
+    const zoomed = manager.handleWheel(wheel(-100000).event, BOUNDS)!;
+
+    expect(widthOf(BOUNDS) / widthOf(zoomed)).toBeCloseTo(
+      Math.exp(MAX_WHEEL_DELTA * WHEEL_ZOOM_RATE),
+      12,
+    );
+  });
 });
 
 describe("pointer events on a canvas CSS has resized", () => {
@@ -285,7 +407,6 @@ describe("pointer events on a canvas CSS has resized", () => {
     // 150px down the box is the full height of the canvas.
     expect(panned!.minImaginary).toBeCloseTo(-1.5 - (300 / 600) * 3, 12);
   });
-
 });
 
 describe("pinch", () => {
@@ -347,7 +468,10 @@ describe("pinch", () => {
     expect(zoomed).not.toBeNull();
     expect(boundsToView(zoomed!).scale).toBeCloseTo(2, 12);
     expect((zoomed!.minReal + zoomed!.maxReal) / 2).toBeCloseTo(-0.75, 12);
-    expect((zoomed!.minImaginary + zoomed!.maxImaginary) / 2).toBeCloseTo(0, 12);
+    expect((zoomed!.minImaginary + zoomed!.maxImaginary) / 2).toBeCloseTo(
+      0,
+      12,
+    );
     expect(manager.getZoomState().scale).toBeCloseTo(2, 12);
   });
 

@@ -14,11 +14,14 @@ import {
   getDefaultBounds,
 } from "../mandelbrot";
 import { calculateZoomLevel, getPresetById } from "../presets";
+import { wheelZoomFactor } from "../wheelZoom";
 import { ZoomPanManager } from "../zoomPan";
 
 const BOUNDS = getDefaultBounds();
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
+/** The zoom one 100-unit wheel notch asks for. */
+const NOTCH = wheelZoomFactor(-100, 0, false, 0);
 
 interface Rect {
   left: number;
@@ -158,7 +161,7 @@ describe("attachCanvasNavigation", () => {
     expect(views).toHaveLength(1);
     expect(views[0].centerX).toBeCloseTo(-0.75, 12);
     expect(views[0].centerY).toBeCloseTo(0, 12);
-    expect(views[0].scale).toBeCloseTo(1.1, 12);
+    expect(views[0].scale).toBeCloseTo(NOTCH, 12);
   });
 
   it("leaves a wheel event with no vertical movement to the page", () => {
@@ -589,7 +592,7 @@ describe("attachCanvasNavigation", () => {
       // wider than this, because the burst as a whole is what the gesture was.
       const view = harness.current();
       const width = view.maxReal - view.minReal;
-      expect(width).toBeCloseTo(startWidth / 1.1 ** notches, 9);
+      expect(width).toBeCloseTo(startWidth / NOTCH ** notches, 9);
 
       // And the zoom level the readout shows is the width ratio of that view.
       expect(calculateZoomLevel(view)).toBeCloseTo(BASE_WIDTH / width, 9);
@@ -611,7 +614,7 @@ describe("attachCanvasNavigation", () => {
 
       const view = harness.current();
       const width = view.maxReal - view.minReal;
-      expect(width).toBeCloseTo(startWidth / 1.1 ** notches, 9);
+      expect(width).toBeCloseTo(startWidth / NOTCH ** notches, 9);
       expect(calculateZoomLevel(view)).toBeCloseTo(BASE_WIDTH / width, 9);
     });
   });
