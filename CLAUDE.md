@@ -61,6 +61,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, and `suggest` — which of them are near a given view
+- **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
 ### State Management Pattern
@@ -262,6 +263,53 @@ _Last updated: 2026-10-09_
   not, the push after the draw and past the throttle, the `hashchange` path.
   The check in `share-link-panel.test.ts` that the page never pushes now says
   there is exactly one `pushState` and the follower's writer has none.
+
+### Place thumbnails (2026-10-09)
+
+- `src/lib/placeThumbnails.ts` is the second step of guided exploration and
+  changes no screen: nothing in the page imports it yet; the Nearby strip does.
+  `createThumbnailStore({ render, width = 64, height = 48, capacity = 120 })`
+  returns `{ request(place, scheme, onReady), cancelAll(), get(place, scheme),
+  pause(), resume() }`. The store owns no canvas: `render` is injected, so the
+  queue and cache are tested with a fake, and `createCanvasThumbnailRender` is
+  the real one.
+- Results are cached by place id and scheme in an LRU of `capacity`; `get` and
+  a cached `request` both count as a use. A `request` of a cached entry calls
+  `onReady` before it returns; concurrent requests for one key join the one
+  render, queued or running. Renders run one at a time in request order, and
+  each starts on a `setTimeout(0)` of its own, so the browser gets a turn
+  between pictures and a `pause()` in the same turn as a `request` lands
+  before anything is drawn.
+- `cancelAll` drops the queue, aborts the render in flight through the
+  `AbortSignal` it was given, and never calls any dropped `onReady`. It
+  forgets the running job at once rather than waiting for it, so the next
+  request starts fresh, and a cancelled render that finishes late is ignored
+  by job identity: it neither fills the cache nor frees the slot of the render
+  that replaced it. The cache and the `pause` state survive it.
+- `pause()` stops new renders but lets the one running finish: a 64x48 picture
+  is a few thousand pixels, so aborting it costs more than it saves. The strip
+  pauses while the main render runs. Cached entries are still answered.
+- A render that rejects, throws, or returns an image not of the asked size
+  caches a `{ status: "failed", placeholder, reason }` marker for the life of
+  the store, in a map outside the LRU so eviction cannot make a place that
+  cannot be drawn retry in a loop. `placeholder` is the flat grey the strip
+  draws; `onReady` gets the failed entry too. `get` never throws. A listener
+  that throws does not strand the others or the queue; the error is rethrown
+  on a timer so it still surfaces.
+- The real render draws with `FractalRenderer` on an `OffscreenCanvas`, or a
+  detached `<canvas>` where there is none, one canvas and renderer per call so
+  an aborted render cannot paint over the next. It draws at
+  `thumbnailIterations(zoom)`, half of `autoIterations` and never under
+  `MIN_ITERATIONS`: 64 columns cannot show what the last iterations resolve.
+  Every place in `PLACES` stays non-blank at that count (checked once, not
+  guarded by a test). An abort rejects instead of returning the half-drawn
+  canvas.
+- `src/lib/__tests__/placeThumbnails.test.ts` runs the store on fake timers
+  against a render the test finishes by hand — cache hit, LRU order,
+  in-flight sharing, ordering, cancel mid-render and a late finish, failure
+  markers, pause and resume — and renders a Mandelbrot, a Julia and a Burning
+  Ship place through the real renderer at 64x48 on the Node canvas stand-in,
+  asserting at least 5% of each picture differs from its corner pixel.
 
 ### Places and suggest() (2026-10-09)
 
