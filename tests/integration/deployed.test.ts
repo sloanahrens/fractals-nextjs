@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { requestUrl, resolveIntegrationTarget } from "@/lib/integrationTarget";
+import { linkHref, metaContent } from "./html";
 import { get } from "./http";
 
 // Read once, while the suite is collected: a missing STAGING_URL fails the file
@@ -10,9 +11,9 @@ const target = resolveIntegrationTarget();
 const HEALTH = "/api/health";
 const HOME = "/";
 const VERSION = "/api/version";
-// The social preview src/app/layout.tsx points its metadata at, which the
+// The social card src/app/layout.tsx points its metadata at, which the
 // Dockerfile serves out of public/.
-const PREVIEW = "/fractal-preview.png";
+const CARD = "/og-card.png";
 
 const url = (path: string) => requestUrl(target.baseUrl, path);
 
@@ -52,10 +53,38 @@ describe(`the deployment at ${target.baseUrl}`, () => {
     }
   });
 
-  it("serves the static asset the page's metadata needs", async () => {
-    const response = await get(url(PREVIEW));
+  it("names the card and the page's own url on the origin that served it", async () => {
+    const html = await (await get(url(HOME))).text();
+    const origin = new URL(target.baseUrl).origin;
+
+    // Next writes the root url without its slash; either spelling is the origin.
+    expect(metaContent(html, "og:url")?.replace(/\/$/, "")).toBe(origin);
+    expect(metaContent(html, "og:image")).toBe(`${origin}${CARD}`);
+    expect(metaContent(html, "twitter:image")).toBe(`${origin}${CARD}`);
+  });
+
+  it("serves the social card as a 1200x630 PNG under 300 KB", async () => {
+    const response = await get(url(CARD));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("image/png");
+    const body = Buffer.from(await response.arrayBuffer());
+    expect(body.subarray(1, 4).toString("latin1")).toBe("PNG");
+    // IHDR is the first chunk: width and height are big-endian u32s at 16 and 20.
+    expect(body.readUInt32BE(16)).toBe(1200);
+    expect(body.readUInt32BE(20)).toBe(630);
+    expect(body.length).toBeLessThan(300 * 1024);
+  });
+
+  it("links the favicon and the touch icon from the page", async () => {
+    const html = await (await get(url(HOME))).text();
+
+    for (const rel of ["icon", "apple-touch-icon"]) {
+      const href = linkHref(html, rel);
+      expect(href, `no <link rel="${rel}"> in the head`).not.toBeNull();
+      const response = await get(new URL(href as string, target.baseUrl).href);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("image/png");
+    }
   });
 });

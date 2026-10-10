@@ -2,7 +2,7 @@
 
 A modern, interactive web application for exploring the infinite beauty of the Mandelbrot set, Julia sets, the Burning Ship and the Tricorn, built with Next.js 16, React 19 and TypeScript.
 
-![Next Fractals Preview](public/fractal-preview.png)
+![Next Fractals Preview](public/og-card.png)
 
 **Deployment:** A landing on `main` redeploys the staging service by itself.
 Production changes only when the human tags a release, through the devops
@@ -155,21 +155,27 @@ Two environment variables, and no others:
   tier evidence that the commit just built is the commit live. Without it, the
   check only asks that the endpoint answers with a `commit` field at all.
 
-Four checks, one `GET` each, read-only, 15 s per request and one retry:
+Six checks, a `GET` or two each, read-only, 15 s per request and one retry:
 
 - `GET /api/health` is 200 and `{"status":"healthy"}`.
 - `GET /` is 200 and carries the `<h1>Fractal Explorer</h1>` and the document
   title `Next Fractals - Interactive Fractal Explorer`.
 - `GET /api/version` is 200 JSON with a `commit` field, equal to `EXPECT_SHA`
   when that is set.
-- `GET /fractal-preview.png` is 200 and a PNG. It is the social preview
-  `src/app/layout.tsx` points its metadata at, so it is a static asset the page
-  needs, and it is served out of `public/` by the `Dockerfile`.
+- `GET /`'s `og:image` and `twitter:image` are `<origin>/og-card.png` and its
+  `og:url` is the origin (Next writes the root without its slash), where
+  `<origin>` is the origin of `STAGING_URL`: the page names its own host, not
+  another.
+- `GET /og-card.png` is 200, `image/png`, 1200x630 by its IHDR chunk and under
+  300 KB. It is the social card `src/app/layout.tsx` points its metadata at,
+  and it is served out of `public/` by the `Dockerfile`.
+- The favicon and the Apple touch icon the page's head links (`/icon.png`,
+  `/apple-icon.png`) answer 200 with `image/png`.
 
 What no check here asserts is anything that changes between deployments: not
 what the canvas draws, not the fractal list, not the version footer's wording.
 The tier answers "is the commit we just built the app that is answering, and are
-its four endpoints up", and a browser smoke test is a later tier of its own.
+its endpoints up and its link preview pointing at itself", and a browser smoke test is a later tier of its own.
 
 The staging workflow runs `make integration STAGING_URL=<url> EXPECT_SHA=<commit>`
 after it rolls staging onto a landing's commit. Its runner checks the repository
@@ -212,11 +218,14 @@ dependencies and needs nothing else.
 ├── docs/                   # Design notes
 │   ├── design/             # guided-exploration.md: the design the page was rebuilt to, and where the build differs
 │   └── plans/              # Earlier design plans
-├── public/                 # Static assets
+├── public/                 # Static assets: og-card.png, the 1200x630 social card
+├── scripts/make-og-card.mjs  # One-off generator of the social card and icons (not in the gate or the image)
 ├── scripts/release/        # Release scripts a release runs
 ├── src/
 │   ├── app/                # Next.js App Router pages
-│   │   ├── layout.tsx      # Root layout with meta tags
+│   │   ├── layout.tsx      # Root layout; generateMetadata puts the request's own origin on og:image, og:url
+│   │   ├── icon.png        # Favicon (192x192), picked up by Next's file convention
+│   │   ├── apple-icon.png  # Apple touch icon (180x180), likewise
 │   │   ├── page.tsx        # Main fractal viewer page
 │   │   ├── globals.css     # Global styles
 │   │   └── api/
@@ -264,6 +273,7 @@ dependencies and needs nothing else.
 │   │   ├── places.ts               # Catalogue of named places, suggest() for the ones near a view, and each fractal's featured place
 │   │   ├── presets.ts              # Built-in and saved presets
 │   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
+│   │   ├── siteOrigin.ts           # The origin a request was served from, for the page's absolute URLs
 │   │   ├── surprise.ts             # Where Surprise me goes: one of the six nearest suggestions, picked at random
 │   │   ├── tour.ts                 # Where an unattended tour goes next (seeded, with a recent window)
 │   │   ├── tourMode.ts             # The tour's clock: idle start, #tour and button starts, hops, and when it gives way
@@ -387,6 +397,25 @@ The image contract the deploy system relies on is a root `Dockerfile`, a server
 that listens on `$PORT` (8080), the `/api/health` route, and no baked secrets.
 The program that deploys the app is `deploy/` (`deploy/README.md`), and the
 scripts a release runs are in `scripts/release/` (`scripts/release/README.md`).
+
+### Link preview
+
+Sharing the app's link shows `public/og-card.png`, a 1200x630 card: a Julia set
+spiral under the title and one line of text. The release builds one image and
+promotes the same digest from staging to production, so no URL can be baked in
+at build time. `generateMetadata` in `src/app/layout.tsx` therefore reads the
+origin from the request (`siteOrigin` in `src/lib/siteOrigin.ts`: the proxy's
+`x-forwarded-host`, else `host`, checked to be a plain hostname and port before
+it is used) and puts it on `og:image`, `twitter:image` and `og:url`, so staging
+previews with the staging host and production with its own. A link carrying a
+`#v=...` view previews the same card. The favicon and the Apple touch icon are
+`src/app/icon.png` and `src/app/apple-icon.png`.
+
+To change the card or the icons, run `node scripts/make-og-card.mjs` from the
+repository root and commit the three PNGs; the header of that script says how it
+works and which place it drew. It needs the system Chrome and network access for
+the Inter font, adds nothing to `package.json`, and is part of neither
+`make gate` nor the Docker image.
 
 ### Local Docker
 
