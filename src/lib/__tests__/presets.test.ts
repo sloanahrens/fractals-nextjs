@@ -20,6 +20,8 @@ import {
   getCustomPresetsSnapshot,
   getPresetById,
   getServerCustomPresetsSnapshot,
+  presetColorFields,
+  presetColorOptions,
   presetFractal,
   presetFractalFields,
   presetVariant,
@@ -582,6 +584,73 @@ describe("the fractal fields a view is saved with", () => {
     expect(presetFractalFields("multibrot", "4")).toEqual({
       fractal: "multibrot",
       variant: "4",
+    });
+  });
+});
+
+describe("the colour fields a view is saved with", () => {
+  it("says nothing for a view drawn in the scheme's own colours", () => {
+    // No key at all, rather than a key holding a default: a view saved with
+    // the palette untouched keeps the stored shape it had before the settings
+    // existed, and an older build reads it unchanged.
+    expect(presetColorFields(false, 0)).toEqual({});
+    expect(presetColorFields(false, 1)).toEqual({});
+  });
+
+  it("keeps each setting that says something", () => {
+    expect(presetColorFields(true, 0)).toEqual({ reverse: true });
+    expect(presetColorFields(false, 0.35)).toEqual({ shift: 0.35 });
+    expect(presetColorFields(true, 0.35)).toEqual({
+      reverse: true,
+      shift: 0.35,
+    });
+  });
+
+  it("writes a shift the way the mapping reads it", () => {
+    expect(presetColorFields(false, 1.25)).toEqual({ shift: 0.25 });
+    expect(presetColorFields(false, -0.25)).toEqual({ shift: 0.75 });
+  });
+});
+
+describe("the colours a saved view names", () => {
+  it("reads back what was written", () => {
+    for (const [reverse, shift] of [
+      [false, 0],
+      [true, 0],
+      [false, 0.35],
+      [true, 0.62],
+    ] as const) {
+      const stored = { ...CUSTOM_PRESET, ...presetColorFields(reverse, shift) };
+
+      expect(presetColorOptions(stored)).toEqual({ reverse, shift });
+    }
+  });
+
+  it("opens a view that names neither on the scheme's own colours", () => {
+    // Every view saved before the settings existed, and every built-in one.
+    expect(presetColorOptions(CUSTOM_PRESET)).toEqual({
+      reverse: false,
+      shift: 0,
+    });
+  });
+
+  it("judges each field on its own, so a view still loads", () => {
+    expect(
+      presetColorOptions({ ...CUSTOM_PRESET, reverse: "yes" as never }),
+    ).toEqual({ reverse: false, shift: 0 });
+    expect(
+      presetColorOptions({ ...CUSTOM_PRESET, shift: "half" as never }),
+    ).toEqual({ reverse: false, shift: 0 });
+    expect(presetColorOptions({ ...CUSTOM_PRESET, shift: NaN })).toEqual({
+      reverse: false,
+      shift: 0,
+    });
+  });
+
+  it("reads a shift outside 0 to 1 as the distance round it is worth", () => {
+    expect(presetColorOptions({ ...CUSTOM_PRESET, shift: 1.25 })).toEqual({
+      reverse: false,
+      shift: 0.25,
     });
   });
 });

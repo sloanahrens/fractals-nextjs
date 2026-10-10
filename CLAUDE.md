@@ -91,6 +91,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Orbit plot** (`src/lib/orbitPlot.ts`, `src/components/ui/OrbitPlot.tsx`, `orbit` on `FractalKind` in `src/types/fractal.ts`): The path that point took, drawn under the probe's rows in the expanded Math card — `orbit` is the points the kind's own loop visits (optional, as `escapeInfo` is; `orbitFor` answers the point alone for a kind without it), the probe keeps 60 steps of it in `PointProbe.orbit`, `orbitToPlot(orbit, size, minExtent)` places them in a square plot (frame never inside the escape circle nor past twice it, values that are not numbers read as the origin), `describeOrbit(fractalId, info, steps)` is the `aria-label`, `orbitStepColour` paints a dot through the picture's own mapping, and a Play control walks it a step every 120 ms (off under `prefers-reduced-motion`). **A kind's `orbit` must be the same walk as its `iterations` and `escapeInfo`** — `orbit.test.ts` holds the path to the count for every kind
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
+- **Palette controls** (`src/lib/paletteControls.ts`, `Slider`'s `onGestureStart`/`onKeyDown`): The Settings drawer's Reverse checkbox and Shift slider as the controls read them — the slider's whole percent against the view's fraction of a turn (`shiftToPercent`/`percentToShift`), `normalizeShift` (the mapping's reading, a whole turn being no shift), `isDefaultColorOptions` (judged exactly, so a slider dragged to its far end still has a Reset), `formatShiftPercent` and the keys that move a focused slider. The slider's far end is held rather than read modulo a turn, so a drag to the right does not snap the thumb back; a change of either setting repaints from kept counts and is one history entry per gesture, marked on the slider's pointer-down or on the first key press that moves it (`FractalExplorer.tsx`)
 
 ### State Management Pattern
 
@@ -194,6 +195,124 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-10_
 
+### Colour controls: Reverse and Shift in Settings, repainting live and part of the view (2026-10-10)
+
+- fr-ep7. The Rendering Parameters card's Color Scheme select now has the
+  scheme's two settings under it as controls: a **Reverse** checkbox, a
+  **Shift** slider (0 to 100 percent, step 1, with a "35%" readout) and a
+  **Reset colours** button. Both repaint from the counts the last render left,
+  so the picture follows the control as it moves however deep the view, and both
+  are part of the view already — the link carried `r` and `o` from fr-q7x, and
+  nothing about the codec, the mapping, the renderer or `/api/og` changed here.
+- **`src/lib/paletteControls.ts`** is the new pure module and the only new
+  source file: `DEFAULT_REVERSE` (false), `DEFAULT_SHIFT` (0),
+  `SHIFT_PERCENT_MIN`/`SHIFT_PERCENT_MAX` (0/100), `normalizeShift(value)`
+  (the mapping's reading — a shift is a distance round a loop, so a whole turn
+  is none and a negative fraction is the same distance the other way; anything
+  that is not a finite number is no shift, so a `NaN` never reaches the
+  palette), `shiftToPercent`/`percentToShift` (the control against the view),
+  `formatShiftPercent`, `isDefaultColorOptions` and
+  `shiftSliderKeyChangesValue`. `viewLinkState.ts` takes its two defaults from
+  it now, and `presets.ts` uses `normalizeShift`, so "no shift" is decided
+  once.
+- **One deliberate asymmetry, and why.** `shiftToPercent` holds a value to
+  0..1 rather than reading it modulo a turn, which is what `normalizeShift`
+  does: the slider's far end is a whole turn, and read modulo a drag to the
+  right would snap the thumb back to nought — the same picture, which is why
+  the mapping reads a whole turn as no shift, but a control somewhere the
+  pointer is not. For the same reason `isDefaultColorOptions(reverse, shift)`
+  is `reverse === false && shift === 0` exactly, so a slider dragged to its far
+  end is still something Reset colours can put back. A shift of a whole turn is
+  still not written to a saved view (`presetColorFields` normalizes first), and
+  the link codec already wrote it as nothing: the two do draw the same picture,
+  and only the control's rest position is what the exact test is about.
+- **The controls** sit directly under the Color Scheme `Select` in the
+  Rendering Parameters card, in that order, and nowhere else on the page. The
+  slider is the existing `Slider`, which gained two optional props for this:
+  `onGestureStart` (a pointer going down on it) and `onKeyDown`. Its travel is
+  its own percent, so the readout says "35%" and the ends say "0%" and "100%".
+  Reset colours is disabled exactly when there is nothing to put back.
+- **A change repaints, and does not render.** `handleReverseChange`,
+  `handleShiftChange` and `handleResetColours` only set state; the draw effect
+  follows, `drawCanvas` finds the two links equal once each has had its scheme,
+  reversal and shift taken out (`linkWithoutColour`), and `recolour` paints the
+  kept counts in the new settings — the path fr-di8 built. No `isRendering`, no
+  progress line and no wander notice, exactly as for a scheme change, and with
+  nothing kept (a canvas that has not finished a render) the view is counted as
+  it always was. Each goes through `handleParameterChange`, so the selected
+  preset goes.
+- **One history entry per gesture, marked on the first step that moves the
+  slider.** A jump is what makes an entry, and it is taken by the render that
+  first sees the count go up — and only takes one if the view has moved by then.
+  Marking it on the pointer going down (which is where a gesture begins, and
+  what the Julia map's drag does) would spend the jump on the view already on
+  screen, and the drag would then leave no entry at all — found in headless
+  Chrome, not reasoned out. So `handleShiftChange` marks the entry on its first
+  step of a gesture (`shiftEntryMarkedRef`, put back by `beginShiftGesture` from
+  `onGestureStart` on pointer down, and by `onKeyDown` on the first non-repeat
+  press of one of the eight keys that move a range input,
+  `shiftSliderKeyChangesValue`), and the rest of the drag's steps only move the
+  value, rewriting the entry the jump made instead of leaving one each. A held
+  key repeats its `keydown`, so its repeats are the one gesture's steps, while a
+  fresh press is a new entry. The checkbox and Reset colours mark one each,
+  before the setter that moves off the view the entry names.
+- **A hop that was nobody's aim resets the palette.** `handlePlaceSelect` gained
+  a `resetColour` flag: a Nearby tile, a fractal button, a preset or an
+  Auto-wander hop keeps the visitor's reversal and shift (a place names a scheme
+  and no palette setting, and the options colour whatever scheme it names, as
+  `placeColorScheme` already ruled for the scheme itself), while a tour hop
+  (`{ tour: true, resetColour: true }`) and a Surprise me press
+  (`{ resetColour: true }`) put both back, so a tour is not tinted by a setting
+  left over from before it. Its crossfade target now carries the settings too:
+  built without them the flight waited for a picture that never came once the
+  palette had been moved, and "this place is already the view" was never true.
+- **Saved views carry them.** `FractalPreset` gained `reverse?` and `shift?`;
+  `presetColorFields(reverse, shift)` writes each only when it says something
+  (so a view saved in the scheme's own colours keeps the stored JSON it had, and
+  an older build reads the view unchanged) and `presetColorOptions(preset)`
+  reads both, judging each on its own, so a view saved before the settings
+  existed opens on the scheme's own colours. `CustomPresetManager` takes
+  `currentReverse`/`currentShift` and `handlePresetSelect` restores them with
+  the scheme.
+- **The thumbnails already followed**, from fr-q7x: the strip is handed
+  `colorOptions` and the store's key includes them, so a tile is the picture a
+  click shows — the only change here is that the click's own link now carries
+  them.
+- **Verified in headless Chrome** (the production build, a CDP session with
+  real `Input.dispatchMouseEvent` and `Input.dispatchKeyEvent`, 27 checks, all
+  passing): the drawer's Shift slider and Reverse checkbox are laid out where
+  they should be and Reset colours starts disabled; a drag from the slider's
+  left end to about 40 percent moves it, **changes the canvas's pixels with
+  `Rendering...` never once appearing in the progress line** — the repaint path
+  and not a render — puts `o=0.4` in the address bar, and makes exactly one
+  history entry for the whole drag, with Back restoring the palette *and* the
+  identical picture (checksum equal to the pre-drag canvas's). Toggling Reverse
+  repaints with no render, writes `r=1`, makes one entry, and Reset colours
+  clears both, restores the first picture byte for byte, drops `r` and `o` from
+  the link, disables itself again and counts no render. Two ArrowRight presses
+  on the focused slider move it two steps and leave two entries, again with no
+  render. The drag's history behaviour was the one thing this check changed:
+  marking the jump at pointer-down left the drag with no entry at all.
+- Docs: the README's Color Mapping and Custom Presets bullets and its Project
+  Structure (`paletteControls.ts`), a Help row ("Reverse / Shift") in the Views
+  and links group, and this note.
+- Tests: the new `paletteControls.test.ts` (the mapping's reading of a whole
+  turn, a negative fraction and a value that is not a number; the percent
+  against the fraction with the whole round trip for every step; the far end
+  held rather than read back; the readout; the defaults judged exactly; the
+  eight keys and the ones that only move through the drawer), the new
+  `presets.test.ts` cases (each field written only when it says something, a
+  shift written the way the mapping reads it, both read back, a view that names
+  neither, each field judged alone, a shift outside 0 to 1), the new
+  `colour-controls-panel.test.ts` (sources: the controls in the drawer under the
+  select and nowhere else, the native slider's travel and readout, Reset
+  disabled when there is nothing to put back, a change repainting and starting
+  no render, the preset cleared, one entry per gesture marked on the first step
+  of the drag and never per step after it, the mark put back at pointer-down and
+  on the first key that moves the slider, `resetColour` on a tour hop
+  and on Surprise me and not on a tile, the crossfade target carrying the
+  settings, and the saved view's fields), and the two updated assertions in
+  `surprise-panel.test.ts` and `tour-mode-panel.test.ts`. `make gate` is green.
 ### Tour links in the library: up to eight views in one fragment, and a preview of them (2026-10-10)
 
 - fr-d3u. A link can now name a short walk rather than one view: up to eight
@@ -364,10 +483,11 @@ _Last updated: 2026-10-10_
   Nearby strip's tiles (the thumbnail store's `request` and `get` take an
   optional options, which joins the cache key only when there is one — so a
   caller with no such settings keys exactly what it always did).
-- **Not changed**: how a count is computed, any control or animation (fr-ep7),
-  the schemes themselves, the route's size limits, and saved views — a preset
-  still stores a scheme alone, so a view saved with the settings up returns
-  without them until fr-ep7 says otherwise.
+- **Not changed**: how a count is computed, any control or animation (fr-ep7,
+  which is the note above: the controls and the saved-view fields landed
+  there), the schemes themselves, and the route's size limits. At this landing
+  a preset still stored a scheme alone, so a view saved with the settings up
+  returned without them.
 - Tests: `colorMapping.test.ts` (no options is the mapping's own output for
   every scheme; reverse is the place `1 - t`; shift is the place `t + shift`
   with a whole turn coming back round; reverse then shift, shown not to be the

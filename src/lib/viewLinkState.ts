@@ -35,6 +35,7 @@ import {
   isVariantValue,
   variantOn,
 } from "./fractalTypes";
+import { DEFAULT_REVERSE, DEFAULT_SHIFT } from "./paletteControls";
 import { decodeView, type ViewLinkState } from "./viewLink";
 
 /**
@@ -94,8 +95,8 @@ export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
   centerY: DEFAULT_VIEW.centerY,
   zoomLevel: DEFAULT_VIEW.zoom,
   colorScheme: "classic",
-  reverse: false,
-  shift: 0,
+  reverse: DEFAULT_REVERSE,
+  shift: DEFAULT_SHIFT,
   autoIterationsOn: true,
   maxIterations: 100,
   canvasWidth: 800,

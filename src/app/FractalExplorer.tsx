@@ -48,6 +48,7 @@ import {
   DEFAULT_PRESET_FRACTAL,
   FractalPreset,
   formatZoom,
+  presetColorOptions,
   presetFractal,
   presetVariant,
 } from "../lib/presets";
@@ -110,6 +111,17 @@ import {
   type Place,
 } from "../lib/places";
 import { surpriseTarget } from "../lib/surprise";
+import {
+  DEFAULT_REVERSE,
+  DEFAULT_SHIFT,
+  SHIFT_PERCENT_MAX,
+  SHIFT_PERCENT_MIN,
+  formatShiftPercent,
+  isDefaultColorOptions,
+  percentToShift,
+  shiftSliderKeyChangesValue,
+  shiftToPercent,
+} from "../lib/paletteControls";
 import {
   CROSSFADE_MS,
   NEARBY_POOL_SIZE,
@@ -1772,6 +1784,12 @@ export default function Home() {
     // its author saved it rather than at whatever the zoom would pick.
     setAutoIterationsOn(false);
     setColorScheme(preset.colorScheme);
+    // A view's palette is part of it, so the two settings come back with the
+    // scheme; a view saved before they existed names neither and opens on the
+    // scheme's own colours.
+    const colors = presetColorOptions(preset);
+    setReverse(colors.reverse);
+    setShift(colors.shift);
     setCanvasWidth(preset.canvasWidth);
     setCanvasHeight(preset.canvasHeight);
     setCurrentPreset(preset.id);
@@ -1800,14 +1818,29 @@ export default function Home() {
     {
       tour = false,
       replace = tour,
-    }: { tour?: boolean; replace?: boolean } = {},
+      resetColour = false,
+    }: { tour?: boolean; replace?: boolean; resetColour?: boolean } = {},
   ) => {
     const zoom = clampZoom(place.zoom);
     const scheme = placeColorScheme(place, colorScheme);
+    // A place names a scheme and no palette setting of its own, so the
+    // visitor's reversal and shift stay and colour the place's scheme — the
+    // same rule `placeColorScheme` follows for the scheme itself. A hop nobody
+    // aimed at a place — a tour's, and a Surprise me press — is the exception:
+    // the palette goes back to the scheme's own colours, so a tour is never
+    // tinted by a setting left over from before it, and the link it lands on
+    // is the place's own.
+    const options = resetColour
+      ? { reverse: DEFAULT_REVERSE, shift: DEFAULT_SHIFT }
+      : { reverse, shift };
     // A place of a fractal with a variant names its own; one that names none
     // (a hand-built Julia place) keeps the page's, or the fractal's default
     // when the page holds a variant of another fractal.
     const placeVariant = variantOn(place.fractal, place.variant ?? variant);
+    // The link the flight is aiming at is the place in the colours the setters
+    // below will leave on the canvas — its palette settings included, or the
+    // crossfade would wait for a picture that never comes. It is also what
+    // "this place is already the view" is read off.
     const target = encodeView({
       fractalType: place.fractal,
       variant: placeVariant,
@@ -1815,6 +1848,8 @@ export default function Home() {
       centerY: place.centerY,
       zoomLevel: zoom,
       colorScheme: scheme,
+      reverse: options.reverse,
+      shift: options.shift,
       autoIterationsOn: true,
       maxIterations,
       canvasWidth,
@@ -1831,6 +1866,8 @@ export default function Home() {
     setCenterY(place.centerY);
     setZoomLevel(zoom);
     setColorScheme(scheme);
+    setReverse(options.reverse);
+    setShift(options.shift);
     setAutoIterationsOn(true);
     setCurrentPreset("");
     wander.notifyActivity();
@@ -1838,9 +1875,12 @@ export default function Home() {
 
   // Surprise me: a place picked at random from the ones the strip would lead
   // with, reached the way a tile is — `handlePlaceSelect` — so it has the same
-  // crossfade and makes one history entry. The view is read at the press, so a
-  // second press right after the first starts from the place the first chose
-  // and cancels its render the way any other move does. The button is disabled
+  // crossfade and makes one history entry. It is a hop nobody aimed at a place,
+  // so like a tour's it puts the palette back to the scheme's own colours
+  // (`resetColour`): the picture is the place's rather than one carrying a
+  // setting nobody chose for it. The view is read at the press, so a second
+  // press right after the first starts from the place the first chose and
+  // cancels its render the way any other move does. The button is disabled
   // when nothing is near enough to offer.
   const placeView = {
     fractal: fractalType,
@@ -1853,7 +1893,7 @@ export default function Home() {
 
   const handleSurprise = () => {
     const target = surpriseTarget(placeView, PLACES);
-    if (target) handlePlaceSelect(target);
+    if (target) handlePlaceSelect(target, { resetColour: true });
   };
 
   // The fractal switcher's buttons. A switch ends in the same state as the
@@ -1923,7 +1963,7 @@ export default function Home() {
         Math.random,
       );
       tourEngineRef.current = state;
-      handlePlaceSelect(place, { tour: true });
+      handlePlaceSelect(place, { tour: true, resetColour: true });
     });
   });
 
@@ -2220,6 +2260,72 @@ export default function Home() {
   const handleParameterChange = (updateFn: () => void) => {
     updateFn();
     setCurrentPreset("");
+  };
+
+  // The palette's own two settings, which colour a picture without changing
+  // what it is made of: a change of either is a repaint from the counts the
+  // last render left (`drawCanvas`) and never a new render, so the picture
+  // follows the control at once however deep the view.
+  //
+  // They are part of the view as much as the centre is — the link carries
+  // them, so Back, Forward, a pasted link and Copy link all move them — and a
+  // change is a deliberate move like another fractal's, which is one history
+  // entry. Each entry marks the view being left, and `beginJump` reads it from
+  // the render this handler still sees: the view as it was before the change,
+  // which is what Back should return to.
+  const handleReverseChange = (enabled: boolean) => {
+    beginJump();
+    handleParameterChange(() => setReverse(enabled));
+  };
+
+  // The slider is dragged: every step repaints, but a drag is one move, not
+  // fifty. The entry is marked on the first step of a gesture and on no other,
+  // and from then on the drag's own steps rewrite the entry that jump made
+  // rather than leaving one each — the rule the Julia map's drag follows.
+  //
+  // The mark is made on the *change* and not on the pointer going down, which
+  // is where a gesture begins. A jump is taken by the render that first sees
+  // the count go up, and only takes one if the view has moved by then: at
+  // pointer-down nothing has, so the jump would be spent on the view already on
+  // screen and the drag would leave no entry at all. `beginShiftGesture` puts
+  // the mark back at the start of each gesture, so the next drag marks its own
+  // entry, and a keyboard change marks one per press — a held key repeats its
+  // `keydown`, and the repeats are the one gesture's steps.
+  const shiftEntryMarkedRef = useRef(false);
+
+  const beginShiftGesture = () => {
+    shiftEntryMarkedRef.current = false;
+  };
+
+  const handleShiftKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.repeat) return;
+    if (!shiftSliderKeyChangesValue(event.key)) return;
+
+    beginShiftGesture();
+  };
+
+  // A step of the drag: the percent the control reports is the fraction of a
+  // turn the view holds. The first step of a gesture also marks the history
+  // entry — `beginJump` reads the view from the render this handler still sees,
+  // the one before the step — and the rest only move the value.
+  const handleShiftChange = (percent: number) => {
+    if (!shiftEntryMarkedRef.current) {
+      shiftEntryMarkedRef.current = true;
+      beginJump();
+    }
+
+    handleParameterChange(() => setShift(percentToShift(percent)));
+  };
+
+  // Put the palette back to the scheme's own colours — no reversal, no shift.
+  // Disabled when there is nothing to put back, and otherwise one change and
+  // so one entry, like the checkbox above.
+  const handleResetColours = () => {
+    beginJump();
+    handleParameterChange(() => {
+      setReverse(DEFAULT_REVERSE);
+      setShift(DEFAULT_SHIFT);
+    });
   };
 
   // A control that moves the view by hand. It does what a gesture does — the
@@ -2676,6 +2782,38 @@ export default function Home() {
                 )
               }
             />
+
+            {/* The scheme's own two settings, right under the scheme they
+                  belong to: walk the palette backwards, and start it a
+                  fraction of a turn round. Both repaint from the counts the
+                  last render left, so the picture follows the control as it
+                  moves rather than waiting for the view to be counted again. */}
+            <Checkbox
+              label="Reverse"
+              checked={reverse}
+              onChange={handleReverseChange}
+            />
+            <Slider
+              label="Shift"
+              value={shiftToPercent(shift)}
+              min={SHIFT_PERCENT_MIN}
+              max={SHIFT_PERCENT_MAX}
+              step={1}
+              onChange={handleShiftChange}
+              onGestureStart={beginShiftGesture}
+              onKeyDown={handleShiftKeyDown}
+              formatValue={formatShiftPercent}
+            />
+            <div>
+              <Button
+                onClick={handleResetColours}
+                variant="outline"
+                size="sm"
+                disabled={isDefaultColorOptions(reverse, shift)}
+              >
+                Reset colours
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -2817,6 +2955,8 @@ export default function Home() {
             currentBounds={bounds}
             currentMaxIterations={effectiveMaxIterations}
             currentColorScheme={colorScheme}
+            currentReverse={reverse}
+            currentShift={shift}
             currentCanvasWidth={canvasWidth}
             currentCanvasHeight={canvasHeight}
             currentFractal={fractalType}

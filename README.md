@@ -44,9 +44,9 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 - **Iteration Control**: Adjust detail level with iteration sliders
 - **Auto Iterations**: Iterations follow the zoom level; unticking the checkbox takes manual control, and loading a preset turns it off because that preset was framed at its own count
-- **Color Mapping**: Dynamic color schemes for enhanced visualization, each with two settings of its own — reversed, and shifted a fraction of a turn round the palette — that travel with the view in a link and in a shared preview; changing the scheme or either setting repaints the picture from iteration counts already computed, so it is instant however deep the view
+- **Color Mapping**: Dynamic color schemes for enhanced visualization, each with two settings of its own — a Reverse checkbox and a Shift slider (0 to 100 percent) in the Rendering Parameters card, right under the scheme they belong to, with a Reset colours button — that travel with the view in a link, a saved view and a shared preview; changing the scheme or either setting repaints the picture from iteration counts already computed, so it is instant however deep the view. Switching the scheme keeps both, a nearby tile keeps both, and a tour hop or a Surprise me press puts both back so neither is tinted by an old choice
 - **Parameter Presets**: Quick access to interesting fractal configurations from the Presets dropdown in the Settings drawer, listing the built-in and saved views for the fractal selected now
-- **Custom Presets**: Save and manage your own configurations; a saved view remembers its fractal and, for a Julia set, its constant
+- **Custom Presets**: Save and manage your own configurations; a saved view remembers its fractal, for a Julia set its constant, and the palette it was saved in — a view saved before those settings existed opens on the scheme's own colours
 
 ### 🚀 Technical Features
 
@@ -297,6 +297,7 @@ dependencies and needs nothing else.
 │   │   ├── ogView.ts               # The view an /api/og query names: judged strictly, the 1200x630 card bounds, iterations capped at 400, the canonical key
 │   │   ├── orbitPlot.ts            # The orbit plot's scaling, dot colours and words: the frame, the clamping, the aria-label
 │   │   ├── pageMetadata.ts         # The page's head: the static card, or a view's own /api/og image, og:url and one line about it
+│   │   ├── paletteControls.ts      # Reverse and Shift as the controls read them: percent against fraction of a turn, the defaults, the slider's keys
 │   │   ├── pinch.ts                # Pinch helpers: finger distance, midpoint, scale about a point
 │   │   ├── placeThumbnails.ts      # Off-screen place pictures: LRU cache, queue, cancel and pause
 │   │   ├── places.ts               # Catalogue of named places, suggest() for the ones near a view, and each fractal's featured place
