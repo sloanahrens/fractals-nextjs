@@ -82,6 +82,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
 - **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
 - **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers; it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
+- **Math probe** (`src/lib/mathProbe.ts`, `escapeInfo` on `FractalKind` in `src/types/fractal.ts`): The number under the pointer, what its orbit did and the colour the picture paints it, shown in the expanded Math card — `probePoint(kind, point, maxIterations, scheme)` reads the count from the kind (whole steps for the words, the smooth count for the colour) and `describeProbe(fractalId, info, cap)` words it; every kind ships `escapeInfo(point, maxIterations)`, an optional method the probe falls back to the count for; `createFrameThrottle` is the one-point-per-frame rule and `pointerToCanvasPixel` the CSS-to-canvas scaling. **A kind's `escapeInfo` must agree with its `iterations`** — `escapeInfo.test.ts` and the pixel parity in `mathProbe.test.ts` hold it to a drawn view
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -185,6 +186,91 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Math probe: the number under the pointer, its steps and whether it escapes (2026-10-10)
+
+- Layer 2 of the math design (owner-approved 2026-10-10, fr-ycw; layer 1 was the
+  Math card, fr-1tk, and the orbit plot is a later bead, fr-l62). With the Math
+  card expanded, pointing at the picture adds a row for the complex number under
+  the pointer, a row saying what its orbit did ("Escaped at step 7", "Inside the
+  set", "Settles on root 2 after 6 steps", "Never settled in 400 steps"), and a
+  small swatch of the colour the picture paints that pixel. The picture itself is
+  unchanged, and the orbit plot, clicking to pin a point and a crosshair are out
+  of scope.
+- **`escapeInfo` on `FractalKind`** (`src/types/fractal.ts`): optional, so a kind
+  from outside this app still draws and is probed off its count
+  (`escapeInfoFor`, `src/lib/mathProbe.ts`), and implemented by all six kinds.
+  It returns `{ steps, escaped, root? }`: `steps` is the whole-step count, which
+  is exactly what `iterations(point, cap, false)` gives for every escape-time
+  kind; `escaped` is "the orbit came to an end within the cap" — it left the
+  radius, or (Newton) reached a root; `root` is Newton's root index, 0-based as
+  `NEWTON_ROOTS` numbers them. Mandelbrot and the four others answer
+  `{ steps, escaped: steps < cap }` from the same function their count comes
+  from, so the two cannot drift; the Mandelbrot kind keeps its cardioid shortcut,
+  which is the same answer (the cap) arrived at without the orbit. Newton answers
+  from `newtonOrbit`, whose settle/no-settle is exactly what its packed count
+  says (settled < cap; unsettled = cap, black).
+- **`src/lib/mathProbe.ts`** is the whole of the probe and nothing else:
+  `probePoint(kind, point, maxIterations, scheme)` returns `{ point, info,
+  colour }`, where `info` comes from the whole-step path and `colour` from
+  `mapIterationsToColor(kind.iterations(point, cap, true), cap, scheme)` — the
+  smooth count, which is what a full render paints. Channels are clamped to
+  0..255 the way an `Uint8ClampedArray` clamps them (a smooth count just under
+  zero gives a negative channel; a `NaN` from the ocean scheme's `pow` of a
+  negative is 0), because the swatch is painted from these numbers and must be
+  the colour on screen. `describeProbe(fractalId, info, cap)` words it; the card
+  counts Newton's roots from 1 where the kind counts from 0, and Newton's
+  unsettled case says so rather than "Inside the set", since the Newton map has
+  no set to be inside of. `colourCss`, `pointerToCanvasPixel` (CSS pixels to
+  canvas pixels through the element's box, null for a box of no size) and
+  `probeAtPointer` (the three calls in one) are the rest; `createFrameThrottle`
+  is the one-run-per-frame rule, with the frame's functions injectable so a Node
+  suite drives it.
+- **The page** (`FractalExplorer.tsx`) owns the listeners and the state. The
+  work is guarded on `probeLive = mathOpen && mathExpanded && !tourPlaying &&
+  !tourOverlayOpen`: not live, the effect returns before it touches the canvas,
+  so a collapsed or hidden card attaches nothing and computes nothing, and it
+  drops the remembered pointer position. Live, it listens on the canvas for
+  `pointermove`, `pointerdown` (both `passive`) and `pointerleave`; a handler
+  only records where the pointer is in a ref and calls `throttle.request()`, so
+  the computation — one point — happens in the frame's callback and never inside
+  a pointer handler or between the renderer's rows. `pointerleave` clears the
+  state, except for a touch pointer: a finger lifting is the touch ending rather
+  than the pointer moving away, so a tap's point stays up to be read. The
+  effect's dependencies are the view and the kind, so a picture that moves under
+  a resting pointer (a wheel zoom, a preset, a walk step — no `pointermove` is
+  sent for any of them) re-reads the same place in the new view rather than
+  showing the last one's. The card is passed `probe={probeLive ? probe : null}`,
+  so a card that has just been expanded again never shows the point from before
+  it was collapsed.
+- **The card** (`MathCard.tsx`) takes the probe as an optional prop and, in the
+  expanded block only (before the Place row and the "Each point" rule), draws a
+  `Point` row — the number through `formatComplex`, six significant digits, and
+  the swatch, `aria-hidden` since the number beside it carries the meaning — and
+  an `Orbit` row, the line `describeProbe` gives. With no probe the `Point` row
+  says "Hover the picture" rather than leaving a hole.
+- **Docs**: the README's Math card bullet and paragraph and Project Structure,
+  the Help entry for Math (one clause), `docs/design/guided-exploration.md`'s As
+  built, and this note.
+- **Tests**: `escapeInfo.test.ts` (every kind: a point that runs the whole cap, a
+  point whose end step is worked out by hand — c = 2 in one step for the
+  escape-time kinds, a point already outside the radius in none for Julia,
+  -0.5 to root 1 in one for Newton — and a 9x9 grid where the info agrees with
+  `iterations(point, cap, false)` point by point, escaped exactly when the count
+  is under the cap, and a root only where a kind has one; Newton's roots from
+  their own coordinates, an unsettled z = 0, a `NaN` and an infinity returning
+  the cap), `mathProbe.test.ts` (the pixel parity: a 16x12 view of every kind
+  rendered through `renderRgba` with **every pixel** compared to the probe's
+  colour byte for byte and its steps to the whole count, the swatch in four
+  schemes, the fallback for a kind without `escapeInfo`, `describeProbe`'s four
+  wordings and an id this build does not know, `colourCss`, the pointer scaling
+  against a shrunk canvas and a box of no size, `probeAtPointer`, and the frame
+  throttle on a fake scheduler: three requests, one run; a cancel; a run that
+  asks for the next frame), and `math-probe-panel.test.ts` (sources: the live
+  guard and the early return before any listener, the work in the frame's
+  callback and not in the handler, the deps that re-read a view moving under a
+  resting pointer, the listeners and their cleanup, the card's prop and rows,
+  and the Help wording).
 
 ### Per-view previews: Copy link carries the view in the query (2026-10-10)
 

@@ -106,5 +106,10 @@ export function createMultibrotKind(power: number): FractalKind {
     iterations(point, maxIterations, smooth) {
       return multibrotIterations(point, power, maxIterations, smooth);
     },
+    escapeInfo(point, maxIterations) {
+      const steps = multibrotIterations(point, power, maxIterations, false);
+
+      return { steps, escaped: steps < maxIterations };
+    },
   };
 }

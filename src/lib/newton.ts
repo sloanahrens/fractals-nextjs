@@ -181,4 +181,14 @@ export const newtonKind: FractalKind = {
       ? maxIterations
       : packNewton(outcome, maxIterations);
   },
+  escapeInfo(point, maxIterations) {
+    // A Newton orbit does not escape; it ends by arriving at a root. The
+    // whole-step path is the same one the probe's words are read from, and it
+    // is what `iterations` packs the root of, so the two agree.
+    const outcome = newtonOrbit(point, maxIterations, false);
+
+    return outcome === null
+      ? { steps: maxIterations, escaped: false }
+      : { steps: outcome.steps, escaped: true, root: outcome.root };
+  },
 };
