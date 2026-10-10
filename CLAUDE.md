@@ -82,8 +82,9 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia chips land
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
 - **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
-- **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers; it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
+- **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers, the probe's rows and the orbit plot (`OrbitPlot.tsx`); it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
 - **Math probe** (`src/lib/mathProbe.ts`, `escapeInfo` on `FractalKind` in `src/types/fractal.ts`): The number under the pointer, what its orbit did and the colour the picture paints it, shown in the expanded Math card — `probePoint(kind, point, maxIterations, scheme)` reads the count from the kind (whole steps for the words, the smooth count for the colour) and `describeProbe(fractalId, info, cap)` words it; every kind ships `escapeInfo(point, maxIterations)`, an optional method the probe falls back to the count for; `createFrameThrottle` is the one-point-per-frame rule and `pointerToCanvasPixel` the CSS-to-canvas scaling. **A kind's `escapeInfo` must agree with its `iterations`** — `escapeInfo.test.ts` and the pixel parity in `mathProbe.test.ts` hold it to a drawn view
+- **Orbit plot** (`src/lib/orbitPlot.ts`, `src/components/ui/OrbitPlot.tsx`, `orbit` on `FractalKind` in `src/types/fractal.ts`): The path that point took, drawn under the probe's rows in the expanded Math card — `orbit` is the points the kind's own loop visits (optional, as `escapeInfo` is; `orbitFor` answers the point alone for a kind without it), the probe keeps 60 steps of it in `PointProbe.orbit`, `orbitToPlot(orbit, size, minExtent)` places them in a square plot (frame never inside the escape circle nor past twice it, values that are not numbers read as the origin), `describeOrbit(fractalId, info, steps)` is the `aria-label`, `orbitStepColour` paints a dot through the picture's own mapping, and a Play control walks it a step every 120 ms (off under `prefers-reduced-motion`). **A kind's `orbit` must be the same walk as its `iterations` and `escapeInfo`** — `orbit.test.ts` holds the path to the count for every kind
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -187,6 +188,101 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Orbit plot: the path the point under the pointer takes (2026-10-10)
+
+- Layer 3 of the math design (owner-approved 2026-10-10, fr-l62; layer 1 was the
+  Math card, fr-1tk, and layer 2 the probe, fr-ycw). With the Math card expanded,
+  the point under the pointer now has its path drawn under the probe's two rows:
+  a 220 px square SVG with the axes and their unit ticks, the radius of 2 drawn
+  faintly for every fractal that escapes, the orbit as dots joined by a line and
+  coloured through the picture's own palette from the first dot to the last, the
+  start ringed and the escaping point solid white, and the last three points
+  written out as a + bi below. A point inside the set can be watched spiralling
+  in and a point outside it flying off, which is what shows how the picture is
+  made. Pinning several orbits, dragging the point, a 3D view and exporting the
+  plot are out of scope.
+- **`orbit(point, maxSteps)` on `FractalKind`** (`src/types/fractal.ts`):
+  optional, as `escapeInfo` is, so a kind from outside this app still draws and
+  is answered with the point alone by `orbitFor` (`src/lib/mathProbe.ts`), and
+  implemented by all six kinds. It returns the points the orbit visited, the
+  kind's true start first — 0 for every escape-time kind, the pixel itself for
+  Julia and Newton — ending on the point that ended it (the one that left the
+  radius of 2, or Newton's root) or after `maxSteps`. Mandelbrot and Julia both
+  walk `escapeTimeOrbit(start, constant, maxSteps)` in `mandelbrot.ts`, which is
+  `escapeTimeIterations`' loop with the points kept and the two roles swapped
+  between them; the ship, the Tricorn, the Multibrot and Newton each walk their
+  own loop beside their own `iterations`. The Mandelbrot kind's cardioid
+  shortcut is a shortcut for the count and not for the path, so `orbit` ignores
+  it and plots the real orbit of an interior point.
+- **Two offsets worth knowing**, because the kinds count steps differently and
+  the tests say so: `escapeInfo.steps` is the index of the step that escaped, so
+  an ended escape-time orbit has `steps + 2` points (the start, the points before
+  the escape, and the escaping point); Newton's `steps` counts the steps taken to
+  arrive, so its path has `steps + 1`. An orbit that has not ended at `maxSteps`
+  has `maxSteps + 1` points, except Newton's z = 0, which has no step at all and
+  gives the one point. `orbit.test.ts` works out the paths by hand — Mandelbrot
+  c = 1 is 0, 1, 2, 5; c = -1 alternates 0 and -1; Newton's -0.5 goes to the root
+  1 in one step — and holds every kind's path length to its own `escapeInfo`.
+- **`src/lib/orbitPlot.ts`** is the pure half and holds the constants:
+  `ORBIT_PLOT_SIZE` (220), `ORBIT_PLAY_STEP_MS` (120), `ORBIT_ESCAPE_RADIUS` (2),
+  `ORBIT_MAX_EXTENT_FACTOR` (2). `orbitToPlot(orbit, size, minExtent = 1)`
+  returns `{ points, scale, origin, extent, size }`: the frame is the furthest
+  point from the origin, never smaller than `minExtent` and never more than twice
+  it, so the escape circle is always in view and a point that has blown up cannot
+  shrink the rest of the path to a dot — it is pinned to the edge instead. The
+  imaginary part goes up the page as the plane has it. Every coordinate out is a
+  finite number inside the plot's margin box whatever arrived, because an orbit
+  past the escape radius is full of values no scale can hold; a value that is not
+  a number at all reads as the origin. `orbitMinExtent(fractalId)` is 2 (the
+  escape circle) for every kind but Newton's, which gets 1: `hasEscapeCircle` is
+  `fractalId !== "newton"`, since Newton's method is no escape-time set and the
+  plot draws no untrue circle. `orbitStepColour(step, points, scheme)` paints a
+  dot through `mapIterationsToColor`, spread over the number of *dots* and not of
+  steps so the last one sits just short of the palette's end rather than exactly
+  on the cap, which the mapping paints black. `describeOrbit(fractalId, info,
+  steps)` is the `aria-label`: "Orbit of the point, 7 steps, escaped", "first 60
+  steps, stays inside" when the walk stopped before the orbit it describes did
+  (a deep view's cap can be hundreds), and Newton's own wording for a root or for
+  never settling. `subscribeToReducedMotion`/`prefersReducedMotion` are the media
+  query, as a store the component can hold with `useSyncExternalStore`.
+- **`probePoint` now carries the path.** `PointProbe` has `orbit`, filled with
+  `orbitFor(kind, point, ORBIT_MAX_STEPS)`, and `ORBIT_MAX_STEPS` (60) is in
+  `mathProbe.ts` because that is where the walk is asked for. It is the plot's
+  cap and not the render's: the same point's path is identical at an iteration
+  cap of 100 and of 1000, so a deep view costs the probe no more than a shallow
+  one. The probe is still computed once per frame at most, in the frame's
+  callback, and not at all while the card is collapsed or hidden.
+- **`src/components/ui/OrbitPlot.tsx`** is the markup and the one control. It
+  takes the path, the info, the fractal id and the scheme, and draws the SVG with
+  `data-orbit-axes`, `data-orbit-escape-circle`, `data-orbit-path`,
+  `data-orbit-first` and `data-orbit-last` on its parts. The Play button walks
+  the orbit a step at a time (`ORBIT_PLAY_STEP_MS`), is off until it is asked for,
+  and is disabled under `prefers-reduced-motion` — the orbit is drawn whole
+  without it and nothing in the plot is animated by CSS or SMIL. The animation is
+  tied to the orbit it started on by identity: a pointer move re-reads the point
+  and hands the plot a new orbit, which stops it, so the component adds no
+  listener of its own and the probe's own lifecycle (no listener while collapsed
+  or hidden, cleared on leave) is untouched.
+- **The card** draws the plot inside the expanded block, right under the `Point`
+  and `Orbit` rows, only when there is a probe — so a collapsed card, a hidden
+  card and a pointer that has left the picture cost nothing.
+- Docs: README's Math card feature line, detail bullet and Project Structure,
+  the Help entry for Math, `docs/design/guided-exploration.md`'s As built, and
+  this note.
+- Tests: `orbit.test.ts` (every kind: the start, the known paths by hand, the
+  length against `escapeInfo` for both endings, the cap, Julia's pixel start and
+  shared walker, Newton's root and its z = 0, the fallback for a kind without
+  `orbit`), `orbitPlot.test.ts` (the scaling, the up-the-page imaginary axis, the
+  frame band and the runaway clamp, a value that is not a number, a size with no
+  room, the extent for each fractal, the dot colours and the last dot's, the
+  label's five wordings), the new cases in `mathProbe.test.ts` (the probe carries
+  the kind's path, capped by the plot's cap and not the render's, and the point
+  alone for a kind that cannot walk one), and `orbit-plot-panel.test.ts` (sources:
+  the plot in the expanded card under the probe's rows, the labelled `role="img"`,
+  the ends marked, the escape circle guarded, the axes and ticks, the Play control
+  and its reduced-motion rule, no listener and no animation, the cap and the
+  fallback).
 
 ### Math probe: the number under the pointer, its steps and whether it escapes (2026-10-10)
 

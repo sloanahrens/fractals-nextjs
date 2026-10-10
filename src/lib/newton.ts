@@ -191,4 +191,36 @@ export const newtonKind: FractalKind = {
       ? { steps: maxIterations, escaped: false }
       : { steps: outcome.steps, escaped: true, root: outcome.root };
   },
+  orbit(point, maxSteps) {
+    // newtonOrbit's loop with the points kept, and the same two endings: the
+    // walk stops on the z whose residual is within the tolerance -- that z is
+    // already on the path and is the dot at the root -- or on a z with no step
+    // (z = 0, or an iterate that stopped being finite), or after maxSteps.
+    const points: ComplexNumber[] = [{ ...point }];
+    let real = point.real;
+    let imaginary = point.imaginary;
+
+    for (let steps = 0; steps < maxSteps; steps++) {
+      if (!Number.isFinite(real) || !Number.isFinite(imaginary)) break;
+
+      const squareReal = real * real - imaginary * imaginary;
+      const squareImaginary = 2 * real * imaginary;
+      const cubeReal = squareReal * real - squareImaginary * imaginary - 1;
+      const cubeImaginary = squareReal * imaginary + squareImaginary * real;
+
+      if (Math.hypot(cubeReal, cubeImaginary) < NEWTON_TOLERANCE) break;
+
+      const squareMagnitude =
+        squareReal * squareReal + squareImaginary * squareImaginary;
+      if (squareMagnitude === 0) break;
+
+      const inverseReal = squareReal / squareMagnitude;
+      const inverseImaginary = -squareImaginary / squareMagnitude;
+      real = (2 * real + inverseReal) / 3;
+      imaginary = (2 * imaginary + inverseImaginary) / 3;
+      points.push({ real, imaginary });
+    }
+
+    return points;
+  },
 };

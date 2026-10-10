@@ -71,4 +71,23 @@ export const tricornKind: FractalKind = {
 
     return { steps, escaped: steps < maxIterations };
   },
+  orbit(point, maxSteps) {
+    // The count's own loop with the points kept, so the path the plot draws is
+    // the path the colour was read from.
+    const points: ComplexNumber[] = [{ real: 0, imaginary: 0 }];
+    let real = 0;
+    let imaginary = 0;
+
+    for (let steps = 0; steps < maxSteps; steps++) {
+      const squaredReal = real * real - imaginary * imaginary;
+      const squaredImaginary = -2 * real * imaginary;
+      real = squaredReal + point.real;
+      imaginary = squaredImaginary + point.imaginary;
+      points.push({ real, imaginary });
+
+      if (real * real + imaginary * imaginary > 4) break;
+    }
+
+    return points;
+  },
 };

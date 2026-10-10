@@ -75,6 +75,25 @@ export interface FractalKind {
    * @returns The steps it survived and how the orbit ended
    */
   escapeInfo?(point: ComplexNumber, maxIterations: number): EscapeInfo;
+  /**
+   * The points the orbit visits, in order, starting at the point the kind
+   * starts it from: the Math card's orbit plot draws this so a visitor can
+   * watch a point spiral in or fly off.
+   *
+   * An orbit that ends — it left the escape radius, or, for a kind that is not
+   * an escape-time set, it arrived where the formula sends points (Newton's
+   * root) — ends on the point that ended it, so the last dot is the one that
+   * got away. An orbit still going after `maxSteps` stops there.
+   *
+   * Optional for the same reason as `escapeInfo`: the renderer never asks for
+   * it, and `orbitFor` (`src/lib/mathProbe.ts`) answers `[point]` for a kind
+   * that does not have it. Every kind this app ships has one.
+   *
+   * @param point - Point in the complex plane to test
+   * @param maxSteps - Most steps to walk, however many the orbit would take
+   * @returns The visited points, the start first
+   */
+  orbit?(point: ComplexNumber, maxSteps: number): ComplexNumber[];
 }
 
 export interface FractalConfig {

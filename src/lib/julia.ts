@@ -1,5 +1,5 @@
 import type { ComplexNumber, FractalKind } from "../types/fractal";
-import { escapeTimeIterations } from "./mandelbrot";
+import { escapeTimeIterations, escapeTimeOrbit } from "./mandelbrot";
 
 /**
  * A Julia constant with the label a picker shows for it.
@@ -218,6 +218,11 @@ export function createJuliaKind(constant: ComplexNumber): FractalKind {
       );
 
       return { steps, escaped: steps < maxIterations };
+    },
+    orbit(point, maxSteps) {
+      // A Julia orbit starts at the pixel and adds this constant, which is the
+      // Mandelbrot walk with the two roles swapped.
+      return escapeTimeOrbit(point, constant, maxSteps);
     },
   };
 }
