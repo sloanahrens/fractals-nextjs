@@ -24,7 +24,7 @@ interface CustomPresetManagerProps {
   /** Id of the fractal on the canvas now, saved with the view. */
   currentFractal: string;
   /** Julia constant on the canvas now; saved only for a Julia view. */
-  currentJuliaConstant: string;
+  currentVariant: string;
   onPresetsChange: () => void;
   className?: string;
 }
@@ -36,7 +36,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
   currentCanvasWidth,
   currentCanvasHeight,
   currentFractal,
-  currentJuliaConstant,
+  currentVariant,
   onPresetsChange,
   className = "",
 }) => {
@@ -72,7 +72,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
       colorScheme: currentColorScheme,
       canvasWidth: currentCanvasWidth,
       canvasHeight: currentCanvasHeight,
-      ...presetFractalFields(currentFractal, currentJuliaConstant),
+      ...presetFractalFields(currentFractal, currentVariant),
     };
 
     try {

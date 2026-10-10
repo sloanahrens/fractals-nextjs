@@ -219,7 +219,7 @@ describe("a click on a tile", () => {
     const body = handler();
 
     expect(body).toContain(
-      'if (place.fractal === "julia") setJuliaConstant(constant)',
+      'if (place.fractal === "julia") setVariant(constant)',
     );
     expect(body).toContain("placeColorScheme(place, colorScheme)");
     // The rule lives in places.ts alone, so the click cannot drift from the tile.

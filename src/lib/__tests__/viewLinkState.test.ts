@@ -32,7 +32,7 @@ describe("viewLinkToUpdates", () => {
   it("applies every field of a full link", () => {
     expect(viewLinkToUpdates(decodeView(EXAMPLE_LINK))).toEqual({
       fractalType: "julia",
-      juliaConstant: "Classic",
+      variant: "Classic",
       centerX: -0.644,
       centerY: -0.094,
       zoomLevel: 2.56,
@@ -58,7 +58,7 @@ describe("viewLinkToUpdates", () => {
       ),
     ).toEqual({
       fractalType: "burning-ship",
-      juliaConstant: DEFAULT_VIEW_LINK_UPDATES.juliaConstant,
+      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
       centerX: 0.2925755,
       centerY: -0.0149977,
       zoomLevel: 42.5,
@@ -91,7 +91,7 @@ describe("viewLinkToUpdates", () => {
     expect(updates.centerY).toBe(DEFAULT_VIEW_LINK_UPDATES.centerY);
     expect(updates.zoomLevel).toBe(DEFAULT_VIEW_LINK_UPDATES.zoomLevel);
     expect(updates.fractalType).toBe(DEFAULT_VIEW_LINK_UPDATES.fractalType);
-    expect(updates.juliaConstant).toBe(DEFAULT_VIEW_LINK_UPDATES.juliaConstant);
+    expect(updates.variant).toBe(DEFAULT_VIEW_LINK_UPDATES.variant);
     expect(updates.canvasWidth).toBe(DEFAULT_VIEW_LINK_UPDATES.canvasWidth);
   });
 
@@ -102,20 +102,18 @@ describe("viewLinkToUpdates", () => {
     const wrongFractal = viewLinkToUpdates(
       decodeView("#v=1&f=mandelbrot&k=Dendrite"),
     );
-    expect(wrongFractal.juliaConstant).toBe(
-      DEFAULT_VIEW_LINK_UPDATES.juliaConstant,
-    );
+    expect(wrongFractal.variant).toBe(DEFAULT_VIEW_LINK_UPDATES.variant);
 
     const julia = viewLinkToUpdates(decodeView("#v=1&f=julia&k=Dendrite"));
-    expect(julia.juliaConstant).toBe("Dendrite");
+    expect(julia.variant).toBe("Dendrite");
   });
 
   it("gives a Julia link with no constant the page's own", () => {
     // The fractal is the part that was asked for; the constant it opens on is
     // the one the app draws for a name it has no answer for, which is what the
     // picker shows too.
-    expect(viewLinkToUpdates(decodeView("#v=1&f=julia")).juliaConstant).toBe(
-      DEFAULT_VIEW_LINK_UPDATES.juliaConstant,
+    expect(viewLinkToUpdates(decodeView("#v=1&f=julia")).variant).toBe(
+      DEFAULT_VIEW_LINK_UPDATES.variant,
     );
   });
 
@@ -139,13 +137,44 @@ describe("viewLinkToUpdates", () => {
     }
   });
 
+  it("round-trips a Julia variant, named or custom, through the same bytes as before", () => {
+    // The state calls it `variant`; the link still writes it as `k`, and only
+    // beside `f=julia`.
+    const named =
+      "#v=1&f=julia&k=Siegel+disk&x=0&y=0&z=1&s=fire&i=auto&w=800&h=600";
+    const custom = encodeView({
+      ...viewLinkToUpdates(decodeView(named)),
+      variant: "custom:-0.8,0.156",
+    });
+
+    expect(viewLinkToUpdates(decodeView(named)).variant).toBe("Siegel disk");
+    expect(custom).toContain("&k=custom%3A-0.8%2C0.156&");
+    expect(viewLinkToUpdates(decodeView(custom)).variant).toBe(
+      "custom:-0.8,0.156",
+    );
+    expect(
+      encodeView({
+        fractalType: "mandelbrot",
+        variant: "Dendrite",
+        centerX: 0,
+        centerY: 0,
+        zoomLevel: 1,
+        colorScheme: getAvailableColorSchemes()[0].value,
+        autoIterationsOn: true,
+        maxIterations: 100,
+        canvasWidth: 800,
+        canvasHeight: 600,
+      }),
+    ).not.toContain("k=");
+  });
+
   it("answers with the view the codec would write for it", () => {
     // The mapping and the codec meet in the middle: a link read and applied
     // produces the string it came from, so an applied link leaves the address
     // bar alone rather than rewriting it into something else.
     const state: ViewLinkState = {
       fractalType: "julia",
-      juliaConstant: JULIA_CONSTANTS[2].name,
+      variant: JULIA_CONSTANTS[2].name,
       centerX: 0.2925755,
       centerY: -0.0149977,
       zoomLevel: 42.5,

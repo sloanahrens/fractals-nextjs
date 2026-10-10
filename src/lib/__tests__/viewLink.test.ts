@@ -25,7 +25,7 @@ import {
 /** The view the format's example describes, as the page holds it. */
 const EXAMPLE: ViewLinkState = {
   fractalType: "julia",
-  juliaConstant: "Classic",
+  variant: "Classic",
   centerX: -0.644,
   centerY: -0.094,
   zoomLevel: 2.56,
@@ -72,7 +72,7 @@ function sampleStates(): ViewLinkState[] {
         const constant =
           fractal.id === "julia"
             ? {
-                juliaConstant:
+                variant:
                   JULIA_CONSTANTS[
                     (fractalIndex + schemeIndex) % JULIA_CONSTANTS.length
                   ].name,
@@ -114,7 +114,7 @@ function expectSameState(
   expected: ViewLinkState,
 ): void {
   expect(actual.fractalType).toBe(expected.fractalType);
-  expect(actual.juliaConstant).toBe(expected.juliaConstant);
+  expect(actual.variant).toBe(expected.variant);
   expect(actual.colorScheme).toBe(expected.colorScheme);
   expect(actual.autoIterationsOn).toBe(expected.autoIterationsOn);
   expect(actual.maxIterations).toBe(expected.maxIterations);
@@ -157,7 +157,7 @@ describe("encodeView", () => {
     const link = encodeView({
       ...EXAMPLE,
       fractalType: "mandelbrot",
-      juliaConstant: "Dendrite",
+      variant: "Dendrite",
     });
 
     expect(link).toBe(
@@ -173,13 +173,13 @@ describe("encodeView", () => {
     // number it names.
     const link = encodeView({
       ...EXAMPLE,
-      juliaConstant: "custom:-0.8,0.156",
+      variant: "custom:-0.8,0.156",
     });
 
     expect(link).toBe(
       "v=1&f=julia&k=custom%3A-0.8%2C0.156&x=-0.644&y=-0.094&z=2.56&s=fire&i=auto&w=800&h=600",
     );
-    expect(decodeView(link).juliaConstant).toBe("custom:-0.8,0.156");
+    expect(decodeView(link).variant).toBe("custom:-0.8,0.156");
   });
 
   it("leaves out every field the format cannot carry", () => {
@@ -252,7 +252,7 @@ describe("decodeView", () => {
   it("reads a custom constant out of a link", () => {
     expect(decodeView("v=1&f=julia&k=custom%3A-0.8%2C0.156")).toEqual({
       fractalType: "julia",
-      juliaConstant: "custom:-0.8,0.156",
+      variant: "custom:-0.8,0.156",
     });
   });
 
@@ -339,10 +339,10 @@ describe("decodeView against a fragment it should not trust", () => {
     if (state.fractalType !== undefined) {
       expect(FRACTAL_TYPES.map((type) => type.id)).toContain(state.fractalType);
     }
-    if (state.juliaConstant !== undefined) {
+    if (state.variant !== undefined) {
       // A constant that came back is a name this build reads: one of the four
       // the picker offers, or a custom spelling of a point.
-      expect(isJuliaConstantName(state.juliaConstant)).toBe(true);
+      expect(isJuliaConstantName(state.variant)).toBe(true);
     }
     if (state.colorScheme !== undefined) {
       expect(
@@ -467,7 +467,7 @@ describe("the round trip", () => {
     // has to come back and not merely the point it names.
     const state: ViewLinkState = {
       fractalType: "julia",
-      juliaConstant: "custom:0.285,0.01",
+      variant: "custom:0.285,0.01",
       ...VIEWS[2],
       colorScheme: "fire",
       autoIterationsOn: false,

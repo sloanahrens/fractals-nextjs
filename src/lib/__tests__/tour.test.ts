@@ -38,7 +38,7 @@ function place(id: string, fractal: string, centerX: number, zoom = 4): Place {
 function viewOf(p: Place): PlaceView {
   return {
     fractal: p.fractal,
-    juliaConstant: p.juliaConstant,
+    variant: p.variant,
     centerX: p.centerX,
     centerY: p.centerY,
     zoom: p.zoom,

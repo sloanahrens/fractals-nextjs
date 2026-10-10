@@ -63,28 +63,29 @@ describe("the switcher's buttons", () => {
 });
 
 describe("the Julia chips", () => {
-  it("show only while Julia is the fractal on the canvas", () => {
-    expect(switcher).toMatch(/\{fractalType === "julia" && \(/);
-    expect(switcher.match(/fractalType === "julia"/g)).toHaveLength(1);
+  it("show only while the fractal on the canvas takes a variant, and name it in a caption", () => {
+    expect(switcher).toMatch(/\{variants !== null && \(/);
+    expect(switcher).toContain("const variants = fractalVariants(fractalType)");
+    expect(switcher).not.toContain('"julia"');
+    expect(switcher).toContain("{variants.label}");
   });
 
-  it("are the four named constants then Custom, pressed like the Settings select", () => {
+  it("are the descriptor's options then Custom when it allows one, pressed like the Settings select", () => {
     expect(JULIA_CONSTANTS).toHaveLength(4);
-    expect(switcher).toContain("JULIA_CONSTANTS.map((constant)");
-    expect(switcher).toContain("{constant.name}");
+    expect(switcher).toContain("variants.options.map((option)");
+    expect(switcher).toContain("{option.label}");
+    expect(switcher).toContain("{variants.allowsCustom && (");
     expect(switcher).toContain("{CUSTOM_OPTION_LABEL}");
-    expect(switcher.indexOf("{constant.name}")).toBeLessThan(
+    expect(switcher.indexOf("{option.label}")).toBeLessThan(
       switcher.indexOf("{CUSTOM_OPTION_LABEL}"),
     );
-    expect(switcher).toContain(
-      "const current = constant.name === juliaConstant",
-    );
+    expect(switcher).toContain("const current = option.value === variant");
     expect(switcher).toContain("aria-pressed={customCurrent}");
-    expect(switcher).toContain("isCustomJuliaConstant(juliaConstant)");
+    expect(switcher).toContain("isCustomVariant(fractalType, variant)");
   });
 
   it("scroll sideways and never wrap over the picture", () => {
-    expect(switcher).toContain('aria-label="Julia constant"');
+    expect(switcher).toContain("aria-label={variants.label}");
     expect(switcher).toMatch(/overflow-x-auto/);
     expect(switcher).toMatch(/shrink-0 whitespace-nowrap/);
     expect(switcher).not.toMatch(/flex-wrap/);
@@ -129,7 +130,7 @@ describe("the switcher's place on the page", () => {
 
   it("is cleared by the blank-picture hint, one row lower for the chips", () => {
     expect(hint).toContain('belowChips ? "top-24" : "top-14"');
-    expect(page).toContain('belowChips={fractalType === "julia"}');
+    expect(page).toContain("belowChips={variants !== null}");
   });
 });
 
@@ -150,12 +151,12 @@ describe("a click on the switcher", () => {
   });
 
   it("sends a named constant to its whole set, and only changes the constant without one", () => {
-    const body = handlerBody("handleSwitchConstant");
+    const body = handlerBody("handleSwitchVariant");
 
     expect(body).toContain("wholeSetPlaceFor(name)");
     expect(body).toContain("handlePlaceSelect(whole)");
-    expect(body).toContain("setJuliaConstant(name)");
-    expect(body).toContain("if (name === juliaConstant) return");
+    expect(body).toContain("setVariant(name)");
+    expect(body).toContain("if (name === variant) return");
     // Without a place the view stays put: no reframing to the default.
     expect(body).not.toContain("applyDefaultView");
     expect(body).not.toContain("setCenterX");
@@ -164,7 +165,7 @@ describe("a click on the switcher", () => {
   it("makes Custom the select's own pick, then opens Settings with focus bound for the Real box", () => {
     const body = handlerBody("handleSwitchCustom");
 
-    expect(body).toContain("handleJuliaSelect(CUSTOM_OPTION_VALUE)");
+    expect(body).toContain("handleVariantSelect(CUSTOM_OPTION_VALUE)");
     expect(body).toContain("focusJuliaRealRef.current = true");
     expect(body).toContain("setSettingsOpen(true)");
   });
@@ -178,7 +179,7 @@ describe("a click on the switcher", () => {
 
   it("hands the switcher the three handlers and the page's own two values", () => {
     expect(page).toMatch(
-      /<FractalSwitcher\s+fractalType=\{fractalType\}\s+juliaConstant=\{juliaConstant\}\s+onSelectFractal=\{handleSwitchFractal\}\s+onSelectConstant=\{handleSwitchConstant\}\s+onSelectCustom=\{handleSwitchCustom\}/,
+      /<FractalSwitcher\s+fractalType=\{fractalType\}\s+variant=\{variant\}\s+onSelectFractal=\{handleSwitchFractal\}\s+onSelectVariant=\{handleSwitchVariant\}\s+onSelectCustom=\{handleSwitchCustom\}/,
     );
   });
 });
@@ -188,8 +189,8 @@ describe("the Settings selects", () => {
     expect(page).toContain('label="Fractal"');
     expect(page).toContain("value={fractalType}");
     expect(page).toContain("onChange={handleFractalTypeChange}");
-    expect(page).toContain('label="Julia constant"');
-    expect(page).toContain("onChange={handleJuliaSelect}");
+    expect(page).toContain("label={variants.label}");
+    expect(page).toContain("onChange={handleVariantSelect}");
   });
 });
 

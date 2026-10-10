@@ -59,14 +59,15 @@ export interface ViewLinkState {
   /** Id of the fractal drawn, from {@link FRACTAL_TYPES} */
   fractalType: string;
   /**
-   * Name of the Julia constant: one of the named four, or a custom name that
+   * The fractal's variant (`fractalVariants`). Only Julia has one, and it is
+   * written as `k`: one of the named four constants, or a custom name that
    * spells out a point (`julia.ts` has both spellings).
    *
-   * Written only beside a Julia fractal, because the fractal and its constant
-   * are one choice; a state that names a constant for another fractal is not
+   * Written only beside a Julia fractal, because the fractal and its variant
+   * are one choice; a state that names a variant for another fractal is not
    * one this codec writes, and its link reads back without it.
    */
-  juliaConstant?: string;
+  variant?: string;
   /** Real part of the centre of the view */
   centerX: number;
   /** Imaginary part of the centre of the view */
@@ -193,7 +194,7 @@ function fractalNamed(id: string | null | undefined): string | null {
   return id != null && FRACTAL_TYPES.some((type) => type.id === id) ? id : null;
 }
 
-/** A Julia constant name this build reads, or null. */
+/** A variant value this build reads (`k` is only ever a Julia constant today), or null. */
 function constantNamed(name: string | null | undefined): string | null {
   return isJuliaConstantName(name) ? name : null;
 }
@@ -294,7 +295,7 @@ export function encodeView(state: ViewLinkState): string {
   // The constant belongs to the fractal it was chosen with, so it is written
   // beside a Julia fractal and nowhere else.
   if (fractal === "julia") {
-    const constant = constantNamed(state.juliaConstant);
+    const constant = constantNamed(state.variant);
     if (constant !== null) fields.set("k", constant);
   }
 
@@ -385,7 +386,7 @@ export function decodeView(fragment: string): Partial<ViewLinkState> {
   // only beside a Julia fractal, and a link that carries one without its
   // fractal still names a constant this build can draw.
   const constant = constantNamed(fields.get("k"));
-  if (constant !== null) state.juliaConstant = constant;
+  if (constant !== null) state.variant = constant;
 
   const centerX = coordinateOf(numberFrom(fields.get("x")));
   if (centerX !== null) state.centerX = centerX;

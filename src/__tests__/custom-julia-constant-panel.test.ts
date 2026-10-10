@@ -38,8 +38,8 @@ function functionBody(name: string): string {
 
 describe("the custom Julia constant controls", () => {
   it("offers Custom in the Julia constant select, after the named four", () => {
-    const select = page.indexOf('label="Julia constant"');
-    const named = page.indexOf("...JULIA_CONSTANTS.map", select);
+    const select = page.indexOf("label={variants.label}");
+    const named = page.indexOf("...variants.options", select);
     const custom = page.indexOf("CUSTOM_OPTION_VALUE,", named);
 
     expect(select).toBeGreaterThan(-1);
@@ -49,15 +49,17 @@ describe("the custom Julia constant controls", () => {
   });
 
   it("shows the boxes only for a Julia view on a custom constant, under the select", () => {
-    const select = page.indexOf('label="Julia constant"');
-    const guard = page.indexOf("isCustomJuliaConstant(juliaConstant) && (");
+    const select = page.indexOf("label={variants.label}");
+    const guard = page.indexOf("isCustomVariant(fractalType, variant) && (");
     const real = page.indexOf('label="Real"');
     const imaginary = page.indexOf('label="Imaginary"');
 
     expect(guard).toBeGreaterThan(select);
     expect(real).toBeGreaterThan(guard);
     expect(imaginary).toBeGreaterThan(real);
-    expect(page.slice(guard - 80, guard)).toContain('fractalType === "julia"');
+    // The guard is the descriptor's (`isCustomVariant`, tested in
+    // fractalTypes.test.ts): only Julia allows a custom value, so no other
+    // fractal shows the boxes.
   });
 
   it("labels both boxes and asks for a decimal keyboard", () => {
@@ -79,7 +81,7 @@ describe("the custom Julia constant controls", () => {
     const body = functionBody("editJuliaInput");
     const refusal = body.indexOf('"error" in result');
     const returned = body.indexOf("return;", refusal);
-    const handler = body.indexOf("handleJuliaConstantChange(");
+    const handler = body.indexOf("handleVariantChange(");
 
     expect(refusal).toBeGreaterThan(-1);
     expect(returned).toBeGreaterThan(refusal);
@@ -89,21 +91,21 @@ describe("the custom Julia constant controls", () => {
 
   it("sends a readable pair through the existing constant handler", () => {
     expect(functionBody("editJuliaInput")).toContain(
-      "handleJuliaConstantChange(result.constant)",
+      "handleVariantChange(result.constant)",
     );
   });
 
   it("starts Custom from the constant already drawn, without reframing", () => {
-    const body = functionBody("handleJuliaSelect");
+    const body = functionBody("handleVariantSelect");
 
-    expect(body).toContain("parseJuliaConstant(juliaConstant)");
+    expect(body).toContain("parseJuliaConstant(variant)");
     expect(body).toContain("customConstantName(");
-    expect(body).toContain("setJuliaConstant(name)");
+    expect(body).toContain("setVariant(name)");
     expect(body).not.toContain("applyDefaultView");
   });
 
   it("fills the boxes when the constant moves for any other reason", () => {
-    const sync = page.indexOf("syncedJuliaConstant !== juliaConstant");
+    const sync = page.indexOf("syncedVariant !== variant");
 
     expect(sync).toBeGreaterThan(-1);
     expect(page.slice(sync, sync + 500)).toContain("setJuliaRealText(");

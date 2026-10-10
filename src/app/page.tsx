@@ -46,12 +46,14 @@ import {
   FractalPreset,
   formatZoom,
   presetFractal,
-  presetJuliaConstant,
+  presetVariant,
 } from "../lib/presets";
 import { downloadFileName } from "../lib/download";
 import {
   FRACTAL_TYPES,
   defaultViewFor,
+  fractalVariants,
+  isCustomVariant,
   resolveFractalKind,
 } from "../lib/fractalTypes";
 import {
@@ -60,11 +62,7 @@ import {
   isCustomJuliaConstant,
   parseCustomConstantInput,
 } from "../lib/customConstantInput";
-import {
-  customConstantName,
-  JULIA_CONSTANTS,
-  parseJuliaConstant,
-} from "../lib/julia";
+import { customConstantName, parseJuliaConstant } from "../lib/julia";
 import { BLANK_HINT_DELAY_MS, canvasIsBlank } from "../lib/blankView";
 import { createRng, nextWanderView } from "../lib/wander";
 import {
@@ -226,9 +224,7 @@ export default function Home() {
   const [fractalType, setFractalType] = useState(
     DEFAULT_VIEW_LINK_UPDATES.fractalType,
   );
-  const [juliaConstant, setJuliaConstant] = useState(
-    DEFAULT_VIEW_LINK_UPDATES.juliaConstant,
-  );
+  const [variant, setVariant] = useState(DEFAULT_VIEW_LINK_UPDATES.variant);
 
   // The Real and Imaginary boxes of a custom constant hold what the user typed,
   // so a half-typed "0." is not rewritten under their fingers. They follow the
@@ -240,11 +236,11 @@ export default function Home() {
   const [juliaRealText, setJuliaRealText] = useState("");
   const [juliaImaginaryText, setJuliaImaginaryText] = useState("");
   const [juliaInputError, setJuliaInputError] = useState<string | null>(null);
-  const [syncedJuliaConstant, setSyncedJuliaConstant] = useState(juliaConstant);
-  if (syncedJuliaConstant !== juliaConstant) {
-    setSyncedJuliaConstant(juliaConstant);
-    const point = isCustomJuliaConstant(juliaConstant)
-      ? parseJuliaConstant(juliaConstant)
+  const [syncedVariant, setSyncedVariant] = useState(variant);
+  if (syncedVariant !== variant) {
+    setSyncedVariant(variant);
+    const point = isCustomJuliaConstant(variant)
+      ? parseJuliaConstant(variant)
       : null;
     if (point !== null) {
       setJuliaRealText(String(point.real));
@@ -254,8 +250,8 @@ export default function Home() {
   }
 
   const fractalKind = useMemo(
-    () => resolveFractalKind(fractalType, juliaConstant),
-    [fractalType, juliaConstant],
+    () => resolveFractalKind(fractalType, variant),
+    [fractalType, variant],
   );
 
   // What to call that fractal out loud. The picker's label is the one the user
@@ -587,7 +583,7 @@ export default function Home() {
       const updates = viewLinkUpdatesFrom(fragment);
 
       setFractalType(updates.fractalType);
-      setJuliaConstant(updates.juliaConstant);
+      setVariant(updates.variant);
       setCenterX(updates.centerX);
       setCenterY(updates.centerY);
       setZoomLevel(updates.zoomLevel);
@@ -672,7 +668,7 @@ export default function Home() {
     () =>
       encodeView({
         fractalType,
-        juliaConstant,
+        variant,
         centerX,
         centerY,
         zoomLevel,
@@ -684,7 +680,7 @@ export default function Home() {
       }),
     [
       fractalType,
-      juliaConstant,
+      variant,
       centerX,
       centerY,
       zoomLevel,
@@ -810,7 +806,7 @@ export default function Home() {
       pool: suggest(
         {
           fractal: fractalType,
-          juliaConstant,
+          variant,
           centerX,
           centerY,
           zoom: zoomLevel,
@@ -1189,14 +1185,14 @@ export default function Home() {
 
   // Another constant is another picture, framed the same way: a Julia set is
   // symmetric about the origin whatever its c.
-  const handleJuliaConstantChange = (name: string) => {
-    setJuliaConstant(name);
+  const handleVariantChange = (name: string) => {
+    setVariant(name);
     applyDefaultView("julia");
   };
 
   // The select is the deliberate act, so picking a constant from it is a jump;
   // typing a point into the Real and Imaginary boxes is not. That edit fires on
-  // every readable keystroke and goes to `handleJuliaConstantChange` directly,
+  // every readable keystroke and goes to `handleVariantChange` directly,
   // refining the view the way a drag does instead of leaving an entry behind
   // for each digit.
   //
@@ -1204,19 +1200,19 @@ export default function Home() {
   // already drawn with, so choosing it changes the controls and not the
   // picture: the constant is the same, only spelled as a custom name, and the
   // view stays where it was.
-  const handleJuliaSelect = (value: string) => {
+  const handleVariantSelect = (value: string) => {
     if (value !== CUSTOM_OPTION_VALUE) {
       beginJump();
-      handleJuliaConstantChange(value);
+      handleVariantChange(value);
       return;
     }
-    if (isCustomJuliaConstant(juliaConstant)) return;
+    if (isCustomJuliaConstant(variant)) return;
 
-    const point = parseJuliaConstant(juliaConstant);
+    const point = parseJuliaConstant(variant);
     const name = point && customConstantName(point.real, point.imaginary);
     if (name === null || name === undefined) return;
 
-    setJuliaConstant(name);
+    setVariant(name);
     wander.notifyActivity();
   };
 
@@ -1239,9 +1235,9 @@ export default function Home() {
     setJuliaInputError(null);
     // The same point written another way ("0.50" for "0.5") is not a new
     // constant, and a new constant would reframe the view.
-    if (result.constant === juliaConstant) return;
-    setSyncedJuliaConstant(result.constant);
-    handleJuliaConstantChange(result.constant);
+    if (result.constant === variant) return;
+    setSyncedVariant(result.constant);
+    handleVariantChange(result.constant);
   };
 
   const resetToDefault = () => {
@@ -1294,7 +1290,7 @@ export default function Home() {
     // The bounds mean nothing without the picture they were framed on.
     const fractal = presetFractal(preset) ?? DEFAULT_PRESET_FRACTAL;
     setFractalType(fractal);
-    if (fractal === "julia") setJuliaConstant(presetJuliaConstant(preset));
+    if (fractal === "julia") setVariant(presetVariant(preset));
 
     setCenterX(view.centerX);
     setCenterY(view.centerY);
@@ -1337,12 +1333,10 @@ export default function Home() {
     const zoom = clampZoom(place.zoom);
     const scheme = placeColorScheme(place, colorScheme);
     const constant =
-      place.fractal === "julia"
-        ? (place.juliaConstant ?? juliaConstant)
-        : juliaConstant;
+      place.fractal === "julia" ? (place.variant ?? variant) : variant;
     const target = encodeView({
       fractalType: place.fractal,
-      juliaConstant: constant,
+      variant: constant,
       centerX: place.centerX,
       centerY: place.centerY,
       zoomLevel: zoom,
@@ -1358,7 +1352,7 @@ export default function Home() {
     if (!replace) beginJump();
 
     setFractalType(place.fractal);
-    if (place.fractal === "julia") setJuliaConstant(constant);
+    if (place.fractal === "julia") setVariant(constant);
     setCenterX(place.centerX);
     setCenterY(place.centerY);
     setZoomLevel(zoom);
@@ -1376,7 +1370,7 @@ export default function Home() {
   // when nothing is near enough to offer.
   const placeView = {
     fractal: fractalType,
-    juliaConstant,
+    variant,
     centerX,
     centerY,
     zoom: zoomLevel,
@@ -1401,8 +1395,8 @@ export default function Home() {
   // A named constant chip goes to the whole of that constant's set when the
   // catalogue has it (all four do) and otherwise only changes the constant,
   // leaving the view where it is.
-  const handleSwitchConstant = (name: string) => {
-    if (name === juliaConstant) return;
+  const handleSwitchVariant = (name: string) => {
+    if (name === variant) return;
 
     const whole = wholeSetPlaceFor(name);
     if (whole) {
@@ -1411,7 +1405,7 @@ export default function Home() {
     }
 
     beginJump();
-    setJuliaConstant(name);
+    setVariant(name);
     wander.notifyActivity();
   };
 
@@ -1421,7 +1415,7 @@ export default function Home() {
   const juliaRealInputRef = useRef<HTMLInputElement>(null);
   const focusJuliaRealRef = useRef(false);
   const handleSwitchCustom = () => {
-    handleJuliaSelect(CUSTOM_OPTION_VALUE);
+    handleVariantSelect(CUSTOM_OPTION_VALUE);
     focusJuliaRealRef.current = true;
     setSettingsOpen(true);
   };
@@ -1687,6 +1681,10 @@ export default function Home() {
     });
   };
 
+  // The setting the fractal takes, if any (the Julia constant for Julia): the
+  // switcher's second row and the Settings select are both drawn from it.
+  const variants = fractalVariants(fractalType);
+
   return (
     <div className="fractal-stage bg-gray-950" data-tour={tourPlaying}>
       {/* A tour shows the picture and nothing else: the bar, the strip, the
@@ -1760,7 +1758,7 @@ export default function Home() {
             }
             onBack={handleBack}
             canGoBack={historyState.canGoBack}
-            belowChips={fractalType === "julia"}
+            belowChips={variants !== null}
           />
 
           {/* One click to another fractal, and for Julia one to another
@@ -1768,9 +1766,9 @@ export default function Home() {
               and while the drawer or the help is up. */}
           <FractalSwitcher
             fractalType={fractalType}
-            juliaConstant={juliaConstant}
+            variant={variant}
             onSelectFractal={handleSwitchFractal}
-            onSelectConstant={handleSwitchConstant}
+            onSelectVariant={handleSwitchVariant}
             onSelectCustom={handleSwitchCustom}
             hidden={tourPlaying || tourOverlayOpen}
           />
@@ -1935,60 +1933,61 @@ export default function Home() {
             />
 
             {/* A Julia set is a family, so the kind alone does not say
-                    which picture to draw; the Mandelbrot set has no such
-                    parameter, and the picker offers nothing to choose. */}
-            {fractalType === "julia" && (
+                    which picture to draw. The select is drawn from the
+                    fractal's variant descriptor, so a fractal with no such
+                    setting (the Mandelbrot set) offers nothing to choose. */}
+            {variants !== null && (
               <Select
-                label="Julia constant"
+                label={variants.label}
                 value={
-                  isCustomJuliaConstant(juliaConstant)
+                  isCustomVariant(fractalType, variant)
                     ? CUSTOM_OPTION_VALUE
-                    : juliaConstant
+                    : variant
                 }
                 options={[
-                  ...JULIA_CONSTANTS.map((constant) => ({
-                    value: constant.name,
-                    label: constant.name,
-                  })),
-                  {
-                    value: CUSTOM_OPTION_VALUE,
-                    label: CUSTOM_OPTION_LABEL,
-                  },
+                  ...variants.options,
+                  ...(variants.allowsCustom
+                    ? [
+                        {
+                          value: CUSTOM_OPTION_VALUE,
+                          label: CUSTOM_OPTION_LABEL,
+                        },
+                      ]
+                    : []),
                 ]}
-                onChange={handleJuliaSelect}
+                onChange={handleVariantSelect}
               />
             )}
 
             {/* A custom constant is two numbers, so it gets two boxes. The
                     message has a box of its own, like the coordinates', so the
                     controls below do not move as it comes and goes. */}
-            {fractalType === "julia" &&
-              isCustomJuliaConstant(juliaConstant) && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      label="Real"
-                      inputRef={juliaRealInputRef}
-                      value={juliaRealText}
-                      inputMode="decimal"
-                      onChange={(text) => editJuliaInput("real", text)}
-                    />
-                    <Input
-                      label="Imaginary"
-                      value={juliaImaginaryText}
-                      inputMode="decimal"
-                      onChange={(text) => editJuliaInput("imaginary", text)}
-                    />
-                  </div>
-                  <div className="min-h-5">
-                    {juliaInputError !== null && (
-                      <p role="status" className="text-xs text-red-600">
-                        {juliaInputError}
-                      </p>
-                    )}
-                  </div>
+            {isCustomVariant(fractalType, variant) && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    label="Real"
+                    inputRef={juliaRealInputRef}
+                    value={juliaRealText}
+                    inputMode="decimal"
+                    onChange={(text) => editJuliaInput("real", text)}
+                  />
+                  <Input
+                    label="Imaginary"
+                    value={juliaImaginaryText}
+                    inputMode="decimal"
+                    onChange={(text) => editJuliaInput("imaginary", text)}
+                  />
                 </div>
-              )}
+                <div className="min-h-5">
+                  {juliaInputError !== null && (
+                    <p role="status" className="text-xs text-red-600">
+                      {juliaInputError}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <Checkbox
               label="Auto iterations"
@@ -2162,7 +2161,7 @@ export default function Home() {
             currentCanvasWidth={canvasWidth}
             currentCanvasHeight={canvasHeight}
             currentFractal={fractalType}
-            currentJuliaConstant={juliaConstant}
+            currentVariant={variant}
             onPresetsChange={handlePresetsChange}
           />
         </div>

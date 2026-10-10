@@ -22,7 +22,7 @@ export interface Place {
    * The Julia constant, as a name or a `custom:<re>,<im>` spelling
    * (`julia.ts`). Present for a Julia place and for no other.
    */
-  juliaConstant?: string;
+  variant?: string;
   /** Real part of the centre of the view. */
   centerX: number;
   /** Imaginary part of the centre of the view. */
@@ -36,7 +36,7 @@ export interface Place {
 /** Where the explorer is: the part of a {@link Place} that locates a view. */
 export type PlaceView = Pick<
   Place,
-  "fractal" | "juliaConstant" | "centerX" | "centerY" | "zoom"
+  "fractal" | "variant" | "centerX" | "centerY" | "zoom"
 >;
 
 /**
@@ -248,7 +248,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-classic-whole",
     name: "Classic: the whole set",
     fractal: "julia",
-    juliaConstant: "Classic",
+    variant: "Classic",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -258,7 +258,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-classic-spirals",
     name: "Classic: spirals",
     fractal: "julia",
-    juliaConstant: "Classic",
+    variant: "Classic",
     centerX: 0,
     centerY: 0,
     zoom: 3,
@@ -268,7 +268,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-classic-deep-spiral",
     name: "Classic: deep spiral",
     fractal: "julia",
-    juliaConstant: "Classic",
+    variant: "Classic",
     centerX: 0.4,
     centerY: 0.05,
     zoom: 40,
@@ -278,7 +278,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-dendrite-whole",
     name: "Dendrite: the whole set",
     fractal: "julia",
-    juliaConstant: "Dendrite",
+    variant: "Dendrite",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -288,7 +288,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-douady-rabbit-whole",
     name: "Douady rabbit: the whole set",
     fractal: "julia",
-    juliaConstant: "Douady rabbit",
+    variant: "Douady rabbit",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -298,7 +298,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-siegel-disk-whole",
     name: "Siegel disk: the whole set",
     fractal: "julia",
-    juliaConstant: "Siegel disk",
+    variant: "Siegel disk",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -308,7 +308,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-coral",
     name: "Coral",
     fractal: "julia",
-    juliaConstant: "custom:-0.70176,-0.3842",
+    variant: "custom:-0.70176,-0.3842",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -318,7 +318,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-basilica",
     name: "Basilica",
     fractal: "julia",
-    juliaConstant: "custom:-1,0",
+    variant: "custom:-1,0",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -328,7 +328,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-s-curve",
     name: "The S-curve",
     fractal: "julia",
-    juliaConstant: "custom:0.37,0.1",
+    variant: "custom:0.37,0.1",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -338,7 +338,7 @@ const JULIA_PLACES: readonly Place[] = [
     id: "julia-four-leaf-clover",
     name: "Four-leaf clover",
     fractal: "julia",
-    juliaConstant: "custom:0.285,0.01",
+    variant: "custom:0.285,0.01",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -518,7 +518,7 @@ export function wholeSetPlaceFor(constant: string): Place | null {
     PLACES.find(
       (place) =>
         place.fractal === "julia" &&
-        sameConstant(place.juliaConstant, constant) &&
+        sameConstant(place.variant, constant) &&
         place.centerX === whole.centerX &&
         place.centerY === whole.centerY &&
         place.zoom === whole.zoom,
@@ -561,7 +561,7 @@ function sameConstant(
 /** Whether a place is the view itself: same picture, within the tolerance. */
 function isCurrentView(view: PlaceView, place: Place, span: number): boolean {
   if (place.fractal === "julia") {
-    if (!sameConstant(place.juliaConstant, view.juliaConstant)) return false;
+    if (!sameConstant(place.variant, view.variant)) return false;
   }
 
   return (
@@ -636,10 +636,7 @@ export function suggest(
       place,
       // 0 for a place that shares a Julia view's constant, 1 for the others;
       // every other fractal has one group.
-      group:
-        isJulia && !sameConstant(place.juliaConstant, view.juliaConstant)
-          ? 1
-          : 0,
+      group: isJulia && !sameConstant(place.variant, view.variant) ? 1 : 0,
       distance: distanceFrom(view, place, span),
     }))
     .sort(

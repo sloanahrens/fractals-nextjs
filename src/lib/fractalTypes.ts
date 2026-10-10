@@ -1,6 +1,12 @@
 import type { FractalKind } from "../types/fractal";
 import { burningShipKind } from "./burningShip";
-import { JULIA_CONSTANTS, createJuliaKind, parseJuliaConstant } from "./julia";
+import { isCustomJuliaConstant } from "./customConstantInput";
+import {
+  JULIA_CONSTANTS,
+  createJuliaKind,
+  isJuliaConstantName,
+  parseJuliaConstant,
+} from "./julia";
 import { mandelbrotKind } from "./mandelbrot";
 
 /**
@@ -24,6 +30,86 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "burning-ship", label: "Burning Ship" },
 ];
 
+/** One choice of a fractal's variant, as a chip or a select option shows it. */
+export interface FractalVariantOption {
+  /** What the page holds and a link carries for this choice */
+  value: string;
+  /** Display text for the chip or option */
+  label: string;
+}
+
+/**
+ * The one setting a fractal takes beyond its view: the Julia constant for
+ * Julia. The switcher's second row and the Settings select are both drawn from
+ * this, so a fractal that takes a setting needs a descriptor and no new
+ * controls.
+ */
+export interface FractalVariants {
+  /** What the setting is called, as the row's caption and the select's label */
+  label: string;
+  /** The named choices, in the order they are offered */
+  options: readonly FractalVariantOption[];
+  /** Whether the setting also takes a value of the user's own (a Custom choice) */
+  allowsCustom: boolean;
+}
+
+const JULIA_VARIANTS: FractalVariants = {
+  label: "Julia constant",
+  options: JULIA_CONSTANTS.map((constant) => ({
+    value: constant.name,
+    label: constant.name,
+  })),
+  allowsCustom: true,
+};
+
+/**
+ * The setting a fractal takes, or null for a fractal that takes none.
+ * @param fractalId - Id of the fractal
+ * @returns Its variant descriptor; null for Mandelbrot, Burning Ship and any id this build does not know
+ */
+export function fractalVariants(fractalId: string): FractalVariants | null {
+  return fractalId === "julia" ? JULIA_VARIANTS : null;
+}
+
+/**
+ * The variant a fractal opens on: its first named choice, or "" for a fractal
+ * with no variant.
+ * @param fractalId - Id of the fractal
+ * @returns The variant value to start from
+ */
+export function defaultVariant(fractalId: string): string {
+  return fractalVariants(fractalId)?.options[0]?.value ?? "";
+}
+
+/**
+ * Whether a value is one this fractal can be drawn with: a named choice, or for
+ * a fractal that allows it, a readable custom one. False for every value of a
+ * fractal with no variant.
+ * @param fractalId - Id of the fractal
+ * @param value - A variant value from a link, a saved view or the page
+ * @returns True when the value is a variant of that fractal
+ */
+export function isVariantValue(
+  fractalId: string,
+  value: string | null | undefined,
+): value is string {
+  return fractalId === "julia" && isJuliaConstantName(value);
+}
+
+/**
+ * Whether a value is the fractal's custom choice: readable, and not one of its
+ * named options. It is what makes the select show Custom and the boxes appear.
+ * @param fractalId - Id of the fractal
+ * @param value - The variant on the page
+ * @returns True for a custom value of a fractal that allows one
+ */
+export function isCustomVariant(fractalId: string, value: string): boolean {
+  return (
+    fractalVariants(fractalId)?.allowsCustom === true &&
+    isCustomJuliaConstant(value)
+  );
+}
+
 /**
  * The formula a picker choice draws.
  *
@@ -34,17 +120,17 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
  * build cannot read falls back to the first named constant instead of to a
  * blank canvas.
  * @param typeId - Id of the fractal the picker selected
- * @param juliaConstantName - Name of the Julia constant; ignored unless typeId is "julia"
+ * @param variant - Name of the Julia constant; ignored unless typeId is "julia"
  * @returns The kind to draw
  */
 export function resolveFractalKind(
   typeId: string,
-  juliaConstantName: string,
+  variant: string,
 ): FractalKind {
   if (typeId === "burning-ship") return burningShipKind;
   if (typeId !== "julia") return mandelbrotKind;
 
-  const constant = parseJuliaConstant(juliaConstantName);
+  const constant = parseJuliaConstant(variant);
 
   return createJuliaKind(constant ?? JULIA_CONSTANTS[0].constant);
 }

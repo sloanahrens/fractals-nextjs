@@ -2,22 +2,22 @@
 
 import React from "react";
 
+import { CUSTOM_OPTION_LABEL } from "../../lib/customConstantInput";
 import {
-  CUSTOM_OPTION_LABEL,
-  isCustomJuliaConstant,
-} from "../../lib/customConstantInput";
-import { FRACTAL_TYPES } from "../../lib/fractalTypes";
-import { JULIA_CONSTANTS } from "../../lib/julia";
+  FRACTAL_TYPES,
+  fractalVariants,
+  isCustomVariant,
+} from "../../lib/fractalTypes";
 
 interface FractalSwitcherProps {
   /** The `FRACTAL_TYPES` id on the canvas. */
   fractalType: string;
-  /** The Julia constant on the canvas, as a name or a custom spelling. */
-  juliaConstant: string;
+  /** The fractal's variant on the canvas; for Julia a constant name or a custom spelling. */
+  variant: string;
   /** Goes to another fractal. Not called for the one that is already current. */
   onSelectFractal: (typeId: string) => void;
-  /** Goes to a named Julia constant. */
-  onSelectConstant: (name: string) => void;
+  /** Goes to a named choice of the fractal's variant. */
+  onSelectVariant: (name: string) => void;
   /** Chooses Custom and takes the user to the Real box in Settings. */
   onSelectCustom: () => void;
   /** True renders nothing: a tour, the drawer or the help has the screen. */
@@ -36,7 +36,9 @@ const RESTING = "bg-white/10 text-white hover:bg-white/20";
 /**
  * The one-click way to change fractal: Mandelbrot, Julia and Burning Ship as a
  * row of buttons over the top left of the canvas, the current one pressed, and
- * while Julia is current a second row of chips for its constants.
+ * while the current fractal takes a setting (`fractalVariants`; today only
+ * Julia, its constant) a second row of chips for it, with the setting's name as
+ * a quiet caption before them. A fractal with none gets no second row.
  *
  * It is drawn inside the canvas's own wrapper, so it sits under the top bar and
  * clear of the progress line, and below the blank-picture hint's row, which the
@@ -45,7 +47,7 @@ const RESTING = "bg-white/10 text-white hover:bg-white/20";
  * canvas around them still pans, and the chip row scrolls sideways when it is
  * wider than the picture rather than wrapping across it.
  *
- * It holds no state. The page owns the fractal and the constant, so the
+ * It holds no state. The page owns the fractal and its variant, so the
  * Settings selects and these buttons are two views of the same two values, and
  * the page decides where a click lands (`featuredPlace`, `wholeSetPlaceFor`).
  * The labels are the picker's own and are short enough for a 320 px screen, so
@@ -53,15 +55,16 @@ const RESTING = "bg-white/10 text-white hover:bg-white/20";
  */
 export function FractalSwitcher({
   fractalType,
-  juliaConstant,
+  variant,
   onSelectFractal,
-  onSelectConstant,
+  onSelectVariant,
   onSelectCustom,
   hidden = false,
 }: FractalSwitcherProps) {
   if (hidden) return null;
 
-  const customCurrent = isCustomJuliaConstant(juliaConstant);
+  const variants = fractalVariants(fractalType);
+  const customCurrent = isCustomVariant(fractalType, variant);
 
   return (
     <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2">
@@ -89,37 +92,45 @@ export function FractalSwitcher({
         })}
       </div>
 
-      {fractalType === "julia" && (
+      {variants !== null && (
         <div
           role="group"
-          aria-label="Julia constant"
+          aria-label={variants.label}
           className="pointer-events-auto flex max-w-full gap-1.5 overflow-x-auto rounded-full bg-gray-900/80 p-1 backdrop-blur"
         >
-          {JULIA_CONSTANTS.map((constant) => {
-            const current = constant.name === juliaConstant;
+          <span
+            aria-hidden="true"
+            className="shrink-0 self-center whitespace-nowrap pl-2 pr-0.5 text-[10px] font-medium uppercase tracking-wide text-white/60"
+          >
+            {variants.label}
+          </span>
+          {variants.options.map((option) => {
+            const current = option.value === variant;
 
             return (
               <button
-                key={constant.name}
+                key={option.value}
                 type="button"
                 aria-pressed={current}
                 onClick={() => {
-                  if (!current) onSelectConstant(constant.name);
+                  if (!current) onSelectVariant(option.value);
                 }}
                 className={`${CHIP_CLASSES} ${current ? PRESSED : RESTING}`}
               >
-                {constant.name}
+                {option.label}
               </button>
             );
           })}
-          <button
-            type="button"
-            aria-pressed={customCurrent}
-            onClick={onSelectCustom}
-            className={`${CHIP_CLASSES} ${customCurrent ? PRESSED : RESTING}`}
-          >
-            {CUSTOM_OPTION_LABEL}
-          </button>
+          {variants.allowsCustom && (
+            <button
+              type="button"
+              aria-pressed={customCurrent}
+              onClick={onSelectCustom}
+              className={`${CHIP_CLASSES} ${customCurrent ? PRESSED : RESTING}`}
+            >
+              {CUSTOM_OPTION_LABEL}
+            </button>
+          )}
         </div>
       )}
     </div>
