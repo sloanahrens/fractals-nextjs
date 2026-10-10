@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "make-og-previews": "node scripts/make-og-previews.mjs",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.mts"
   },

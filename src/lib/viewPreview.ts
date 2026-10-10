@@ -3,14 +3,15 @@
  *
  * `previewFor` turns the query of a request into the link a preview is built
  * from, or null. It is the server's half of `viewQuery.ts`: the same text, read
- * by the same decoder, and it is strict in the way `/api/og` is, because the
- * image it points at is drawn by that route and a preview that names a view the
- * route would refuse is a broken card. So a query previews only when
- * `parseOgQuery` accepts it, and what reaches the URL is the view *re-encoded
- * from the decoded state*: only known fields, in the codec's order, never the
- * visitor's text. The sentence about the view is built from the same state out
- * of this build's own labels and formatted numbers, so no input is echoed into
- * the page's head.
+ * by the same decoder, and it is strict in the way `/api/og` is, because a link
+ * the codec cannot read is not a view and a preview of half of one is a broken
+ * card. So a query previews only when `parseOgQuery` accepts it, and what
+ * reaches the URL is the view *re-encoded from the decoded state*: only known
+ * fields, in the codec's order, never the visitor's text. The sentence about
+ * the view is built from the same state out of this build's own labels and
+ * formatted numbers, so no input is echoed into the page's head. The picture is
+ * a pre-built one — the nearest place of the view's fractal (`ogImage.ts`) —
+ * so nothing a request asks for is drawn for it.
  *
  * A tour link (`tourLink.ts`) previews as its first stop — the card can draw one
  * picture, so it draws the one the walk begins at — and its sentence says how
@@ -22,8 +23,11 @@
 import { formatComplex } from "./fractalMath";
 import { fractalVariants } from "./fractalTypes";
 import { parseJuliaConstant } from "./julia";
+import { CARD_PATH, ogImageFor } from "./ogImage";
 import { parseOgQuery } from "./ogView";
+import { PLACES, nearestPlace, type PlaceView } from "./places";
 import { formatZoom } from "./presets";
+import { CARD_ALT } from "./siteText";
 import { decodeTourLink } from "./tourLink";
 import { decodeView, encodeView } from "./viewLink";
 import { viewLinkToUpdates, type ViewLinkUpdates } from "./viewLinkState";
@@ -37,6 +41,19 @@ export interface ViewPreview {
   fragment: string;
   /** One short phrase for the view, such as "Julia set, Dendrite, 400x" */
   line: string;
+  /**
+   * The pre-built picture this view previews as, as a path on the serving
+   * origin: `/og/<place-id>.jpg`, or the application's own card when the view
+   * names a fractal the catalogue has no place of.
+   */
+  image: string;
+  /** The picture's media type, which is the file's own. */
+  imageType: "image/jpeg" | "image/png";
+  /**
+   * The alt text for it: the same line, and the place the picture is of —
+   * which is what the picture is, since it is not the view's own frame.
+   */
+  alt: string;
 }
 
 /** The query as one string. A repeated key counts once, first value first, as `URLSearchParams.get` reads it. */
@@ -100,12 +117,59 @@ export function describeTourLine(count: number, first: string): string {
 }
 
 /**
+ * Where a decoded link says the view is, in the catalogue's own field names.
+ *
+ * `ViewLinkUpdates` is what a link decodes to and a `PlaceView` is what the
+ * catalogue is searched by; this is the one place the two vocabularies meet.
+ */
+function placeViewOf(view: ViewLinkUpdates): PlaceView {
+  return {
+    fractal: view.fractalType,
+    variant: view.variant,
+    centerX: view.centerX,
+    centerY: view.centerY,
+    zoom: view.zoomLevel,
+  };
+}
+
+/**
+ * The rest of a preview: the picture the view is shown as, and its alt text.
+ *
+ * The picture is the nearest catalogue place's, pre-built (`ogImage.ts`), so
+ * what a crawler fetches is a static file rather than a render. The alt names
+ * that place — the picture is of the place and not of the view's own frame —
+ * under the line the head itself carries, which for a tour is the tour's. A
+ * view whose fractal has no place, which the catalogue's own test rules out for
+ * every fractal this build knows, falls back to the application's card, whose
+ * alt text is `siteText.ts`'s.
+ *
+ * @param view - The view the preview is of
+ * @param line - The phrase this preview's title and descriptions use
+ */
+function imageFor(
+  view: ViewLinkUpdates,
+  line: string,
+): Pick<ViewPreview, "image" | "imageType" | "alt"> {
+  const place = nearestPlace(placeViewOf(view), PLACES);
+
+  if (place === null) {
+    return { image: CARD_PATH, imageType: "image/png", alt: CARD_ALT };
+  }
+
+  return {
+    image: ogImageFor(placeViewOf(view)),
+    imageType: "image/jpeg",
+    alt: `${line}, a picture of ${place.name}`,
+  };
+}
+
+/**
  * The preview a request's query asks for.
  *
  * @param searchParams - The route's search parameters
- * @returns The link and phrase for a view `/api/og` can draw — a tour link's
- *   being its first stop — or null for no parameters, for garbage, and for
- *   anything the route would refuse
+ * @returns The link, phrase and picture for a view the query codec can read —
+ *   a tour link's being its first stop — or null for no parameters, for
+ *   garbage, and for anything the codec would refuse
  */
 export function previewFor(searchParams: SearchParams): ViewPreview | null {
   const query = queryOf(searchParams);
@@ -118,16 +182,15 @@ export function previewFor(searchParams: SearchParams): ViewPreview | null {
   const stops = decodeTourLink(query);
   if (stops !== null) {
     const first = stops[0];
+    const line = describeTourLine(stops.length, describeViewLine(first));
 
-    return {
-      fragment: encodeView(first),
-      line: describeTourLine(stops.length, describeViewLine(first)),
-    };
+    return { fragment: encodeView(first), line, ...imageFor(first, line) };
   }
 
   if (!parseOgQuery(query).ok) return null;
 
   const view = viewLinkToUpdates(decodeView(query));
+  const line = describeViewLine(view);
 
-  return { fragment: encodeView(view), line: describeViewLine(view) };
+  return { fragment: encodeView(view), line, ...imageFor(view, line) };
 }

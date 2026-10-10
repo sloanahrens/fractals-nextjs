@@ -996,6 +996,22 @@ function isCurrentView(view: PlaceView, place: Place, span: number): boolean {
 }
 
 /**
+ * How far a place's centre is from the view, in the view's own spans, lower
+ * being nearer. "Near" therefore means near on the screen the user is looking
+ * at, whatever the zoom.
+ */
+function centreDistanceFrom(
+  view: PlaceView,
+  place: Place,
+  span: number,
+): number {
+  return (
+    Math.hypot(place.centerX - view.centerX, place.centerY - view.centerY) /
+    span
+  );
+}
+
+/**
  * How far a place is from the view, lower being nearer.
  *
  * Two distances added: the centre's, measured in the view's own spans so that
@@ -1004,12 +1020,79 @@ function isCurrentView(view: PlaceView, place: Place, span: number): boolean {
  * deeper or shallower than that costs as much as a place several screens away.
  */
 function distanceFrom(view: PlaceView, place: Place, span: number): number {
-  const centre =
-    Math.hypot(place.centerX - view.centerX, place.centerY - view.centerY) /
-    span;
   const octaves = Math.log2(place.zoom / view.zoom);
 
-  return centre + Math.abs(octaves - PREFERRED_DEPTH_OCTAVES);
+  return (
+    centreDistanceFrom(view, place, span) +
+    Math.abs(octaves - PREFERRED_DEPTH_OCTAVES)
+  );
+}
+
+/**
+ * The catalogue place a view is nearest to, or null for a view that has none.
+ *
+ * The one place that stands for a view when a picture has to be picked without
+ * a visitor to ask. The view's own fractal is the first cut, and for a fractal
+ * whose variants change the picture (a Julia constant, a Multibrot power) the
+ * places that share the view's variant are preferred over the rest, so a
+ * custom Julia constant still previews as some Julia set rather than as another
+ * constant's picture, which is a different fractal's shape.
+ *
+ * Within those, a view that *is* a place — the same picture within
+ * {@link placeAtView}'s tolerance, which is 1% of the view's span in the centre
+ * and 1% in zoom — names that place, and any other view names the place whose
+ * centre is nearest on the screen the link was made at
+ * ({@link centreDistanceFrom}). The zoom is otherwise not part of the measure:
+ * this answers "which of our pictures is this one", and `distanceFrom`'s depth
+ * term answers "which place is a good next step", which sends the whole-set
+ * view to a place it is not on.
+ *
+ * @param view - Where the explorer is
+ * @param places - The catalogue to look in
+ * @returns The nearest such place; null when the view cannot be measured, when
+ *   its fractal has no place in the catalogue, or when the catalogue is empty
+ */
+export function nearestPlace(
+  view: PlaceView,
+  places: readonly Place[],
+): Place | null {
+  if (
+    !Number.isFinite(view.centerX) ||
+    !Number.isFinite(view.centerY) ||
+    !Number.isFinite(view.zoom) ||
+    view.zoom <= 0
+  ) {
+    return null;
+  }
+
+  const ofFractal = places.filter((place) => place.fractal === view.fractal);
+  if (ofFractal.length === 0) return null;
+
+  const sharingVariant =
+    fractalVariants(view.fractal) === null
+      ? ofFractal
+      : ofFractal.filter((place) =>
+          sameVariant(view.fractal, place.variant, view.variant),
+        );
+  const pool = sharingVariant.length > 0 ? sharingVariant : ofFractal;
+
+  // A view on a place is that place. Two places can share a centre and differ
+  // in zoom (the whole Classic Julia set and its spirals), and this is what
+  // tells them apart; the search below could not, since the centre is equal.
+  const on = placeAtView(view, pool);
+  if (on !== null) return on;
+
+  const span = BASE_WIDTH / view.zoom;
+
+  // A tie is broken by id, so the same view always names the same place.
+  return pool.reduce((best, place) => {
+    const distance = centreDistanceFrom(view, place, span);
+    const bestDistance = centreDistanceFrom(view, best, span);
+
+    if (distance < bestDistance) return place;
+    if (distance > bestDistance) return best;
+    return place.id < best.id ? place : best;
+  });
 }
 
 /**

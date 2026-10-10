@@ -49,6 +49,31 @@ describe("previewFor", () => {
     expect(parseOgQuery(preview!.fragment).ok).toBe(true);
   });
 
+  it("names the pre-built picture of the nearest place, and says it is that place", () => {
+    // The Dendrite set's only catalogue place: a deep view of the same set
+    // previews as its whole set's picture, a static file rather than a render.
+    const preview = previewFor(JULIA);
+
+    expect(preview!.image).toBe("/og/julia-dendrite-whole.jpg");
+    expect(preview!.imageType).toBe("image/jpeg");
+    expect(preview!.alt).toBe(
+      "Julia set, Dendrite, 400x, a picture of Dendrite: the whole set",
+    );
+  });
+
+  it("shows every fractal the picker offers as one of its own places", () => {
+    for (const type of FRACTAL_TYPES) {
+      const query = `v=1&f=${type.id}`;
+      const preview = previewFor(
+        Object.fromEntries(new URLSearchParams(query)),
+      );
+
+      expect(preview!.image, type.id).toMatch(/^\/og\//);
+      expect(preview!.imageType, type.id).toBe("image/jpeg");
+      expect(preview!.alt, type.id).toContain("a picture of");
+    }
+  });
+
   it("only previews what /api/og would draw", () => {
     // The route refuses a known key whose value it cannot read; a preview that
     // pointed at it would be a broken card.
@@ -165,7 +190,7 @@ describe("previewFor", () => {
       for (const key of ["f", "k", "s", "x", "y", "z", "i", "w", "h", "v"]) {
         const preview = previewFor({ ...JULIA, [key]: text });
         if (preview === null) continue;
-        const output = `${preview.fragment} ${preview.line}`;
+        const output = `${preview.fragment} ${preview.line} ${preview.image} ${preview.alt}`;
 
         expect(output).not.toMatch(/[<>"'{}\\]|script|onerror/);
       }
@@ -235,6 +260,16 @@ describe("previewFor with a tour link", () => {
       "v=1&f=julia&k=Dendrite&x=-0.5&y=0.25&z=400&s=fire&i=auto&w=800&h=600",
     );
     expect(parseOgQuery(preview!.fragment).ok).toBe(true);
+  });
+
+  it("shows the walk's first stop's picture, under the walk's own line", () => {
+    const preview = previewFor(params(TOUR));
+
+    expect(preview!.image).toBe("/og/julia-dendrite-whole.jpg");
+    expect(preview!.imageType).toBe("image/jpeg");
+    expect(preview!.alt).toBe(
+      "Tour of 3 views, starting at Julia set, Dendrite, 400x, a picture of Dendrite: the whole set",
+    );
   });
 
   it("beats a single view in the same query", () => {

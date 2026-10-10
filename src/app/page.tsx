@@ -8,8 +8,8 @@ import { requestOrigin } from "./requestOrigin";
  * The head for this request. A shared view link carries its view in the query
  * (`/?v=1&f=julia&...`), which a crawler sees and the part after `#` never
  * reaches, so the page is where the search parameters are read: when they name
- * a view `/api/og` can draw, og:image is that view; otherwise this is the head
- * the layout gives.
+ * a view the codec can read, og:image is the pre-built picture of the nearest
+ * place of that view's fractal; otherwise this is the head the layout gives.
  */
 export async function generateMetadata({
   searchParams,

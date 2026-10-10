@@ -1,14 +1,17 @@
 /**
- * The page's head: title, description, and the social card, on the origin that
- * served the request.
+ * The page's head: title, description, and the picture a link previews with,
+ * on the origin that served the request.
  *
  * Without a view in the request this is the static card `public/og-card-2.png`
- * (fr-nd5, re-cut in fr-3y2). A request whose query names a view `/api/og` can
- * draw gets that view as og:image and twitter:image, and one short line about
- * the view in the title and descriptions (`viewPreview.ts`). The title, the
- * description and the card's alt text are `siteText.ts`'s, the one place they
- * are written down. Everything that reaches the head is built from the decoded
- * view, never from the request's text.
+ * (fr-nd5, re-cut in fr-3y2). A request whose query names a view the codec can
+ * read gets the pre-built picture of the nearest place of that view's fractal
+ * as og:image and twitter:image — a static file under `/og`, drawn ahead of
+ * time by `scripts/make-og-previews.mjs`, so no request makes the server draw
+ * anything (fr-xnl) — and one short line about the view in the title and
+ * descriptions (`viewPreview.ts`). The title, the description and the card's
+ * alt text are `siteText.ts`'s, the one place they are written down.
+ * Everything that reaches the head is built from the decoded view, never from
+ * the request's text.
  *
  * og:url is the one field here that is not in the Metadata object: Next
  * collapses a root url with no query to the bare origin, so `ogUrl` is what
@@ -16,24 +19,9 @@
  */
 
 import type { Metadata } from "next";
-import {
-  CARD_ALT,
-  DESCRIPTION,
-  TITLE,
-  TWITTER_DESCRIPTION,
-} from "./siteText";
+import { CARD_HEIGHT, CARD_PATH, CARD_WIDTH } from "./ogImage";
+import { CARD_ALT, DESCRIPTION, TITLE, TWITTER_DESCRIPTION } from "./siteText";
 import { previewFor, type SearchParams } from "./viewPreview";
-
-// The social card, public/og-card-2.png (scripts/make-og-card.mjs draws it).
-// The size is the file's own, which is what og:image:width and height must
-// say. The name carries a 2 so a chat app that cached the old card fetches
-// this one; a new card means a new name and a new file here.
-export const CARD_PATH = "/og-card-2.png";
-export const CARD_WIDTH = 1200;
-export const CARD_HEIGHT = 630;
-
-/** The image route's path; /api/og draws 1200x630, the same shape as the card. */
-export const VIEW_IMAGE_PATH = "/api/og";
 
 /**
  * The page's own address, for og:url.
@@ -68,10 +56,9 @@ export function pageMetadata(
 ): Metadata {
   const preview = previewFor(searchParams);
 
-  const image = preview
-    ? `${origin}${VIEW_IMAGE_PATH}?${preview.fragment}`
-    : `${origin}${CARD_PATH}`;
-  const alt = preview ? `${preview.line}, drawn by Fractal Explorer` : CARD_ALT;
+  const image = preview ? `${origin}${preview.image}` : `${origin}${CARD_PATH}`;
+  const imageType = preview ? preview.imageType : "image/png";
+  const alt = preview ? preview.alt : CARD_ALT;
   const title = preview ? `${preview.line} - ${TITLE}` : TITLE;
   const description = preview ? `${preview.line}. ${DESCRIPTION}` : DESCRIPTION;
   const twitterDescription = preview
@@ -104,7 +91,7 @@ export function pageMetadata(
           width: CARD_WIDTH,
           height: CARD_HEIGHT,
           alt,
-          type: "image/png",
+          type: imageType,
         },
       ],
       siteName: "Next Fractals",

@@ -43,7 +43,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 
 - **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support, and the counts of the render that finished: `recolour(scheme, maxIterations)` repaints the canvas from them in another scheme, computing no orbit, and answers false when it has kept none; the page uses it for a colour change, which is the one redraw that does not have to count the view again
 - **renderRgba** (`src/lib/renderRgba.ts`): A view as raw RGBA bytes with no canvas, in two steps — `countRgbaRows` (each pixel's point to its count through the kind) and `colourRgbaRows` (the count to a colour through the scheme and its `ColorOptions`) — with `renderRgbaRows` (some rows into a buffer) and `renderRgba` (the whole picture) as the two composed, so a picture is exactly its counts, coloured, and a colour change is the second step alone. `FractalRenderer` draws every row through it, and so does `/api/og`
-- **Image route** (`src/app/api/og/route.ts`, a shell over `src/lib/ogRoute.ts`, `ogView.ts`, `ogLimits.ts`) and **PNG encoder** (`src/lib/pngEncode.ts`): `GET /api/og?<view link>` draws a view as a 1200x630 PNG on the server, in the colours the link names — scheme, reversal and shift; see the Version Notes of 2026-10-10 (fr-c4z, fr-q7x)
+- **Image route** (`src/app/api/og/route.ts`, a shell over `src/lib/ogRoute.ts`, `ogView.ts`, `ogLimits.ts`) and **PNG encoder** (`src/lib/pngEncode.ts`): `GET /api/og?<view link>` draws a view as a 1200x630 PNG on the server, in the colours the link names — scheme, reversal and shift; nothing points at it any more (fr-xnl) and a later change redirects it and deletes the renderer; see the Version Notes of 2026-10-10 (fr-c4z, fr-q7x)
+- **Pre-built previews** (`src/lib/ogImage.ts`, `nearestPlace` in `src/lib/places.ts`, `scripts/make-og-previews.mjs`, `public/og/`): one 1200x630 JPEG per catalogue place, drawn ahead of time through the app's own pipeline, and the rule that says which one a shared link previews as — the nearest place of the view's own fractal, same variant preferred, or the static card; `next.config.js` caches `/og/*` for a day; see the Version Notes of 2026-10-10 (fr-xnl)
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
 - **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, the choice-to-kind and choice-to-default-view resolvers, and the per-fractal variant descriptor (`fractalVariants`, `defaultVariant`, `variantOn`)
@@ -75,7 +76,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
 - **Site origin** (`src/lib/siteOrigin.ts`, read per request by `src/app/requestOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `pageMetadata` (`src/lib/pageMetadata.ts`, called by `generateMetadata` in `src/app/layout.tsx` and `src/app/page.tsx`) puts on og:image, twitter:image and og:url
-- **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>`; a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form; `generateMetadata` in the server page turns the search parameters into a view-specific og:image at `/api/og` or, for no view, the static card; `previewFor` reads a tour link first, so a walk previews as its first stop; see the Version Notes of 2026-10-10 (fr-cr5, fr-d3u)
+- **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>`; a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form; `generateMetadata` in the server page turns the search parameters into og:image, the pre-built picture of the nearest place of that view's fractal, or the static card when there is no view; `previewFor` reads a tour link first, so a walk previews as its first stop; see the Version Notes of 2026-10-10 (fr-cr5, fr-d3u, fr-xnl)
 - **Tour link** (`src/lib/tourLink.ts`): Up to eight views in order in one fragment — one column per codec field (`v=1&t.f=mandelbrot~julia&t.x=…`), each stop written and read by `viewLink`'s own encoder and decoder, so a stop is judged exactly as a single view is; a stop carries no canvas size and no count when its zoom picks one; see the Version Note of 2026-10-10 (fr-d3u)
 - **Site text** (`src/lib/siteText.ts`): The app's own words about itself — the document title, the description built from `FRACTAL_TYPES` labels, the social card's tagline and title lines, and the card's alt text — so the page's head and `scripts/make-og-card.mjs` read one place; see the Version Note of 2026-10-10 (fr-3y2)
 - **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Math/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
@@ -196,6 +197,109 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Static link previews: one pre-built picture per place, nothing drawn on request (2026-10-10)
+
+- fr-xnl. A shared view used to preview as a picture `/api/og` drew for the
+  request, and that route is an unauthenticated CPU endpoint: any stranger could
+  ask the service to render. So every picture a preview can name is now drawn
+  ahead of time and served as a static file, and nothing in the page's head
+  points at `/api/og` any more (owner's concern and proposal, 2026-10-10). The
+  head is otherwise unchanged: og:url, the title, the descriptions and the
+  strictness of what counts as a view are as they were.
+- **`src/lib/ogImage.ts`** is the new module and holds the whole rule.
+  `ogImagePath(placeId)` is `/og/<place-id>.jpg`, spelled once for the generator
+  and the head; `ogImageFor(view)` is that path for the nearest place of the
+  view's fractal, or `CARD_PATH` (`/og-card-2.png`, moved here from
+  `pageMetadata.ts`) when the view has no place. `OG_IMAGE_DIR` (`/og`),
+  `OG_IMAGE_WIDTH`/`HEIGHT` (1200x630, which the card's own constants now alias)
+  and `OG_IMAGE_MAX_BYTES` are the rest.
+- **`nearestPlace(view, places)`** in `places.ts` is the rule underneath: the
+  places of the view's own fractal, with the places that share its variant
+  preferred when the fractal takes one (a Julia constant, a Multibrot power) and
+  every place of the fractal as the fallback, so a custom Julia constant
+  previews as some Julia set rather than another constant's shape. Within those,
+  a view that *is* a place by `placeAtView`'s tolerance (1% of the view's span in
+  the centre, 1% in zoom) names that place — which is what tells the whole
+  Classic Julia set from its spirals, two places at one centre — and any other
+  view names the place whose centre is nearest in the view's own spans
+  (`centreDistanceFrom`, the centre half of `distanceFrom`, which `suggest` and
+  `distanceFrom` now share). The zoom is otherwise not part of it on purpose:
+  `distanceFrom`'s depth term answers "which place is a good next step" and would
+  send the whole-set view to a place it is not on. Ties break by id, so a view
+  always names one picture.
+- **The pictures** come from `scripts/make-og-previews.mjs`, run by hand as
+  `npm run make-og-previews` and never by `make gate`, the Docker build or CI:
+  it esbuild-bundles the app's own modules into a temporary file, imports them,
+  and draws every place with `renderRgba` at `cardBounds` (the 1.91:1 frame
+  `/api/og` drew a card in), in `placeColorScheme(place, "classic")`, at
+  `autoIterations(place.zoom)`, smooth — the picture the page draws when a
+  visitor lands on that place, so a card cannot drift from the app. It encodes
+  with `sharp` — the encoder `make-og-card.mjs` already uses, installed with
+  Next.js, so `package.json` and the runtime bundle gain nothing — and fails
+  rather than writes a picture that is nearly one colour (`isBlankImage`) or
+  heavier than `OG_IMAGE_MAX_BYTES`; a `.jpg` no place names is deleted, so the
+  committed set always matches the catalogue.
+- **The file sizes, and the encoder the bead named.** The landing asked for
+  quality 80 with at most 200 KB a file, and named `jpeg-js` as the encoder. The
+  two cannot both hold: `jpeg-js` encodes full-resolution colour (4:4:4) where
+  every other encoder subsamples it, so the busiest cards come out two to three
+  times the budget — at quality 80 the set was 10.7 MB with `mandelbrot-seahorse-tail`
+  at 616 KB and sixteen places over 200 KB, and at quality 60 nine were still
+  over. Raising the per-file guard instead (700 KB, 10.7 MB committed) was
+  written first and then dropped: the budget is the acceptance criterion, the
+  pictures pay for it only slightly, and the repo's own card generator already
+  uses `sharp`. It starts each picture at 80 and steps down only as far as it
+  must: 67 of the 69 places are drawn at 80, `julia-classic-spirals` at 70 and
+  `mandelbrot-seahorse-tail` at 67, and the set is 4.6 MB. `jpeg-js` was removed
+  from `package.json` again — nothing else used it.
+- **The head** (`viewPreview.ts`, `pageMetadata.ts`). `previewFor` gained
+  `image` (the path), `imageType` and `alt`, built by `imageFor` from the same
+  `nearestPlace` the picture comes from, so the alt cannot describe another
+  picture: "Julia set, Dendrite, 400x, a picture of Dendrite: the whole set" —
+  the line the title carries (for a tour, the tour's own line), and the place the
+  picture is of, since it is not the view's own frame. `pageMetadata` points
+  og:image and twitter:image at `<origin><preview.image>`, declares
+  `image/jpeg` and 1200x630, and leaves og:url, the title and the descriptions
+  exactly as they were. A query that is not a view, and no query at all, are
+  still the static card and `CARD_ALT`. `VIEW_IMAGE_PATH` is gone from
+  `pageMetadata.ts` — nothing named it — and `ogUrl` is untouched.
+- **`/og/*` is cached** by a `headers()` rule in `next.config.js`:
+  `Cache-Control: public, max-age=86400, stale-while-revalidate=604800`. Next
+  serves a file under `public/` with `max-age=0` and an ETag, so a crawler or a
+  browser revalidated one on every share; these change only when the generator
+  is run. The rule names `/og/:path*` and nothing else, and a test asserts the
+  whole `headers()` value so the page, the health route and every other asset
+  keep the headers they had.
+- **`/api/og` is untouched** — route, limits, cache and renderer as they were,
+  and no page points at it. Removing it is fr-5om, the bead this one blocks.
+- Tests: `src/lib/__tests__/ogImage.test.ts` (`ogImagePath`; every place
+  previews as its own picture; a view between two gives the nearer; a Dendrite
+  view at the Classic spirals' own centre is a Dendrite picture and a power-5
+  view on a power-3 place a power-5 one; a custom Julia constant is a Julia
+  place; every `FRACTAL_TYPES` id resolves to a place of its own fractal;
+  garbage — a `NaN`, an infinity, a zoom of nought or less, an unknown fractal —
+  is the static card; and `nearestPlace` over a hand-built catalogue: the nearer
+  of two, the place the view is on, the variant preference and its fallback, and
+  null for a view it cannot measure or place),
+  `src/__tests__/og-previews.test.ts` (the committed `.jpg` set is exactly the
+  catalogue — a place with no file, or a file no place names, fails — every file
+  is a JPEG, between 1 KB and the weight guard, and the set under 15 MB; the
+  card is beside them; and the whole `headers()` value, `/og/:path*` only, with
+  the exact `Cache-Control`), the rewritten cases in `pageMetadata.test.ts` and
+  `viewPreview.test.ts` (the path, the JPEG type, the alt naming the place, the
+  tour's alt carrying the tour's line, and the hostile-input walk now reading
+  the alt and the image path too), and the integration tier's preview checks
+  (the Dendrite link's og:image is `<origin>/og/julia-dendrite-whole.jpg`, is
+  declared `image/jpeg`, and the file answers 200 `image/jpeg` with
+  `max-age=86400`; the Copy link round trip's picture is
+  `/og/multibrot-4-whole.jpg`; and the head names no `/api/og`). `make gate` is
+  green.
+- Docs: the README's Image Route bullet, its integration list, its Link preview
+  section (a new **Pre-built previews** subsection: what is pre-built, the rule,
+  how to regenerate, why), its Project Structure (`ogImage.ts`, `public/og/`,
+  `make-og-previews.mjs`) and its regenerating paragraphs; the
+  `guided-exploration.md` As-built entry; and this note.
 
 ### A link that names a fractal and no centre opens on that fractal's frame (2026-10-10)
 
