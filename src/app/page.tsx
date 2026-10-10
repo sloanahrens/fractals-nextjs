@@ -80,7 +80,7 @@ import {
 } from "../lib/manualBounds";
 import { opensHelpShortcut } from "../lib/helpEntries";
 import { Journey, historyButtons } from "../lib/journey";
-import { PLACES, suggest, type Place } from "../lib/places";
+import { PLACES, placeColorScheme, suggest, type Place } from "../lib/places";
 import { surpriseTarget } from "../lib/surprise";
 import {
   CROSSFADE_MS,
@@ -1213,13 +1213,14 @@ export default function Home() {
   // preset, through the same setters, so the sliders, the manual coordinates
   // and the address bar follow it. The place is drawn at the iteration count
   // Auto picks for its zoom, which is the count its catalogue entry was chosen
-  // at, and in its own colours when it names any. The link it will settle on is
+  // at, and in the scheme `placeColorScheme` gives, the one its tile was drawn
+  // in. The link it will settle on is
   // worked out first: a place that is already the view changes nothing, and a
   // crossfade waiting for a render that never comes would hold the old picture
   // on screen.
   const handlePlaceSelect = (place: Place) => {
     const zoom = clampZoom(place.zoom);
-    const scheme = place.colorScheme ?? colorScheme;
+    const scheme = placeColorScheme(place, colorScheme);
     const constant =
       place.fractal === "julia"
         ? (place.juliaConstant ?? juliaConstant)

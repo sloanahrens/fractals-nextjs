@@ -90,9 +90,19 @@ describe("the Nearby strip", () => {
     );
   });
 
-  it("draws its pictures in the page's colours, with the flat placeholder for a failure", () => {
+  it("draws each picture in the scheme its click applies, with the flat placeholder for a failure", () => {
+    // The page hands over its own scheme for the places that name none.
     expect(page).toContain("colorScheme={colorScheme}");
-    expect(strip).toContain("store.request(place, colorScheme");
+    // The tile and the click ask the one rule, and the tile asks the store for
+    // the scheme that rule gave, never for the page's directly.
+    expect(strip).toContain(
+      "const scheme = placeColorScheme(place, colorScheme);",
+    );
+    expect(strip).toContain("store.request(place, scheme,");
+    expect(strip).not.toContain("store.request(place, colorScheme");
+    expect(handlerBody("handlePlaceSelect")).toContain(
+      "const scheme = placeColorScheme(place, colorScheme);",
+    );
     expect(strip).toContain('entry.status === "ready"');
     expect(strip).toContain("entry.placeholder");
   });
@@ -109,6 +119,17 @@ describe("the Nearby strip", () => {
     );
     // Tiles are keyed by the list, so a changed list asks for its pictures again.
     expect(strip).toContain("key={`${listKey}|${place.id}`}");
+  });
+
+  it("does not repaint a tile whose place keeps its own scheme when the page's changes", () => {
+    // The list key is the places alone: with the page's scheme in it, a colour
+    // change would cancel the queue and remount every tile.
+    expect(strip).toContain(
+      'const listKey = places.map((place) => place.id).join(",");',
+    );
+    // The request effect depends on the resolved scheme, which a place that
+    // names its own never changes.
+    expect(strip).toContain("}, [store, place, scheme]);");
   });
 
   it("renders nothing for an empty list", () => {
@@ -174,13 +195,15 @@ describe("a click on a tile", () => {
     expect(page).toContain("onSelect={handlePlaceSelect}");
   });
 
-  it("sets the Julia constant for a Julia place and keeps the scheme when the place names none", () => {
+  it("sets the Julia constant for a Julia place and takes the scheme from the shared rule", () => {
     const body = handler();
 
     expect(body).toContain(
       'if (place.fractal === "julia") setJuliaConstant(constant)',
     );
-    expect(body).toContain("place.colorScheme ?? colorScheme");
+    expect(body).toContain("placeColorScheme(place, colorScheme)");
+    // The rule lives in places.ts alone, so the click cannot drift from the tile.
+    expect(body).not.toContain("place.colorScheme");
   });
 
   it("does nothing for a place that is already the view", () => {
