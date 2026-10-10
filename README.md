@@ -23,6 +23,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 ### 🎨 Interactive Visualization
 
 - **Fractal Types**: Draw the Mandelbrot set, the Burning Ship, the Tricorn, a Multibrot set (the Mandelbrot loop with a higher power, `z^3`, `z^4` or `z^5`, picked from the Power select; a view link carries it as `k=3`, `k=4` or `k=5`), the Newton fractal of `z^3 - 1` (three basins, one colour family per root, shaded by how fast Newton's method gets there; it takes no setting) or a Julia set, and pick the Julia constant from four named ones or choose Custom and type your own Real and Imaginary parts (each from -2 to 2, written as plain decimals like `-0.8` and `0.156`); an entry that is empty, not a number or out of range shows a message under the boxes and leaves the picture as it was, and a view link carries the point as `k=custom:<re>,<im>`
+- **Julia Map**: In Settings, under the Julia constant, the Mandelbrot set drawn small (160 x 120, about 60 iterations, drawn once per colour scheme) as the map of Julia constants. Point at it or drag along it and the constant becomes the point under your pointer — the Julia set on the canvas changes as you move — and one Back returns to the constant you started from; focus it and the arrow keys move the constant by a fiftieth of the width a press, so it is usable without a pointer. The frame is the app's base view centred on the origin (x -2 to 2, y -1.5 to 1.5), which is exactly the box a custom constant may name, so every point of the map is a constant you can pick
 - **Fractal Switcher**: Six buttons over the top left of the picture — Mandelbrot, Julia, Burning Ship, Tricorn, Multibrot and Newton, the current one lit — change fractal in one click and fly to that fractal's showpiece place (Seahorse Valley, the Classic set's spirals, the Burning Ship's armada, the whole three-armed Tricorn, a small copy of the z^3 set, the junction where Newton's three basins meet); Back returns to where you were. While Julia is current a row of chips offers its four named constants and Custom; while Multibrot is current a row captioned "Power" offers z^3, z^4 and z^5
 - **Real-time Rendering**: Smooth fractal generation with optimized performance
 - **Zoom Controls**: Zoom with the mouse wheel, a two-finger pinch on a touch screen, the Zoom In/Out buttons and the Zoom Level slider, which is logarithmic — equal slider steps are equal zoom ratios from 1x to 10000x
@@ -250,6 +251,7 @@ dependencies and needs nothing else.
 │   │   ├── FractalSwitcher.tsx     # The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton buttons and the Julia constant or Multibrot power chips over the canvas
 │   │   ├── HelpDialog.tsx          # The Help overlay, a modal <dialog>
 │   │   ├── Input.tsx               # Text and number box
+│   │   ├── JuliaMap.tsx            # The Mandelbrot set small, as the control that picks the Julia constant by pointing
 │   │   ├── MathCard.tsx            # The Math card: the rule, the setting and the view's numbers, collapsed to a line or expanded, and the panel the probe holds while the pointer is on it
 │   │   ├── MathView.tsx            # A formula tree (MathExpr) as native MathML with a plain-text aria-label
 │   │   ├── NearbyStrip.tsx         # The "Nearby, worth a look" thumbnails over the bottom of the canvas
@@ -282,6 +284,7 @@ dependencies and needs nothing else.
 │   │   ├── idleFade.ts             # The top bar's idle clock and its timing constants
 │   │   ├── journey.ts              # The page's record of its history entries (jumps)
 │   │   ├── julia.ts                # Julia sets, named constants and custom:<re>,<im> names
+│   │   ├── juliaMap.ts             # The Julia map's frame, and its pixels to the plane's points and back
 │   │   ├── mandelbrot.ts           # Mandelbrot iteration and coordinates
 │   │   ├── mathCard.ts             # The Math card's view numbers, refresh cadence and the remembered shown/expanded state
 │   │   ├── mathProbe.ts            # The Math card's probe: the point under the pointer, its orbit and its colour, and the rule that holds it while the pointer is on the card
