@@ -75,10 +75,17 @@ describe("the palette options in the page", () => {
   });
 
   it("writes them into the link the address bar follows", () => {
-    const link = functionBody(PAGE, "currentLink");
+    // The fields are spelled once, in `viewLinkFor`, which takes the Shift to
+    // write: the view's own for everything that follows the view, and the
+    // palette actually on the canvas for a link the visitor copies while the
+    // palette is cycling.
+    const link = functionBody(PAGE, "viewLinkFor");
 
     expect(link).toContain("reverse,");
-    expect(link).toContain("shift,");
+    expect(link).toContain("shift: shiftValue,");
+    expect(PAGE).toContain(
+      "const currentLink = useMemo(() => viewLinkFor(shift), [viewLinkFor, shift]);",
+    );
   });
 
   it("draws the canvas with them, and repaints from kept counts with them", () => {

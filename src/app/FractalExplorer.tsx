@@ -123,6 +123,22 @@ import {
   shiftToPercent,
 } from "../lib/paletteControls";
 import {
+  CYCLE_MIN_PAINT_GAP_MS,
+  CYCLE_SPEEDS,
+  DEFAULT_CYCLE_SPEED,
+  cyclePaused,
+  cycleShift,
+  cycleSpeedFor,
+  shouldPaint,
+  type CycleSpeedId,
+} from "../lib/cycleColours";
+// The `prefers-reduced-motion` store the orbit plot's Play control also holds:
+// one media query, one subscription, one answer for everything that moves.
+import {
+  prefersReducedMotion,
+  subscribeToReducedMotion,
+} from "../lib/orbitPlot";
+import {
   CROSSFADE_MS,
   NEARBY_POOL_SIZE,
   hasMoreNearby,
@@ -353,6 +369,19 @@ export default function Home() {
     () => ({ reverse, shift }),
     [reverse, shift],
   );
+
+  // Cycling the palette: the mode that walks the Shift round a turn and
+  // repaints the canvas from the counts the last render left, so a deep view
+  // animates for the price of a colour change and no orbit is ever counted
+  // twice. It is a way of looking at the picture rather than part of it — not
+  // in the link, not in a saved view, not remembered between visits, and no
+  // history entry per frame — so where it has got to is held apart from the
+  // view, in `cycleShiftRef` below, and reaches the view only where the
+  // visitor moves it: on the Shift slider, and when they switch the mode off.
+  const [cycling, setCycling] = useState(false);
+  const [cycleSpeed, setCycleSpeed] = useState<CycleSpeedId>(
+    DEFAULT_CYCLE_SPEED,
+  );
   const [canvasWidth, setCanvasWidth] = useState(
     DEFAULT_VIEW_LINK_UPDATES.canvasWidth,
   );
@@ -523,6 +552,66 @@ export default function Home() {
    * `setRenderedLink` is called, so they cannot drift.
    */
   const renderedLinkRef = useRef(renderedLink);
+
+  // Where the palette has got to, as the picture is painted. It is the view's
+  // own Shift except while the palette is cycling, which moves this and leaves
+  // the view alone; a Shift the visitor moves for themselves — the slider, a
+  // link, Reset colours, a saved view — is taken as where the animation
+  // carries on from, since they have obviously just put the palette where they
+  // want it. Read by the frame of the animation below rather than passed in, so
+  // a frame paints the palette of this moment and not of the render that
+  // scheduled it.
+  //
+  // It lives here, beside the other refs the page keeps for the same reason,
+  // because the handlers that move the Shift and make a link both use it.
+  const cycleShiftRef = useRef(shift);
+  useEffect(() => {
+    cycleShiftRef.current = shift;
+  }, [shift]);
+
+  // Whether a pointer is down on the picture, and whether one is down on the
+  // Shift slider. Both are ways the visitor has the picture or the palette in
+  // hand, and the cycling animation holds while either is true so that the two
+  // are never painting the same canvas against each other.
+  const [gestureActive, setGestureActive] = useState(false);
+  const [draggingShift, setDraggingShift] = useState(false);
+
+  // A drag of the slider ends wherever the pointer is released — on the
+  // slider, off it, or outside the window — so the release is watched for on
+  // the window rather than on the control.
+  useEffect(() => {
+    if (!draggingShift) return;
+
+    const end = () => setDraggingShift(false);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+
+    return () => {
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [draggingShift]);
+
+  // A background tab has nobody watching it, and a browser throttles its
+  // frames anyway, so the animation is held rather than run against a clock
+  // that has stopped. The walk is held on the same signal, for the same
+  // reason.
+  const [tabHidden, setTabHidden] = useState(false);
+  useEffect(() => {
+    const handle = () => setTabHidden(document.hidden);
+
+    document.addEventListener("visibilitychange", handle);
+    return () => document.removeEventListener("visibilitychange", handle);
+  }, []);
+
+  // The `prefers-reduced-motion` store the orbit plot's Play control also
+  // holds: one media query, one subscription, one answer for everything that
+  // moves.
+  const reducedMotion = useSyncExternalStore(
+    subscribeToReducedMotion,
+    prefersReducedMotion,
+    () => false,
+  );
 
   // Draw the canvas at the quality the render policy asks for: the cheap
   // low-resolution pass while a gesture is moving the view, the full image
@@ -865,11 +954,12 @@ export default function Home() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, [applyViewLink, journey, syncHistoryButtons, tourMode]);
 
-  // The view as a link, rebuilt whenever anything a link carries moves. Both
-  // halves of the feature read it: the effect below writes it to the address
-  // bar and the Copy link button hands it over as the URL.
-  const currentLink = useMemo(
-    () =>
+  // The view as a link, with the palette's Shift named. The view's own Shift
+  // is what the address bar and everything that follows the view spell; the
+  // palette on the canvas is what a link the visitor makes carries, and while
+  // the palette is cycling those are two points of the turn rather than one.
+  const viewLinkFor = useCallback(
+    (shiftValue: number) =>
       encodeView({
         fractalType,
         variant,
@@ -878,7 +968,7 @@ export default function Home() {
         zoomLevel,
         colorScheme,
         reverse,
-        shift,
+        shift: shiftValue,
         autoIterationsOn,
         maxIterations,
         canvasWidth,
@@ -892,13 +982,17 @@ export default function Home() {
       zoomLevel,
       colorScheme,
       reverse,
-      shift,
       autoIterationsOn,
       maxIterations,
       canvasWidth,
       canvasHeight,
     ],
   );
+
+  // The view as a link, rebuilt whenever anything a link carries moves. Both
+  // halves of the feature read it: the effect below writes it to the address
+  // bar and the Copy link button hands it over as the URL.
+  const currentLink = useMemo(() => viewLinkFor(shift), [viewLinkFor, shift]);
 
   // When this page last wrote the address bar, in the clock linkWriteDelayMs
   // reads. Zero is "never", which is a first write nothing holds back.
@@ -1079,7 +1173,16 @@ export default function Home() {
   const [blankLink, setBlankLink] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isRendering || renderedLink === "" || renderedLink !== currentLink) {
+    // A palette that is cycling paints colours nobody asked to judge: the
+    // canvas is moving under the detector, and the view it would name as blank
+    // is the one the visitor is deliberately watching change. The hint is for
+    // a view that landed somewhere dull, not for a picture in motion.
+    if (
+      isRendering ||
+      cycling ||
+      renderedLink === "" ||
+      renderedLink !== currentLink
+    ) {
       return;
     }
 
@@ -1093,7 +1196,7 @@ export default function Home() {
       window.clearTimeout(timer);
       setBlankLink(null);
     };
-  }, [isRendering, renderedLink, currentLink]);
+  }, [isRendering, cycling, renderedLink, currentLink]);
 
   // The address bar follows the view — an auto-wander step, a control, a wheel,
   // a preset, a link — but only once that view has been drawn, which is also
@@ -1193,21 +1296,29 @@ export default function Home() {
   }, [copy]);
 
   const handleCopyLink = useCallback(() => {
-    // The link is the view on screen, however far behind it the follower above
-    // happens to be, so the address bar is brought up to date first. What is
-    // copied is not the bar, though: it is the same text as a query on this
-    // origin and path, because a crawler sees a query and never a fragment, so
-    // only that form previews as the view. The page reads either form.
-    writeViewLink(`#${currentLink}`, Date.now());
+    // The link is the picture on screen, however far behind it the follower
+    // above happens to be, so the address bar is brought up to date first.
+    // The palette it names is the one the canvas is painted with, which while
+    // the palette is cycling is where the animation has reached rather than
+    // the view's own Shift: a link made now is a link to the picture on screen
+    // now. What is copied is not the bar, though: it is the same text as a
+    // query on this origin and path, because a crawler sees a query and never
+    // a fragment, so only that form previews as the view. The page reads
+    // either form.
+    const link = viewLinkFor(cycleShiftRef.current);
+
+    writeViewLink(`#${link}`, Date.now());
     const url = copyLinkUrl(
       window.location.origin,
       window.location.pathname,
-      currentLink,
+      link,
     );
 
     // Nothing selected by hand is needed when the clipboard takes the URL; a
     // browser without the API, or one that refuses the write, gets the URL in a
-    // field to copy from instead of a button that did nothing.
+    // field to copy from instead of a button that did nothing. The offer
+    // belongs to the view rather than to the URL, so it is taken away when the
+    // view moves on and not by a palette that is still flowing.
     const offerToSelect = () =>
       setCopy({ kind: "manual", link: currentLink, url });
 
@@ -1227,7 +1338,7 @@ export default function Home() {
         LINK_COPIED_MS,
       );
     }, offerToSelect);
-  }, [currentLink, writeViewLink]);
+  }, [currentLink, viewLinkFor, writeViewLink]);
 
   // Whether the help overlay is up. The Help button and the `?` key both set
   // it, so the two ways in are one piece of state rather than two.
@@ -1318,6 +1429,10 @@ export default function Home() {
       {
         onGestureStart: () => {
           renderPolicy.beginGesture();
+          // A hand on the picture is a hand on it: the palette-cycling
+          // animation holds while a drag or a pinch is in flight, so the two
+          // are not painting the same canvas.
+          setGestureActive(true);
 
           // A full-resolution pass that is already running is drawing the view
           // the user is leaving. Stop it, or it keeps painting stale rows over
@@ -1330,6 +1445,8 @@ export default function Home() {
           }
         },
         onGestureEnd: () => {
+          setGestureActive(false);
+
           if (renderPolicy.endGesture()) {
             setFullRenderNonce((nonce) => nonce + 1);
           }
@@ -1359,6 +1476,81 @@ export default function Home() {
     fullRenderNonce,
     fractalKind,
     currentLink,
+  ]);
+
+  // Whether the animation must hold this render, as the rules in
+  // `cyclePaused` read the page. It is a value and not a ref, so that a hold
+  // stops the frame loop entirely rather than leaving it running against a
+  // canvas it must not paint — and so that coming out of a hold starts the
+  // clock again from where the palette is.
+  const cyclePausedNow = cyclePaused({
+    tabHidden,
+    rendering: isRendering,
+    gesturing: gestureActive,
+    draggingShift,
+    helpOpen,
+    tourPlaying,
+    reducedMotion,
+  });
+
+  // The cycling clock.
+  //
+  // A frame asks where the palette has reached from the time that has passed,
+  // never from the number of frames — a slow device cycles at the same speed
+  // and only the picture moves choppier — and repaints the canvas from the
+  // counts the last full render left. That repaint is the whole of a frame:
+  // `recolour` computes no orbit, so a frame of the animation costs what a
+  // colour change costs and nothing more, and it is the same step the Shift
+  // slider takes. A frame that cannot be repainted — a render has started and
+  // dropped the counts, which is the one way `recolour` answers false — is
+  // skipped rather than queued: the clock moves on, the palette holds still,
+  // and it carries on from where it was when there is a picture to paint.
+  //
+  // Nothing here starts a render. The view does not move while the palette
+  // cycles, so `drawCanvas` is never asked for one, and the counts a repaint
+  // needs are exactly the ones still on the canvas.
+  const cycleLoopMs = cycleSpeedFor(cycleSpeed).loopMs;
+  useEffect(() => {
+    if (!cycling || cyclePausedNow) return;
+
+    let frame = 0;
+    // When the palette was last advanced, and when it was last painted. Both
+    // are the frames' own clock, which starts again here so that time spent
+    // held is no part of the loop: the tour, the render or the trip to another
+    // tab costs the visitor no part of the turn.
+    let at = performance.now();
+    let lastPaint = 0;
+
+    const animate = (now: number) => {
+      frame = requestAnimationFrame(animate);
+
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      if (!shouldPaint(now, lastPaint, CYCLE_MIN_PAINT_GAP_MS)) return;
+
+      const next = cycleShift(cycleShiftRef.current, now - at, cycleLoopMs);
+      const repainted = renderer.recolour(colorScheme, effectiveMaxIterations, {
+        reverse,
+        shift: next,
+      });
+
+      at = now;
+      if (!repainted) return;
+
+      cycleShiftRef.current = next;
+      lastPaint = now;
+    };
+
+    frame = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(frame);
+  }, [
+    cycling,
+    cyclePausedNow,
+    cycleLoopMs,
+    colorScheme,
+    reverse,
+    effectiveMaxIterations,
   ]);
 
   // Helper functions for manual coordinate input
@@ -2297,6 +2489,17 @@ export default function Home() {
     shiftEntryMarkedRef.current = false;
   };
 
+  // A pointer going down on the slider is the visitor taking the palette in
+  // hand: it marks the drag for the history as it always has, and it holds the
+  // cycling animation for as long as the drag lasts, so the two are never
+  // moving the palette against each other. A key press is a refinement of the
+  // palette rather than a drag of it — it marks its own entry through
+  // `beginShiftGesture` — so it holds nothing.
+  const handleShiftGestureStart = () => {
+    beginShiftGesture();
+    setDraggingShift(true);
+  };
+
   const handleShiftKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.repeat) return;
     if (!shiftSliderKeyChangesValue(event.key)) return;
@@ -2314,7 +2517,37 @@ export default function Home() {
       beginJump();
     }
 
-    handleParameterChange(() => setShift(percentToShift(percent)));
+    const next = percentToShift(percent);
+
+    // The palette the animation is working from moves with the slider, so a
+    // drag that lands somewhere releases into a picture that carries on from
+    // there rather than snapping back to where the animation had reached
+    // before the visitor touched it.
+    cycleShiftRef.current = next;
+
+    handleParameterChange(() => setShift(next));
+  };
+
+  // Switching the palette's animation on and off.
+  //
+  // On, the frame loop above picks the palette up wherever the view has it.
+  // Off, the palette stops where it is and the view takes that value: that is
+  // a move the visitor made, so it is one history entry like the checkbox
+  // beside it, and it is what leaves the view, the address bar and a copied
+  // link all describing the picture that is on the canvas.
+  const handleCycleChange = (enabled: boolean) => {
+    if (!enabled) {
+      beginJump();
+      setShift(cycleShiftRef.current);
+    }
+
+    setCycling(enabled);
+  };
+
+  // Read through `cycleSpeedFor`, so a value that is not one of the three
+  // offered leaves the select on the default rather than on nothing.
+  const handleCycleSpeedChange = (value: string) => {
+    setCycleSpeed(cycleSpeedFor(value).id);
   };
 
   // Put the palette back to the scheme's own colours — no reversal, no shift.
@@ -2800,7 +3033,7 @@ export default function Home() {
               max={SHIFT_PERCENT_MAX}
               step={1}
               onChange={handleShiftChange}
-              onGestureStart={beginShiftGesture}
+              onGestureStart={handleShiftGestureStart}
               onKeyDown={handleShiftKeyDown}
               formatValue={formatShiftPercent}
             />
@@ -2814,6 +3047,35 @@ export default function Home() {
                 Reset colours
               </Button>
             </div>
+
+            {/* The palette can also be left to flow: the Shift walks round a
+                  turn of its own and the picture is repainted from the counts
+                  the last render left, so a deep view animates for the price
+                  of a colour change. It is a way of looking at the picture and
+                  not part of it, which is why neither control is in the link
+                  and why a reader who has asked for less motion is not offered
+                  it at all. */}
+            <Checkbox
+              label="Cycle colours"
+              checked={cycling}
+              onChange={handleCycleChange}
+              disabled={reducedMotion}
+            />
+            <Select
+              label="Cycle speed"
+              value={cycleSpeed}
+              options={CYCLE_SPEEDS.map((speed) => ({
+                value: speed.id,
+                label: speed.label,
+              }))}
+              onChange={handleCycleSpeedChange}
+              disabled={reducedMotion}
+            />
+            {reducedMotion && (
+              <p className="text-sm text-gray-600">
+                Your system asks for reduced motion, so the palette stays still.
+              </p>
+            )}
           </div>
         </div>
 

@@ -190,7 +190,10 @@ describe("a change of either setting", () => {
     // A step of the drag is the percent the control reports, as the fraction of
     // a turn the view holds.
     expect(functionBody(PAGE, "handleShiftChange")).toContain(
-      "handleParameterChange(() => setShift(percentToShift(percent)));",
+      "handleParameterChange(() => setShift(next));",
+    );
+    expect(functionBody(PAGE, "handleShiftChange")).toContain(
+      "const next = percentToShift(percent);",
     );
   });
 
@@ -232,7 +235,10 @@ describe("one history entry per gesture", () => {
       "<Slider",
     );
 
-    expect(shift).toContain("onGestureStart={beginShiftGesture}");
+    expect(shift).toContain("onGestureStart={handleShiftGestureStart}");
+    expect(functionBody(PAGE, "handleShiftGestureStart")).toContain(
+      "beginShiftGesture();",
+    );
     expect(functionBody(PAGE, "beginShiftGesture")).toContain(
       "shiftEntryMarkedRef.current = false;",
     );

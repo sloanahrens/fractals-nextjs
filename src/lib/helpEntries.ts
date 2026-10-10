@@ -160,6 +160,11 @@ export const HELP_SECTIONS: HelpSection[] = [
           "In Settings, under Color Scheme: Reverse walks the palette backwards and Shift slides it a fraction of a turn round, 0 to 100 percent, with Reset colours to put both back. Either repaints the picture at once from iteration counts already computed, so it is instant however deep the view, and both travel in a link, so Copy link, Back and a saved view carry them. A tour or Surprise me puts both back by itself, so neither is tinted by a setting left over from before",
       },
       {
+        keys: "Cycle colours",
+        action:
+          "In Settings, under the Shift slider: the palette flows slowly round a turn and the picture is repainted from iteration counts already computed, so it costs no new work however deep the view. Slow, Medium or Fast sets how long a loop takes; the animation pauses while you drag the picture or the slider, while the Help is up, while a tour plays and while the tab is hidden, and is not offered at all if your system asks for reduced motion. Switching it off leaves the Shift where it stopped",
+      },
+      {
         keys: "Presets",
         action:
           "Pick a built-in view for the fractal on the canvas from the Presets dropdown in Settings, or save and load your own",

@@ -45,6 +45,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Iteration Control**: Adjust detail level with iteration sliders
 - **Auto Iterations**: Iterations follow the zoom level; unticking the checkbox takes manual control, and loading a preset turns it off because that preset was framed at its own count
 - **Color Mapping**: Dynamic color schemes for enhanced visualization, each with two settings of its own — a Reverse checkbox and a Shift slider (0 to 100 percent) in the Rendering Parameters card, right under the scheme they belong to, with a Reset colours button — that travel with the view in a link, a saved view and a shared preview; changing the scheme or either setting repaints the picture from iteration counts already computed, so it is instant however deep the view. Switching the scheme keeps both, a nearby tile keeps both, and a tour hop or a Surprise me press puts both back so neither is tinted by an old choice
+- **Cycle Colours**: The palette can be left to flow: a checkbox and a speed (Slow, Medium, Fast) under the Shift slider walk the shift slowly round a turn and repaint the picture from the counts already computed, so a deep view animates for the price of a colour change and no orbit is ever counted twice. It is a mode and not part of the view — not in the link, not in a saved view, no history entry per frame — so it pauses while a render is in flight, while you drag the picture or the slider, while the Help is up, while a tour plays and while the tab is hidden, and is not offered at all if your system asks for reduced motion. Switching it off leaves the Shift where it stopped, as one history entry
 - **Parameter Presets**: Quick access to interesting fractal configurations from the Presets dropdown in the Settings drawer, listing the built-in and saved views for the fractal selected now
 - **Custom Presets**: Save and manage your own configurations; a saved view remembers its fractal, for a Julia set its constant, and the palette it was saved in — a view saved before those settings existed opens on the scheme's own colours
 
@@ -272,6 +273,7 @@ dependencies and needs nothing else.
 │   │   ├── canvasNavigation.ts     # Wheel, drag, touch and key listeners
 │   │   ├── colorMapping.ts         # Color schemes
 │   │   ├── customConstantInput.ts  # Real and Imaginary boxes to a custom Julia constant
+│   │   ├── cycleColours.ts         # Cycling the palette: the speeds, the shift after a time, whether a frame is due a repaint, and what holds it
 │   │   ├── download.ts             # Filename a saved canvas is written under
 │   │   ├── exportShape.ts          # Wallpaper shapes offered, the frame each draws, and the names they save under
 │   │   ├── exportSize.ts           # Export sizes offered, and the names they save under

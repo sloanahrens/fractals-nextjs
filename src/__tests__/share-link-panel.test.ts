@@ -214,10 +214,12 @@ describe("the query form", () => {
   it("is what Copy link copies, on this origin and path", () => {
     const copy = functionBody(page, "handleCopyLink");
 
-    // The bar is still brought up to date in the hash form first, and nothing
-    // else in the page writes the query form: the clipboard gets it, the bar
-    // does not.
-    expect(copy).toContain("writeViewLink(`#${currentLink}`");
+    // The bar is still brought up to date in the hash form first — with the
+    // palette the canvas is painted with, which is the view's own Shift unless
+    // the palette is cycling — and nothing else in the page writes the query
+    // form: the clipboard gets it, the bar does not.
+    expect(copy).toContain("const link = viewLinkFor(cycleShiftRef.current);");
+    expect(copy).toContain("writeViewLink(`#${link}`");
     expect(copy).toContain("copyLinkUrl(");
     expect(copy).toContain("window.location.origin");
     expect(copy).toContain("window.location.pathname");
