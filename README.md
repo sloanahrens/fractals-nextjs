@@ -178,7 +178,7 @@ dependencies and needs nothing else.
 
 ### Basic Navigation
 
-- **The Page**: The picture fills the window, with a slim bar over it holding the title, Back, Forward, Help and Settings. The bar fades after two seconds without a pointer move, key press or touch and comes back on any of them, and it stays up while Settings is open or one of its buttons has keyboard focus. Settings opens a drawer down the right-hand side — a bottom sheet on a narrow screen — holding every control the page has: presets, navigation, coordinates, rendering parameters, canvas resolution, manual coordinates, saved views and Download PNG. Escape, its Close button and a click outside it close it, and opening it does not interrupt a render
+- **The Page**: The picture fills the window, with a slim bar over it holding the title, Surprise me, Back, Forward, Help and Settings. The bar fades after two seconds without a pointer move, key press or touch and comes back on any of them, and it stays up while Settings is open or one of its buttons has keyboard focus. Settings opens a drawer down the right-hand side — a bottom sheet on a narrow screen — holding every control the page has: Presets, Navigation, Auto-wander, Coordinates, Rendering Parameters, Canvas Resolution, Manual Coordinates, saved views and Download PNG. Escape, its Close button and a click outside it close it, and opening it does not interrupt a render
 - **Nearby strip**: Along the bottom of the picture, "Nearby, worth a look" shows up to six places near the view for the fractal you are on, each a small picture in your current colour scheme. Hover or Tab to a tile to read its name, and click it (or press Enter) to fly there: the old picture fades into the new one over about 0.4 s (no fade if your system asks for reduced motion), the place is drawn at the iteration count Auto picks for its zoom and in its own colours, and the move adds one history entry. More swaps in the next six, wrapping back to the first. The suggestions are worked out again once the picture has been drawn after a jump — a preset, applying coordinates, picking another fractal or Julia constant, a tile, a pasted link, Back or Forward — and not while you drag, wheel or key about, so the strip does not shuffle under your pointer. The thumbnails wait while the main picture renders. Like the top bar the strip fades after two seconds without input, but it stays up while one of its tiles has keyboard focus
 - **Back and Forward**: The top bar's Back and Forward buttons are the browser's own, moving along the places you jumped to; each is disabled when there is nothing in that direction, which is always so on a freshly opened page until the first jump
 - **Zoom In/Out**: Use the mouse wheel, the Zoom In/Out buttons, or the Zoom Level slider
@@ -205,6 +205,8 @@ dependencies and needs nothing else.
 │                           #   deploy.yml and teardown.yml (release and teardown)
 ├── deploy/                 # Pulumi program that deploys the app to Cloud Run
 ├── docs/                   # Design notes
+│   ├── design/             # guided-exploration.md: the design the page was rebuilt to, and where the build differs
+│   └── plans/              # Earlier design plans
 ├── public/                 # Static assets
 ├── scripts/release/        # Release scripts a release runs
 ├── src/
@@ -215,7 +217,22 @@ dependencies and needs nothing else.
 │   │   └── api/
 │   │       ├── health/route.ts  # Health check endpoint
 │   │       └── version/route.ts # Build, deploy time, commit and revision as JSON
-│   ├── components/ui/      # Reusable UI components (TopBar, NearbyStrip, SettingsDrawer, HelpDialog, VersionFooter, ...)
+│   ├── components/ui/      # UI components
+│   │   ├── __tests__/              # Tests for the form controls' labels
+│   │   ├── Button.tsx              # Button
+│   │   ├── CenterControls.tsx      # The Real (X) and Imaginary (Y) centre boxes with Apply and Reset
+│   │   ├── Checkbox.tsx            # Checkbox
+│   │   ├── CustomPresetManager.tsx # Saved views: Save Current, the list, Delete
+│   │   ├── HelpDialog.tsx          # The Help overlay, a modal <dialog>
+│   │   ├── Input.tsx               # Text and number box
+│   │   ├── NearbyStrip.tsx         # The "Nearby, worth a look" thumbnails over the bottom of the canvas
+│   │   ├── PresetSelector.tsx      # The Presets dropdown
+│   │   ├── Select.tsx              # Select
+│   │   ├── SettingsDrawer.tsx      # The Settings <dialog>: right-hand panel, bottom sheet under 768 px
+│   │   ├── Slider.tsx              # Slider
+│   │   ├── TopBar.tsx              # Title, Surprise me, Back, Forward, Help and Settings
+│   │   ├── useIdleVisibility.ts    # Idle fade shared by the top bar and the Nearby strip
+│   │   └── VersionFooter.tsx       # Which build is being served, from /api/version
 │   ├── lib/                # Core logic and utilities
 │   │   ├── __tests__/              # Unit tests for the modules below
 │   │   ├── burningShip.ts          # Burning Ship iteration
@@ -238,6 +255,7 @@ dependencies and needs nothing else.
 │   │   ├── places.ts               # Catalogue of named places, and suggest() for the ones near a view
 │   │   ├── presets.ts              # Built-in and saved presets
 │   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
+│   │   ├── surprise.ts             # Where Surprise me goes: one of the six nearest suggestions, picked at random
 │   │   ├── version.ts              # Build and deploy facts, and the footer wording
 │   │   ├── viewReadout.ts          # The "Zoom 400x at -0.7453, 0.1127" line above the coordinate boxes
 │   │   ├── viewLink.ts             # A view as a URL fragment, and back
@@ -247,11 +265,11 @@ dependencies and needs nothing else.
 │   │   ├── zoomPan.ts              # Zoom and pan manager
 │   │   └── zoomScale.ts            # Logarithmic zoom slider mapping, coordinate formatting
 │   ├── __tests__/          # Route tests, and tests that read page.tsx and the Makefile
-│   └── types/              # TypeScript type definitions
+│   └── types/              # TypeScript type definitions (fractal.ts: FractalKind, bounds)
 ├── tests/integration/      # Integration tier: checks against a deployed app
 │                           #   (deployed.test.ts is the checks, http.ts the request helper)
 ├── Dockerfile              # Multi-stage container build
-├── Makefile                # install, dev, build, check, test, integration, gate, docker-*
+├── Makefile                # install, dev, build, start, lint, format, typecheck, check, test, presubmit, gate, integration, deploy-check, docker-*, test-docker, clean
 ├── next.config.js          # Next.js configuration
 ├── package.json            # Scripts and dependencies
 ├── tsconfig.json           # TypeScript configuration

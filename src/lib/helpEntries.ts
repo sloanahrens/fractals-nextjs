@@ -110,6 +110,11 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Views and links",
     entries: [
       {
+        keys: "Settings",
+        action:
+          "Open the drawer that holds every other control; Escape, Close or a click outside it shuts it",
+      },
+      {
         keys: "Presets",
         action:
           "Pick a built-in view for the fractal on the canvas from the Presets dropdown in Settings, or save and load your own",
