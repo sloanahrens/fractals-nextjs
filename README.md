@@ -2,7 +2,7 @@
 
 A modern, interactive web application for exploring the infinite beauty of the Mandelbrot set, Julia sets, the Burning Ship, the Tricorn, the Multibrot sets and the Newton fractal, built with Next.js 16, React 19 and TypeScript.
 
-![Next Fractals Preview](public/og-card.png)
+![Next Fractals Preview](public/og-card-2.png)
 
 **Deployment:** A landing on `main` redeploys the staging service by itself.
 Production changes only when the human tags a release, through the devops
@@ -164,13 +164,13 @@ Seven checks, a `GET` or two each, read-only, 15 s per request and one retry:
   title `Next Fractals - Interactive Fractal Explorer`.
 - `GET /api/version` is 200 JSON with a `commit` field, equal to `EXPECT_SHA`
   when that is set.
-- `GET /`'s `og:image` and `twitter:image` are `<origin>/og-card.png` and its
-  `og:url` is the origin (Next writes the root without its slash), where
-  `<origin>` is the origin of `STAGING_URL`: the page names its own host, not
-  another.
-- `GET /og-card.png` is 200, `image/png`, 1200x630 by its IHDR chunk and under
-  300 KB. It is the social card `src/app/layout.tsx` points its metadata at,
-  and it is served out of `public/` by the `Dockerfile`.
+- `GET /`'s `og:image` and `twitter:image` are `<origin>/og-card-2.png` and its
+  `og:url` is `<origin>/` — the origin with its own slash, which is the address
+  the page is on, where `<origin>` is the origin of `STAGING_URL`: the page
+  names its own host, not another.
+- `GET /og-card-2.png` is 200, `image/png`, 1200x630 by its IHDR chunk and
+  under 300 KB. It is the social card `src/app/layout.tsx` points its metadata
+  at, and it is served out of `public/` by the `Dockerfile`.
 - `GET /api/og?<view link>` is 200, `image/png`, 1200x630 by its IHDR chunk and
   `Cache-Control: public, max-age=31536000, immutable`; a request that is not a
   view (no query, `v=1&x=banana`, `v=2&f=julia`) is 400.
@@ -224,7 +224,7 @@ dependencies and needs nothing else.
 ├── docs/                   # Design notes
 │   ├── design/             # guided-exploration.md: the design the page was rebuilt to, and where the build differs
 │   └── plans/              # Earlier design plans
-├── public/                 # Static assets: og-card.png, the 1200x630 social card
+├── public/                 # Static assets: og-card-2.png, the 1200x630 social card
 ├── scripts/make-og-card.mjs  # One-off generator of the social card and icons (not in the gate or the image)
 ├── scripts/release/        # Release scripts a release runs
 ├── src/
@@ -298,6 +298,7 @@ dependencies and needs nothing else.
 │   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
 │   │   ├── renderRgba.ts           # A view as raw RGBA pixels with no canvas, shared by FractalRenderer and /api/og
 │   │   ├── siteOrigin.ts           # The origin a request was served from, for the page's absolute URLs
+│   │   ├── siteText.ts             # The app's own words: title, the description built from FRACTAL_TYPES, the card's tagline and alt text
 │   │   ├── surprise.ts             # Where Surprise me goes: one of the six nearest suggestions, picked at random
 │   │   ├── tour.ts                 # Where an unattended tour goes next (seeded, with a recent window)
 │   │   ├── tourMode.ts             # The tour's clock: idle start, #tour and button starts, hops, and when it gives way
@@ -490,16 +491,26 @@ scripts a release runs are in `scripts/release/` (`scripts/release/README.md`).
 
 ### Link preview
 
-Sharing the app's link shows `public/og-card.png`, a 1200x630 card: a Julia set
-spiral under the title and one line of text. The release builds one image and
+Sharing the app's link shows `public/og-card-2.png`, a 1200x630 card: the Newton
+fractal's junction, six coloured sectors meeting at a point, under the title and
+one line of text. The line names no fractal and counts nothing ("Wander the
+fractals: zoom, switch and explore"), so it stays true as fractals are added;
+the card, its tagline and the page's title, description and alt text are all
+built from the constants in `src/lib/siteText.ts`, the one place they are
+written down. The description lists every `FRACTAL_TYPES` label, so a new
+fractal is described without a second edit, and `siteText.test.ts` fails if one
+is missing. The release builds one image and
 promotes the same digest from staging to production, so no URL can be baked in
 at build time. `generateMetadata` in `src/app/layout.tsx` therefore reads the
 origin from the request (`siteOrigin` in `src/lib/siteOrigin.ts`: the proxy's
 `x-forwarded-host`, else `host`, checked to be a plain hostname and port before
-it is used) and puts it on `og:image`, `twitter:image` and `og:url`, so staging
-previews with the staging host and production with its own. A link carrying a
-`#v=...` view previews the same card, because a crawler never sees the part of
-an address after the `#`.
+it is used) and puts it on `og:image` and `twitter:image`, so staging previews
+with the staging host and production with its own. `og:url` is the same origin
+under its own slash (`https://host/`, or `https://host/?v=1&…` for a view
+link): Next's metadata API collapses a root url with no query down to the bare
+origin, so the page writes that one tag itself, from `ogUrl` in
+`src/lib/pageMetadata.ts`. A link carrying a `#v=...` view previews the same
+card, because a crawler never sees the part of an address after the `#`.
 
 A link that carries its view in the query (`/?v=1&f=julia&k=Dendrite&...`, the
 form Copy link copies) previews as that view. `generateMetadata` in
@@ -521,7 +532,12 @@ To change the card or the icons, run `node scripts/make-og-card.mjs` from the
 repository root and commit the three PNGs; the header of that script says how it
 works and which place it drew. It needs the system Chrome and network access for
 the Inter font, adds nothing to `package.json`, and is part of neither
-`make gate` nor the Docker image.
+`make gate` nor the Docker image. The text on the card is `src/lib/siteText.ts`'s,
+so editing it there changes the card, the page's description and its alt text
+together. A re-cut card goes to a new file (`CARD_FILE` in the script,
+`CARD_PATH` in `src/lib/pageMetadata.ts` and `CARD` in the integration tier all
+name it), because a chat app that has already cached the old card will not ask
+for it again; the old file is deleted in the same landing.
 
 ### Local Docker
 

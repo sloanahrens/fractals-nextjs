@@ -2,33 +2,59 @@
  * The page's head: title, description, and the social card, on the origin that
  * served the request.
  *
- * Without a view in the request this is the static card `public/og-card.png`
- * (fr-nd5). A request whose query names a view `/api/og` can draw gets that
- * view as og:image and twitter:image, the canonical link as og:url, and one
- * short line about the view in the title and descriptions (`viewPreview.ts`).
- * Everything that reaches the head is built from the decoded view, never from
- * the request's text.
+ * Without a view in the request this is the static card `public/og-card-2.png`
+ * (fr-nd5, re-cut in fr-3y2). A request whose query names a view `/api/og` can
+ * draw gets that view as og:image and twitter:image, and one short line about
+ * the view in the title and descriptions (`viewPreview.ts`). The title, the
+ * description and the card's alt text are `siteText.ts`'s, the one place they
+ * are written down. Everything that reaches the head is built from the decoded
+ * view, never from the request's text.
+ *
+ * og:url is the one field here that is not in the Metadata object: Next
+ * collapses a root url with no query to the bare origin, so `ogUrl` is what
+ * `src/app/page.tsx` renders as a tag of its own.
  */
 
 import type { Metadata } from "next";
+import {
+  CARD_ALT,
+  DESCRIPTION,
+  TITLE,
+  TWITTER_DESCRIPTION,
+} from "./siteText";
 import { previewFor, type SearchParams } from "./viewPreview";
 
-export const TITLE = "Next Fractals - Interactive Fractal Explorer";
-export const DESCRIPTION =
-  "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets, the Burning Ship, the Tricorn, the Multibrot sets and the Newton fractal with customizable parameters, zoom controls, and preset configurations.";
-const TWITTER_DESCRIPTION =
-  "Generate beautiful fractals with real-time parameter adjustment. Explore infinite mathematical beauty.";
-
-// The social card, public/og-card.png (scripts/make-og-card.mjs draws it). The
-// size is the file's own, which is what og:image:width and height must say.
-export const CARD_PATH = "/og-card.png";
+// The social card, public/og-card-2.png (scripts/make-og-card.mjs draws it).
+// The size is the file's own, which is what og:image:width and height must
+// say. The name carries a 2 so a chat app that cached the old card fetches
+// this one; a new card means a new name and a new file here.
+export const CARD_PATH = "/og-card-2.png";
 export const CARD_WIDTH = 1200;
 export const CARD_HEIGHT = 630;
-export const CARD_ALT =
-  "Fractal Explorer: a colourful Julia set spiral beside the title and the line Wander the Mandelbrot, Julia and Burning Ship sets";
 
 /** The image route's path; /api/og draws 1200x630, the same shape as the card. */
 export const VIEW_IMAGE_PATH = "/api/og";
+
+/**
+ * The page's own address, for og:url.
+ *
+ * The root carries its slash here — `https://host/`, not `https://host` — because
+ * that is the address the page is on and the one a shared preview should name.
+ * Next's metadata API cannot say it: it collapses a url whose pathname is `/`
+ * with no query down to the bare origin (`resolveAbsoluteUrlWithPathname`),
+ * whatever `metadataBase` or `trailingSlash` say; only `trailingSlash` makes it
+ * keep the slash, and that config would redirect `/api/health` and `/api/og` to
+ * their slashed forms. So the page renders this one tag itself, from this
+ * function, and `pageMetadata` leaves og:url out (fr-3y2).
+ *
+ * @param origin - The origin the request was served from, no trailing slash
+ * @param searchParams - The request's query; omitted for the static page
+ */
+export function ogUrl(origin: string, searchParams: SearchParams = {}): string {
+  const preview = previewFor(searchParams);
+
+  return preview ? `${origin}/?${preview.fragment}` : `${origin}/`;
+}
 
 /**
  * The page's metadata for a request.
@@ -51,7 +77,6 @@ export function pageMetadata(
   const twitterDescription = preview
     ? `${preview.line}. ${TWITTER_DESCRIPTION}`
     : TWITTER_DESCRIPTION;
-  const url = preview ? `${origin}/?${preview.fragment}` : `${origin}/`;
 
   return {
     metadataBase: new URL(origin),
@@ -70,7 +95,7 @@ export function pageMetadata(
     openGraph: {
       type: "website",
       locale: "en_US",
-      url,
+      // No `url`: the page renders og:url itself, from `ogUrl` above.
       title,
       description,
       images: [

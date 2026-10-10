@@ -14,8 +14,9 @@ const HEALTH = "/api/health";
 const HOME = "/";
 const VERSION = "/api/version";
 // The social card src/app/layout.tsx points its metadata at, which the
-// Dockerfile serves out of public/.
-const CARD = "/og-card.png";
+// Dockerfile serves out of public/. The name carries a 2 so a chat app that
+// cached the old card fetches this one (fr-3y2).
+const CARD = "/og-card-2.png";
 // The image route: GET /api/og?<view link> draws that view as a 1200x630 PNG.
 const OG = "/api/og";
 
@@ -61,8 +62,10 @@ describe(`the deployment at ${target.baseUrl}`, () => {
     const html = await (await get(url(HOME))).text();
     const origin = new URL(target.baseUrl).origin;
 
-    // Next writes the root url without its slash; either spelling is the origin.
-    expect(metaContent(html, "og:url")?.replace(/\/$/, "")).toBe(origin);
+    // The page's own url, under its own slash. Next's metadata API collapses
+    // the root down to the bare origin, so the page writes this tag itself
+    // from `ogUrl` (fr-3y2).
+    expect(metaContent(html, "og:url")).toBe(`${origin}/`);
     expect(metaContent(html, "og:image")).toBe(`${origin}${CARD}`);
     expect(metaContent(html, "twitter:image")).toBe(`${origin}${CARD}`);
   });
