@@ -105,6 +105,17 @@
   cursor: grabbing;
 }
 
+/* While a tour plays nothing but the picture shows: no pointer over it, and no
+   focus ring left on the canvas by a keyboard user who then went quiet. */
+.fractal-stage[data-tour="true"],
+.fractal-stage[data-tour="true"] .fractal-canvas {
+  cursor: none;
+}
+
+.fractal-stage[data-tour="true"] .fractal-canvas:focus-visible {
+  outline: none;
+}
+
 /* Custom scrollbar styles */
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;

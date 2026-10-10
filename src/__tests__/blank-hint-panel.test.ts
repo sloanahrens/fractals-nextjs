@@ -46,9 +46,9 @@ describe("the page's wiring", () => {
     expect(page).toMatch(/<TopBar[\s\S]*?onBack=\{handleBack\}/);
   });
 
-  it("shows it only for the view it was found blank on", () => {
+  it("shows it only for the view it was found blank on, and not during a tour", () => {
     expect(page).toMatch(
-      /show=\{blankLink !== null && blankLink === currentLink\}/,
+      /show=\{\s*!tourPlaying &&\s*blankLink !== null &&\s*blankLink === currentLink\s*\}/,
     );
   });
 

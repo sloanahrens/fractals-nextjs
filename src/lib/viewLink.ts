@@ -321,6 +321,38 @@ export function encodeView(state: ViewLinkState): string {
   return fields.toString();
 }
 
+/** The fragment that is nothing but a request for a tour. */
+const TOUR_FRAGMENT = "tour";
+
+/**
+ * Whether a link asks for a tour to start.
+ *
+ * Two spellings do: the whole fragment is `#tour`, or a link of this version
+ * carries `tour=1` beside its view. Neither is something `encodeView` writes —
+ * a tour is a thing a link does when it is opened, not part of the view — so
+ * the address bar goes back to following the view once the tour has started.
+ *
+ * `tour=1` is read only in a link the decoder would read: a fragment from
+ * another version, or one past {@link MAX_FRAGMENT_LENGTH}, asks for nothing,
+ * and so does any other value of `tour`. The view a `#tour` link opens on is
+ * the page's default, because the fragment carries no field of a view.
+ *
+ * @param fragment - The link, with or without its leading `#`
+ * @returns True when the link asks for a tour; false for anything else,
+ *   garbage included
+ */
+export function decodeTour(fragment: string): boolean {
+  if (typeof fragment !== "string") return false;
+  if (fragment.length > MAX_FRAGMENT_LENGTH) return false;
+
+  const text = fragment.startsWith("#") ? fragment.slice(1) : fragment;
+  if (text === TOUR_FRAGMENT) return true;
+
+  const fields = new URLSearchParams(text);
+
+  return fields.get("v") === String(VERSION) && fields.get("tour") === "1";
+}
+
 /**
  * The view a link describes, field by field, with everything unreadable left
  * out.

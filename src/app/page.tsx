@@ -91,7 +91,21 @@ import {
   nearbyWindow,
   nextNearbyOffset,
 } from "../lib/nearbyStrip";
-import { encodeView } from "../lib/viewLink";
+import { decodeTour, encodeView } from "../lib/viewLink";
+import {
+  TOUR_CROSSFADE_MS,
+  initialTourState,
+  nextTourStop,
+  type TourState,
+} from "../lib/tour";
+import {
+  TOUR_ACTIVITY_EVENTS,
+  TourMode,
+  isTextEntry,
+  pointerMoved,
+  type TourModeState,
+} from "../lib/tourMode";
+import { holdScreenAwake } from "../lib/wakeLock";
 import {
   DEFAULT_VIEW_LINK_UPDATES,
   linkWriteDelayMs,
@@ -273,6 +287,18 @@ export default function Home() {
   const [wander] = useState(
     () => new WanderController({ onCountdown: setWanderCountdown }),
   );
+
+  // Tour mode. `TourMode` owns the clock and the rules — when a tour starts,
+  // when it hops, when it gives way — and this page owns what a hop does and
+  // tells it what it can see. `tourPlaying` is the one flag the shell reads to
+  // hide every control. The engine's own state (what it has visited) lives in a
+  // ref because only a hop reads it; the first hop of a tour starts it afresh.
+  const [tourState, setTourState] = useState<TourModeState>("idle");
+  const tourEngineRef = useRef<TourState | null>(null);
+  const [tourMode] = useState(
+    () => new TourMode({ onChange: (next) => setTourState(next) }),
+  );
+  const tourPlaying = tourState === "playing";
 
   // Manual coordinate inputs. Only text the user typed is held here, so a box
   // that has not been touched reads straight off the view and Apply reuses the
@@ -503,17 +529,26 @@ export default function Home() {
   // The walk counts down only while the tab is on screen: a background tab has
   // nobody watching the view move, and a browser throttles its timers anyway.
   // Leaving the page stops the walk, so a stray timer cannot outlive it.
+  // It is held the same way while a tour plays, since two things choosing the
+  // next view would fight; the tour ending gives the walk a fresh interval.
+  const tourPlayingRef = useRef(false);
   useEffect(() => {
-    const handleVisibilityChange = () => wander.setHidden(document.hidden);
+    const handleVisibilityChange = () =>
+      wander.setHidden(document.hidden || tourPlayingRef.current);
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    wander.setHidden(document.hidden);
+    wander.setHidden(document.hidden || tourPlayingRef.current);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       wander.stop();
     };
   }, [wander]);
+
+  useEffect(() => {
+    tourPlayingRef.current = tourPlaying;
+    wander.setHidden(document.hidden || tourPlaying);
+  }, [wander, tourPlaying]);
 
   // What the page believes the browser's history entries for this document are:
   // the fragment each holds, and which one the page is on. The browser keeps
@@ -569,8 +604,13 @@ export default function Home() {
       setCurrentPreset("");
       setLinkArrivals((count) => count + 1);
       wander.notifyActivity();
+
+      // A link can also ask for a tour from the view it describes (`#tour`
+      // names none, so it is the opening view). The tour waits for the view to
+      // be drawn, and the address bar goes back to following the view.
+      if (decodeTour(fragment)) tourMode.hashTour();
     },
-    [wander],
+    [wander, tourMode],
   );
 
   // A link is read once, after mount. It is read from the fragment in an effect
@@ -614,6 +654,10 @@ export default function Home() {
   // no `hashchange`, so the only events here are the user's own.
   useEffect(() => {
     const handleHashChange = () => {
+      // A navigation is someone being here, even when the browser's own Back
+      // button made it and the page saw no input: it ends a tour, and a tour
+      // the link asks for is started again below.
+      tourMode.stop();
       journey.arrive(window.location.hash);
       syncHistoryButtons();
       applyViewLink(window.location.hash);
@@ -622,7 +666,7 @@ export default function Home() {
     window.addEventListener("hashchange", handleHashChange);
 
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [applyViewLink, journey, syncHistoryButtons]);
+  }, [applyViewLink, journey, syncHistoryButtons, tourMode]);
 
   // The view as a link, rebuilt whenever anything a link carries moves. Both
   // halves of the feature read it: the effect below writes it to the address
@@ -696,14 +740,31 @@ export default function Home() {
   // for the throttle, and the jump's render would cancel it, so the view on
   // screen is written into the current entry before the jump moves anything.
   // A view still being drawn is not on the canvas and is not written.
-  const beginJump = () => {
+  const writeLeavingView = () => {
     if (renderedLink !== "" && renderedLink === currentLink) {
       const leaving = `#${currentLink}`;
 
       if (window.location.hash !== leaving) writeViewLink(leaving, Date.now());
     }
+  };
+
+  const beginJump = () => {
+    writeLeavingView();
     setJumpSerial((serial) => serial + 1);
   };
+
+  // A tour is one jump that ends where it stops. While it plays the address bar
+  // is left alone (the follower below stands down), so the entry the tour began
+  // in keeps the view it began on; the end counts as the jump, which makes the
+  // one entry for the place on screen then and leaves Back on the view before
+  // the tour. Counting it in the render that sees the tour end is the
+  // documented alternative to an effect:
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [seenTourState, setSeenTourState] = useState(tourState);
+  if (seenTourState !== tourState) {
+    setSeenTourState(tourState);
+    if (seenTourState === "playing") setJumpSerial((serial) => serial + 1);
+  }
 
   // Make a jump's view a history entry of its own.
   const pushViewLink = useCallback(
@@ -773,8 +834,10 @@ export default function Home() {
   // set on the element for the same reason.
   const crossfadeRef = useRef<HTMLCanvasElement>(null);
   const crossfadeTargetRef = useRef<string | null>(null);
+  // How long the fade being waited for takes: a tile's, or the slower tour's.
+  const crossfadeMsRef = useRef(CROSSFADE_MS);
 
-  const startCrossfade = (targetLink: string) => {
+  const startCrossfade = (targetLink: string, durationMs = CROSSFADE_MS) => {
     const overlay = crossfadeRef.current;
     const canvas = canvasRef.current;
     if (!overlay || !canvas) return;
@@ -786,6 +849,7 @@ export default function Home() {
     overlay.style.transition = "none";
     overlay.style.opacity = "1";
     crossfadeTargetRef.current = targetLink;
+    crossfadeMsRef.current = durationMs;
   };
 
   useEffect(() => {
@@ -799,7 +863,7 @@ export default function Home() {
     const overlay = crossfadeRef.current;
     if (!overlay) return;
 
-    overlay.style.transition = `opacity ${CROSSFADE_MS}ms ease-out`;
+    overlay.style.transition = `opacity ${crossfadeMsRef.current}ms ease-out`;
     overlay.style.opacity = "0";
   }, [currentLink, renderedLink]);
 
@@ -833,7 +897,11 @@ export default function Home() {
   // The address bar follows the view — an auto-wander step, a control, a wheel,
   // a preset, a link — but only once that view has been drawn, which is also
   // what keeps a drag from rewriting it while the gesture is still moving.
+  //
+  // A playing tour leaves the address bar alone: it hops between places nobody
+  // chose, and the entry the tour began in has to keep the view before it.
   useEffect(() => {
+    if (tourPlaying) return;
     if (currentLink !== renderedLink) return;
 
     const next = `#${currentLink}`;
@@ -881,7 +949,14 @@ export default function Home() {
 
       return () => window.clearTimeout(timer);
     }
-  }, [currentLink, renderedLink, jumpSerial, pushViewLink, writeViewLink]);
+  }, [
+    currentLink,
+    renderedLink,
+    jumpSerial,
+    pushViewLink,
+    writeViewLink,
+    tourPlaying,
+  ]);
 
   // What the Copy link button last did: the confirmation a clipboard gave, or
   // the field a browser without one gets instead. The manual half carries the
@@ -1247,7 +1322,14 @@ export default function Home() {
   // worked out first: a place that is already the view changes nothing, and a
   // crossfade waiting for a render that never comes would hold the old picture
   // on screen.
-  const handlePlaceSelect = (place: Place) => {
+  //
+  // A tour's hop is the same flight with two differences: the fade takes
+  // `TOUR_CROSSFADE_MS`, and it is no jump — it counts nothing and writes
+  // nothing, because the tour's end is the jump (see `seenTourState`).
+  const handlePlaceSelect = (
+    place: Place,
+    { tour = false }: { tour?: boolean } = {},
+  ) => {
     const zoom = clampZoom(place.zoom);
     const scheme = placeColorScheme(place, colorScheme);
     const constant =
@@ -1268,8 +1350,8 @@ export default function Home() {
     });
     if (target === currentLink) return;
 
-    startCrossfade(target);
-    beginJump();
+    startCrossfade(target, tour ? TOUR_CROSSFADE_MS : CROSSFADE_MS);
+    if (!tour) beginJump();
 
     setFractalType(place.fractal);
     if (place.fractal === "julia") setJuliaConstant(constant);
@@ -1301,6 +1383,133 @@ export default function Home() {
     const target = surpriseTarget(placeView, PLACES);
     if (target) handlePlaceSelect(target);
   };
+
+  // What a hop of the tour does: ask the engine for the next place, from where
+  // the tour is, and go there the way a tile does. The first hop of a tour also
+  // writes the view being left into the address bar, which is what lets `#tour`
+  // (and `tour=1`) leave the bar, and what keeps Back on the view before the
+  // tour. Handed to the clock after every render, because the clock is built
+  // once and the view moves under it.
+  useEffect(() => {
+    tourMode.setHopHandler((first) => {
+      if (first || tourEngineRef.current === null) {
+        writeLeavingView();
+        tourEngineRef.current = initialTourState(placeView);
+      }
+
+      const { place, state } = nextTourStop(
+        tourEngineRef.current,
+        PLACES,
+        Math.random,
+      );
+      tourEngineRef.current = state;
+      handlePlaceSelect(place, { tour: true });
+    });
+  });
+
+  // What the clock needs to know about the page. A tour starts over a settled
+  // picture only — a full render has drawn the view on screen — and never over
+  // the drawer or the help.
+  const tourSettled =
+    !isRendering && renderedLink !== "" && renderedLink === currentLink;
+  useEffect(() => {
+    tourMode.setConditions({ settled: tourSettled });
+  }, [tourMode, tourSettled]);
+
+  const tourOverlayOpen = settingsOpen || helpOpen;
+  useEffect(() => {
+    tourMode.setConditions({ overlayOpen: tourOverlayOpen });
+  }, [tourMode, tourOverlayOpen]);
+
+  // What only the browser knows: whether the tab is showing, whether the window
+  // has focus, whether a field has it, and whether anyone is here. Input on the
+  // window, in the capture phase, so nothing on the page can keep it from being
+  // seen. The first report also starts the idle wait.
+  useEffect(() => {
+    let lastPointer: { x: number; y: number } | null = null;
+
+    const handleActivity = (event: Event) => {
+      if (event.type === "pointermove") {
+        const { clientX, clientY } = event as PointerEvent;
+        const moved = pointerMoved(lastPointer, clientX, clientY);
+
+        lastPointer = { x: clientX, y: clientY };
+        // The page under a resting pointer changing is not someone.
+        if (!moved) return;
+      }
+      // A key held down before the tour began repeats into it.
+      if ((event as KeyboardEvent).repeat && tourMode.state === "playing") {
+        return;
+      }
+
+      tourMode.activity();
+    };
+
+    const reportTab = () =>
+      tourMode.setConditions({
+        tabHidden: document.visibilityState !== "visible",
+      });
+    const reportFocus = (focused: boolean) =>
+      tourMode.setConditions({ windowFocused: focused });
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+
+      tourMode.setConditions({
+        inputFocused: isTextEntry(
+          target?.tagName ?? "",
+          target?.isContentEditable ?? false,
+        ),
+      });
+    };
+    const handleFocusOut = () =>
+      tourMode.setConditions({ inputFocused: false });
+    const handleWindowFocus = () => reportFocus(true);
+    const handleWindowBlur = () => reportFocus(false);
+
+    for (const name of TOUR_ACTIVITY_EVENTS) {
+      window.addEventListener(name, handleActivity, {
+        capture: true,
+        passive: true,
+      });
+    }
+    document.addEventListener("visibilitychange", reportTab);
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
+    window.addEventListener("focus", handleWindowFocus);
+    window.addEventListener("blur", handleWindowBlur);
+
+    reportTab();
+    reportFocus(document.hasFocus());
+    const active = document.activeElement as HTMLElement | null;
+    tourMode.setConditions({
+      inputFocused: isTextEntry(
+        active?.tagName ?? "",
+        active?.isContentEditable ?? false,
+      ),
+    });
+
+    return () => {
+      for (const name of TOUR_ACTIVITY_EVENTS) {
+        window.removeEventListener(name, handleActivity, { capture: true });
+      }
+      document.removeEventListener("visibilitychange", reportTab);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
+      window.removeEventListener("focus", handleWindowFocus);
+      window.removeEventListener("blur", handleWindowBlur);
+      tourMode.dispose();
+    };
+  }, [tourMode]);
+
+  // Keep the screen on while a tour plays, as best the browser allows.
+  useEffect(() => {
+    if (!tourPlaying) return;
+
+    return holdScreenAwake(
+      "wakeLock" in navigator ? navigator.wakeLock : undefined,
+      document,
+    );
+  }, [tourPlaying]);
 
   const handleNearbyMore = () => {
     setNearby((previous) => ({
@@ -1379,19 +1588,26 @@ export default function Home() {
   };
 
   return (
-    <div className="fractal-stage bg-gray-950">
-      <TopBar
-        onBack={handleBack}
-        onForward={handleForward}
-        canGoBack={historyState.canGoBack}
-        canGoForward={historyState.canGoForward}
-        onSurprise={handleSurprise}
-        canSurprise={canSurprise}
-        onHelp={() => setHelpOpen(true)}
-        onSettings={() => setSettingsOpen(true)}
-        settingsOpen={settingsOpen}
-        settingsButtonRef={settingsButtonRef}
-      />
+    <div className="fractal-stage bg-gray-950" data-tour={tourPlaying}>
+      {/* A tour shows the picture and nothing else: the bar, the strip, the
+          progress line and the hint are all keyed on `tourPlaying`, and the
+          drawer and the help are closed dialogs. Any input ends the tour and
+          they all come back as they were. */}
+      {!tourPlaying && (
+        <TopBar
+          onBack={handleBack}
+          onForward={handleForward}
+          canGoBack={historyState.canGoBack}
+          canGoForward={historyState.canGoForward}
+          onSurprise={handleSurprise}
+          canSurprise={canSurprise}
+          onTour={() => tourMode.buttonStart()}
+          onHelp={() => setHelpOpen(true)}
+          onSettings={() => setSettingsOpen(true)}
+          settingsOpen={settingsOpen}
+          settingsButtonRef={settingsButtonRef}
+        />
+      )}
 
       <main className="flex h-full items-center justify-center">
         {/* The canvas is the page: as large as fits under the bar, in the
@@ -1422,7 +1638,7 @@ export default function Home() {
             className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
           />
 
-          {isRendering && (
+          {isRendering && !tourPlaying && (
             <div className="absolute inset-x-0 top-0 h-1 bg-black/30">
               <div
                 className="h-full bg-blue-500 transition-all duration-150"
@@ -1431,13 +1647,17 @@ export default function Home() {
             </div>
           )}
           <p role="status" className="sr-only">
-            {isRendering && `Rendering... ${Math.round(progress * 100)}%`}
+            {tourPlaying
+              ? "Tour playing. Press any key to stop."
+              : isRendering && `Rendering... ${Math.round(progress * 100)}%`}
           </p>
 
           {/* Said when the settled picture has nothing in it, with the way
               back; it takes no pointer events outside its own box. */}
           <BlankHint
-            show={blankLink !== null && blankLink === currentLink}
+            show={
+              !tourPlaying && blankLink !== null && blankLink === currentLink
+            }
             onBack={handleBack}
             canGoBack={historyState.canGoBack}
           />
@@ -1449,6 +1669,7 @@ export default function Home() {
             places={nearbyWindow(nearby.pool, nearby.offset)}
             colorScheme={colorScheme}
             paused={isRendering}
+            hidden={tourPlaying}
             onSelect={handlePlaceSelect}
             onMore={
               hasMoreNearby(nearby.pool.length) ? handleNearbyMore : undefined
