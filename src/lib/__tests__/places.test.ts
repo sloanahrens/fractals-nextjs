@@ -22,6 +22,7 @@ import {
   calculateZoomBounds,
 } from "../mandelbrot";
 import type { ColorScheme } from "../../types/fractal";
+import { NEWTON_BAND } from "../newton";
 import {
   FEATURED_PLACE_IDS,
   PLACES,
@@ -418,6 +419,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   "burning-ship": [8, 10],
   tricorn: [8, 10],
   multibrot: [10, 12],
+  newton: [8, 10],
 };
 
 describe("PLACES", () => {
@@ -485,6 +487,46 @@ describe("PLACES", () => {
       expect(wholeSetPlaceFor(power, "multibrot")?.id, power).toBe(
         `multibrot-${power}-whole`,
       );
+    }
+  });
+
+  it("shows at least two Newton basins in every Newton place, since one basin is a flat field", () => {
+    const grid = 40;
+
+    for (const entry of placesForFractal("newton")) {
+      const cap = autoIterations(entry.zoom);
+      const bounds = calculateZoomBounds(
+        entry.centerX,
+        entry.centerY,
+        entry.zoom,
+      );
+      const kind = resolveFractalKind("newton", "");
+      const share = [0, 0, 0];
+
+      for (let row = 0; row < grid; row++) {
+        for (let column = 0; column < grid; column++) {
+          const value = kind.iterations(
+            {
+              real:
+                bounds.minReal +
+                ((bounds.maxReal - bounds.minReal) * (column + 0.5)) / grid,
+              imaginary:
+                bounds.minImaginary +
+                ((bounds.maxImaginary - bounds.minImaginary) * (row + 0.5)) /
+                  grid,
+            },
+            cap,
+            false,
+          );
+          if (value < cap) share[Math.floor(value / (cap * NEWTON_BAND))] += 1;
+        }
+      }
+
+      const shown = share.filter((count) => count / (grid * grid) >= 0.05);
+      expect(
+        shown.length,
+        `${entry.id}: ${share.join(", ")}`,
+      ).toBeGreaterThanOrEqual(2);
     }
   });
 

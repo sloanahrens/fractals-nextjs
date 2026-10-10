@@ -171,7 +171,7 @@ describe("nextTourStop", () => {
       walk(PLACES, 400, seeded(5)).map((h) => h.place.fractal),
     );
 
-    expect(fractals.size).toBe(5);
+    expect(fractals.size).toBe(6);
     expect(seen).toEqual(fractals);
   });
 
@@ -181,9 +181,13 @@ describe("nextTourStop", () => {
       share.set(hop.place.fractal, (share.get(hop.place.fractal) ?? 0) + 1);
     }
 
+    // Six fractals share the 200 hops, about 33 each; a walk stays on a
+    // fractal for a few hops at a time, so one seed's share is streaky (seeds
+    // 1 to 12 ranged from 4 to 74), and the floor only rules out a fractal the
+    // walk has all but forgotten.
     for (const fractal of new Set(PLACES.map((p) => p.fractal))) {
       const visits = share.get(fractal) ?? 0;
-      expect(visits).toBeGreaterThanOrEqual(20);
+      expect(visits).toBeGreaterThanOrEqual(10);
       expect(visits).toBeLessThanOrEqual(120);
     }
   });

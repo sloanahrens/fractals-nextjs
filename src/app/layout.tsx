@@ -13,7 +13,7 @@ export const viewport: Viewport = {
 
 const TITLE = "Next Fractals - Interactive Fractal Explorer";
 const DESCRIPTION =
-  "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets, the Burning Ship, the Tricorn and the Multibrot sets with customizable parameters, zoom controls, and preset configurations.";
+  "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets, the Burning Ship, the Tricorn, the Multibrot sets and the Newton fractal with customizable parameters, zoom controls, and preset configurations.";
 
 // The social card, public/og-card.png (scripts/make-og-card.mjs draws it). The
 // size is the file's own, which is what og:image:width and height must say.

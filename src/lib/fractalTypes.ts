@@ -13,6 +13,7 @@ import {
   createMultibrotKind,
   parseMultibrotPower,
 } from "./multibrot";
+import { newtonKind } from "./newton";
 import { tricornKind } from "./tricorn";
 
 /**
@@ -36,6 +37,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "burning-ship", label: "Burning Ship" },
   { id: "tricorn", label: "Tricorn" },
   { id: "multibrot", label: "Multibrot" },
+  { id: "newton", label: "Newton" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -160,8 +162,8 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
  * The formula a picker choice draws.
  *
  * The picker names a fractal and the renderer wants a {@link FractalKind}. For
- * the Mandelbrot set, the Burning Ship and the Tricorn those are the same
- * thing. Julia is a family rather than a picture, so the choice carries a constant as well — one
+ * the Mandelbrot set, the Burning Ship, the Tricorn and the Newton fractal
+ * those are the same thing. Julia is a family rather than a picture, so the choice carries a constant as well — one
  * of the named four, or a custom spelling of any other point — and a name this
  * build cannot read falls back to the first named constant instead of to a
  * blank canvas. The Multibrot is a family of powers, and one it cannot read
@@ -176,6 +178,7 @@ export function resolveFractalKind(
 ): FractalKind {
   if (typeId === "burning-ship") return burningShipKind;
   if (typeId === "tricorn") return tricornKind;
+  if (typeId === "newton") return newtonKind;
   if (typeId === "multibrot") {
     return createMultibrotKind(
       parseMultibrotPower(variant) ?? MULTIBROT_POWERS[0],
@@ -238,6 +241,23 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // renders of all three at 300x225 in the classic scheme). Zoom 1.1 would
   // leave z^3's top bulb only 0.04 from the frame's edge.
   if (typeId === "multibrot") return { centerX: 0, centerY: 0, zoom: 1 };
+
+  // Newton's method on z^3 - 1 has no set to frame: every point of the plane
+  // but the boundary belongs to one of three basins, so the frame is chosen to
+  // show all three. The map commutes with a turn of 120 degrees about the
+  // origin (the roots 1 and -0.5 +- 0.866i are turned onto each other), the
+  // three basins meet at the origin and the boundary runs out from it along
+  // the rays at 60, 180 and 300 degrees, so the origin is the centre that
+  // treats them alike, and zoom 1 (x -2..2, y -1.5..1.5) is the widest view the
+  // explorer has. Measured on a 400x300 grid at a cap of 100, whole counts, the
+  // frame is 40% / 30% / 30% basin of the root 1, of -0.5 + 0.866i and of
+  // -0.5 - 0.866i (the frame is wider than it is tall, so the root on the axis
+  // gets the larger share), none left unsettled, and each root and its dark
+  // centre is inside it with a margin of at least 0.6 to the nearest edge.
+  // Drawn at 400x300 in all five schemes (see the 2026-10-10 Newton note in
+  // CLAUDE.md), the origin junction reads as a pinwheel of three colours with
+  // bulbs strung along the three boundaries.
+  if (typeId === "newton") return { centerX: 0, centerY: 0, zoom: 1 };
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }

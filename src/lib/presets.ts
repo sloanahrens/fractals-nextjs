@@ -345,6 +345,40 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     fractal: "multibrot",
     variant: "3",
   },
+  {
+    id: "newton-overview",
+    name: "Newton basins",
+    description: "The three basins of z^3 - 1, one colour family per root",
+    // The Newton default view (0, 0) at zoom 1: 4 by 3 about the origin.
+    bounds: {
+      minReal: -2,
+      maxReal: 2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "rainbow",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "newton",
+  },
+  {
+    id: "newton-junction",
+    name: "Newton junction",
+    description: "Where all three basins meet, at the origin",
+    // Centre (0, 0) at zoom 8: 0.5 by 0.375.
+    bounds: {
+      minReal: -0.25,
+      maxReal: 0.25,
+      minImaginary: -0.1875,
+      maxImaginary: 0.1875,
+    },
+    maxIterations: 300,
+    colorScheme: "rainbow",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "newton",
+  },
 ];
 
 /**

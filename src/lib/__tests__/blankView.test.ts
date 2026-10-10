@@ -242,6 +242,46 @@ describe("what the detector says of real pictures", () => {
     "rainbow",
   ];
 
+  // The Newton fractal has no inside and no outside: every point is in a
+  // basin, so the whole-basins view is large flat fields. It is not blank
+  // because three of them show, each a different colour family, so the
+  // commonest colour is a share of the picture and not nearly all of it.
+  it.each(schemes)(
+    "the Newton whole-basins view is not blank in %s, and no one colour holds most of it",
+    async (scheme) => {
+      const whole: Place = {
+        id: "newton-whole-check",
+        name: "newton",
+        fractal: "newton",
+        ...defaultViewFor("newton"),
+      };
+      const picture = await pictureOf(whole, scheme);
+
+      expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(false);
+      expect(
+        nearUniformShare(picture.data, WIDTH, HEIGHT),
+        `${scheme}: ${nearUniformShare(picture.data, WIDTH, HEIGHT)}`,
+      ).toBeLessThan(0.6);
+    },
+    30000,
+  );
+
+  it("calls a deep view inside one Newton basin blank, since one basin is one colour family", async () => {
+    // Zoom 40 around a point of the basin of the root 1, far from any
+    // boundary: no second basin in the frame, just the shading of one.
+    const inside: Place = {
+      id: "newton-inside",
+      name: "newton",
+      fractal: "newton",
+      centerX: 1.6,
+      centerY: 0.05,
+      zoom: 40,
+    };
+    const picture = await pictureOf(inside, "grayscale");
+
+    expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(true);
+  }, 30000);
+
   // Julia's default is drawn with the first named constant, as the page does.
   it.each(
     FRACTAL_TYPES.flatMap((type) =>
