@@ -64,7 +64,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Render quality** (`src/lib/renderQuality.ts`): Whether a redraw is a low-resolution preview or a full-resolution render
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
-- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Back/Forward/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus and shares the clock with the Nearby strip
+- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Back/Forward/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
@@ -366,13 +366,16 @@ _Last updated: 2026-10-10_
   cached one is immediate, no state); a changed list `cancelAll()`s in the
   cleanup that runs before the new tiles ask. A failed thumbnail is the store's
   flat grey and the tile still works.
-- The fade is the top bar's: both use `useIdleVisibility(hold)`, which holds on
-  `hold` or on keyboard focus (`:focus-visible`) inside, so the strip never
-  fades while a tile has focus. The hook's second argument, `resetKey`, shows
-  the bar and restarts its wait when it changes; the strip passes its list,
-  because the list only exists once the first render has settled and would
-  otherwise arrive already faded. `canvas-first-page.test.ts` reads the hook
-  for the rules the bar used to carry itself.
+- The strip does not fade; only the top bar does (fr-s8f). It first shared the
+  bar's `useIdleVisibility`, which hid it after two quiet seconds, exactly when
+  a visitor lost in an empty field needed it. It is now always shown
+  (`data-visible="true"`, no opacity transition, its row always taking pointer
+  events), and `useIdleVisibility(hold)` is the bar's alone, so the hook lost
+  its `resetKey`. `hidden` is an optional prop (default false): true renders
+  nothing, so no tile mounts and the store is asked for nothing, and the
+  `cancelAll` cleanup also runs on a change of `hidden`. It is for a later Tour
+  mode to hide the strip. The strip's height, gradient and tile size are as
+  they were.
 - Suggestions refresh by `nearbyRefreshDue` (`nearbyStrip.ts`): a full render
   has settled on the view (`renderedLink === currentLink`) and the count of
   deliberate moves is not the one the list was worked out at. A deliberate move

@@ -12,8 +12,6 @@ import {
   type ThumbnailEntry,
   type ThumbnailStore,
 } from "../../lib/placeThumbnails";
-import { TOP_BAR_FADE_MS } from "../../lib/idleFade";
-import { useIdleVisibility } from "./useIdleVisibility";
 
 /** The strip's heading, which also names the region for a screen reader. */
 export const NEARBY_LABEL = "Nearby, worth a look";
@@ -32,6 +30,11 @@ interface NearbyStripProps {
   onSelect: (place: Place) => void;
   /** Rotates in the next suggestions. Absent when there are no others to show. */
   onMore?: () => void;
+  /**
+   * True while something else owns the screen (a tour): the strip renders
+   * nothing and asks the store for no pictures. Defaults to false.
+   */
+  hidden?: boolean;
 }
 
 const TILE_CLASSES =
@@ -135,9 +138,11 @@ function Tile({ place, colorScheme, store, onSelect }: TileProps) {
  * the list changes or the strip goes away. A picture that could not be drawn
  * is a flat grey tile; the place is still a button that works.
  *
- * It fades with the top bar's idle clock and stays up while a tile has
- * keyboard focus. The row scrolls sideways when it is wider than the canvas.
- * Only the tiles take pointer events, so the canvas under the gaps still pans.
+ * It does not fade. The top bar goes after a quiet two seconds, but the strip
+ * is the page's main way of moving and is most needed when the visitor is lost,
+ * so it stays up (`hidden` is the only thing that takes it away). The row
+ * scrolls sideways when it is wider than the canvas. Only the tiles take
+ * pointer events, so the canvas under the gaps still pans.
  */
 export function NearbyStrip({
   places,
@@ -145,6 +150,7 @@ export function NearbyStrip({
   paused,
   onSelect,
   onMore,
+  hidden = false,
 }: NearbyStripProps) {
   const [store] = useState(() =>
     createThumbnailStore({ render: createCanvasThumbnailRender() }),
@@ -157,28 +163,21 @@ export function NearbyStrip({
   // own scheme, and a tile that follows the page asks again by itself.
   const listKey = places.map((place) => place.id).join(",");
 
-  // A new list is news: it arrives after a render settles, which can be well
-  // past the two seconds a strip that came in with the page would have waited.
-  const { shown, focusProps } = useIdleVisibility(false, listKey);
-
   useEffect(() => {
     if (paused) store.pause();
     else store.resume();
   }, [paused, store]);
 
-  useEffect(() => () => store.cancelAll(), [store, listKey]);
+  // Hiding the strip unmounts its tiles; this also drops what they had queued.
+  useEffect(() => () => store.cancelAll(), [store, listKey, hidden]);
 
-  if (places.length === 0) return null;
+  if (hidden || places.length === 0) return null;
 
   return (
     <section
       aria-labelledby="nearby-strip-label"
-      data-visible={shown}
-      {...focusProps}
-      style={{ transitionDuration: `${TOP_BAR_FADE_MS}ms` }}
-      className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-3 pb-3 pt-10 transition-opacity ${
-        shown ? "opacity-100" : "opacity-0"
-      }`}
+      data-visible="true"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-3 pb-3 pt-10"
     >
       <h2
         id="nearby-strip-label"
@@ -186,11 +185,7 @@ export function NearbyStrip({
       >
         {NEARBY_LABEL}
       </h2>
-      <div
-        className={`flex gap-2 overflow-x-auto pb-1 ${
-          shown ? "pointer-events-auto" : "pointer-events-none"
-        }`}
-      >
+      <div className="pointer-events-auto flex gap-2 overflow-x-auto pb-1">
         {places.map((place) => (
           <Tile
             key={`${listKey}|${place.id}`}
