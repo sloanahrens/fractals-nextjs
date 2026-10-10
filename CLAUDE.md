@@ -230,14 +230,14 @@ _Last updated: 2026-10-09_
   and after `journey.arrive` (in the `hashchange` listener), the only two moves
   that change whether either direction is open. Their accessible names are
   "Back" and "Forward".
-- The Presets card is the dropdown alone; the button row (and the clipped-label
-  problem and its test, `preset-button-labels.test.ts`) is gone. Saved views
-  and custom presets stay in the drawer.
+- The Presets card is the dropdown alone; the button row and the clipped-label
+  problem it had are gone. Saved views and custom presets stay in the drawer.
 - `nearbyStrip.test.ts` drives the refresh policy, the window and the offset;
   `journey.test.ts` grew `historyButtons`; `nearby-strip-panel.test.ts` reads
   the sources for the label, the tile buttons, More, the focus hold, the pause,
   the click's setters, the crossfade and the top bar buttons;
-  `presets-card-dropdown.test.ts` says the button row stays gone.
+  `preset-button-labels.test.ts`, kept at its path, now says the button row
+  stays gone.
 
 ### One place for position and zoom (2026-10-09)
 
@@ -446,8 +446,9 @@ _Last updated: 2026-10-09_
 
 ### Preset button labels are no longer clipped (2026-10-09)
 
-_Superseded: the Nearby strip replaced the button row, which is gone along
-with `preset-button-labels.test.ts`; what follows is how it was._
+_Superseded: the Nearby strip replaced the button row, which is gone; what
+follows is how it was, and `preset-button-labels.test.ts` now asserts the row
+stays gone instead of measuring its classes._
 
 - The built-in view buttons asked for six columns from `lg` up, but from there
   the Presets card is the fixed `w-96` column beside the canvas, not a share of
@@ -455,8 +456,8 @@ with `preset-button-labels.test.ts`; what follows is how it was._
   read "Classi". The grid is `grid-cols-2 sm:grid-cols-3 lg:grid-cols-2` now,
   and a button carries `min-w-0 break-words`, so a name that does not fit wraps
   inside its button. Labels and the `Julia:` prefix are unchanged.
-- `src/__tests__/preset-button-labels.test.ts` reads `PresetSelector.tsx` for
-  the classes that decide this — a column count past three, a missing
+- `src/__tests__/preset-button-labels.test.ts` read `PresetSelector.tsx` for
+  the classes that decided this — a column count past three, a missing
   `lg:grid-cols-2`, a button that cannot shrink or wrap, and any
   `truncate`/`whitespace-nowrap`/`overflow-hidden`/fixed-width class — since
   the Node suite has no layout to measure.
