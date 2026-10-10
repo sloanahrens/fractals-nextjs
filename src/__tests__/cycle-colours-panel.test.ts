@@ -333,11 +333,12 @@ describe("the rest of the page", () => {
 
     expect(copy).toContain("const link = viewLinkFor(cycleShiftRef.current);");
     expect(copy).toContain("copyLinkUrl(");
-    expect(copy).toContain("window.location.pathname,");
-    expect(copy).toContain("link,");
+    // The URL is that link, on this origin and path.
+    expect(copy).toContain("window.location.pathname, link");
     // The offer of a field to copy from still belongs to the view, so a palette
-    // that is still flowing does not take it away.
-    expect(copy).toContain("link: currentLink,");
+    // that is still flowing does not take it away. It is made where the URL is
+    // handed over, which is the path both copy buttons share.
+    expect(functionBody(page, "copyUrl")).toContain("link: currentLink,");
   });
 
   it("names the feature in the Help overlay", () => {

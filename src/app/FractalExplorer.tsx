@@ -147,13 +147,21 @@ import {
   nextNearbyOffset,
 } from "../lib/nearbyStrip";
 import { decodeTour, encodeView, linkWithoutColour } from "../lib/viewLink";
-import { copyLinkUrl, readLocationLink } from "../lib/viewQuery";
+import { copyLinkUrl, copyTourUrl, readLocationLink } from "../lib/viewQuery";
 import {
   TOUR_CROSSFADE_MS,
   initialTourState,
   nextTourStop,
   type TourState,
 } from "../lib/tour";
+import { MIN_TOUR_STOPS, decodeTourLink } from "../lib/tourLink";
+import {
+  createPlaylist,
+  nextPlaylistStop,
+  playlistStops,
+  stopPlaylist,
+  type PlaylistState,
+} from "../lib/tourPlaylist";
 import {
   TOUR_ACTIVITY_EVENTS,
   TourMode,
@@ -167,6 +175,7 @@ import {
   linkWriteDelayMs,
   shouldWriteLink,
   viewLinkUpdatesFrom,
+  type ViewLinkUpdates,
 } from "../lib/viewLinkState";
 import { Slider } from "../components/ui/Slider";
 import { Checkbox } from "../components/ui/Checkbox";
@@ -218,6 +227,14 @@ const COPY_MESSAGES = {
   copied: "Link copied",
   manual: "Press Ctrl+C to copy",
 } as const;
+
+/**
+ * Why Copy tour link is off, said under it while it is.
+ *
+ * A walk is at least two places, and the page opens on one, so the button is
+ * dark until the visitor has been somewhere.
+ */
+const COPY_TOUR_HINT = "Visit a couple of places first";
 
 // What the Copy link button last did, and — for the manual case, where the
 // clipboard would not take the URL — the URL to copy by hand and the view it
@@ -480,12 +497,29 @@ export default function Home() {
   // tells it what it can see. `tourPlaying` is the one flag the shell reads to
   // hide every control. The engine's own state (what it has visited) lives in a
   // ref because only a hop reads it; the first hop of a tour starts it afresh.
+  //
+  // A tour link names the stops to walk (`tourLink.ts`), and that walk lives
+  // here too, in a ref for the same reason: only a hop reads it. It is null for
+  // an ordinary tour, which wanders by `tour.ts`'s rules.
+  const playlistRef = useRef<PlaylistState | null>(null);
   const [tourState, setTourState] = useState<TourModeState>("idle");
   const tourEngineRef = useRef<TourState | null>(null);
   const [tourMode] = useState(
     () => new TourMode({ onChange: (next) => setTourState(next) }),
   );
   const tourPlaying = tourState === "playing";
+
+  // A tour that is taken back gives up the walk it was taking. A shared walk is
+  // not carried on by the next tour — somebody has taken the page back by hand,
+  // and the tour after this one wanders — so what is left of it is thrown away
+  // where the page sees a tour end, which is the input listener and a change of
+  // fragment. That is every way one ends: the only other is a dialog opening,
+  // and a dialog is opened by input, which is the first of the two.
+  const giveUpWalk = useCallback(() => {
+    if (playlistRef.current !== null) {
+      playlistRef.current = stopPlaylist(playlistRef.current);
+    }
+  }, []);
 
   // Manual coordinate inputs. Only text the user typed is held here, so a box
   // that has not been touched reads straight off the view and Apply reuses the
@@ -851,7 +885,12 @@ export default function Home() {
   // setters produce, like they do for a preset or a Reset View.
   const applyViewLink = useCallback(
     (fragment: string) => {
-      const updates = viewLinkUpdatesFrom(fragment);
+      // A link can name a walk rather than one view (`tourLink.ts`). Its first
+      // stop is the view to put on screen and the tour takes the rest in order,
+      // so it is read before the view codec — which sees none of a tour's
+      // columns and would leave the page on its opening view.
+      const stops = decodeTourLink(fragment);
+      const updates = stops === null ? viewLinkUpdatesFrom(fragment) : stops[0];
 
       setFractalType(updates.fractalType);
       setVariant(updates.variant);
@@ -863,13 +902,27 @@ export default function Home() {
       setShift(updates.shift);
       setAutoIterationsOn(updates.autoIterationsOn);
       setMaxIterations(updates.maxIterations);
-      setCanvasWidth(updates.canvasWidth);
-      setCanvasHeight(updates.canvasHeight);
+      // A stop carries no canvas size — how big the picture is is the page's own
+      // business, not the walk's — so a walk leaves the canvas where it is. Every
+      // other link names the size it was written on.
+      if (stops === null) {
+        setCanvasWidth(updates.canvasWidth);
+        setCanvasHeight(updates.canvasHeight);
+      }
       // Settings, not views, are what a preset names: a link is a view, so no
       // preset is selected in the page it opens.
       setCurrentPreset("");
       setLinkArrivals((count) => count + 1);
       wander.notifyActivity();
+
+      if (stops !== null) {
+        playlistRef.current = createPlaylist(stops, stops[0]);
+        // A refused start — a drawer or a text field has the user's attention —
+        // leaves nothing to walk, and a walk waiting for the next tour is one
+        // nobody asked for.
+        if (!tourMode.hashTour()) playlistRef.current = null;
+        return;
+      }
 
       // A link can also ask for a tour from the view it describes (`#tour`
       // names none, so it is the opening view). The tour waits for the view to
@@ -944,6 +997,9 @@ export default function Home() {
       // button made it and the page saw no input: it ends a tour, and a tour
       // the link asks for is started again below.
       tourMode.stop();
+      // It gives up a walk too, before the fragment is applied: the fragment
+      // arriving may be a tour link of its own, and that one is the walk.
+      giveUpWalk();
       journey.arrive(window.location.hash);
       syncHistoryButtons();
       applyViewLink(window.location.hash);
@@ -952,7 +1008,7 @@ export default function Home() {
     window.addEventListener("hashchange", handleHashChange);
 
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [applyViewLink, journey, syncHistoryButtons, tourMode]);
+  }, [applyViewLink, giveUpWalk, journey, syncHistoryButtons, tourMode]);
 
   // The view as a link, with the palette's Shift named. The view's own Shift
   // is what the address bar and everything that follows the view spell; the
@@ -1295,6 +1351,41 @@ export default function Home() {
     if (copy.kind === "manual") copyFieldRef.current?.select();
   }, [copy]);
 
+  /**
+   * Hand a URL to the clipboard, with the fallbacks Copy link has always had.
+   *
+   * Both copy buttons go through here. Nothing selected by hand is needed when
+   * the clipboard takes the URL; a browser without the API, or one that refuses
+   * the write, gets the URL in a field to copy from instead of a button that did
+   * nothing. The offer belongs to the view on screen rather than to the URL, so
+   * it is taken away when the view moves on and not by a palette that is still
+   * flowing.
+   */
+  const copyUrl = useCallback(
+    (url: string) => {
+      const offerToSelect = () =>
+        setCopy({ kind: "manual", link: currentLink, url });
+
+      const clipboard = navigator.clipboard;
+      if (!clipboard) {
+        offerToSelect();
+        return;
+      }
+
+      clipboard.writeText(url).then(() => {
+        setCopy({ kind: "copied" });
+        if (copyTimerRef.current !== null) {
+          window.clearTimeout(copyTimerRef.current);
+        }
+        copyTimerRef.current = window.setTimeout(
+          () => setCopy({ kind: "idle" }),
+          LINK_COPIED_MS,
+        );
+      }, offerToSelect);
+    },
+    [currentLink],
+  );
+
   const handleCopyLink = useCallback(() => {
     // The link is the picture on screen, however far behind it the follower
     // above happens to be, so the address bar is brought up to date first.
@@ -1308,37 +1399,38 @@ export default function Home() {
     const link = viewLinkFor(cycleShiftRef.current);
 
     writeViewLink(`#${link}`, Date.now());
-    const url = copyLinkUrl(
+    copyUrl(
+      copyLinkUrl(window.location.origin, window.location.pathname, link),
+    );
+  }, [copyUrl, viewLinkFor, writeViewLink]);
+
+  // The stops a tour link would name for the journey so far: the places the
+  // visitor has walked, in order, with the view on screen last. It is worked out
+  // as the page renders rather than at the click, because the button has to say
+  // whether there is a walk to share — and the journey is a plain object no
+  // render follows, but nothing that changes these stops changes without the
+  // view moving too, so the view is the dependency that keeps them current.
+  const tourStops = useMemo(
+    () =>
+      playlistStops(journey.visited, viewLinkUpdatesFrom(`#${currentLink}`)),
+    [journey, currentLink],
+  );
+  const canCopyTourLink = tourStops.length >= MIN_TOUR_STOPS;
+
+  // Copy tour link: the places just visited, as a walk somebody else can play.
+  // It is a query on this origin and path like Copy link's, so a chat previews
+  // it as the place the walk begins at — and the address bar is left alone, for
+  // the same reason: the bar names the view on screen, and this link names
+  // several of them.
+  const handleCopyTourLink = useCallback(() => {
+    const url = copyTourUrl(
       window.location.origin,
       window.location.pathname,
-      link,
+      tourStops,
     );
 
-    // Nothing selected by hand is needed when the clipboard takes the URL; a
-    // browser without the API, or one that refuses the write, gets the URL in a
-    // field to copy from instead of a button that did nothing. The offer
-    // belongs to the view rather than to the URL, so it is taken away when the
-    // view moves on and not by a palette that is still flowing.
-    const offerToSelect = () =>
-      setCopy({ kind: "manual", link: currentLink, url });
-
-    const clipboard = navigator.clipboard;
-    if (!clipboard) {
-      offerToSelect();
-      return;
-    }
-
-    clipboard.writeText(url).then(() => {
-      setCopy({ kind: "copied" });
-      if (copyTimerRef.current !== null) {
-        window.clearTimeout(copyTimerRef.current);
-      }
-      copyTimerRef.current = window.setTimeout(
-        () => setCopy({ kind: "idle" }),
-        LINK_COPIED_MS,
-      );
-    }, offerToSelect);
-  }, [currentLink, viewLinkFor, writeViewLink]);
+    if (url !== null) copyUrl(url);
+  }, [copyUrl, tourStops]);
 
   // Whether the help overlay is up. The Help button and the `?` key both set
   // it, so the two ways in are one piece of state rather than two.
@@ -2136,16 +2228,64 @@ export default function Home() {
     juliaRealInputRef.current?.focus();
   }, [settingsOpen]);
 
-  // What a hop of the tour does: ask the engine for the next place, from where
-  // the tour is, and go there the way a tile does. The first hop of a tour also
-  // writes the view being left into the address bar, which is what lets `#tour`
-  // (and `tour=1`) leave the bar, and what keeps Back on the view before the
-  // tour. Handed to the clock after every render, because the clock is built
-  // once and the view moves under it.
+  // Show one stop of a shared walk: the view it names, over the last with the
+  // tour's own crossfade. A stop carries no canvas size, so the page's own is
+  // kept — a walk does not resize the picture — and it is nobody's jump, the
+  // same as a tour's hop to a place: the end of the tour counts the one entry.
+  const showStop = (stop: ViewLinkUpdates) => {
+    const target = encodeView({ ...stop, canvasWidth, canvasHeight });
+    if (target === currentLink) return;
+
+    startCrossfade(target, TOUR_CROSSFADE_MS);
+    setFractalType(stop.fractalType);
+    setVariant(stop.variant);
+    setCenterX(stop.centerX);
+    setCenterY(stop.centerY);
+    setZoomLevel(stop.zoomLevel);
+    setColorScheme(stop.colorScheme);
+    setReverse(stop.reverse);
+    setShift(stop.shift);
+    setAutoIterationsOn(stop.autoIterationsOn);
+    setMaxIterations(stop.maxIterations);
+    setCurrentPreset("");
+    wander.notifyActivity();
+  };
+
+  // What a hop of the tour does. A walk from a tour link comes first: the stops
+  // the link names are shown in order, and when they run out the ordinary tour
+  // takes over from the last one, so a shared walk is a way in and not another
+  // kind of tour. The walk's own first stop is the view the link put on screen,
+  // so the first hop — which a wandering tour makes at once, to set the picture
+  // moving — only gives the address bar that view: the walk is held for its
+  // dwell like any other stop.
+  //
+  // Otherwise the hop asks the engine for the next place, from where the tour
+  // is, and goes there the way a tile does. The first hop of a tour also writes
+  // the view being left into the address bar, which is what lets `#tour` (and
+  // `tour=1`) leave the bar, and what keeps Back on the view before the tour.
+  // Handed to the clock after every render, because the clock is built once and
+  // the view moves under it.
   useEffect(() => {
     tourMode.setHopHandler((first) => {
+      if (first) writeLeavingView();
+
+      const walk = playlistRef.current;
+      if (walk !== null) {
+        if (first) {
+          if (walk.stops.length > 0) return;
+        } else {
+          const step = nextPlaylistStop(walk);
+          if (step !== null) {
+            playlistRef.current = step.state;
+            showStop(step.stop);
+            return;
+          }
+        }
+        // The walk has run out, or was given up: from here the tour wanders.
+        playlistRef.current = null;
+      }
+
       if (first || tourEngineRef.current === null) {
-        writeLeavingView();
         tourEngineRef.current = initialTourState(placeView);
       }
 
@@ -2354,6 +2494,8 @@ export default function Home() {
         return;
       }
 
+      // Input ends a tour, and with it the walk that tour was taking.
+      if (tourMode.state === "playing") giveUpWalk();
       tourMode.activity();
     };
 
@@ -2411,7 +2553,7 @@ export default function Home() {
       window.removeEventListener("blur", handleWindowBlur);
       tourMode.dispose();
     };
-  }, [tourMode]);
+  }, [giveUpWalk, tourMode]);
 
   // Keep the screen on while a tour plays, as best the browser allows.
   useEffect(() => {
@@ -2828,19 +2970,31 @@ export default function Home() {
               </Button>
             </div>
 
-            {/* Copy link sits under the buttons that move the view, since
-                    what it copies is that view. The status line is in the page
-                    when it is empty so a screen reader hears it fill in, and
-                    the fallback field appears under it for a browser that will
-                    not take a clipboard write. */}
+            {/* The copy buttons sit under the buttons that move the view,
+                    since what Copy link copies is that view and what Copy tour
+                    link copies is the journey to it. The status line is in the
+                    page when it is empty so a screen reader hears it fill in,
+                    and the fallback field appears under it for a browser that
+                    will not take a clipboard write. */}
             <div className="flex items-center gap-2">
               <Button onClick={handleCopyLink} variant="secondary" size="sm">
                 Copy link
+              </Button>
+              <Button
+                onClick={handleCopyTourLink}
+                disabled={!canCopyTourLink}
+                variant="secondary"
+                size="sm"
+              >
+                Copy tour link
               </Button>
               <p role="status" className="text-xs text-gray-600">
                 {COPY_MESSAGES[copy.kind]}
               </p>
             </div>
+            {!canCopyTourLink && (
+              <p className="text-xs text-gray-600">{COPY_TOUR_HINT}</p>
+            )}
             {copy.kind === "manual" && (
               <input
                 ref={copyFieldRef}
