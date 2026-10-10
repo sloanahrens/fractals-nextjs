@@ -69,4 +69,9 @@ export const burningShipKind: FractalKind = {
   iterations(point, maxIterations, smooth) {
     return burningShipIterations(point, maxIterations, smooth);
   },
+  escapeInfo(point, maxIterations) {
+    const steps = burningShipIterations(point, maxIterations, false);
+
+    return { steps, escaped: steps < maxIterations };
+  },
 };

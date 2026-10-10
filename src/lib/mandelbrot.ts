@@ -145,6 +145,13 @@ export const mandelbrotKind: FractalKind = {
       ? smoothMandelbrotIterations(point, maxIterations)
       : mandelbrotIterations(point, maxIterations);
   },
+  escapeInfo(point, maxIterations) {
+    // The interior shortcut is a point in the set, so it is the same answer
+    // the count gives: the cap, and no escape.
+    const steps = mandelbrotIterations(point, maxIterations);
+
+    return { steps, escaped: steps < maxIterations };
+  },
 };
 
 /**

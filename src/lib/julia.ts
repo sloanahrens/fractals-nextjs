@@ -209,5 +209,15 @@ export function createJuliaKind(constant: ComplexNumber): FractalKind {
     iterations(point, maxIterations, smooth) {
       return escapeTimeIterations(point, constant, maxIterations, smooth);
     },
+    escapeInfo(point, maxIterations) {
+      const steps = escapeTimeIterations(
+        point,
+        constant,
+        maxIterations,
+        false,
+      );
+
+      return { steps, escaped: steps < maxIterations };
+    },
   };
 }

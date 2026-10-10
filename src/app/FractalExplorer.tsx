@@ -139,6 +139,11 @@ import {
   setMathCardOpen,
   subscribeToMathCard,
 } from "../lib/mathCard";
+import {
+  type PointProbe,
+  createFrameThrottle,
+  probeAtPointer,
+} from "../lib/mathProbe";
 import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
 import { BlankHint } from "../components/ui/BlankHint";
@@ -1578,6 +1583,81 @@ export default function Home() {
     tourMode.setConditions({ overlayOpen: tourOverlayOpen });
   }, [tourMode, tourOverlayOpen]);
 
+  // The Math probe: the number under the pointer, what its orbit did and the
+  // colour the picture paints it, which the expanded card shows. It runs only
+  // while that card is on screen — collapsed, hidden by a tour or a dialog, or
+  // closed, nothing is listened for and nothing is computed — and it works out
+  // one point per animation frame at most, so a pointer flooding events is
+  // never inside a pointer handler and never sits between the renderer's rows.
+  const probeLive =
+    mathOpen && mathExpanded && !tourPlaying && !tourOverlayOpen;
+  const [probe, setProbe] = useState<PointProbe | null>(null);
+  // Where the pointer last was, in CSS pixels. Kept across a change of view so
+  // that a picture moving under a resting pointer re-reads the same place, and
+  // dropped when the pointer leaves the picture or the probe stops.
+  const pointerRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!probeLive) {
+      pointerRef.current = null;
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const run = () => {
+      const at = pointerRef.current;
+      if (!at) return;
+
+      const next = probeAtPointer(
+        fractalKind,
+        at.x,
+        at.y,
+        canvas.getBoundingClientRect(),
+        canvas.width,
+        canvas.height,
+        bounds,
+        effectiveMaxIterations,
+        colorScheme,
+      );
+      if (next) setProbe(next);
+    };
+
+    const throttle = createFrameThrottle(run);
+
+    const handleMove = (event: PointerEvent) => {
+      pointerRef.current = { x: event.clientX, y: event.clientY };
+      throttle.request();
+    };
+    const handleLeave = (event: PointerEvent) => {
+      // A finger lifting is the touch ending, not a pointer moving away: the
+      // point it was on stays up to be read. A mouse or a pen leaving the
+      // picture clears the probe.
+      if (event.pointerType === "touch") return;
+
+      pointerRef.current = null;
+      throttle.cancel();
+      setProbe(null);
+    };
+
+    canvas.addEventListener("pointermove", handleMove, { passive: true });
+    canvas.addEventListener("pointerdown", handleMove, { passive: true });
+    canvas.addEventListener("pointerleave", handleLeave);
+
+    // A view that has moved under a resting pointer reports no move of its
+    // own, and the ref still holds where the pointer was, so read that place
+    // in the new view rather than waiting for the pointer to stir.
+    if (pointerRef.current) throttle.request();
+
+    return () => {
+      canvas.removeEventListener("pointermove", handleMove);
+      canvas.removeEventListener("pointerdown", handleMove);
+      canvas.removeEventListener("pointerleave", handleLeave);
+      throttle.cancel();
+    };
+  }, [probeLive, fractalKind, bounds, effectiveMaxIterations, colorScheme]);
+
   // The Auto-wander pill's one-time offer to a visitor who has not found it.
   const wanderNudge = useWanderNudge({
     wanderOn,
@@ -1871,6 +1951,10 @@ export default function Home() {
                 colorScheme,
               }}
               belowChips={variants !== null}
+              // Held only while the probe runs, so a card that has just been
+              // expanded again never shows the point from before it was
+              // collapsed.
+              probe={probeLive ? probe : null}
               stepAside={blankHintShown}
               onClose={closeMath}
               returnFocusRef={mathButtonRef}

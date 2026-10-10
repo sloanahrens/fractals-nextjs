@@ -66,4 +66,9 @@ export const tricornKind: FractalKind = {
   iterations(point, maxIterations, smooth) {
     return tricornIterations(point, maxIterations, smooth);
   },
+  escapeInfo(point, maxIterations) {
+    const steps = tricornIterations(point, maxIterations, false);
+
+    return { steps, escaped: steps < maxIterations };
+  },
 };

@@ -9,7 +9,7 @@ import React, {
   useSyncExternalStore,
 } from "react";
 
-import { describeFractalMath } from "../../lib/fractalMath";
+import { describeFractalMath, formatComplex } from "../../lib/fractalMath";
 import {
   type MathCardView,
   formatViewNumbers,
@@ -19,6 +19,11 @@ import {
   setMathCardExpanded,
   subscribeToMathCard,
 } from "../../lib/mathCard";
+import {
+  type PointProbe,
+  colourCss,
+  describeProbe,
+} from "../../lib/mathProbe";
 import { PLACES, placeAtView } from "../../lib/places";
 import { MathView } from "./MathView";
 
@@ -31,6 +36,12 @@ interface MathCardProps {
   view: MathCardView;
   /** Whether the switcher shows its second row, which pushes the card down. */
   belowChips: boolean;
+  /**
+   * The live probe: the point the pointer is over, what its orbit did and the
+   * colour the picture paints it, or null while the pointer is not over the
+   * picture (and, from the page, whenever the probe is not running at all).
+   */
+  probe?: PointProbe | null;
   /**
    * Whether the blank-view hint is showing. Under 640 px the picture is too
    * short for the switcher, the card and the hint together, so the card steps
@@ -76,6 +87,12 @@ const ROW_LABEL = "text-xs font-medium uppercase tracking-wide text-white/60";
  * fractal and variant, and the numbers from the state the renderer draws, so
  * the card cannot disagree with the picture. It is read-only.
  *
+ * Expanded it also carries the live probe: with the pointer over the picture,
+ * the number under it, how its orbit ended and a swatch of the colour it is
+ * painted. The page computes it (`src/lib/mathProbe.ts`) and hands it down,
+ * only while the card is expanded and on screen; the row says where to point
+ * when there is none.
+ *
  * The numbers follow the live view, throttled to the link writer's cadence.
  * It starts shown and collapsed, and both choices are kept in the browser
  * (`src/lib/mathCard.ts`). Escape closes the card only while focus is in it or
@@ -93,6 +110,7 @@ export function MathCard({
   variant,
   view,
   belowChips,
+  probe = null,
   stepAside = false,
   onClose,
   returnFocusRef,
@@ -247,6 +265,37 @@ export function MathCard({
               <dd>{numbers.iterations}</dd>
               <dt className={ROW_LABEL}>Colours</dt>
               <dd>{numbers.scheme}</dd>
+
+              {/* The probe: the number under the pointer, what its orbit did
+                  and the colour the picture paints it. Without one the row
+                  says where to point, so the reading is discoverable. */}
+              <dt className={ROW_LABEL}>Point</dt>
+              <dd>
+                {probe ? (
+                  <>
+                    <span className="tabular-nums">
+                      {formatComplex(probe.point.real, probe.point.imaginary)}
+                    </span>
+                    {/* The pixel's colour; the number beside it says what it
+                        means, so the swatch itself has nothing to read out. */}
+                    <span
+                      aria-hidden="true"
+                      data-probe-colour={colourCss(probe.colour)}
+                      className="ml-2 inline-block h-3 w-3 rounded-sm align-middle ring-1 ring-white/40"
+                      style={{ backgroundColor: colourCss(probe.colour) }}
+                    />
+                  </>
+                ) : (
+                  <span className="text-white/60">Hover the picture</span>
+                )}
+              </dd>
+
+              {probe && (
+                <>
+                  <dt className={ROW_LABEL}>Orbit</dt>
+                  <dd>{describeProbe(fractalType, probe.info, iterations)}</dd>
+                </>
+              )}
 
               {place && (
                 <>
