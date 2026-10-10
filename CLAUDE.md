@@ -67,6 +67,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Render quality** (`src/lib/renderQuality.ts`): Whether a redraw is a low-resolution preview or a full-resolution render
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
+- **Site origin** (`src/lib/siteOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `generateMetadata` in `src/app/layout.tsx` puts on og:image, twitter:image and og:url
 - **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
@@ -243,6 +244,54 @@ _Last updated: 2026-10-10_
   scrolling classes in `fractal-switcher-panel.test.ts`. Every place and the
   featured place already run through the catalogue guards (kind, range, link
   round trip, non-blank render, featured detail share).
+
+### Link preview: a card on the app's own origin (2026-10-10)
+
+- Sharing the staging link showed a generic link glyph: `layout.tsx` fell back to
+  `https://fractals.team.trabian.ai` when `NEXT_PUBLIC_APP_URL` was unset (it is
+  unset on Cloud Run), so og:image pointed at a host that is not this app,
+  og:url was an invented `next-fractals-app.run.app`, the og title said "Nextjs
+  Fractals", the declared 1200x630 was a 1578x1172 file, and there was no
+  favicon.
+- The origin comes from the request, because the release builds one image and
+  promotes the same digest to production, so nothing can be baked in. The
+  layout's static `metadata` is an async `generateMetadata` that reads
+  `next/headers` and calls `siteOrigin(getHeader, env)` (`src/lib/siteOrigin.ts`,
+  pure, tested in `siteOrigin.test.ts`): `x-forwarded-host`, else `host`; the
+  scheme is `x-forwarded-proto` when it is `http` or `https`, else https, except
+  a local host with none, which is http; a host that is not a plain hostname and
+  port (a path, space, scheme, quote, credential) is never echoed and counts as
+  absent; with no host, `NEXT_PUBLIC_APP_URL` if it is an http(s) URL, else
+  `http://localhost:3000`. The result sets `metadataBase`, og:url and the
+  absolute og:image and twitter:image. Reading `headers()` makes `/`
+  server-rendered on demand (`ƒ` in the build output, not `○`); the page's HTML
+  was already the same for everyone, and the one extra render per request is
+  the price of a correct origin.
+- Title is "Next Fractals - Interactive Fractal Explorer" for title, og:title and
+  twitter:title. The description names the Tricorn too (it is in `FRACTAL_TYPES`
+  on main); the card's own line stays the three sets the bead named. og:image:width/height are 1200 and 630,
+  the file's own, with `og:image:alt`.
+- `public/og-card.png` replaces `public/fractal-preview.png` (a new name, so chat
+  apps do not serve the cached old image), and `src/app/icon.png` (192x192) and
+  `src/app/apple-icon.png` (180x180) are Next file conventions, so the head
+  links appear without code. All three come from `scripts/make-og-card.mjs`, a
+  one-off generator that is neither in `make gate` nor in the Docker image: it
+  bundles `FractalRenderer` with esbuild, draws in the system Chrome, and uses
+  sharp (already installed by Next) to cut the icons and palette-compress the
+  card under 300 KB. Run `node scripts/make-og-card.mjs` to regenerate and commit
+  the PNGs; `--sheet out.png --places id[:scheme],...` draws a contact sheet of
+  candidates. The card is `julia-classic-deep-spiral` in its own scheme at the
+  card's 1.91:1 shape, the subject right of centre, under a dark left-to-right
+  gradient carrying "Fractal Explorer" (Inter 800, fetched from Google Fonts) and
+  the one-line subtitle. Checked by downscaling to 300 px wide: the title and the
+  subtitle both read.
+- Integration tier (`tests/integration/deployed.test.ts`, with `html.ts` for the
+  tag readers): og:image and twitter:image are `<origin>/og-card.png` on the
+  origin of `STAGING_URL`, og:url is that origin (Next writes the root URL
+  without its slash, so the check accepts either), the card is 200 `image/png`
+  with an IHDR of 1200x630 under 300 KB, and the head's `icon` and
+  `apple-touch-icon` links answer 200 `image/png`. The unit suite is unchanged
+  in what it needs: no network.
 
 ### Fractal variants (2026-10-10)
 
@@ -1358,7 +1407,7 @@ stays gone instead of measuring its classes._
 - Added `tests/integration/`, the checks that call a deployed app rather than
   the route handlers directly: `/api/health`, `/` (its `<h1>` and document
   title), `/api/version` (its `commit`, and equality with `EXPECT_SHA` when that
-  is set) and `/fractal-preview.png`, the social preview `src/app/layout.tsx`
+  is set) and `/og-card.png`, the social card `src/app/layout.tsx`
   points its metadata at. What they need is a deployment, so the staging
   workflow can run `make integration STAGING_URL=<url> EXPECT_SHA=<commit>`
   after it rolls staging onto a commit; that wiring is the devops side's
@@ -1402,7 +1451,7 @@ stays gone instead of measuring its classes._
   rollback does not read as "Built", and returning empty text when it has
   neither — which is the footer's cue to render nothing.
 - The footer is a client component (`src/components/ui/VersionFooter.tsx`) that
-  fetches the route after the page is up, so `/` stays a static prerender, and
+  fetches the route after the page is up, so the page itself does not wait on it, and
   it renders nothing if the fetch fails.
 
 ### Random walk (2026-10-08)
