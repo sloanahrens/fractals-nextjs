@@ -93,8 +93,8 @@ import { Select } from "../components/ui/Select";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { PresetSelector } from "../components/ui/PresetSelector";
-import { ZoomDisplay } from "../components/ui/ZoomDisplay";
 import { CenterControls } from "../components/ui/CenterControls";
+import { describeView } from "../lib/viewReadout";
 import { CustomPresetManager } from "../components/ui/CustomPresetManager";
 import { VersionFooter } from "../components/ui/VersionFooter";
 import { HelpDialog } from "../components/ui/HelpDialog";
@@ -1220,28 +1220,10 @@ export default function Home() {
           />
         </div>
 
-        {/* Navigation Sliders */}
+        {/* Navigation */}
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <h3 className="text-lg font-semibold mb-4">Navigation</h3>
           <div className="space-y-4">
-            <Slider
-              label="Center X (Real)"
-              value={centerX}
-              min={-2.5}
-              max={1.5}
-              step={0.01}
-              onChange={(value) => handleViewChange(() => setCenterX(value))}
-              formatValue={(v) => v.toFixed(3)}
-            />
-            <Slider
-              label="Center Y (Imaginary)"
-              value={centerY}
-              min={-1.5}
-              max={1.5}
-              step={0.01}
-              onChange={(value) => handleViewChange(() => setCenterY(value))}
-              formatValue={(v) => v.toFixed(3)}
-            />
             <Slider
               label="Zoom Level"
               value={zoomToSlider(zoomLevel)}
@@ -1328,11 +1310,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* View Info and Center Controls */}
+        {/* Where the view is, and the boxes that set its centre */}
         <div className="bg-white p-6 rounded-lg shadow-lg">
-          <h3 className="text-lg font-semibold mb-4">View Info</h3>
+          <h3 className="text-lg font-semibold mb-4">Coordinates</h3>
           <div className="space-y-4">
-            <ZoomDisplay bounds={bounds} />
+            <p role="status" className="text-sm font-mono text-gray-700">
+              {describeView(bounds)}
+            </p>
             <CenterControls
               bounds={bounds}
               onCenterChange={handleCenterChange}

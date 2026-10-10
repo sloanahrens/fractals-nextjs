@@ -76,7 +76,8 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 ### Component Structure
 
 - **UI Components** (`src/components/ui/`): Reusable form controls (Slider, Select, Input, Button)
-- **Specialized Controls**: ZoomDisplay, CenterControls, PresetSelector, CustomPresetManager
+- **View read-out** (`src/lib/viewReadout.ts`): The "Zoom 400x at -0.7453, 0.1127" line above the coordinate boxes
+- **Specialized Controls**: CenterControls, PresetSelector, CustomPresetManager
 - **Layout**: Single-page application, canvas-first: the picture fills the viewport under a floating top bar (`TopBar.tsx`: title, Help, Settings), and every control sits in the Settings drawer (`SettingsDrawer.tsx`) — see the Version Note of 2026-10-09
 
 ### Performance Optimizations
@@ -163,6 +164,29 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### One place for position and zoom (2026-10-09)
+
+- Inside the Settings drawer the Center X and Center Y sliders and the View
+  Info card (`ZoomDisplay`, deleted with its file) are gone; each thing now
+  appears once. The Navigation card keeps the Zoom Level slider, Zoom In, Zoom
+  Out and Reset View, and the card that held View Info is headed "Coordinates":
+  a read-out line over `CenterControls` (the Center Coordinates boxes with Apply
+  and Reset). The Manual Coordinates card is unchanged.
+- The read-out is `describeView(bounds)` in `src/lib/viewReadout.ts`, a
+  `role="status"` paragraph: `Zoom 400x at -0.7453, 0.1127`. The zoom goes
+  through `formatZoom` and the centre through `formatCoordinate`, the helper the
+  boxes below it use (six significant digits), so line and boxes never disagree
+  about one view. It is not the link's ten-digit rounding: that would print a
+  centre fifteen characters wide on a line meant to be glanced at. It reads
+  `bounds`, which every setter that moves the view already updates, so it
+  follows drags, presets, links and the walk with no state of its own.
+- Handlers and state are untouched: `centerX`/`centerY` and their setters
+  remain, since the gestures, links, presets and the walk all write them; only
+  the slider handlers that called them are gone.
+- `src/lib/__tests__/viewReadout.test.ts` covers the Mandelbrot and Julia
+  opening views, a deep zoom, negative centres and long float noise;
+  `canvas-first-page.test.ts` now fails if either slider or the card returns.
 
 ### Canvas-first page: top bar and Settings drawer (2026-10-09)
 
@@ -886,8 +910,8 @@ _Last updated: 2026-10-09_
 - Coordinate boxes hold only what the user typed (a `draft` in `page.tsx` and
   `CenterControls`). An untouched box shows `formatCoordinate` of the view — at
   most six significant digits, trailing zeros dropped — while Apply reuses the
-  view's own float64, so a short display costs no precision. `ZoomDisplay` reads
-  its coordinates through the same helper.
+  view's own float64, so a short display costs no precision. The read-out line
+  above the boxes (`viewReadout.ts`) formats through the same helper.
 
 ### One base view for zoom (2026-10-08)
 
@@ -903,7 +927,7 @@ _Last updated: 2026-10-09_
   through `boundsToView`, and the built-in presets are framed at exactly 1, 200
   and 2000 against the 4-unit base.
 - The readout is exact and `formatZoom` (presets.ts) is what makes it short:
-  the Zoom Level slider and the View Info panel format with it, so a notch that
+  the Zoom Level slider and the read-out above the coordinate boxes format with it, so a notch that
   moves the view by a hair over 10% shows as 1.1x instead of rounding to 1x.
   `MIN_ZOOM`, `MAX_ZOOM` and `clampZoom` moved from `page.tsx` into
   `mandelbrot.ts` so the range the page clamps a gesture into is testable.
@@ -1020,7 +1044,7 @@ _Last updated: 2026-10-09_
   `findDOMNode`, `unmountComponentAtNode`, string refs, `createFactory`, and
   `defaultProps`/`propTypes` on function components; none are used here. The
   four `React.FC` components (`CenterControls`, `CustomPresetManager`,
-  `PresetSelector`, `ZoomDisplay`) take no implicit `children`, so the 19 types
+  `PresetSelector`, and `ZoomDisplay`, since removed) take no implicit `children`, so the 19 types
   are satisfied as written.
 - `npm run build` is warning-free and `make gate` is green on the same
   60-test Vitest suite as before.

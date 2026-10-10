@@ -28,7 +28,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Pan Navigation**: Click and drag to explore different regions, or drag with one finger on a touch screen
 - **Keyboard Navigation**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
 - **Help Overlay**: A Help button in the top bar, or the `?` key from anywhere on the page, opens a dialog listing every way to drive the explorer — mouse and touch, keyboard, the random walk, and the views and links
-- **Center Controls**: Precise positioning with coordinate input, and four boxes under Manual Coordinates that apply a view you type in: Apply says so when a box cannot be read or runs the wrong way, and notes when a box of another shape is fitted around its centre to the view's 4:3
+- **Center Controls**: Precise positioning with coordinate input under a line that reads the zoom and centre of the view on screen ("Zoom 400x at -0.7453, 0.1127"), and four boxes under Manual Coordinates that apply a view you type in: Apply says so when a box cannot be read or runs the wrong way, and notes when a box of another shape is fitted around its centre to the view's 4:3
 - **Random Walk**: Tick Random walk in the Navigation card of the Settings drawer and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose
 - **Download PNG**: In the Settings drawer, save the canvas at its full resolution, named from the fractal and the view it shows
 - **Shareable Links**: The address bar follows the view once a render settles, and the Copy link button in the Navigation card of the Settings drawer puts that URL — fractal, Julia constant, centre, zoom, colour scheme, iterations and canvas size — on the clipboard
@@ -175,7 +175,7 @@ dependencies and needs nothing else.
 
 ### Basic Navigation
 
-- **The Page**: The picture fills the window, with a slim bar over it holding the title, Help and Settings. The bar fades after two seconds without a pointer move, key press or touch and comes back on any of them, and it stays up while Settings is open or one of its buttons has keyboard focus. Settings opens a drawer down the right-hand side — a bottom sheet on a narrow screen — holding every control the page has: presets, navigation, view info, rendering parameters, canvas resolution, manual coordinates, saved views and Download PNG. Escape, its Close button and a click outside it close it, and opening it does not interrupt a render
+- **The Page**: The picture fills the window, with a slim bar over it holding the title, Help and Settings. The bar fades after two seconds without a pointer move, key press or touch and comes back on any of them, and it stays up while Settings is open or one of its buttons has keyboard focus. Settings opens a drawer down the right-hand side — a bottom sheet on a narrow screen — holding every control the page has: presets, navigation, coordinates, rendering parameters, canvas resolution, manual coordinates, saved views and Download PNG. Escape, its Close button and a click outside it close it, and opening it does not interrupt a render
 - **Zoom In/Out**: Use the mouse wheel, the Zoom In/Out buttons, or the Zoom Level slider
 - **Pan**: Click and drag to move around the fractal, or drag with one finger on a touch screen
 - **Keyboard**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
@@ -230,6 +230,7 @@ dependencies and needs nothing else.
 │   │   ├── presets.ts              # Built-in and saved presets
 │   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
 │   │   ├── version.ts              # Build and deploy facts, and the footer wording
+│   │   ├── viewReadout.ts          # The "Zoom 400x at -0.7453, 0.1127" line above the coordinate boxes
 │   │   ├── viewLink.ts             # A view as a URL fragment, and back
 │   │   ├── viewLinkState.ts        # What a link means for the page, and the address-bar throttle
 │   │   ├── wander.ts               # One random-walk step
