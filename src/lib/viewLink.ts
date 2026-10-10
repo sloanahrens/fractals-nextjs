@@ -40,7 +40,9 @@
  * Reading is the suspicious half. A link arrives from anywhere, so nothing in
  * it is trusted: an unknown key is ignored, and every value is judged on its
  * own and left out when it fails, which puts the page on its default for that
- * field rather than on a broken one. Nothing here throws — not for a truncated
+ * field rather than on a broken one — and that default is the named fractal's
+ * own frame for a centre or a zoom, since a link may name a picture and no
+ * place in it (`viewLinkState.ts`). Nothing here throws — not for a truncated
  * fragment, not for a percent sign that ends the string, not for a 600
  * character paste — so a bad link is a page looking the way it did before,
  * never an error screen.
@@ -350,8 +352,9 @@ function addNumber(
  *
  * A field the format cannot carry is left out of the link, exactly as the
  * decoder leaves out a field it cannot read, so the two halves agree on what a
- * link holds and the page keeps its default for whatever is missing. The
- * version is always written.
+ * link holds and the reader fills in whatever is missing: the page's opening
+ * view, or the named fractal's own frame for a centre or a zoom
+ * (`viewLinkState.ts`). The version is always written.
  *
  * @param state - The view to write
  * @returns The fragment's text, beginning `v=1&` and with no leading `#`

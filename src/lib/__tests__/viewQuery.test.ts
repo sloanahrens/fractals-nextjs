@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { defaultViewFor } from "../fractalTypes";
 import { copyLinkUrl, readLocationLink } from "../viewQuery";
 import { decodeView, encodeView } from "../viewLink";
 import { viewLinkUpdatesFrom } from "../viewLinkState";
@@ -148,7 +149,10 @@ describe("readLocationLink", () => {
 
     expect(view.fractalType).toBe("julia");
     expect(view.zoomLevel).toBe(9);
-    expect(view.centerX).toBe(viewLinkUpdatesFrom("").centerX);
+    // The centre it could not read is the frame of the fractal it named, not
+    // the page's own — the Mandelbrot set's centre under a Julia set is empty
+    // plane.
+    expect(view.centerX).toBe(defaultViewFor("julia").centerX);
     expect(view.colorScheme).toBe("classic");
   });
 

@@ -6,13 +6,18 @@
  * fragment back into the fields it could. This module is what the page does
  * with that reading. A link is *partial* and the page's state is not, so every
  * field the link did not carry — including every field the codec refused,
- * which it reports by leaving the field out — has to be filled with the value
- * the page opens on. That filling is `viewLinkToUpdates`, and it lives here
- * rather than in the page so the whole of the rule can be driven in Node.
+ * which it reports by leaving the field out — has to be filled. The centre and
+ * the zoom are filled from the frame of the fractal the link names, because a
+ * link that names a picture and no place in it is a link about that picture and
+ * is asking for its whole view; every other field is filled from the view the
+ * page opens on. That filling is `viewLinkToUpdates`, and it lives here rather
+ * than in the page so the whole of the rule can be driven in Node.
  *
  * `DEFAULT_VIEW_LINK_UPDATES` is that opening view, and the page initialises
- * its state from it. A link's defaults are therefore the page's defaults by
- * construction, instead of two lists that have to be kept in step by hand.
+ * its state from it. A link naming no fractal therefore leaves exactly the
+ * page's own view standing, because the fractal it falls back to is the one the
+ * page opens on and its frame is that view's frame by construction, instead of
+ * two lists that have to be kept in step by hand.
  *
  * `viewLinkUpdatesFrom` is that reading and that filling in one call, because
  * the page asks the question twice with the same answer wanted both times: once
@@ -106,10 +111,21 @@ export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
 /**
  * What a decoded link means for the page.
  *
- * A field the link did not carry keeps the value the page opens on. Nothing
- * arriving here has to be refused: the codec judges each value on its own and
- * leaves out what it cannot read, so a fragment from another build, or from
- * nowhere at all, decodes to no fields and leaves every default standing.
+ * A field the link did not carry keeps the value the page opens on — except the
+ * centre and the zoom, which keep the frame of the fractal the link names. A
+ * link may name a picture and no place in it (`#v=1&f=julia&k=Dendrite&z=400`,
+ * a hand-written or truncated link), and the page's own centre is the Mandelbrot
+ * set's: framing a Julia set there draws empty plane. Filling from
+ * `defaultViewFor` is what the page's own fractal switcher does, so a link with
+ * no centre is one way of asking for the whole view of the fractal it names,
+ * and a link naming no fractal at all still gets exactly the page's opening
+ * view, since `defaultViewFor` of it answers that frame. Each of the three is
+ * judged on its own, so a link carrying a zoom and no centre keeps the zoom it
+ * asked for.
+ *
+ * Nothing arriving here has to be refused: the codec judges each value on its
+ * own and leaves out what it cannot read, so a fragment from another build, or
+ * from nowhere at all, decodes to no fields and leaves every default standing.
  *
  * The variant is only applied to a fractal that can draw it, which is the
  * codec's own rule seen from this side: it writes `k` only beside a fractal that
@@ -131,15 +147,19 @@ export function viewLinkToUpdates(
 ): ViewLinkUpdates {
   const defaults = DEFAULT_VIEW_LINK_UPDATES;
   const fractalType = decoded.fractalType ?? defaults.fractalType;
+  // Where the fractal the link names is framed: the Mandelbrot set's own frame
+  // when it names none, since that is what it falls back to, so this branch
+  // leaves the page's opening view exactly as it was.
+  const frame = defaultViewFor(fractalType);
 
   return {
     fractalType,
     variant: isVariantValue(fractalType, decoded.variant)
       ? decoded.variant
       : variantOn(fractalType, defaults.variant),
-    centerX: decoded.centerX ?? defaults.centerX,
-    centerY: decoded.centerY ?? defaults.centerY,
-    zoomLevel: decoded.zoomLevel ?? defaults.zoomLevel,
+    centerX: decoded.centerX ?? frame.centerX,
+    centerY: decoded.centerY ?? frame.centerY,
+    zoomLevel: decoded.zoomLevel ?? frame.zoom,
     colorScheme: decoded.colorScheme ?? defaults.colorScheme,
     reverse: decoded.reverse ?? defaults.reverse,
     shift: decoded.shift ?? defaults.shift,
