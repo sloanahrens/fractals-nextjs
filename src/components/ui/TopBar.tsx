@@ -20,6 +20,12 @@ interface TopBarProps {
   canSurprise: boolean;
   /** Starts a tour at once, without waiting out the idle time. */
   onTour: () => void;
+  /** Shows or hides the Math card. */
+  onMath: () => void;
+  /** Whether the Math card is showing; the button reads as pressed. */
+  mathOpen: boolean;
+  /** The Math button, so Escape in the card can hand focus back to it. */
+  mathButtonRef?: React.Ref<HTMLButtonElement>;
   /** Opens the help overlay. */
   onHelp: () => void;
   /** Opens the Settings drawer. */
@@ -31,7 +37,7 @@ interface TopBarProps {
 }
 
 const BUTTON_CLASSES =
-  "rounded-lg bg-white/10 px-2 py-1.5 text-xs font-medium sm:px-3 sm:text-sm text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10";
+  "rounded-lg bg-white/10 px-1.5 py-1.5 text-xs font-medium sm:px-3 sm:text-sm text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10";
 
 // Drawn from `sm` up; below it the title is for a screen reader only, which
 // leaves the width to the five buttons.
@@ -68,6 +74,9 @@ export function TopBar({
   onSurprise,
   canSurprise,
   onTour,
+  onMath,
+  mathOpen,
+  mathButtonRef,
   onHelp,
   onSettings,
   settingsOpen,
@@ -80,12 +89,12 @@ export function TopBar({
       data-visible={shown}
       {...focusProps}
       style={{ transitionDuration: `${TOP_BAR_FADE_MS}ms` }}
-      className={`fixed inset-x-0 top-0 z-20 flex h-[var(--top-bar-height)] items-center justify-between gap-2 bg-gray-900/80 px-2 text-white backdrop-blur transition-opacity sm:grid sm:grid-cols-[1fr_auto_1fr] sm:px-4 ${
+      className={`fixed inset-x-0 top-0 z-20 flex h-[var(--top-bar-height)] items-center justify-between gap-1 bg-gray-900/80 px-1 text-white backdrop-blur transition-opacity sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-2 sm:px-4 ${
         shown ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
       <h1 className={TITLE_CLASSES}>Fractal Explorer</h1>
-      <div className="flex gap-1 sm:gap-2">
+      <div className="flex gap-0.5 sm:gap-2">
         <button
           type="button"
           onClick={onSurprise}
@@ -98,7 +107,7 @@ export function TopBar({
           Tour
         </button>
       </div>
-      <div className="flex gap-1 sm:justify-self-end sm:gap-2">
+      <div className="flex gap-0.5 sm:justify-self-end sm:gap-2">
         <button
           type="button"
           onClick={onBack}
@@ -114,6 +123,15 @@ export function TopBar({
           className={BUTTON_CLASSES}
         >
           Forward
+        </button>
+        <button
+          type="button"
+          ref={mathButtonRef}
+          onClick={onMath}
+          aria-pressed={mathOpen}
+          className={BUTTON_CLASSES}
+        >
+          Math
         </button>
         <button type="button" onClick={onHelp} className={BUTTON_CLASSES}>
           Help

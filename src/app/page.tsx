@@ -130,6 +130,7 @@ import { CustomPresetManager } from "../components/ui/CustomPresetManager";
 import { VersionFooter } from "../components/ui/VersionFooter";
 import { HelpDialog } from "../components/ui/HelpDialog";
 import { FractalSwitcher } from "../components/ui/FractalSwitcher";
+import { MathCard } from "../components/ui/MathCard";
 import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
 import { BlankHint } from "../components/ui/BlankHint";
@@ -1029,6 +1030,13 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Whether the Math card is up, and the top bar button that toggles it. The
+  // card reads the fractal, the variant and the view the renderer draws, and
+  // holds nothing of its own but whether it is expanded.
+  const [mathOpen, setMathOpen] = useState(false);
+  const mathButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMath = useCallback(() => setMathOpen(false), []);
+
   // `?` opens the help from anywhere on the page, not only from the canvas,
   // which is what the canvas-local arrow handlers cannot do. The decision is
   // `opensHelpShortcut`'s so it can be tested without a browser: a `?` typed
@@ -1720,6 +1728,9 @@ export default function Home() {
           onSurprise={handleSurprise}
           canSurprise={canSurprise}
           onTour={() => tourMode.buttonStart()}
+          onMath={() => setMathOpen((open) => !open)}
+          mathOpen={mathOpen}
+          mathButtonRef={mathButtonRef}
           onHelp={() => setHelpOpen(true)}
           onSettings={() => setSettingsOpen(true)}
           settingsOpen={settingsOpen}
@@ -1792,6 +1803,28 @@ export default function Home() {
             onSelectCustom={handleSwitchCustom}
             hidden={tourPlaying || tourOverlayOpen}
           />
+
+          {/* The maths of the picture, under the switcher. Not rendered at
+              all while a tour plays or the drawer or the help is up, so it is
+              never over a dialog and its Escape listener is only live while
+              it is on screen. */}
+          {mathOpen && !tourPlaying && !tourOverlayOpen && (
+            <MathCard
+              fractalType={fractalType}
+              variant={variant}
+              view={{
+                centerX,
+                centerY,
+                zoom: zoomLevel,
+                iterations: effectiveMaxIterations,
+                autoIterations: autoIterationsOn,
+                colorScheme,
+              }}
+              belowChips={variants !== null}
+              onClose={closeMath}
+              returnFocusRef={mathButtonRef}
+            />
+          )}
 
           {/* Places worth a look near this view. The thumbnails wait for a
               render in flight, so the strip never slows the picture the user

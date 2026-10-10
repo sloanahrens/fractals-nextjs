@@ -1013,6 +1013,41 @@ function distanceFrom(view: PlaceView, place: Place, span: number): number {
 }
 
 /**
+ * The catalogue place a view is on, if any.
+ *
+ * A view is on a place when it is the same picture within 1% of the view's
+ * span in the centre and 1% in zoom (the rule `suggest` uses to leave the
+ * place you are on out of its list), so a view panned a hair off a place still
+ * names it. A view that cannot be measured is on none.
+ *
+ * @param view - Where the explorer is
+ * @param places - The catalogue to look in
+ * @returns The first place that is the view, in catalogue order, or null
+ */
+export function placeAtView(
+  view: PlaceView,
+  places: readonly Place[],
+): Place | null {
+  if (
+    !Number.isFinite(view.centerX) ||
+    !Number.isFinite(view.centerY) ||
+    !Number.isFinite(view.zoom) ||
+    view.zoom <= 0
+  ) {
+    return null;
+  }
+
+  const span = BASE_WIDTH / view.zoom;
+
+  return (
+    places.find(
+      (place) =>
+        place.fractal === view.fractal && isCurrentView(view, place, span),
+    ) ?? null
+  );
+}
+
+/**
  * What is worth looking at near a view.
  *
  * Pure and deterministic: the same view and catalogue always give the same
