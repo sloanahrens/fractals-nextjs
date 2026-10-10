@@ -53,7 +53,17 @@ import {
   defaultViewFor,
   resolveFractalKind,
 } from "../lib/fractalTypes";
-import { JULIA_CONSTANTS } from "../lib/julia";
+import {
+  CUSTOM_OPTION_LABEL,
+  CUSTOM_OPTION_VALUE,
+  isCustomJuliaConstant,
+  parseCustomConstantInput,
+} from "../lib/customConstantInput";
+import {
+  customConstantName,
+  JULIA_CONSTANTS,
+  parseJuliaConstant,
+} from "../lib/julia";
 import { createRng, nextWanderView } from "../lib/wander";
 import {
   DEFAULT_WANDER_INTERVAL_SECONDS,
@@ -180,6 +190,29 @@ export default function Home() {
   const [juliaConstant, setJuliaConstant] = useState(
     DEFAULT_VIEW_LINK_UPDATES.juliaConstant,
   );
+
+  // The Real and Imaginary boxes of a custom constant hold what the user typed,
+  // so a half-typed "0." is not rewritten under their fingers. They follow the
+  // constant when it moves for any other reason — a link, a saved view, the
+  // select — by adjusting during the render that sees a new name, the way the
+  // coordinate boxes follow the bounds. A name the boxes themselves produced is
+  // recorded as synced where it is set, which is what keeps them from being
+  // rewritten to its canonical spelling.
+  const [juliaRealText, setJuliaRealText] = useState("");
+  const [juliaImaginaryText, setJuliaImaginaryText] = useState("");
+  const [juliaInputError, setJuliaInputError] = useState<string | null>(null);
+  const [syncedJuliaConstant, setSyncedJuliaConstant] = useState(juliaConstant);
+  if (syncedJuliaConstant !== juliaConstant) {
+    setSyncedJuliaConstant(juliaConstant);
+    const point = isCustomJuliaConstant(juliaConstant)
+      ? parseJuliaConstant(juliaConstant)
+      : null;
+    if (point !== null) {
+      setJuliaRealText(String(point.real));
+      setJuliaImaginaryText(String(point.imaginary));
+    }
+    setJuliaInputError(null);
+  }
 
   const fractalKind = useMemo(
     () => resolveFractalKind(fractalType, juliaConstant),
@@ -849,6 +882,49 @@ export default function Home() {
     applyDefaultView("julia");
   };
 
+  // The select's Custom option. It starts from the point the picture is
+  // already drawn with, so choosing it changes the controls and not the
+  // picture: the constant is the same, only spelled as a custom name, and the
+  // view stays where it was.
+  const handleJuliaSelect = (value: string) => {
+    if (value !== CUSTOM_OPTION_VALUE) {
+      handleJuliaConstantChange(value);
+      return;
+    }
+    if (isCustomJuliaConstant(juliaConstant)) return;
+
+    const point = parseJuliaConstant(juliaConstant);
+    const name = point && customConstantName(point.real, point.imaginary);
+    if (name === null || name === undefined) return;
+
+    setJuliaConstant(name);
+    wander.notifyActivity();
+  };
+
+  // Typing in either box. A readable pair goes to the same handler the select
+  // uses; anything else says why and leaves the constant, and so the picture,
+  // as it was.
+  const editJuliaInput = (field: "real" | "imaginary", text: string) => {
+    const realText = field === "real" ? text : juliaRealText;
+    const imaginaryText = field === "imaginary" ? text : juliaImaginaryText;
+
+    if (field === "real") setJuliaRealText(text);
+    else setJuliaImaginaryText(text);
+
+    const result = parseCustomConstantInput(realText, imaginaryText);
+    if ("error" in result) {
+      setJuliaInputError(result.error);
+      return;
+    }
+
+    setJuliaInputError(null);
+    // The same point written another way ("0.50" for "0.5") is not a new
+    // constant, and a new constant would reframe the view.
+    if (result.constant === juliaConstant) return;
+    setSyncedJuliaConstant(result.constant);
+    handleJuliaConstantChange(result.constant);
+  };
+
   const resetToDefault = () => {
     applyDefaultView(fractalType);
     setMaxIterations(100);
@@ -1205,14 +1281,54 @@ export default function Home() {
                 {fractalType === "julia" && (
                   <Select
                     label="Julia constant"
-                    value={juliaConstant}
-                    options={JULIA_CONSTANTS.map((constant) => ({
-                      value: constant.name,
-                      label: constant.name,
-                    }))}
-                    onChange={handleJuliaConstantChange}
+                    value={
+                      isCustomJuliaConstant(juliaConstant)
+                        ? CUSTOM_OPTION_VALUE
+                        : juliaConstant
+                    }
+                    options={[
+                      ...JULIA_CONSTANTS.map((constant) => ({
+                        value: constant.name,
+                        label: constant.name,
+                      })),
+                      {
+                        value: CUSTOM_OPTION_VALUE,
+                        label: CUSTOM_OPTION_LABEL,
+                      },
+                    ]}
+                    onChange={handleJuliaSelect}
                   />
                 )}
+
+                {/* A custom constant is two numbers, so it gets two boxes. The
+                    message has a box of its own, like the coordinates', so the
+                    controls below do not move as it comes and goes. */}
+                {fractalType === "julia" &&
+                  isCustomJuliaConstant(juliaConstant) && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          label="Real"
+                          value={juliaRealText}
+                          inputMode="decimal"
+                          onChange={(text) => editJuliaInput("real", text)}
+                        />
+                        <Input
+                          label="Imaginary"
+                          value={juliaImaginaryText}
+                          inputMode="decimal"
+                          onChange={(text) => editJuliaInput("imaginary", text)}
+                        />
+                      </div>
+                      <div className="min-h-5">
+                        {juliaInputError !== null && (
+                          <p role="status" className="text-xs text-red-600">
+                            {juliaInputError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                 <Checkbox
                   label="Auto iterations"
