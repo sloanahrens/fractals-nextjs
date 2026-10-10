@@ -64,7 +64,9 @@ describe("the Surprise me button", () => {
     const body = handlerBody("handleSurprise");
 
     expect(body).toContain("surpriseTarget(placeView, PLACES)");
-    expect(body).toContain("handlePlaceSelect(target)");
+    // A hop nobody aimed at a place, so the palette goes back to the scheme's
+    // own colours with it — see `colour-controls-panel.test.ts`.
+    expect(body).toContain("handlePlaceSelect(target, { resetColour: true })");
     // The tile's handler is the crossfade and the one history entry; Surprise
     // me has no setters or push of its own to drift from it.
     expect(body).not.toContain("setCenterX");

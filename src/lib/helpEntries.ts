@@ -155,6 +155,11 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Open the drawer that holds every other control; Escape, Close or a click outside it shuts it",
       },
       {
+        keys: "Reverse / Shift",
+        action:
+          "In Settings, under Color Scheme: Reverse walks the palette backwards and Shift slides it a fraction of a turn round, 0 to 100 percent, with Reset colours to put both back. Either repaints the picture at once from iteration counts already computed, so it is instant however deep the view, and both travel in a link, so Copy link, Back and a saved view carry them. A tour or Surprise me puts both back by itself, so neither is tinted by a setting left over from before",
+      },
+      {
         keys: "Presets",
         action:
           "Pick a built-in view for the fractal on the canvas from the Presets dropdown in Settings, or save and load your own",

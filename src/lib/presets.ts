@@ -7,6 +7,11 @@ import {
   variantOn,
 } from "./fractalTypes";
 import { boundsToView } from "./mandelbrot";
+import {
+  DEFAULT_REVERSE,
+  DEFAULT_SHIFT,
+  normalizeShift,
+} from "./paletteControls";
 
 export interface FractalPreset {
   id: string;
@@ -38,6 +43,17 @@ export interface FractalPreset {
    * and leaves it unlisted instead of reading a power as a Julia name.
    */
   variant?: string;
+  /**
+   * Whether the view's palette was walked backwards when it was saved
+   * (`ColorOptions.reverse`). Absent means it was not, which is what a view
+   * saved before the setting existed was: the app had no such control.
+   */
+  reverse?: boolean;
+  /**
+   * How far round the palette the view's colours started when it was saved
+   * (`ColorOptions.shift`), a fraction of a turn. Absent means not at all.
+   */
+  shift?: number;
 }
 
 /** The fractal a view with no `fractal` field was saved for. */
@@ -513,6 +529,57 @@ export function presetVariant(preset: FractalPreset): string {
     stored.find((value) => isVariantValue(fractal, value)) ??
     variantOn(fractal, defaultVariant("julia"))
   );
+}
+
+/**
+ * The colour fields a view saved right now should carry.
+ *
+ * A view's palette is part of it: the same counts coloured two ways are two
+ * pictures, so a saved view keeps whichever way it was saved. Both defaults are
+ * left out of the entry, exactly as `presetFractalFields` leaves out a key that
+ * says nothing — a view saved with the scheme's own colours gets neither field
+ * and its stored JSON stays the shape it had before the settings existed. That
+ * is also what makes a view saved now readable by an older build, which reads
+ * the fields it knows and ignores the rest.
+ *
+ * @param reverse - Whether the palette on the canvas is walked backwards
+ * @param shift - Fraction of a turn the colours start at
+ * @returns The fields to merge into the saved preset
+ */
+export function presetColorFields(
+  reverse: boolean,
+  shift: number,
+): { reverse?: boolean; shift?: number } {
+  const fields: { reverse?: boolean; shift?: number } = {};
+
+  if (reverse !== DEFAULT_REVERSE) fields.reverse = reverse;
+  const wrapped = normalizeShift(shift);
+  if (wrapped !== DEFAULT_SHIFT) fields.shift = wrapped;
+
+  return fields;
+}
+
+/**
+ * The colours a saved view names: its palette's two settings, judged one at a
+ * time.
+ *
+ * A view saved before the settings existed names neither, and one that names a
+ * value this build cannot use — a shift that is not a number, or one that has
+ * been in storage a long time — keeps its default, so the view still loads and
+ * still draws. A shift is read modulo a whole turn, as the mapping and the link
+ * codec read it.
+ *
+ * @param preset - The saved view
+ * @returns Both settings, the defaults for anything it does not say
+ */
+export function presetColorOptions(preset: FractalPreset): {
+  reverse: boolean;
+  shift: number;
+} {
+  return {
+    reverse: preset.reverse === true,
+    shift: normalizeShift(preset.shift),
+  };
 }
 
 // Custom presets live in localStorage: an external store that the components

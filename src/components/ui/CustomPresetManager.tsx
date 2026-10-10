@@ -8,6 +8,7 @@ import {
   deleteCustomPreset,
   getCustomPresetsSnapshot,
   getServerCustomPresetsSnapshot,
+  presetColorFields,
   presetFractalFields,
   presetsForFractal,
   subscribeToCustomPresets,
@@ -19,6 +20,10 @@ interface CustomPresetManagerProps {
   currentBounds: FractalBounds;
   currentMaxIterations: number;
   currentColorScheme: ColorScheme;
+  /** Whether the palette on the canvas is walked backwards; saved with the view. */
+  currentReverse: boolean;
+  /** Fraction of a turn the colours start at; saved with the view. */
+  currentShift: number;
   currentCanvasWidth: number;
   currentCanvasHeight: number;
   /** Id of the fractal on the canvas now, saved with the view. */
@@ -33,6 +38,8 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
   currentBounds,
   currentMaxIterations,
   currentColorScheme,
+  currentReverse,
+  currentShift,
   currentCanvasWidth,
   currentCanvasHeight,
   currentFractal,
@@ -73,6 +80,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
       canvasWidth: currentCanvasWidth,
       canvasHeight: currentCanvasHeight,
       ...presetFractalFields(currentFractal, currentVariant),
+      ...presetColorFields(currentReverse, currentShift),
     };
 
     try {

@@ -134,7 +134,11 @@ describe("a hop", () => {
   it("asks the engine and goes through the tile's handler", () => {
     expect(hop()).toContain("nextTourStop(");
     expect(hop()).toContain("PLACES");
-    expect(hop()).toContain("handlePlaceSelect(place, { tour: true })");
+    // The palette goes back to the scheme's own colours on a hop, so a tour is
+    // never tinted by a setting left over from before it (`resetColour`).
+    expect(hop()).toContain(
+      "handlePlaceSelect(place, { tour: true, resetColour: true })",
+    );
   });
 
   it("starts the engine from the view on screen at the first hop", () => {
