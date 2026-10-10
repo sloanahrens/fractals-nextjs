@@ -56,6 +56,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
+- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`): The floating title/Help/Settings bar, and the clock that fades it after two seconds without input
+- **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, and `suggest` — which of them are near a given view
@@ -74,7 +76,7 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 
 - **UI Components** (`src/components/ui/`): Reusable form controls (Slider, Select, Input, Button)
 - **Specialized Controls**: ZoomDisplay, CenterControls, PresetSelector, CustomPresetManager
-- **Layout**: Single-page application with side-by-side canvas and control panels
+- **Layout**: Single-page application, canvas-first: the picture fills the viewport under a floating top bar (`TopBar.tsx`: title, Help, Settings), and every control sits in the Settings drawer (`SettingsDrawer.tsx`) — see the Version Note of 2026-10-09
 
 ### Performance Optimizations
 
@@ -160,6 +162,54 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### Canvas-first page: top bar and Settings drawer (2026-10-09)
+
+- The page is the picture. `page.tsx` no longer has a heading block or a
+  two-column layout: a `.fractal-stage` (`globals.css`) is the viewport's height
+  with `--top-bar-height` (3rem) cleared at the top, and the canvas is sized by
+  `.fractal-canvas` to the largest `min(100vw, (100dvh - bar) * aspect)` wide, at
+  the aspect of its own resolution (`--canvas-aspect`, set by the page from
+  `canvasWidth / canvasHeight`; 4:3 unless the size boxes say otherwise). The
+  page cannot scroll. Checked in headless Chrome at 1280x800 (1003x752 canvas)
+  and 375x667 (375x281).
+- The render progress bar is a 4 px line on the canvas's top edge inside a
+  wrapper that is exactly the canvas's size; "Rendering... N%" is an `sr-only`
+  `role="status"` line. The sub-line under the old heading is gone — the Help
+  overlay says it.
+- `TopBar.tsx` holds the page's `<h1>Fractal Explorer</h1>` (the integration
+  check reads it from the prerendered HTML), a Help button and a Settings button
+  that takes a ref, so the drawer can hand focus back to it. It fades through
+  `createIdleFade` (`idleFade.ts`): visible with a 2 s wait running at load,
+  `activity()` on a window `pointermove`, `pointerdown`, `keydown` or
+  `touchstart`, and a *held* clock that never starts a timer. Held means the
+  drawer is open or a control in the bar has *keyboard* focus
+  (`:focus-visible`) — a mouse click also focuses a button and the drawer
+  returns focus to Settings, so holding on any focus would pin the bar after one
+  use. The owner makes a new clock whenever the hold changes, which is what
+  gives the bar a full wait after the drawer closes; the bar is made visible for
+  that change during render rather than from the effect. A faded bar takes no
+  pointer events, so the touch that brings it back does not also press a button.
+- `SettingsDrawer.tsx` is a native `<dialog>` shown with `showModal()`, the way
+  `HelpDialog` is, so Escape, the inert page and focus moving in are the
+  browser's; the Close button and a click on the dialog element itself (the
+  backdrop — the panel inside has no padding on the dialog) close it through the
+  same `onClose`. It is a panel against the right edge, 28 rem wide, and a bottom
+  sheet (full width, `max-h-[85vh]`, scrolling) under `md`. It never puts a
+  `display` class on the dialog, which would override its closed `display: none`.
+  Focus goes to the Close button on open (Chrome would pick the scrolling panel)
+  and back to the Settings button on close.
+- The cards are the drawer's children and stay mounted while it is closed, so
+  opening and closing it changes no state, starts no render and cancels none;
+  the cards, their handlers and the wander and link logic are as they were, in
+  the same order. Download PNG, which had sat under the canvas, is a card of its
+  own after the saved views, and `VersionFooter` is the drawer's last child.
+- The `?` listener is on the window and unchanged, so it still opens Help from
+  anywhere, including over an open drawer, where Help stacks above it.
+- `src/__tests__/canvas-first-page.test.ts` reads the three sources for the
+  dialog attributes, the close paths, the card order, the hold rules and the
+  stage CSS; `src/lib/__tests__/idleFade.test.ts` drives the clock on fake
+  timers; `help-overlay-panel.test.ts` now finds the Help button in the bar.
 
 ### Deliberate jumps are browser history entries (2026-10-09)
 

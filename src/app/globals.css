@@ -58,6 +58,41 @@
   }
 }
 
+/* The page is the canvas: a stage the height of the viewport, with the top bar's
+   height cleared above it. `dvh` follows a phone's collapsing address bar; the
+   `vh` line before each is the fallback for a browser without it. */
+:root {
+  --top-bar-height: 3rem;
+}
+
+.fractal-stage {
+  height: 100vh;
+  height: 100dvh;
+  padding-top: var(--top-bar-height);
+  overflow: hidden;
+}
+
+/* As wide as the viewport allows without the height overflowing: the width
+   whose height, at the canvas's own aspect ratio (set by the page), fills the
+   space under the bar. */
+.fractal-canvas {
+  width: min(
+    100vw,
+    calc((100vh - var(--top-bar-height)) * var(--canvas-aspect, 1.3333))
+  );
+  height: auto;
+  aspect-ratio: var(--canvas-aspect, 1.3333);
+}
+
+@supports (height: 100dvh) {
+  .fractal-canvas {
+    width: min(
+      100vw,
+      calc((100dvh - var(--top-bar-height)) * var(--canvas-aspect, 1.3333))
+    );
+  }
+}
+
 /* Custom styles for fractal canvas */
 .fractal-canvas {
   cursor: crosshair;

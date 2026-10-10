@@ -6,6 +6,7 @@ import {
   useState,
   useMemo,
   useCallback,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { FractalRenderer } from "../lib/fractalRenderer";
@@ -97,6 +98,8 @@ import { CenterControls } from "../components/ui/CenterControls";
 import { CustomPresetManager } from "../components/ui/CustomPresetManager";
 import { VersionFooter } from "../components/ui/VersionFooter";
 import { HelpDialog } from "../components/ui/HelpDialog";
+import { SettingsDrawer } from "../components/ui/SettingsDrawer";
+import { TopBar } from "../components/ui/TopBar";
 
 // The four manual coordinate boxes. A field is present only once the user has
 // typed in it; while it is absent the box shows the current view.
@@ -806,6 +809,12 @@ export default function Home() {
   // it, so the two ways in are one piece of state rather than two.
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // Whether the Settings drawer is up, and the button that opens it, which the
+  // drawer hands focus back to on close. Opening it touches no view state and
+  // starts no render, so a draw in flight carries on behind it.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+
   // `?` opens the help from anywhere on the page, not only from the canvas,
   // which is what the canvas-local arrow handlers cannot do. The decision is
   // `opensHelpShortcut`'s so it can be tested without a browser: a `?` typed
@@ -1151,468 +1160,451 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">Fractal Explorer</h1>
-          <p className="text-lg text-gray-600">
-            Scroll to zoom, drag to pan, or use the sliders. Focus the image to
-            pan with the arrow keys and zoom with + and −.
+    <div className="fractal-stage bg-gray-950">
+      <TopBar
+        onHelp={() => setHelpOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
+        settingsOpen={settingsOpen}
+        settingsButtonRef={settingsButtonRef}
+      />
+
+      <main className="flex h-full items-center justify-center">
+        {/* The canvas is the page: as large as fits under the bar, in the
+            shape of its own resolution (4:3 unless the size boxes say
+            otherwise). The progress line sits on its top edge, inside the
+            wrapper that is exactly the canvas's size. */}
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            role="img"
+            aria-label={describeBounds(bounds, fractalLabel)}
+            tabIndex={0}
+            onKeyDown={handleCanvasKeyDown}
+            className="fractal-canvas block focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
+            style={
+              {
+                "--canvas-aspect": canvasWidth / canvasHeight,
+              } as CSSProperties
+            }
+          />
+
+          {isRendering && (
+            <div className="absolute inset-x-0 top-0 h-1 bg-black/30">
+              <div
+                className="h-full bg-blue-500 transition-all duration-150"
+                style={{ width: `${progress * 100}%` }}
+              ></div>
+            </div>
+          )}
+          <p role="status" className="sr-only">
+            {isRendering && `Rendering... ${Math.round(progress * 100)}%`}
           </p>
-          <div className="mt-4">
-            <Button
-              onClick={() => setHelpOpen(true)}
-              variant="outline"
-              size="sm"
-            >
-              Help
-            </Button>
-          </div>
+        </div>
+      </main>
+
+      {/* Every control the page has. Escape, the Close button and the backdrop
+          all report through the same handler, so there is one place the
+          drawer closes. */}
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        returnFocusRef={settingsButtonRef}
+      >
+        {/* Preset System */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Presets</h3>
+          <PresetSelector
+            currentPreset={currentPreset}
+            fractal={fractalType}
+            onPresetSelect={handlePresetSelect}
+          />
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8 items-start justify-center">
-          {/* Canvas Section */}
-          <div className="bg-white p-4 rounded-lg shadow-lg">
-            <canvas
-              ref={canvasRef}
-              role="img"
-              aria-label={describeBounds(bounds, fractalLabel)}
-              tabIndex={0}
-              onKeyDown={handleCanvasKeyDown}
-              className="fractal-canvas border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              style={{ maxWidth: "100%", height: "auto" }}
+        {/* Navigation Sliders */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Navigation</h3>
+          <div className="space-y-4">
+            <Slider
+              label="Center X (Real)"
+              value={centerX}
+              min={-2.5}
+              max={1.5}
+              step={0.01}
+              onChange={(value) => handleViewChange(() => setCenterX(value))}
+              formatValue={(v) => v.toFixed(3)}
             />
-
-            {isRendering && (
-              <div className="mt-4">
-                <div className="bg-gray-200 rounded-full h-2.5">
-                  <div
-                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-150"
-                    style={{ width: `${progress * 100}%` }}
-                  ></div>
-                </div>
-                <p className="text-sm text-gray-600 mt-2 text-center">
-                  Rendering... {Math.round(progress * 100)}%
-                </p>
-              </div>
-            )}
-
-            <div className="mt-4 text-center">
+            <Slider
+              label="Center Y (Imaginary)"
+              value={centerY}
+              min={-1.5}
+              max={1.5}
+              step={0.01}
+              onChange={(value) => handleViewChange(() => setCenterY(value))}
+              formatValue={(v) => v.toFixed(3)}
+            />
+            <Slider
+              label="Zoom Level"
+              value={zoomToSlider(zoomLevel)}
+              min={0}
+              max={1}
+              step={ZOOM_SLIDER_STEP}
+              onChange={(position) =>
+                handleViewChange(() => setZoomLevel(sliderToZoom(position)))
+              }
+              formatValue={(position) =>
+                `${formatZoom(sliderToZoom(position))}x`
+              }
+            />
+            <div className="flex gap-2">
               <Button
-                onClick={handleDownload}
-                disabled={isRendering}
+                onClick={() =>
+                  handleViewChange(() => setZoomLevel(clampZoom(zoomLevel / 2)))
+                }
+                disabled={zoomLevel <= MIN_ZOOM}
                 variant="secondary"
                 size="sm"
               >
-                Download PNG
+                Zoom Out
+              </Button>
+              <Button
+                onClick={() =>
+                  handleViewChange(() => setZoomLevel(clampZoom(zoomLevel * 2)))
+                }
+                disabled={zoomLevel >= MAX_ZOOM}
+                variant="secondary"
+                size="sm"
+              >
+                Zoom In
+              </Button>
+              <Button onClick={resetToDefault} variant="secondary" size="sm">
+                Reset View
               </Button>
             </div>
-          </div>
 
-          {/* Parameter Control Panel */}
-          <div className="w-full lg:w-96 space-y-6">
-            {/* Preset System */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4">Presets</h3>
-              <PresetSelector
-                currentPreset={currentPreset}
-                fractal={fractalType}
-                onPresetSelect={handlePresetSelect}
-              />
-            </div>
-
-            {/* Navigation Sliders */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4">Navigation</h3>
-              <div className="space-y-4">
-                <Slider
-                  label="Center X (Real)"
-                  value={centerX}
-                  min={-2.5}
-                  max={1.5}
-                  step={0.01}
-                  onChange={(value) =>
-                    handleViewChange(() => setCenterX(value))
-                  }
-                  formatValue={(v) => v.toFixed(3)}
-                />
-                <Slider
-                  label="Center Y (Imaginary)"
-                  value={centerY}
-                  min={-1.5}
-                  max={1.5}
-                  step={0.01}
-                  onChange={(value) =>
-                    handleViewChange(() => setCenterY(value))
-                  }
-                  formatValue={(v) => v.toFixed(3)}
-                />
-                <Slider
-                  label="Zoom Level"
-                  value={zoomToSlider(zoomLevel)}
-                  min={0}
-                  max={1}
-                  step={ZOOM_SLIDER_STEP}
-                  onChange={(position) =>
-                    handleViewChange(() => setZoomLevel(sliderToZoom(position)))
-                  }
-                  formatValue={(position) =>
-                    `${formatZoom(sliderToZoom(position))}x`
-                  }
-                />
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() =>
-                      handleViewChange(() =>
-                        setZoomLevel(clampZoom(zoomLevel / 2)),
-                      )
-                    }
-                    disabled={zoomLevel <= MIN_ZOOM}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    Zoom Out
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      handleViewChange(() =>
-                        setZoomLevel(clampZoom(zoomLevel * 2)),
-                      )
-                    }
-                    disabled={zoomLevel >= MAX_ZOOM}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    Zoom In
-                  </Button>
-                  <Button
-                    onClick={resetToDefault}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    Reset View
-                  </Button>
-                </div>
-
-                {/* Copy link sits under the buttons that move the view, since
+            {/* Copy link sits under the buttons that move the view, since
                     what it copies is that view. The status line is in the page
                     when it is empty so a screen reader hears it fill in, and
                     the fallback field appears under it for a browser that will
                     not take a clipboard write. */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={handleCopyLink}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    Copy link
-                  </Button>
-                  <p role="status" className="text-xs text-gray-600">
-                    {COPY_MESSAGES[copy.kind]}
-                  </p>
-                </div>
-                {copy.kind === "manual" && (
-                  <input
-                    ref={copyFieldRef}
-                    readOnly
-                    aria-label="View link"
-                    value={copy.url}
-                    className="w-full px-3 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-lg bg-gray-50"
-                  />
-                )}
-
-                <Checkbox
-                  label="Random walk"
-                  checked={wanderOn}
-                  onChange={handleWanderChange}
-                />
-                <Input
-                  label="Seconds between steps"
-                  value={wanderIntervalDraft ?? String(wanderInterval)}
-                  type="number"
-                  step="1"
-                  min={MIN_WANDER_INTERVAL_SECONDS}
-                  max={MAX_WANDER_INTERVAL_SECONDS}
-                  onChange={handleWanderIntervalChange}
-                />
-                {wanderOn && (
-                  <p className="text-sm text-gray-600">
-                    {wanderCountdown === null
-                      ? "Waiting for the render to finish"
-                      : `Next step in about ${wanderCountdown} s`}
-                  </p>
-                )}
-              </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={handleCopyLink} variant="secondary" size="sm">
+                Copy link
+              </Button>
+              <p role="status" className="text-xs text-gray-600">
+                {COPY_MESSAGES[copy.kind]}
+              </p>
             </div>
+            {copy.kind === "manual" && (
+              <input
+                ref={copyFieldRef}
+                readOnly
+                aria-label="View link"
+                value={copy.url}
+                className="w-full px-3 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-lg bg-gray-50"
+              />
+            )}
 
-            {/* View Info and Center Controls */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4">View Info</h3>
-              <div className="space-y-4">
-                <ZoomDisplay bounds={bounds} />
-                <CenterControls
-                  bounds={bounds}
-                  onCenterChange={handleCenterChange}
-                />
-              </div>
-            </div>
+            <Checkbox
+              label="Random walk"
+              checked={wanderOn}
+              onChange={handleWanderChange}
+            />
+            <Input
+              label="Seconds between steps"
+              value={wanderIntervalDraft ?? String(wanderInterval)}
+              type="number"
+              step="1"
+              min={MIN_WANDER_INTERVAL_SECONDS}
+              max={MAX_WANDER_INTERVAL_SECONDS}
+              onChange={handleWanderIntervalChange}
+            />
+            {wanderOn && (
+              <p className="text-sm text-gray-600">
+                {wanderCountdown === null
+                  ? "Waiting for the render to finish"
+                  : `Next step in about ${wanderCountdown} s`}
+              </p>
+            )}
+          </div>
+        </div>
 
-            {/* Rendering Parameters */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4">
-                Rendering Parameters
-              </h3>
-              <div className="space-y-4">
-                <Select
-                  label="Fractal"
-                  value={fractalType}
-                  options={FRACTAL_TYPES.map((type) => ({
-                    value: type.id,
-                    label: type.label,
-                  }))}
-                  onChange={handleFractalTypeChange}
-                />
+        {/* View Info and Center Controls */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">View Info</h3>
+          <div className="space-y-4">
+            <ZoomDisplay bounds={bounds} />
+            <CenterControls
+              bounds={bounds}
+              onCenterChange={handleCenterChange}
+            />
+          </div>
+        </div>
 
-                {/* A Julia set is a family, so the kind alone does not say
+        {/* Rendering Parameters */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Rendering Parameters</h3>
+          <div className="space-y-4">
+            <Select
+              label="Fractal"
+              value={fractalType}
+              options={FRACTAL_TYPES.map((type) => ({
+                value: type.id,
+                label: type.label,
+              }))}
+              onChange={handleFractalTypeChange}
+            />
+
+            {/* A Julia set is a family, so the kind alone does not say
                     which picture to draw; the Mandelbrot set has no such
                     parameter, and the picker offers nothing to choose. */}
-                {fractalType === "julia" && (
-                  <Select
-                    label="Julia constant"
-                    value={
-                      isCustomJuliaConstant(juliaConstant)
-                        ? CUSTOM_OPTION_VALUE
-                        : juliaConstant
-                    }
-                    options={[
-                      ...JULIA_CONSTANTS.map((constant) => ({
-                        value: constant.name,
-                        label: constant.name,
-                      })),
-                      {
-                        value: CUSTOM_OPTION_VALUE,
-                        label: CUSTOM_OPTION_LABEL,
-                      },
-                    ]}
-                    onChange={handleJuliaSelect}
-                  />
-                )}
+            {fractalType === "julia" && (
+              <Select
+                label="Julia constant"
+                value={
+                  isCustomJuliaConstant(juliaConstant)
+                    ? CUSTOM_OPTION_VALUE
+                    : juliaConstant
+                }
+                options={[
+                  ...JULIA_CONSTANTS.map((constant) => ({
+                    value: constant.name,
+                    label: constant.name,
+                  })),
+                  {
+                    value: CUSTOM_OPTION_VALUE,
+                    label: CUSTOM_OPTION_LABEL,
+                  },
+                ]}
+                onChange={handleJuliaSelect}
+              />
+            )}
 
-                {/* A custom constant is two numbers, so it gets two boxes. The
+            {/* A custom constant is two numbers, so it gets two boxes. The
                     message has a box of its own, like the coordinates', so the
                     controls below do not move as it comes and goes. */}
-                {fractalType === "julia" &&
-                  isCustomJuliaConstant(juliaConstant) && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          label="Real"
-                          value={juliaRealText}
-                          inputMode="decimal"
-                          onChange={(text) => editJuliaInput("real", text)}
-                        />
-                        <Input
-                          label="Imaginary"
-                          value={juliaImaginaryText}
-                          inputMode="decimal"
-                          onChange={(text) => editJuliaInput("imaginary", text)}
-                        />
-                      </div>
-                      <div className="min-h-5">
-                        {juliaInputError !== null && (
-                          <p role="status" className="text-xs text-red-600">
-                            {juliaInputError}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
+            {fractalType === "julia" &&
+              isCustomJuliaConstant(juliaConstant) && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      label="Real"
+                      value={juliaRealText}
+                      inputMode="decimal"
+                      onChange={(text) => editJuliaInput("real", text)}
+                    />
+                    <Input
+                      label="Imaginary"
+                      value={juliaImaginaryText}
+                      inputMode="decimal"
+                      onChange={(text) => editJuliaInput("imaginary", text)}
+                    />
+                  </div>
+                  <div className="min-h-5">
+                    {juliaInputError !== null && (
+                      <p role="status" className="text-xs text-red-600">
+                        {juliaInputError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
-                <Checkbox
-                  label="Auto iterations"
-                  checked={autoIterationsOn}
-                  onChange={handleAutoIterationsChange}
-                />
-                <Slider
-                  label="Maximum Iterations"
-                  value={effectiveMaxIterations}
-                  min={MIN_ITERATIONS}
-                  max={MAX_ITERATIONS}
-                  step={ITERATION_STEP}
-                  onChange={(value) =>
-                    handleParameterChange(() => setMaxIterations(value))
+            <Checkbox
+              label="Auto iterations"
+              checked={autoIterationsOn}
+              onChange={handleAutoIterationsChange}
+            />
+            <Slider
+              label="Maximum Iterations"
+              value={effectiveMaxIterations}
+              min={MIN_ITERATIONS}
+              max={MAX_ITERATIONS}
+              step={ITERATION_STEP}
+              onChange={(value) =>
+                handleParameterChange(() => setMaxIterations(value))
+              }
+              disabled={autoIterationsOn}
+              formatValue={(v) => v.toString()}
+            />
+
+            <Select
+              label="Color Scheme"
+              value={colorScheme}
+              options={getAvailableColorSchemes()}
+              onChange={(value) =>
+                handleParameterChange(() =>
+                  setColorScheme(value as ColorScheme),
+                )
+              }
+            />
+          </div>
+        </div>
+
+        {/* Canvas Resolution */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Canvas Resolution</h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Width"
+                value={canvasWidth.toString()}
+                type="number"
+                onChange={(value) => {
+                  const num = parseInt(value);
+                  if (!isNaN(num) && num > 0 && num <= 2000) {
+                    handleParameterChange(() => setCanvasWidth(num));
                   }
-                  disabled={autoIterationsOn}
-                  formatValue={(v) => v.toString()}
-                />
-
-                <Select
-                  label="Color Scheme"
-                  value={colorScheme}
-                  options={getAvailableColorSchemes()}
-                  onChange={(value) =>
-                    handleParameterChange(() =>
-                      setColorScheme(value as ColorScheme),
-                    )
-                  }
-                />
-              </div>
-            </div>
-
-            {/* Canvas Resolution */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4">Canvas Resolution</h3>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    label="Width"
-                    value={canvasWidth.toString()}
-                    type="number"
-                    onChange={(value) => {
-                      const num = parseInt(value);
-                      if (!isNaN(num) && num > 0 && num <= 2000) {
-                        handleParameterChange(() => setCanvasWidth(num));
-                      }
-                    }}
-                  />
-                  <Input
-                    label="Height"
-                    value={canvasHeight.toString()}
-                    type="number"
-                    onChange={(value) => {
-                      const num = parseInt(value);
-                      if (!isNaN(num) && num > 0 && num <= 2000) {
-                        handleParameterChange(() => setCanvasHeight(num));
-                      }
-                    }}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => {
-                      setCanvasWidth(400);
-                      setCanvasHeight(300);
-                      setCurrentPreset("");
-                    }}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    400×300
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setCanvasWidth(800);
-                      setCanvasHeight(600);
-                      setCurrentPreset("");
-                    }}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    800×600
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setCanvasWidth(1200);
-                      setCanvasHeight(900);
-                      setCurrentPreset("");
-                    }}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    1200×900
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Manual Coordinates */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <h3 className="text-lg font-semibold mb-4">Manual Coordinates</h3>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    label="Min Real"
-                    value={manualText("minReal", bounds.minReal)}
-                    type="number"
-                    step="any"
-                    onChange={(value) => editManualCoordinate("minReal", value)}
-                  />
-                  <Input
-                    label="Max Real"
-                    value={manualText("maxReal", bounds.maxReal)}
-                    type="number"
-                    step="any"
-                    onChange={(value) => editManualCoordinate("maxReal", value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    label="Min Imaginary"
-                    value={manualText("minImaginary", bounds.minImaginary)}
-                    type="number"
-                    step="any"
-                    onChange={(value) =>
-                      editManualCoordinate("minImaginary", value)
-                    }
-                  />
-                  <Input
-                    label="Max Imaginary"
-                    value={manualText("maxImaginary", bounds.maxImaginary)}
-                    type="number"
-                    step="any"
-                    onChange={(value) =>
-                      editManualCoordinate("maxImaginary", value)
-                    }
-                  />
-                </div>
-                {/* Under the four boxes, in a box of its own so the row below
-                    does not move as a message comes and goes. An error is
-                    announced as it appears; a fitted note is only reported. */}
-                <div className="min-h-5">
-                  {manualMessage?.kind === "error" && (
-                    <p role="alert" className="text-xs text-red-600">
-                      {manualMessage.text}
-                    </p>
-                  )}
-                  {manualMessage?.kind === "note" && (
-                    <p role="status" className="text-xs text-gray-600">
-                      {manualMessage.text}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={applyManualCoordinates}>
-                    Apply Coordinates
-                  </Button>
-                  <Button onClick={resetToDefault} variant="secondary">
-                    Reset to Default
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Phase 5: Custom Preset Manager */}
-            <div className="bg-white p-6 rounded-lg shadow-lg">
-              <CustomPresetManager
-                currentBounds={bounds}
-                currentMaxIterations={effectiveMaxIterations}
-                currentColorScheme={colorScheme}
-                currentCanvasWidth={canvasWidth}
-                currentCanvasHeight={canvasHeight}
-                currentFractal={fractalType}
-                currentJuliaConstant={juliaConstant}
-                onPresetsChange={handlePresetsChange}
+                }}
               />
+              <Input
+                label="Height"
+                value={canvasHeight.toString()}
+                type="number"
+                onChange={(value) => {
+                  const num = parseInt(value);
+                  if (!isNaN(num) && num > 0 && num <= 2000) {
+                    handleParameterChange(() => setCanvasHeight(num));
+                  }
+                }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setCanvasWidth(400);
+                  setCanvasHeight(300);
+                  setCurrentPreset("");
+                }}
+                variant="secondary"
+                size="sm"
+              >
+                400×300
+              </Button>
+              <Button
+                onClick={() => {
+                  setCanvasWidth(800);
+                  setCanvasHeight(600);
+                  setCurrentPreset("");
+                }}
+                variant="secondary"
+                size="sm"
+              >
+                800×600
+              </Button>
+              <Button
+                onClick={() => {
+                  setCanvasWidth(1200);
+                  setCanvasHeight(900);
+                  setCurrentPreset("");
+                }}
+                variant="secondary"
+                size="sm"
+              >
+                1200×900
+              </Button>
             </div>
           </div>
         </div>
 
-        <VersionFooter />
+        {/* Manual Coordinates */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Manual Coordinates</h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Min Real"
+                value={manualText("minReal", bounds.minReal)}
+                type="number"
+                step="any"
+                onChange={(value) => editManualCoordinate("minReal", value)}
+              />
+              <Input
+                label="Max Real"
+                value={manualText("maxReal", bounds.maxReal)}
+                type="number"
+                step="any"
+                onChange={(value) => editManualCoordinate("maxReal", value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Min Imaginary"
+                value={manualText("minImaginary", bounds.minImaginary)}
+                type="number"
+                step="any"
+                onChange={(value) =>
+                  editManualCoordinate("minImaginary", value)
+                }
+              />
+              <Input
+                label="Max Imaginary"
+                value={manualText("maxImaginary", bounds.maxImaginary)}
+                type="number"
+                step="any"
+                onChange={(value) =>
+                  editManualCoordinate("maxImaginary", value)
+                }
+              />
+            </div>
+            {/* Under the four boxes, in a box of its own so the row below
+                    does not move as a message comes and goes. An error is
+                    announced as it appears; a fitted note is only reported. */}
+            <div className="min-h-5">
+              {manualMessage?.kind === "error" && (
+                <p role="alert" className="text-xs text-red-600">
+                  {manualMessage.text}
+                </p>
+              )}
+              {manualMessage?.kind === "note" && (
+                <p role="status" className="text-xs text-gray-600">
+                  {manualMessage.text}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={applyManualCoordinates}>
+                Apply Coordinates
+              </Button>
+              <Button onClick={resetToDefault} variant="secondary">
+                Reset to Default
+              </Button>
+            </div>
+          </div>
+        </div>
 
-        {/* Escape, the Close button and the backdrop all report through the
-            same handler, so there is one place the overlay closes. */}
-        <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
-      </div>
+        {/* Phase 5: Custom Preset Manager */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <CustomPresetManager
+            currentBounds={bounds}
+            currentMaxIterations={effectiveMaxIterations}
+            currentColorScheme={colorScheme}
+            currentCanvasWidth={canvasWidth}
+            currentCanvasHeight={canvasHeight}
+            currentFractal={fractalType}
+            currentJuliaConstant={juliaConstant}
+            onPresetsChange={handlePresetsChange}
+          />
+        </div>
+
+        {/* Download PNG keeps its lock while a render runs: the canvas it reads
+            may be half drawn. */}
+        <div className="bg-white p-6 rounded-lg shadow-lg text-center">
+          <Button
+            onClick={handleDownload}
+            disabled={isRendering}
+            variant="secondary"
+            size="sm"
+          >
+            Download PNG
+          </Button>
+        </div>
+
+        <VersionFooter />
+      </SettingsDrawer>
+
+      {/* Escape, the Close button and the backdrop all report through the
+          same handler, so there is one place the overlay closes. */}
+      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

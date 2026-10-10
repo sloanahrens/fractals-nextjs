@@ -73,7 +73,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Random walk",
         action:
-          "Tick it in the Navigation panel and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose",
+          "Tick it in the Navigation card of the Settings drawer and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose",
       },
       {
         keys: "Seconds between steps",
