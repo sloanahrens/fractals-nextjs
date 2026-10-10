@@ -550,3 +550,133 @@ describe("FractalRenderer and renderRgba", () => {
     expect(Array.from(pixels())).toEqual(Array.from(expected));
   });
 });
+
+describe("FractalRenderer recolour", () => {
+  const WIDTH = 32;
+  const HEIGHT = 24;
+  const BOUNDS = calculateZoomBounds(0.1, -0.05, 1.5);
+  const CAP = 90;
+  const SCHEMES = ["classic", "fire", "ocean", "rainbow", "grayscale"] as const;
+
+  /** The kinds `FractalRenderer and renderRgba` holds to byte equality. */
+  const KINDS: [string, FractalKind][] = [
+    ...FRACTAL_TYPES.flatMap((type): [string, FractalKind][] => {
+      const options = fractalVariants(type.id)?.options.map((o) => o.value);
+      return (options ?? [""]).map((variant) => [
+        `${type.id} ${variant}`.trim(),
+        resolveFractalKind(type.id, variant),
+      ]);
+    }),
+    ["julia custom", resolveFractalKind("julia", "custom:-0.8,0.156")],
+  ];
+
+  it.each(KINDS)(
+    "%s: repaints in any scheme as the render of that scheme",
+    async (_name, kind) => {
+      const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
+      const renderer = new FractalRenderer(element, kind);
+
+      await renderer.renderFractal(
+        renderConfig({
+          bounds: BOUNDS,
+          width: WIDTH,
+          height: HEIGHT,
+          maxIterations: CAP,
+          colorScheme: "classic",
+        }),
+      );
+
+      for (const scheme of SCHEMES) {
+        expect(renderer.recolour(scheme, CAP)).toBe(true);
+        // The picture a colour change leaves is the picture a full render in
+        // that scheme draws, byte for byte — no new orbit, no new count.
+        const expected = renderRgba(
+          BOUNDS,
+          WIDTH,
+          HEIGHT,
+          CAP,
+          scheme,
+          kind,
+          true,
+        );
+        expect(Array.from(pixels())).toEqual(Array.from(expected));
+      }
+    },
+  );
+
+  it("counts nothing when it repaints", async () => {
+    const { element } = createFakeCanvas(WIDTH, HEIGHT);
+    const calls: KindCall[] = [];
+    const renderer = new FractalRenderer(element, constantKind(50, calls));
+
+    await renderer.renderFractal(
+      renderConfig({ bounds: BOUNDS, width: WIDTH, height: HEIGHT }),
+    );
+    const counted = calls.length;
+    expect(counted).toBe(WIDTH * HEIGHT);
+
+    expect(renderer.recolour("fire", 100)).toBe(true);
+
+    // The whole point: a colour change is the colouring step alone.
+    expect(calls.length).toBe(counted);
+  });
+
+  it("has nothing to repaint from before its first render finishes", () => {
+    const { element } = createFakeCanvas(WIDTH, HEIGHT);
+    const renderer = new FractalRenderer(element, mandelbrotKind);
+
+    expect(renderer.recolour("fire", CAP)).toBe(false);
+  });
+
+  it("keeps nothing from a render that is replaced", async () => {
+    const { element } = createFakeCanvas(WIDTH, HEIGHT);
+    const renderer = new FractalRenderer(element, mandelbrotKind);
+
+    await renderer.renderFractal(
+      renderConfig({ bounds: BOUNDS, width: WIDTH, height: HEIGHT }),
+    );
+    expect(renderer.recolour("fire", 100)).toBe(true);
+
+    // A render that starts takes the counts away as it starts, so a colour
+    // change arriving mid-render has nothing to repaint from and is answered
+    // false — the caller then counts the view in full.
+    const replacing = renderer.renderFractal(
+      renderConfig({
+        bounds: calculateZoomBounds(0, 0, 4),
+        width: WIDTH,
+        height: HEIGHT,
+      }),
+    );
+    expect(renderer.recolour("ocean", 100)).toBe(false);
+
+    await replacing;
+    // The run that finished replaced them with its own.
+    expect(renderer.recolour("ocean", 100)).toBe(true);
+  });
+
+  it("keeps nothing from a render that was cancelled", async () => {
+    const { element } = createFakeCanvas(WIDTH, HEIGHT);
+    const renderer = new FractalRenderer(element, mandelbrotKind);
+
+    await renderer.renderFractal(
+      renderConfig({ bounds: BOUNDS, width: WIDTH, height: HEIGHT }),
+    );
+
+    renderer.cancelRender();
+
+    expect(renderer.recolour("ocean", 100)).toBe(false);
+  });
+
+  it("keeps nothing from a whole-count pass, which draws a different picture", async () => {
+    const { element } = createFakeCanvas(WIDTH, HEIGHT);
+    const renderer = new FractalRenderer(element, mandelbrotKind);
+
+    await renderer.renderFractal(
+      renderConfig({ bounds: BOUNDS, width: WIDTH, height: HEIGHT }),
+      undefined,
+      false,
+    );
+
+    expect(renderer.recolour("ocean", 100)).toBe(false);
+  });
+});

@@ -335,6 +335,28 @@ export function encodeView(state: ViewLinkState): string {
 const TOUR_FRAGMENT = "tour";
 
 /**
+ * A link with its colour scheme left out.
+ *
+ * Colour is the one field of a view that does not change what the picture is
+ * made of: the same fractal, framed the same way, drawn another way. Two links
+ * that agree in everything else name a picture whose iteration counts are the
+ * same numbers, so the page asks this before it repaints the canvas from the
+ * counts of the render that finished (`FractalRenderer.recolour`) rather than
+ * counting the view again.
+ *
+ * @param fragment - The link, with or without its leading `#`
+ * @returns The same link without its `s` field, and without a leading `#`
+ */
+export function linkWithoutScheme(fragment: string): string {
+  const text = fragment.startsWith("#") ? fragment.slice(1) : fragment;
+  const fields = new URLSearchParams(text);
+
+  fields.delete("s");
+
+  return fields.toString();
+}
+
+/**
  * Whether a link asks for a tour to start.
  *
  * Two spellings do: the whole fragment is `#tour`, or a link of this version

@@ -195,12 +195,14 @@ describe("the address bar", () => {
     // A finished render is what makes a view the address bar may name, so the
     // draw is handed the link it is drawing and hands it back when it is done —
     // and only the draw that is still the newest one does, since a superseded
-    // draw did not settle the canvas.
+    // draw did not settle the canvas. The repaint from kept counts names its
+    // view too (it is showing it), and needs no token: it is synchronous, so
+    // there is nothing for a newer draw to overtake.
     const draw = functionBody(page, "drawCanvas");
 
     expect(draw).toContain("setRenderedLink(link)");
     expect(draw.indexOf("if (token === drawTokenRef.current)")).toBeLessThan(
-      draw.indexOf("setRenderedLink(link)"),
+      draw.lastIndexOf("setRenderedLink(link)"),
     );
     expect(page).toContain(
       "drawCanvas(renderPolicy.requestRender(), currentLink)",

@@ -1,6 +1,6 @@
-import { FractalConfig, FractalKind } from "../types/fractal";
+import { ColorScheme, FractalConfig, FractalKind } from "../types/fractal";
 import { mandelbrotKind } from "./mandelbrot";
-import { BYTES_PER_PIXEL, renderRgbaRows } from "./renderRgba";
+import { BYTES_PER_PIXEL, colourRgbaRows, countRgbaRows } from "./renderRgba";
 
 /**
  * Fractal renderer class for managing canvas rendering operations
@@ -19,6 +19,17 @@ export class FractalRenderer {
    */
   private runToken = 0;
   private kind: FractalKind;
+  /**
+   * The smooth counts of the last render to finish on this canvas, one per
+   * pixel, row by row — what {@link FractalRenderer.recolour} repaints from.
+   *
+   * Null whenever there are none: before the first render, from the moment a
+   * render starts until the run that finishes keeps its own, and from a
+   * `cancelRender`. `Float64Array` because a count is then the very number the
+   * renderer drew with, so a repaint from it is the picture the render drew;
+   * see `CountBuffer` in `renderRgba.ts` for what float32 would cost.
+   */
+  private counts: Float64Array | null = null;
 
   /**
    * @param canvas - Canvas to paint
@@ -56,6 +67,12 @@ export class FractalRenderer {
 
     this.isRendering = true;
 
+    // The counts this renderer was holding are the view's this render is
+    // replacing, so they go now rather than at the end: a recolour asked for
+    // while this runs has nothing to repaint from and is answered false, which
+    // is how a colour change that arrives mid-render still draws in full.
+    this.counts = null;
+
     // Resize canvas if needed
     if (
       this.canvas.width !== config.width ||
@@ -70,24 +87,37 @@ export class FractalRenderer {
     const totalPixels = width * height;
     let processedPixels = 0;
 
-    // A row at a time, into a buffer of its own, so nothing reaches the
-    // canvas's image data until the superseded check below has passed. The
-    // pixels are `renderRgbaRows`, the function the server draws a link
-    // preview with.
+    // One row at a time: the row's iteration counts, the row's pixels, and —
+    // only for a smooth run — a copy of those counts to keep. The two steps are
+    // `countRgbaRows` and `colourRgbaRows`, the halves of the pipeline the
+    // server draws a link preview with, so nothing reaches the canvas's image
+    // data until the superseded check below has passed.
+    const rowCounts = new Float64Array(width);
     const row = new Uint8ClampedArray(width * BYTES_PER_PIXEL);
+    // Only a smooth run's counts are the picture: a whole-count pass would
+    // repaint a different one, and draws at fewer pixels anyway.
+    const kept = useSmooth ? new Float64Array(totalPixels) : null;
 
     for (let y = 0; y < height && !superseded(); y++) {
-      renderRgbaRows(
-        row,
+      countRgbaRows(
+        rowCounts,
         y,
         y + 1,
         bounds,
         width,
         height,
         maxIterations,
-        colorScheme,
         this.kind,
         useSmooth,
+      );
+      colourRgbaRows(
+        row,
+        rowCounts,
+        y,
+        y + 1,
+        width,
+        maxIterations,
+        colorScheme,
       );
 
       // Give a render started from a promise continuation its turn to claim
@@ -100,6 +130,7 @@ export class FractalRenderer {
       // await above suspends it, and nothing here writes before this check.
       if (superseded()) break;
 
+      kept?.set(rowCounts, y * width);
       this.imageData.data.set(row, y * width * BYTES_PER_PIXEL);
 
       processedPixels += width;
@@ -120,6 +151,11 @@ export class FractalRenderer {
     // the last render to finish is the one that clears it.
     if (superseded()) return;
 
+    // The counts are this renderer's to keep only now: the picture they make is
+    // the picture on the canvas, and a colour change can repaint from them
+    // without counting the view again.
+    this.counts = kept;
+
     // Final render
     this.ctx.putImageData(this.imageData, 0, 0);
     onProgress?.(1);
@@ -136,6 +172,55 @@ export class FractalRenderer {
   cancelRender(): void {
     this.runToken++;
     this.isRendering = false;
+    // Whatever the cancelled run had half counted is not a picture, and the
+    // view it is counting is the one the user has left: nothing is kept.
+    this.counts = null;
+  }
+
+  /**
+   * Repaint the canvas in another colour scheme from the iteration counts the
+   * last render to finish left, computing no orbit at all — the whole of a
+   * colour change, since a view's counts do not depend on the scheme.
+   *
+   * The counts are the picture's own: only a smooth run that finished keeps
+   * them, and they are dropped the moment another render starts or the canvas
+   * is cancelled. So a caller that knows the view has not moved can be sure the
+   * repaint is what a full render would draw — and the caller's half of that
+   * knowledge is the view it is looking at: it asks for this only when nothing
+   * but the scheme has changed since the render that finished.
+   *
+   * Answers false, with the canvas untouched, whenever there is nothing to
+   * repaint from — a renderer whose first render has not finished, one whose
+   * run was cancelled or replaced, one rebuilt for a new size or fractal, one
+   * drawn only in whole counts. That is the caller's cue to render in full.
+   *
+   * @param scheme - Colour scheme to repaint in
+   * @param maxIterations - The cap the counts are judged against, which is the
+   *   one they were counted with
+   * @returns Whether the canvas was repainted
+   */
+  recolour(scheme: ColorScheme, maxIterations: number): boolean {
+    const counts = this.counts;
+    const { width, height } = this.canvas;
+
+    // The counts are always the canvas's own size — a render keeps them only
+    // for the canvas it drew on, and the page builds a new renderer for a new
+    // canvas or a new fractal — but a repaint from another size's counts would
+    // be a scrambled picture rather than a wrong shade, so it is refused.
+    if (counts === null || counts.length !== width * height) return false;
+
+    colourRgbaRows(
+      this.imageData.data,
+      counts,
+      0,
+      height,
+      width,
+      maxIterations,
+      scheme,
+    );
+    this.ctx.putImageData(this.imageData, 0, 0);
+
+    return true;
   }
 
   /**

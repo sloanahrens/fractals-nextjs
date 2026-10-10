@@ -7,7 +7,12 @@ import {
   mandelbrotKind,
   pixelToComplex,
 } from "../mandelbrot";
-import { renderRgba, renderRgbaRows } from "../renderRgba";
+import {
+  colourRgbaRows,
+  countRgbaRows,
+  renderRgba,
+  renderRgbaRows,
+} from "../renderRgba";
 
 const BOUNDS = calculateZoomBounds(-0.75, 0, 2);
 
@@ -120,5 +125,119 @@ describe("renderRgbaRows", () => {
     renderRgbaRows(out, 2, 2, BOUNDS, 4, 4, 50, "classic", mandelbrotKind);
 
     expect([...out]).toEqual(new Array(16).fill(0));
+  });
+});
+
+describe("the counting and colouring steps", () => {
+  const WIDTH = 12;
+  const HEIGHT = 9;
+
+  it("counts every pixel's point, in row order, exactly as the kind answers", () => {
+    const kind = resolveFractalKind("julia", "Douady rabbit");
+    const counts = new Float64Array(WIDTH * HEIGHT);
+
+    countRgbaRows(counts, 0, HEIGHT, BOUNDS, WIDTH, HEIGHT, 90, kind, true);
+
+    let index = 0;
+    for (let y = 0; y < HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        const point = pixelToComplex(x, y, WIDTH, HEIGHT, BOUNDS);
+        // The count is the kind's own number, unrounded: a Float64Array holds
+        // it as it came, which is what makes a picture drawn from counts the
+        // picture drawn in one pass.
+        expect(counts[index]).toBe(kind.iterations(point, 90, true));
+        index++;
+      }
+    }
+  });
+
+  it("counts one row into the start of the buffer, as the rows are asked for", () => {
+    const wholePicture = new Float64Array(WIDTH * HEIGHT);
+    const oneRow = new Float64Array(WIDTH);
+
+    countRgbaRows(
+      wholePicture,
+      0,
+      HEIGHT,
+      BOUNDS,
+      WIDTH,
+      HEIGHT,
+      80,
+      mandelbrotKind,
+    );
+    countRgbaRows(oneRow, 3, 4, BOUNDS, WIDTH, HEIGHT, 80, mandelbrotKind);
+
+    expect([...oneRow]).toEqual([
+      ...wholePicture.subarray(3 * WIDTH, 4 * WIDTH),
+    ]);
+  });
+
+  it("colours the counts it is given, and nothing else", () => {
+    const kind = resolveFractalKind("burning-ship", "");
+    const counts = new Float64Array(WIDTH * HEIGHT);
+    const out = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+
+    countRgbaRows(counts, 0, HEIGHT, BOUNDS, WIDTH, HEIGHT, 70, kind, true);
+    colourRgbaRows(out, counts, 0, HEIGHT, WIDTH, 70, "ocean");
+
+    // The counts are untouched by the colouring, so the same counts may be
+    // coloured again in another scheme.
+    const before = [...counts];
+    let index = 0;
+    for (let i = 0; i < counts.length; i++) {
+      const expected = mapIterationsToColor(counts[i], 70, "ocean");
+      expect([...out.subarray(index, index + 4)]).toEqual([
+        expected.r,
+        expected.g,
+        expected.b,
+        255,
+      ]);
+      index += 4;
+    }
+    expect([...counts]).toEqual(before);
+  });
+
+  it("makes the one-pass picture, and renderRgba's, for every fractal", () => {
+    // Newton's count packs a root and a shade into one number, so it is the
+    // one a count buffer that rounded would change: it is here to be sure the
+    // counts are the kind's own numbers and not a copy of them.
+    const KINDS = [
+      mandelbrotKind,
+      resolveFractalKind("julia", "Dendrite"),
+      resolveFractalKind("burning-ship", ""),
+      resolveFractalKind("tricorn", ""),
+      resolveFractalKind("multibrot", "4"),
+      resolveFractalKind("newton", ""),
+    ];
+
+    for (const kind of KINDS) {
+      const counts = new Float64Array(WIDTH * HEIGHT);
+      const apart = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+
+      countRgbaRows(counts, 0, HEIGHT, BOUNDS, WIDTH, HEIGHT, 100, kind, true);
+      colourRgbaRows(apart, counts, 0, HEIGHT, WIDTH, 100, "fire");
+
+      let index = 0;
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          const point = pixelToComplex(x, y, WIDTH, HEIGHT, BOUNDS);
+          const color = mapIterationsToColor(
+            kind.iterations(point, 100, true),
+            100,
+            "fire",
+          );
+
+          expect([...apart.subarray(index, index + 4)]).toEqual([
+            ...new Uint8ClampedArray([color.r, color.g, color.b]),
+            255,
+          ]);
+          index += 4;
+        }
+      }
+
+      expect([...apart]).toEqual([
+        ...renderRgba(BOUNDS, WIDTH, HEIGHT, 100, "fire", kind, true),
+      ]);
+    }
   });
 });

@@ -117,7 +117,7 @@ import {
   nearbyWindow,
   nextNearbyOffset,
 } from "../lib/nearbyStrip";
-import { decodeTour, encodeView } from "../lib/viewLink";
+import { decodeTour, encodeView, linkWithoutScheme } from "../lib/viewLink";
 import { copyLinkUrl, readLocationLink } from "../lib/viewQuery";
 import {
   TOUR_CROSSFADE_MS,
@@ -483,6 +483,18 @@ export default function Home() {
    */
   const [renderedLink, setRenderedLink] = useState("");
 
+  /**
+   * The same link, for the draw to read without depending on it.
+   *
+   * What the canvas is showing is what decides whether a colour change can be a
+   * repaint from kept counts, and the draw needs it the moment it runs rather
+   * than in a render of its own: as a value in `drawCanvas`'s dependency list
+   * the draw effect would re-run every time a render settled, which would have
+   * it redraw what it has just drawn. The two are written together, where
+   * `setRenderedLink` is called, so they cannot drift.
+   */
+  const renderedLinkRef = useRef(renderedLink);
+
   // Draw the canvas at the quality the render policy asks for: the cheap
   // low-resolution pass while a gesture is moving the view, the full image
   // otherwise. A preview leaves the progress bar alone so that a drag does not
@@ -532,6 +544,30 @@ export default function Home() {
       // image until something else redrew the canvas.
       await previewInFlightRef.current;
 
+      // A colour change is the one redraw that does not have to count the view
+      // again. If nothing but the scheme has moved since the render that
+      // finished — the two links agree once each has had its scheme taken out —
+      // the picture's iteration counts are the same numbers, and the renderer
+      // holds them: repainting from them is the whole of the change, and draws
+      // no orbit. It answers false when it has kept nothing, which is the case
+      // for a renderer that has not finished a render yet, was rebuilt for a
+      // new canvas or fractal, or had its run cancelled; then the view is
+      // counted as it always was.
+      const showing = renderedLinkRef.current;
+      if (
+        showing !== "" &&
+        linkWithoutScheme(showing) === linkWithoutScheme(link) &&
+        renderer.recolour(colorScheme, effectiveMaxIterations)
+      ) {
+        // The canvas is showing this view in the new colours, so it is the
+        // drawn view the address bar may name, exactly as a render would make
+        // it. No wander notice: a repaint is not a render, and it is over
+        // before a step could land in it.
+        renderedLinkRef.current = link;
+        setRenderedLink(link);
+        return;
+      }
+
       // Which draw owns the rendering flag and the progress bar. A draw that
       // has been overtaken — a control used again while this one was still
       // running — keeps rendering, but its reports and its finishing must not
@@ -568,6 +604,7 @@ export default function Home() {
           // name.
           if (token === drawTokenRef.current) {
             setIsRendering(false);
+            renderedLinkRef.current = link;
             setRenderedLink(link);
             wander.notifyRenderDone();
           }
