@@ -182,7 +182,7 @@ dependencies and needs nothing else.
 
 ### Advanced Features
 
-- **Custom Presets**: A view belongs to the fractal it was framed on, so each fractal in the Fractal select offers its own built-in views — six for the Mandelbrot set, five for Julia (one per named constant) and two for the Burning Ship — as buttons under the dropdown. Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant; loading it puts the Fractal and Julia constant selects back on that picture. The preset dropdown, the built-in buttons and the saved list show the views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
+- **Custom Presets**: A view belongs to the fractal it was framed on, so each fractal in the Fractal select offers its own built-in views — six for the Mandelbrot set, five for Julia (the four named constants, and a second view of the Classic set's spirals) and two for the Burning Ship — as buttons under the dropdown. Create and save your own fractal configurations (stored in browser localStorage). A saved view remembers the fractal it was saved on and, for a Julia set, its constant; loading it puts the Fractal and Julia constant selects back on that picture. The preset dropdown, the built-in buttons and the saved list show the views for the fractal selected now, and views saved for another fractal are kept and appear when that fractal is selected
 - **Parameter Adjustment**: Fine-tune iterations and other settings; the Auto iterations checkbox lets the zoom pick the count, and unticking it hands that count to the slider
 - **Saving an Image**: The Download PNG button saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
@@ -204,24 +204,44 @@ dependencies and needs nothing else.
 │   │   ├── layout.tsx      # Root layout with meta tags
 │   │   ├── page.tsx        # Main fractal viewer page
 │   │   ├── globals.css     # Global styles
-│   │   └── api/health/route.ts # Health check endpoint
-│   ├── components/ui/      # Reusable UI components
+│   │   └── api/
+│   │       ├── health/route.ts  # Health check endpoint
+│   │       └── version/route.ts # Build, deploy time, commit and revision as JSON
+│   ├── components/ui/      # Reusable UI components (HelpDialog, VersionFooter, ...)
 │   ├── lib/                # Core logic and utilities
-│   │   ├── burningShip.ts      # Burning Ship iteration
-│   │   ├── canvasNavigation.ts # Wheel, drag and touch listeners
-│   │   ├── colorMapping.ts     # Color schemes
-│   │   ├── fractalRenderer.ts  # Canvas rendering engine
-│   │   ├── mandelbrot.ts       # Mandelbrot iteration and coordinates
-│   │   ├── presets.ts          # Built-in and saved presets
-│   │   ├── renderQuality.ts    # Preview vs full-resolution decisions
-│   │   └── zoomPan.ts          # Zoom and pan manager
-│   ├── __tests__/          # Tests for the routes
+│   │   ├── __tests__/              # Unit tests for the modules below
+│   │   ├── burningShip.ts          # Burning Ship iteration
+│   │   ├── canvasNavigation.ts     # Wheel, drag, touch and key listeners
+│   │   ├── colorMapping.ts         # Color schemes
+│   │   ├── customConstantInput.ts  # Real and Imaginary boxes to a custom Julia constant
+│   │   ├── download.ts             # Filename a saved canvas is written under
+│   │   ├── fractalKinds.ts         # Registry of drawable fractals, looked up by id
+│   │   ├── fractalRenderer.ts      # Canvas rendering engine
+│   │   ├── fractalTypes.ts         # The Fractal select's list, and choice to kind and default view
+│   │   ├── helpEntries.ts          # Help overlay text and the rule behind the ? key
+│   │   ├── integrationTarget.ts    # STAGING_URL and EXPECT_SHA for the integration tier
+│   │   ├── julia.ts                # Julia sets, named constants and custom:<re>,<im> names
+│   │   ├── mandelbrot.ts           # Mandelbrot iteration and coordinates
+│   │   ├── manualBounds.ts         # Checks the Manual Coordinates boxes
+│   │   ├── presets.ts              # Built-in and saved presets
+│   │   ├── renderQuality.ts        # Preview vs full-resolution decisions
+│   │   ├── version.ts              # Build and deploy facts, and the footer wording
+│   │   ├── viewLink.ts             # A view as a URL fragment, and back
+│   │   ├── viewLinkState.ts        # What a link means for the page, and the address-bar throttle
+│   │   ├── wander.ts               # One random-walk step
+│   │   ├── wanderController.ts     # The walk's countdown and what suspends it
+│   │   ├── zoomPan.ts              # Zoom and pan manager
+│   │   └── zoomScale.ts            # Logarithmic zoom slider mapping, coordinate formatting
+│   ├── __tests__/          # Route tests, and tests that read page.tsx and the Makefile
 │   └── types/              # TypeScript type definitions
 ├── tests/integration/      # Integration tier: checks against a deployed app
+│                           #   (deployed.test.ts is the checks, http.ts the request helper)
 ├── Dockerfile              # Multi-stage container build
 ├── Makefile                # install, dev, build, check, test, integration, gate, docker-*
 ├── next.config.js          # Next.js configuration
 ├── package.json            # Scripts and dependencies
+├── tsconfig.json           # TypeScript configuration
+├── eslint.config.mjs       # ESLint flat config
 ├── vitest.config.mts       # Vitest configuration (the unit suite)
 ├── vitest.integration.config.mts # Vitest configuration (the integration tier)
 └── tailwind.config.js      # Tailwind configuration
@@ -232,6 +252,11 @@ not part of the project.)
 
 ## Mathematics Behind the Magic
 
+All three fractals share one escape-time loop: iterate, and count the steps
+until `|z|² > 4`. A point that has not escaped after the maximum number of
+iterations is drawn black. They differ in where the orbit starts and what each
+step does.
+
 The Mandelbrot set is defined by the iterative formula:
 
 ```
@@ -239,7 +264,30 @@ z₀ = 0
 z_{n+1} = z_n² + c
 ```
 
-Where `c` is a complex number representing each pixel's coordinate. Points that don't diverge to infinity after a maximum number of iterations are considered part of the set.
+Where `c` is a complex number representing each pixel's coordinate.
+
+A Julia set swaps the roles: the pixel is where the orbit starts, and `c` is
+one fixed point for the whole picture.
+
+```
+z₀ = the pixel
+z_{n+1} = z_n² + c      (c fixed)
+```
+
+`c` is one of four named points (Classic −0.8 + 0.156i, Dendrite i,
+Douady rabbit −0.123 + 0.745i, Siegel disk −0.391 − 0.587i) or, with Custom, any
+point whose real and imaginary parts are each from −2 to 2.
+
+The Burning Ship is the Mandelbrot loop with both parts of `z` folded onto the
+positive side before squaring:
+
+```
+z₀ = 0
+z_{n+1} = (|Re z_n| + i|Im z_n|)² + c
+```
+
+An orbit that escapes is counted with the same smoothing for all three,
+`n + 1 − log₂(log₂|z|)`, so a colour scheme looks alike on each.
 
 ## Performance Optimization
 
