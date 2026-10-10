@@ -76,6 +76,11 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Nearby places",
     entries: [
       {
+        keys: "Fractal buttons",
+        action:
+          "Mandelbrot, Julia and Burning Ship, top left of the picture, the current one lit: one click flies to that fractal's showpiece place, and Back returns to where you were. With Julia on, a row of chips picks its constant (Classic, Dendrite, Douady rabbit, Siegel disk) and goes to the whole of that set; Custom opens Settings at the Real box to type your own",
+      },
+      {
         keys: "Nearby tile",
         action:
           "Click a picture in the strip along the bottom, or Tab to it and press Enter, to fly to that place; hover or focus a tile to read its name",

@@ -81,7 +81,14 @@ import {
 } from "../lib/manualBounds";
 import { opensHelpShortcut } from "../lib/helpEntries";
 import { Journey, historyButtons } from "../lib/journey";
-import { PLACES, placeColorScheme, suggest, type Place } from "../lib/places";
+import {
+  PLACES,
+  featuredPlace,
+  placeColorScheme,
+  suggest,
+  wholeSetPlaceFor,
+  type Place,
+} from "../lib/places";
 import { surpriseTarget } from "../lib/surprise";
 import {
   CROSSFADE_MS,
@@ -123,6 +130,7 @@ import { describeView } from "../lib/viewReadout";
 import { CustomPresetManager } from "../components/ui/CustomPresetManager";
 import { VersionFooter } from "../components/ui/VersionFooter";
 import { HelpDialog } from "../components/ui/HelpDialog";
+import { FractalSwitcher } from "../components/ui/FractalSwitcher";
 import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
 import { BlankHint } from "../components/ui/BlankHint";
@@ -1384,6 +1392,54 @@ export default function Home() {
     if (target) handlePlaceSelect(target);
   };
 
+  // The fractal switcher's buttons. A switch ends in the same state as the
+  // Fractal select's — the new fractal, its view, its colours — but it goes
+  // there as a place, through the tile's handler, so it has the crossfade, the
+  // place's own scheme and constant, and the one history entry that lets Back
+  // return to where the click was made. The fractal already shown is a no-op.
+  const handleSwitchFractal = (typeId: string) => {
+    if (typeId === fractalType) return;
+    handlePlaceSelect(featuredPlace(typeId));
+  };
+
+  // A named constant chip goes to the whole of that constant's set when the
+  // catalogue has it (all four do) and otherwise only changes the constant,
+  // leaving the view where it is.
+  const handleSwitchConstant = (name: string) => {
+    if (name === juliaConstant) return;
+
+    const whole = wholeSetPlaceFor(name);
+    if (whole) {
+      handlePlaceSelect(whole);
+      return;
+    }
+
+    beginJump();
+    setJuliaConstant(name);
+    wander.notifyActivity();
+  };
+
+  // Custom is the Settings select's own pick, then the drawer, with focus to go
+  // to the Real box once it is open (`focusJuliaRealRef`, read by the effect
+  // below). Choosing Custom moves no view and starts no render.
+  const juliaRealInputRef = useRef<HTMLInputElement>(null);
+  const focusJuliaRealRef = useRef(false);
+  const handleSwitchCustom = () => {
+    handleJuliaSelect(CUSTOM_OPTION_VALUE);
+    focusJuliaRealRef.current = true;
+    setSettingsOpen(true);
+  };
+
+  // The drawer's own effect has already shown the dialog and focused its Close
+  // button by now (a child's effects run before its parent's), and the Real box
+  // is in the same commit, so this is the last word on where focus lands.
+  useEffect(() => {
+    if (!settingsOpen || !focusJuliaRealRef.current) return;
+
+    focusJuliaRealRef.current = false;
+    juliaRealInputRef.current?.focus();
+  }, [settingsOpen]);
+
   // What a hop of the tour does: ask the engine for the next place, from where
   // the tour is, and go there the way a tile does. The first hop of a tour also
   // writes the view being left into the address bar, which is what lets `#tour`
@@ -1660,6 +1716,19 @@ export default function Home() {
             }
             onBack={handleBack}
             canGoBack={historyState.canGoBack}
+            belowChips={fractalType === "julia"}
+          />
+
+          {/* One click to another fractal, and for Julia one to another
+              constant. Hidden with the rest of the controls while a tour plays
+              and while the drawer or the help is up. */}
+          <FractalSwitcher
+            fractalType={fractalType}
+            juliaConstant={juliaConstant}
+            onSelectFractal={handleSwitchFractal}
+            onSelectConstant={handleSwitchConstant}
+            onSelectCustom={handleSwitchCustom}
+            hidden={tourPlaying || tourOverlayOpen}
           />
 
           {/* Places worth a look near this view. The thumbnails wait for a
@@ -1855,6 +1924,7 @@ export default function Home() {
                   <div className="grid grid-cols-2 gap-2">
                     <Input
                       label="Real"
+                      inputRef={juliaRealInputRef}
                       value={juliaRealText}
                       inputMode="decimal"
                       onChange={(text) => editJuliaInput("real", text)}

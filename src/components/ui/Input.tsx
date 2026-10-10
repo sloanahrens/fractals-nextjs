@@ -14,6 +14,8 @@ interface InputProps {
   disabled?: boolean;
   placeholder?: string;
   error?: string;
+  /** The `<input>` element, for a caller that has to move focus into it. */
+  inputRef?: React.Ref<HTMLInputElement>;
 }
 
 export function Input({
@@ -28,6 +30,7 @@ export function Input({
   disabled = false,
   placeholder,
   error,
+  inputRef,
 }: InputProps) {
   // useId gives each instance its own id, so the label points at this input
   // and not at the last one that happened to print the same label text.
@@ -40,6 +43,7 @@ export function Input({
       </label>
       <input
         id={inputId}
+        ref={inputRef}
         type={type}
         inputMode={inputMode}
         value={value}
