@@ -1,0 +1,772 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { ColorScheme } from "../../types/fractal";
+import {
+  createCanvasThumbnailRender,
+  createThumbnailStore,
+  thumbnailIterations,
+  type ThumbnailEntry,
+  type ThumbnailImage,
+  type ThumbnailRenderRequest,
+} from "../placeThumbnails";
+import { PLACES, type Place } from "../places";
+
+const WIDTH = 4;
+const HEIGHT = 3;
+
+function place(id: string): Place {
+  return {
+    id,
+    name: id,
+    fractal: "mandelbrot",
+    centerX: -0.75,
+    centerY: 0,
+    zoom: 1,
+  };
+}
+
+function image(fill = 1): ThumbnailImage {
+  return {
+    width: WIDTH,
+    height: HEIGHT,
+    data: new Uint8ClampedArray(WIDTH * HEIGHT * 4).fill(fill),
+  };
+}
+
+interface Call {
+  request: ThumbnailRenderRequest;
+  resolve(result?: ThumbnailImage): void;
+  reject(error: unknown): void;
+}
+
+/**
+ * A render the test finishes by hand: every call is recorded and stays pending
+ * until the test resolves or rejects it, so what the store does while a render
+ * is in flight can be looked at.
+ */
+function fakeRender() {
+  const calls: Call[] = [];
+
+  const render = (request: ThumbnailRenderRequest) =>
+    new Promise<ThumbnailImage>((resolve, reject) => {
+      calls.push({
+        request,
+        resolve: (result = image()) => resolve(result),
+        reject,
+      });
+    });
+
+  return { render, calls, ids: () => calls.map((c) => c.request.place.id) };
+}
+
+function newStore(options: { capacity?: number } = {}, fake = fakeRender()) {
+  const store = createThumbnailStore({
+    render: fake.render,
+    width: WIDTH,
+    height: HEIGHT,
+    ...options,
+  });
+
+  return { store, ...fake };
+}
+
+/** Let the store's start-of-render timer fire and the render promises settle. */
+async function tick(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(0);
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("createThumbnailStore", () => {
+  describe("rendering and caching", () => {
+    it("renders a request at the asked size and hands the entry to onReady", async () => {
+      const { store, calls } = newStore();
+      const onReady = vi.fn();
+
+      store.request(place("a"), "fire", onReady);
+      await tick();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].request).toMatchObject({
+        place: { id: "a" },
+        scheme: "fire",
+        width: WIDTH,
+        height: HEIGHT,
+      });
+      expect(onReady).not.toHaveBeenCalled();
+
+      const picture = image(7);
+      calls[0].resolve(picture);
+      await tick();
+
+      expect(onReady).toHaveBeenCalledExactlyOnceWith({
+        status: "ready",
+        image: picture,
+      });
+    });
+
+    it("answers a cached entry at once, without rendering again", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      calls[0].resolve();
+      await tick();
+
+      const onReady = vi.fn();
+      store.request(place("a"), "fire", onReady);
+
+      // Before any timer runs: the call is synchronous.
+      expect(onReady).toHaveBeenCalledTimes(1);
+      await tick();
+      expect(calls).toHaveLength(1);
+    });
+
+    it("keys the cache by scheme as well as by place", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      calls[0].resolve();
+      await tick();
+
+      expect(store.get(place("a"), "fire")?.status).toBe("ready");
+      expect(store.get(place("a"), "ocean")).toBeUndefined();
+
+      store.request(place("a"), "ocean", () => {});
+      await tick();
+      expect(calls).toHaveLength(2);
+    });
+
+    it("get is undefined for a place never requested", () => {
+      const { store } = newStore();
+
+      expect(store.get(place("a"), "fire")).toBeUndefined();
+    });
+  });
+
+  describe("LRU eviction", () => {
+    async function fill(
+      store: ReturnType<typeof newStore>,
+      ids: string[],
+      scheme: ColorScheme = "fire",
+    ) {
+      for (const id of ids) {
+        store.store.request(place(id), scheme, () => {});
+        await tick();
+        store.calls[store.calls.length - 1].resolve();
+        await tick();
+      }
+    }
+
+    it("drops the least recently requested picture past capacity", async () => {
+      const s = newStore({ capacity: 2 });
+
+      await fill(s, ["a", "b", "c"]);
+
+      expect(s.store.get(place("a"), "fire")).toBeUndefined();
+      expect(s.store.get(place("b"), "fire")).toBeDefined();
+      expect(s.store.get(place("c"), "fire")).toBeDefined();
+    });
+
+    it("counts a get as a use", async () => {
+      const s = newStore({ capacity: 2 });
+
+      await fill(s, ["a", "b"]);
+      s.store.get(place("a"), "fire");
+      await fill(s, ["c"]);
+
+      expect(s.store.get(place("a"), "fire")).toBeDefined();
+      expect(s.store.get(place("b"), "fire")).toBeUndefined();
+    });
+
+    it("counts a cached request as a use", async () => {
+      const s = newStore({ capacity: 2 });
+
+      await fill(s, ["a", "b"]);
+      s.store.request(place("a"), "fire", () => {});
+      await fill(s, ["c"]);
+
+      expect(s.store.get(place("a"), "fire")).toBeDefined();
+      expect(s.store.get(place("b"), "fire")).toBeUndefined();
+    });
+
+    it("renders an evicted picture again when it is asked for again", async () => {
+      const s = newStore({ capacity: 1 });
+
+      await fill(s, ["a", "b"]);
+      s.store.request(place("a"), "fire", () => {});
+      await tick();
+
+      expect(s.ids()).toEqual(["a", "b", "a"]);
+    });
+  });
+
+  describe("in-flight sharing", () => {
+    it("runs one render for concurrent requests of a key and tells each caller", async () => {
+      const { store, calls } = newStore();
+      const first = vi.fn();
+      const second = vi.fn();
+      const third = vi.fn();
+
+      store.request(place("a"), "fire", first);
+      store.request(place("a"), "fire", second);
+      await tick();
+      // The third arrives while the render is already running.
+      store.request(place("a"), "fire", third);
+      await tick();
+
+      expect(calls).toHaveLength(1);
+
+      calls[0].resolve();
+      await tick();
+
+      expect(calls).toHaveLength(1);
+      for (const listener of [first, second, third]) {
+        expect(listener).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it("does not share between schemes", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      store.request(place("a"), "ocean", () => {});
+      await tick();
+      calls[0].resolve();
+      await tick();
+
+      expect(calls).toHaveLength(2);
+    });
+  });
+
+  describe("ordering", () => {
+    it("renders one at a time, in the order requested", async () => {
+      const { store, calls, ids } = newStore();
+
+      for (const id of ["a", "b", "c"])
+        store.request(place(id), "fire", () => {});
+
+      await tick();
+      expect(ids()).toEqual(["a"]);
+
+      // A second render waits for the first even when time passes.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(ids()).toEqual(["a"]);
+
+      calls[0].resolve();
+      await tick();
+      expect(ids()).toEqual(["a", "b"]);
+
+      calls[1].resolve();
+      await tick();
+      expect(ids()).toEqual(["a", "b", "c"]);
+    });
+
+    it("starts a render on a timer, not inside the request", () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+
+      expect(calls).toHaveLength(0);
+    });
+  });
+
+  describe("cancelAll", () => {
+    it("aborts the render in flight and never calls its onReady", async () => {
+      const { store, calls } = newStore();
+      const onReady = vi.fn();
+
+      store.request(place("a"), "fire", onReady);
+      await tick();
+      expect(calls[0].request.signal.aborted).toBe(false);
+
+      store.cancelAll();
+      expect(calls[0].request.signal.aborted).toBe(true);
+
+      // The render ignores the signal and finishes anyway.
+      calls[0].resolve();
+      await tick();
+
+      expect(onReady).not.toHaveBeenCalled();
+      expect(store.get(place("a"), "fire")).toBeUndefined();
+    });
+
+    it("drops queued work and never calls its onReady", async () => {
+      const { store, calls, ids } = newStore();
+      const queued = vi.fn();
+
+      store.request(place("a"), "fire", () => {});
+      store.request(place("b"), "fire", queued);
+      await tick();
+
+      store.cancelAll();
+      calls[0].resolve();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(ids()).toEqual(["a"]);
+      expect(queued).not.toHaveBeenCalled();
+    });
+
+    it("drops work that has not started even before the first timer", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      store.cancelAll();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(calls).toHaveLength(0);
+    });
+
+    it("leaves cached pictures in place", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      calls[0].resolve();
+      await tick();
+      store.cancelAll();
+
+      expect(store.get(place("a"), "fire")?.status).toBe("ready");
+    });
+
+    it("lets a later request render the same key afresh, and ignores the aborted render's late result", async () => {
+      const { store, calls } = newStore();
+      const stale = vi.fn();
+      const fresh = vi.fn();
+
+      store.request(place("a"), "fire", stale);
+      await tick();
+      store.cancelAll();
+
+      store.request(place("a"), "fire", fresh);
+      await tick();
+      expect(calls).toHaveLength(2);
+
+      // The aborted one limps in last: it must not answer or fill the cache.
+      calls[1].resolve(image(9));
+      await tick();
+      calls[0].resolve(image(1));
+      await tick();
+
+      expect(stale).not.toHaveBeenCalled();
+      expect(fresh).toHaveBeenCalledTimes(1);
+      expect(fresh).toHaveBeenCalledWith({
+        status: "ready",
+        image: expect.objectContaining({
+          data: expect.objectContaining({ 0: 9 }),
+        }),
+      });
+      expect(store.get(place("a"), "fire")).toEqual(
+        expect.objectContaining({
+          image: expect.objectContaining({
+            data: expect.objectContaining({ 0: 9 }),
+          }),
+        }),
+      );
+    });
+
+    it("keeps the queue moving after a cancelled render finishes late", async () => {
+      const { store, calls, ids } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      store.cancelAll();
+
+      store.request(place("b"), "fire", () => {});
+      await tick();
+      expect(ids()).toEqual(["a", "b"]);
+
+      store.request(place("c"), "fire", () => {});
+      calls[0].resolve(); // the cancelled one, late
+      await tick();
+      // c waits for b: the late result of a must not free the slot.
+      expect(ids()).toEqual(["a", "b"]);
+
+      calls[1].resolve();
+      await tick();
+      expect(ids()).toEqual(["a", "b", "c"]);
+    });
+  });
+
+  describe("failure", () => {
+    it("caches a flat placeholder and does not retry", async () => {
+      const { store, calls } = newStore();
+      const onReady = vi.fn();
+
+      store.request(place("a"), "fire", onReady);
+      await tick();
+      calls[0].reject(new Error("no canvas"));
+      await tick();
+
+      const expected: ThumbnailEntry = {
+        status: "failed",
+        placeholder: {
+          width: WIDTH,
+          height: HEIGHT,
+          color: expect.objectContaining({ r: expect.any(Number) }),
+        },
+        reason: "no canvas",
+      };
+      expect(onReady).toHaveBeenCalledWith(expected);
+      expect(store.get(place("a"), "fire")).toEqual(expected);
+
+      const again = vi.fn();
+      store.request(place("a"), "fire", again);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(again).toHaveBeenCalledWith(expected);
+      expect(calls).toHaveLength(1);
+    });
+
+    it("survives a render that throws before returning a promise", async () => {
+      const store = createThumbnailStore({
+        render: () => {
+          throw new Error("sync boom");
+        },
+        width: WIDTH,
+        height: HEIGHT,
+      });
+      const onReady = vi.fn();
+
+      store.request(place("a"), "fire", onReady);
+      await tick();
+
+      expect(onReady).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "failed", reason: "sync boom" }),
+      );
+    });
+
+    it("treats a render that rejects with a non-error as a failure", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      calls[0].reject("plain string");
+      await tick();
+
+      expect(store.get(place("a"), "fire")).toMatchObject({
+        status: "failed",
+        reason: "plain string",
+      });
+    });
+
+    it("treats an image of the wrong size as a failure", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      calls[0].resolve({
+        width: 2,
+        height: 2,
+        data: new Uint8ClampedArray(16),
+      });
+      await tick();
+
+      expect(store.get(place("a"), "fire")?.status).toBe("failed");
+    });
+
+    it("moves on to the next place after a failure", async () => {
+      const { store, calls, ids } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      store.request(place("b"), "fire", () => {});
+      await tick();
+      calls[0].reject(new Error("x"));
+      await tick();
+
+      expect(ids()).toEqual(["a", "b"]);
+    });
+
+    it("keeps failure markers outside the LRU", async () => {
+      const { store, calls } = newStore({ capacity: 1 });
+
+      store.request(place("bad"), "fire", () => {});
+      await tick();
+      calls[0].reject(new Error("x"));
+      await tick();
+
+      for (const id of ["a", "b"]) {
+        store.request(place(id), "fire", () => {});
+        await tick();
+        calls[calls.length - 1].resolve();
+        await tick();
+      }
+
+      expect(store.get(place("bad"), "fire")?.status).toBe("failed");
+    });
+  });
+
+  describe("listeners", () => {
+    it("does not let one throwing listener strand the others", async () => {
+      const { store, calls } = newStore();
+      const after = vi.fn();
+
+      store.request(place("a"), "fire", () => {
+        throw new Error("listener boom");
+      });
+      store.request(place("a"), "fire", after);
+      await tick();
+      calls[0].resolve();
+
+      // The mistake is rethrown on a timer, so it is not swallowed.
+      await expect(vi.advanceTimersByTimeAsync(0)).rejects.toThrow(
+        "listener boom",
+      );
+      expect(after).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("pause and resume", () => {
+    it("starts nothing while paused, then continues in order on resume", async () => {
+      const { store, ids } = newStore();
+
+      store.pause();
+      store.request(place("a"), "fire", () => {});
+      store.request(place("b"), "fire", () => {});
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(ids()).toEqual([]);
+
+      store.resume();
+      await tick();
+
+      expect(ids()).toEqual(["a"]);
+    });
+
+    it("holds back a render a request in the same turn had scheduled", async () => {
+      const { store, ids } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      store.pause();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(ids()).toEqual([]);
+    });
+
+    it("lets the render in flight finish but starts no next one", async () => {
+      const { store, calls, ids } = newStore();
+      const onReady = vi.fn();
+
+      store.request(place("a"), "fire", onReady);
+      store.request(place("b"), "fire", () => {});
+      await tick();
+
+      store.pause();
+      calls[0].resolve();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(onReady).toHaveBeenCalledTimes(1);
+      expect(calls[0].request.signal.aborted).toBe(false);
+      expect(ids()).toEqual(["a"]);
+
+      store.resume();
+      await tick();
+      expect(ids()).toEqual(["a", "b"]);
+    });
+
+    it("still answers cached requests while paused", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      calls[0].resolve();
+      await tick();
+
+      store.pause();
+      const onReady = vi.fn();
+      store.request(place("a"), "fire", onReady);
+
+      expect(onReady).toHaveBeenCalledTimes(1);
+    });
+
+    it("stays paused through cancelAll", async () => {
+      const { store, ids } = newStore();
+
+      store.pause();
+      store.cancelAll();
+      store.request(place("a"), "fire", () => {});
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(ids()).toEqual([]);
+    });
+
+    it("resume with nothing queued does nothing", async () => {
+      const { store, ids } = newStore();
+
+      store.resume();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(ids()).toEqual([]);
+    });
+  });
+
+  describe("options", () => {
+    it("defaults to 64 x 48", async () => {
+      const calls: ThumbnailRenderRequest[] = [];
+      const store = createThumbnailStore({
+        render: (request) => {
+          calls.push(request);
+          return new Promise(() => {});
+        },
+      });
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+
+      expect(calls[0]).toMatchObject({ width: 64, height: 48 });
+    });
+
+    it.each([
+      ["width", { width: 0 }],
+      ["height", { height: 2.5 }],
+      ["capacity", { capacity: 0 }],
+    ])("refuses a bad %s", (_name, options) => {
+      expect(() =>
+        createThumbnailStore({
+          render: fakeRender().render,
+          ...options,
+        }),
+      ).toThrow(RangeError);
+    });
+  });
+});
+
+describe("thumbnailIterations", () => {
+  it("is half of Auto's count, never under the slider's floor", () => {
+    expect(thumbnailIterations(1)).toBe(50);
+    expect(thumbnailIterations(10000)).toBe(380);
+    expect(thumbnailIterations(Number.NaN)).toBe(50);
+  });
+});
+
+describe("createCanvasThumbnailRender", () => {
+  // Real timers: FractalRenderer yields on setTimeout while it draws.
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The same Node stand-in for a 2D canvas the renderer tests use, plus getImageData. */
+  function createFakeCanvas(width: number, height: number) {
+    const state = {
+      width,
+      height,
+      pixels: new Uint8ClampedArray(width * height * 4),
+    };
+
+    const context = {
+      createImageData: (w: number, h: number) => ({
+        data: new Uint8ClampedArray(w * h * 4),
+        width: w,
+        height: h,
+      }),
+      putImageData: (picture: { data: Uint8ClampedArray }) => {
+        state.pixels.set(picture.data);
+      },
+      getImageData: () => ({ data: state.pixels.slice() }),
+    };
+
+    return {
+      width,
+      height,
+      getContext: () => context,
+    } as unknown as HTMLCanvasElement;
+  }
+
+  /** The share of pixels whose colour differs from the top-left pixel's. */
+  function differingFromCorner(picture: ThumbnailImage): number {
+    let differing = 0;
+
+    for (let index = 1; index < picture.width * picture.height; index++) {
+      for (let channel = 0; channel < 3; channel++) {
+        if (picture.data[index * 4 + channel] !== picture.data[channel]) {
+          differing++;
+          break;
+        }
+      }
+    }
+
+    return differing / (picture.width * picture.height);
+  }
+
+  const byId = (id: string) => {
+    const found = PLACES.find((candidate) => candidate.id === id);
+    if (!found) throw new Error(`no place ${id}`);
+    return found;
+  };
+
+  it("renders a Mandelbrot, a Julia and a Burning Ship place as non-blank 64x48 pictures", async () => {
+    const store = createThumbnailStore({
+      render: createCanvasThumbnailRender(createFakeCanvas),
+      width: 64,
+      height: 48,
+    });
+    const places = [
+      byId("mandelbrot-seahorse-valley"),
+      byId("julia-classic-spirals"),
+      byId("burning-ship-hull-and-rigging"),
+    ];
+
+    const entries = await Promise.all(
+      places.map(
+        (candidate) =>
+          new Promise<ThumbnailEntry>((resolve) => {
+            store.request(
+              candidate,
+              candidate.colorScheme ?? "classic",
+              resolve,
+            );
+          }),
+      ),
+    );
+
+    for (const entry of entries) {
+      expect(entry.status).toBe("ready");
+      if (entry.status !== "ready") continue;
+
+      expect(entry.image.width).toBe(64);
+      expect(entry.image.height).toBe(48);
+      expect(entry.image.data).toHaveLength(64 * 48 * 4);
+      expect(differingFromCorner(entry.image)).toBeGreaterThanOrEqual(0.05);
+    }
+  });
+
+  it("rejects when aborted instead of returning a half-drawn picture", async () => {
+    const render = createCanvasThumbnailRender(createFakeCanvas);
+    const controller = new AbortController();
+    const pending = render({
+      place: byId("mandelbrot-seahorse-valley"),
+      scheme: "fire",
+      width: 64,
+      height: 48,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("rejects at once for a signal already aborted, without making a canvas", async () => {
+    const createCanvas = vi.fn(createFakeCanvas);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      createCanvasThumbnailRender(createCanvas)({
+        place: byId("mandelbrot-whole"),
+        scheme: "fire",
+        width: 64,
+        height: 48,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(createCanvas).not.toHaveBeenCalled();
+  });
+});
