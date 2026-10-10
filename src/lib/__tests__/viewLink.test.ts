@@ -15,6 +15,7 @@ import {
   decodeTour,
   decodeView,
   encodeView,
+  linkWithoutScheme,
   type ViewLinkState,
 } from "../viewLink";
 
@@ -615,6 +616,59 @@ describe("the round trip", () => {
         Math.abs(state[field]);
       expect(error).toBeLessThan(1e-9);
     }
+  });
+});
+
+describe("linkWithoutScheme", () => {
+  it("drops the colour field and keeps every other, in the format's order", () => {
+    expect(linkWithoutScheme(EXAMPLE_LINK)).toBe(
+      EXAMPLE_LINK.replace("s=fire&", ""),
+    );
+    expect(linkWithoutScheme(`#${EXAMPLE_LINK}`)).toBe(
+      EXAMPLE_LINK.replace("s=fire&", ""),
+    );
+  });
+
+  it("makes two links that differ only in their scheme the same text", () => {
+    const same = (scheme: ViewLinkState["colorScheme"]) =>
+      linkWithoutScheme(encodeView({ ...EXAMPLE, colorScheme: scheme }));
+
+    const first = same("classic");
+    for (const scheme of getAvailableColorSchemes().map((s) => s.value)) {
+      expect(same(scheme)).toBe(first);
+    }
+  });
+
+  it("keeps two links that differ in anything else apart", () => {
+    const base = linkWithoutScheme(encodeView(EXAMPLE));
+    const others: Partial<ViewLinkState>[] = [
+      { centerX: EXAMPLE.centerX + 0.001 },
+      { centerY: EXAMPLE.centerY + 0.001 },
+      { zoomLevel: EXAMPLE.zoomLevel * 2 },
+      { fractalType: "mandelbrot", variant: undefined },
+      { variant: "Dendrite" },
+      { autoIterationsOn: false, maxIterations: 150 },
+      { canvasWidth: 400, canvasHeight: 300 },
+    ];
+
+    for (const change of others) {
+      expect(linkWithoutScheme(encodeView({ ...EXAMPLE, ...change }))).not.toBe(
+        base,
+      );
+    }
+  });
+
+  it("carries a custom Julia constant through unchanged", () => {
+    const state: ViewLinkState = {
+      ...EXAMPLE,
+      variant: "custom:-0.8,0.156",
+    };
+
+    // The name survives the field being dropped and the rest re-serialised, so
+    // the two halves of the check read the same way round.
+    expect(linkWithoutScheme(encodeView(state))).toContain(
+      `k=${encodeURIComponent("custom:-0.8,0.156")}`,
+    );
   });
 });
 

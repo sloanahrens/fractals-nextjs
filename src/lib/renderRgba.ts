@@ -1,15 +1,26 @@
 /**
  * The picture of a view as raw pixels, with no canvas anywhere.
  *
- * The explorer's pixels are made in one place: a point of the plane goes to its
- * iteration count through a {@link FractalKind}, and the count goes to a colour
- * through the colour mapping. This module is that pipeline over a buffer of
- * RGBA bytes. `FractalRenderer` calls {@link renderRgbaRows} a row at a time and
- * copies each row into its canvas, and the `/api/og` route calls
- * {@link renderRgba} for a whole picture on the server, so a view is the same
- * pixels in the browser and in a link preview, by construction rather than by
- * two loops kept in step. `fractalRenderer.test.ts` holds the two to byte
- * equality for every fractal.
+ * The explorer's pixels are made in one place, and in two steps: a point of the
+ * plane goes to its iteration count through a {@link FractalKind}
+ * ({@link countRgbaRows}), and the count goes to a colour through the colour
+ * mapping ({@link colourRgbaRows}). {@link renderRgbaRows} and
+ * {@link renderRgba} are those two steps run one after the other over one
+ * buffer, so a picture is exactly its counts, coloured.
+ *
+ * Splitting them is what lets a colour change be had for free: the counts of a
+ * view do not depend on the scheme, so a caller that kept them — `FractalRenderer`
+ * keeps the counts of the run that finished, and repaints from them in another
+ * scheme with no orbit computed at all — redraws the picture by running the
+ * second step alone. Because the first step stores a count exactly as the kind
+ * returned it, colouring those counts draws the picture the two-step pipeline
+ * draws, byte for byte.
+ *
+ * `FractalRenderer` calls {@link renderRgbaRows} a row at a time and copies each
+ * row into its canvas, and the `/api/og` route calls {@link renderRgba} for a
+ * whole picture on the server, so a view is the same pixels in the browser and
+ * in a link preview, by construction rather than by two loops kept in step.
+ * `fractalRenderer.test.ts` holds the two to byte equality for every fractal.
  *
  * Nothing here touches the DOM, `window` or any Node module, so it runs in both.
  */
@@ -22,16 +33,114 @@ import { pixelToComplex } from "./mandelbrot";
 export const BYTES_PER_PIXEL = 4;
 
 /**
- * Draw some rows of a view into a buffer.
+ * A row range's iteration counts, one per pixel.
  *
- * Row `y` of the picture lands at `(y - firstRow) * width * 4` in `out`, so a
- * caller drawing one row passes a buffer of `width * 4` bytes, and one drawing
+ * `Float64Array` — what every caller here uses — holds a count exactly as the
+ * kind returned it, so colouring counts draws the picture the one-pass pipeline
+ * draws, byte for byte. A `Float32Array` halves the memory and rounds each
+ * count to about seven significant digits, which for the five escape-time
+ * fractals moves no pixel and for Newton's packed root-and-speed count moves
+ * about one pixel in 150 by one step of a ramp, so the type is the caller's to
+ * choose rather than this module's.
+ */
+export type CountBuffer = Float32Array | Float64Array;
+
+/**
+ * Count some rows of a view: each pixel's point to its iteration count.
+ *
+ * Row `y` of the picture lands at `(y - firstRow) * width` in `counts`, so a
+ * caller counting one row passes a buffer of `width` counts, and one counting
  * everything passes the whole picture with `firstRow` 0. Pixels are walked left
- * to right, top to bottom, and each is opaque.
+ * to right, top to bottom.
  *
  * A pixel's point is the pixel's top-left corner (`pixelToComplex` as the
  * canvas has always used it), not its centre; changing that would change every
  * picture the app has ever drawn.
+ *
+ * @param counts - Buffer to write, at least `(endRow - firstRow) * width` counts
+ * @param firstRow - First row to count
+ * @param endRow - One past the last row to count
+ * @param bounds - The region of the plane the picture covers
+ * @param width - Width of the whole picture in pixels
+ * @param height - Height of the whole picture in pixels
+ * @param maxIterations - Iteration cap, which is also what a count is judged against
+ * @param kind - The formula to iterate
+ * @param smooth - Whether counts are fractional; the full render is smooth, a
+ *   preview is not
+ */
+export function countRgbaRows(
+  counts: CountBuffer,
+  firstRow: number,
+  endRow: number,
+  bounds: FractalBounds,
+  width: number,
+  height: number,
+  maxIterations: number,
+  kind: FractalKind,
+  smooth: boolean = true,
+): void {
+  let index = 0;
+
+  for (let y = firstRow; y < endRow; y++) {
+    for (let x = 0; x < width; x++) {
+      const point = pixelToComplex(x, y, width, height, bounds);
+      counts[index] = kind.iterations(point, maxIterations, smooth);
+      index++;
+    }
+  }
+}
+
+/**
+ * Colour some rows of a view: each pixel's count to its colour.
+ *
+ * The other half of {@link countRgbaRows}, over the same shape of buffer and
+ * the same rows, and the only step a colour change has to run: the pixels are
+ * opaque and their colours are the counts through the mapping, with no point of
+ * the plane involved.
+ *
+ * @param out - Buffer to write, at least `(endRow - firstRow) * width * 4` bytes
+ * @param counts - The counts to colour, as {@link countRgbaRows} left them
+ * @param firstRow - First row to colour
+ * @param endRow - One past the last row to colour
+ * @param width - Width of the whole picture in pixels
+ * @param maxIterations - The cap the counts were counted with, which is what
+ *   they are judged against: a count of the whole cap is in the set, and black
+ * @param scheme - Colour scheme to draw in
+ */
+export function colourRgbaRows(
+  out: Uint8ClampedArray,
+  counts: CountBuffer,
+  firstRow: number,
+  endRow: number,
+  width: number,
+  maxIterations: number,
+  scheme: ColorScheme,
+): void {
+  // One count a pixel, four bytes a pixel: the two buffers walk at different
+  // rates.
+  let pixel = 0;
+  let index = 0;
+
+  for (let y = firstRow; y < endRow; y++) {
+    for (let x = 0; x < width; x++) {
+      const color = mapIterationsToColor(counts[pixel], maxIterations, scheme);
+
+      out[index] = color.r;
+      out[index + 1] = color.g;
+      out[index + 2] = color.b;
+      out[index + 3] = 255;
+      pixel++;
+      index += BYTES_PER_PIXEL;
+    }
+  }
+}
+
+/**
+ * Draw some rows of a view into a buffer: count them, then colour them.
+ *
+ * The two steps above, over one counts buffer of the rows' own size, so a
+ * caller has one function to call and the picture is the one the split pipeline
+ * makes.
  *
  * @param out - Buffer to write, at least `(endRow - firstRow) * width * 4` bytes
  * @param firstRow - First row to draw
@@ -57,25 +166,25 @@ export function renderRgbaRows(
   kind: FractalKind,
   smooth: boolean = true,
 ): void {
-  let index = 0;
+  const rows = Math.max(0, endRow - firstRow);
+  const counts = new Float64Array(rows * width);
 
-  for (let y = firstRow; y < endRow; y++) {
-    for (let x = 0; x < width; x++) {
-      const point = pixelToComplex(x, y, width, height, bounds);
-      const iterations = kind.iterations(point, maxIterations, smooth);
-      const color = mapIterationsToColor(iterations, maxIterations, scheme);
-
-      out[index] = color.r;
-      out[index + 1] = color.g;
-      out[index + 2] = color.b;
-      out[index + 3] = 255;
-      index += BYTES_PER_PIXEL;
-    }
-  }
+  countRgbaRows(
+    counts,
+    firstRow,
+    endRow,
+    bounds,
+    width,
+    height,
+    maxIterations,
+    kind,
+    smooth,
+  );
+  colourRgbaRows(out, counts, firstRow, endRow, width, maxIterations, scheme);
 }
 
 /**
- * The whole picture of a view.
+ * The whole picture of a view: every row, counted and coloured.
  *
  * @param bounds - The region of the plane the picture covers
  * @param width - Width in pixels

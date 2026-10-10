@@ -44,7 +44,7 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 
 - **Iteration Control**: Adjust detail level with iteration sliders
 - **Auto Iterations**: Iterations follow the zoom level; unticking the checkbox takes manual control, and loading a preset turns it off because that preset was framed at its own count
-- **Color Mapping**: Dynamic color schemes for enhanced visualization
+- **Color Mapping**: Dynamic color schemes for enhanced visualization; changing one repaints the picture from iteration counts already computed, so it is instant however deep the view
 - **Parameter Presets**: Quick access to interesting fractal configurations from the Presets dropdown in the Settings drawer, listing the built-in and saved views for the fractal selected now
 - **Custom Presets**: Save and manage your own configurations; a saved view remembers its fractal and, for a Julia set, its constant
 

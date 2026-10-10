@@ -41,8 +41,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 
 ### Core Rendering System
 
-- **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support
-- **renderRgba** (`src/lib/renderRgba.ts`): A view as raw RGBA bytes with no canvas — `renderRgbaRows` (some rows into a buffer) and `renderRgba` (the whole picture); a pixel's point to its count through the kind, the count to a colour through the scheme. `FractalRenderer` draws every row through it, and so does `/api/og`
+- **FractalRenderer** (`src/lib/fractalRenderer.ts`): Canvas-based rendering engine with progressive rendering and cancellation support, and the counts of the render that finished: `recolour(scheme, maxIterations)` repaints the canvas from them in another scheme, computing no orbit, and answers false when it has kept none; the page uses it for a colour change, which is the one redraw that does not have to count the view again
+- **renderRgba** (`src/lib/renderRgba.ts`): A view as raw RGBA bytes with no canvas, in two steps — `countRgbaRows` (each pixel's point to its count through the kind) and `colourRgbaRows` (the count to a colour through the scheme) — with `renderRgbaRows` (some rows into a buffer) and `renderRgba` (the whole picture) as the two composed, so a picture is exactly its counts, coloured, and a colour change is the second step alone. `FractalRenderer` draws every row through it, and so does `/api/og`
 - **Image route** (`src/app/api/og/route.ts`, a shell over `src/lib/ogRoute.ts`, `ogView.ts`, `ogLimits.ts`) and **PNG encoder** (`src/lib/pngEncode.ts`): `GET /api/og?<view link>` draws a view as a 1200x630 PNG on the server; see the Version Note of 2026-10-10 (fr-c4z)
 - **Mandelbrot calculations** (`src/lib/mandelbrot.ts`): Core mathematical functions for fractal generation
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
@@ -112,6 +112,7 @@ The main page (`src/app/FractalExplorer.tsx`, a client component; `src/app/page.
 - Progressive rendering with chunked calculations to avoid UI blocking
 - Cancellable rendering operations when parameters change
 - A preview pass while a gesture is in flight, with the full-resolution render deferred to its end
+- A colour change repaints from the iteration counts the last render left (`FractalRenderer.recolour`), so it costs a pass over the pixels and no orbit at all
 - Canvas ImageData direct pixel manipulation
 
 ## Next.js Configuration
@@ -191,6 +192,104 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Recolour instantly: a colour change repaints from kept counts (2026-10-10)
+
+- fr-di8. Changing the colour scheme no longer recomputes the picture. The
+  pipeline is now visibly two steps — a point to its iteration count, the count
+  to a colour — and `FractalRenderer` keeps the counts of the render that
+  finished, so a scheme change is the second step alone. It is the foundation
+  for the palette options and colour cycling that follow (fr-q7x). Nothing a
+  visitor sees changes except the wait: at zoom 2000, 1200 x 900 with Auto
+  iterations, a colour change takes about 80 ms where a full render of the same
+  view takes about 1.9 s.
+- **`src/lib/renderRgba.ts`** is split in two. `countRgbaRows(counts, firstRow,
+  endRow, bounds, width, height, maxIterations, kind, smooth = true)` writes
+  each pixel's count, in the order the pixels are walked, into a buffer of the
+  caller's; `colourRgbaRows(out, counts, firstRow, endRow, width, maxIterations,
+  scheme)` writes the pixels those counts make. `renderRgbaRows` and
+  `renderRgba` are the two run one after the other over a counts buffer of the
+  rows' own size, so the composed pipeline is byte for byte what the one-pass
+  loop drew — checked against that loop over every fractal and variant, three
+  views, five schemes, two caps and both smooth and whole counts while this was
+  written (the permanent guards are the by-hand test in `renderRgba.test.ts`,
+  which now runs over six kinds, and `fractalRenderer.test.ts`'s parity with
+  `renderRgba`).
+- **The counts buffer is a `Float64Array`, not the bead's `Float32Array`, and
+  that is a deliberate departure.** A `Float32Array` rounds every count to about
+  seven significant digits, and colouring a rounded count is not colouring the
+  count: measured over 200 x 150 views, `Math.fround` moves no pixel of the five
+  escape-time fractals and moves **203 of 30,000 (0.68%) of Newton's**, because
+  Newton packs a root and a speed into one number. That would break the bead's
+  own first acceptance line ("output byte-identical to before") and its
+  "recolour matches full render byte for byte", and it would have to break
+  `mathProbe.test.ts`'s pixel parity, which compares the probe's float64 colour
+  to the render's. `CountBuffer` is typed `Float32Array | Float64Array` so a
+  caller may still choose the halved memory where a shade is not load-bearing;
+  every caller here takes the exact one. The stored counts are about 3.8 MB at
+  800 x 600 and 8.6 MB at 1200 x 900 (the bead's 1.9/4.3 MB were the float32
+  figures), held one at a time.
+- **`FractalRenderer`** keeps `counts`, the smooth counts of the last render to
+  finish, dropped the moment a render starts and by `cancelRender` — so counts
+  are never held for a view the canvas has left or a picture that only got half
+  drawn. A whole-count pass (a preview) keeps nothing: it draws a different
+  picture. A superseded run keeps nothing either; the run that finished keeps
+  its own. `recolour(scheme, maxIterations)` colours those counts into the
+  canvas's own image data and puts it up — synchronous, no orbit, no progress,
+  answering false (canvas untouched) when there is nothing to repaint from, and
+  refusing counts that are not the canvas's own size, which would scramble the
+  picture rather than shade it.
+- **The page decides when.** A repaint is only sound when nothing but the scheme
+  has moved since the render that finished, and everything else a picture is
+  made of is already in its link — fractal, variant, centre, zoom, iteration
+  cap, canvas size — so `linkWithoutScheme(fragment)` in `viewLink.ts` (the
+  codec's own text, less its `s` field) makes the question a comparison of two
+  strings. `drawCanvas` asks it after the preview branch has returned and
+  before it starts a render: if the canvas's shown view and the view being drawn
+  agree once each has had its scheme taken out and `recolour` answers true, the
+  draw names the view (`setRenderedLink`) and returns. Otherwise it renders
+  exactly as it did. The shown view is read through `renderedLinkRef`, written
+  wherever `setRenderedLink` is: as a value in `drawCanvas`'s dependency list
+  the draw effect would re-run every time a render settled, redrawing what it
+  had just drawn.
+- A repaint is not a render, so it does nothing a render does: no `isRendering`,
+  no progress line, and no `wander.notifyRenderStart`/`Done`, which would
+  restart the walk's countdown for a picture that never changed shape. It is
+  synchronous, so there is nothing for a newer draw to overtake and no token to
+  hold. A colour change that arrives while a different view is rendering finds
+  the counts gone and renders in full, which is the same answer the page would
+  have given before this landing.
+- Verified in headless Chrome (CDP, real `input` and `change` events, against
+  the standalone production build): at the deep view above, the scheme change
+  repainted in 83 ms with no "Rendering..." line ever in the document, the
+  address bar followed to `s=fire`, **the repainted canvas was byte-identical to
+  a full render of the same view in the same scheme** (forced by taking the
+  canvas through 800 x 600 and back), and switching back to classic reproduced
+  the first full render of that view byte for byte. The repainted canvas is also
+  byte-identical to the same view rendered off the browser through the shared
+  pipeline (`renderRgba` + `encodePng`). A *reload* of that URL is not a valid
+  comparison and was measured to differ: the page rewrites the address bar with
+  the codec's ten-significant-digit centre, and at zoom 2000 that is a genuinely
+  different picture — the exact centre and the bar's one differ in 30,389 of
+  1,080,000 pixels, each matching its own offline render byte for byte. The
+  fractal boundary is what makes the last digits of a centre matter at that
+  depth, not anything about the repaint.
+- Tests: the split's own cases in `renderRgba.test.ts` (the counts are the
+  kind's own numbers, a row into the start of a buffer, the colouring leaves the
+  counts alone, and the two steps make the one-pass picture for every fractal
+  including Newton), a `FractalRenderer recolour` block in
+  `fractalRenderer.test.ts` (every fractal and variant repaints in each of the
+  five schemes as the full render of that scheme; a repaint counts no pixels,
+  which is the acceptance line the pipeline exists for; and false with nothing
+  kept, after a cancel, from a whole-count pass, and while another render is
+  replacing the counts), `linkWithoutScheme` in `viewLink.test.ts`, and the new
+  `src/__tests__/recolour-panel.test.ts` (the repaint is for a full draw only,
+  the guard, the fall-through to the render, no progress or wander notice, the
+  ref, and the two writes kept in step). `share-link-panel.test.ts`'s ordering
+  assertion reads the full-render path now, since a repaint names its view too
+  and has no token. `make gate` is green.
+- Docs: the README's Color Mapping line; the Core Rendering System and
+  Performance Optimizations bullets in this file; and this note.
 
 ### Julia map: pick the constant by pointing at a small Mandelbrot inset (2026-10-10)
 
