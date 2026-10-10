@@ -6,6 +6,7 @@ import {
   useState,
   useMemo,
   useCallback,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
@@ -131,6 +132,12 @@ import { VersionFooter } from "../components/ui/VersionFooter";
 import { HelpDialog } from "../components/ui/HelpDialog";
 import { FractalSwitcher } from "../components/ui/FractalSwitcher";
 import { MathCard } from "../components/ui/MathCard";
+import {
+  getMathCardSnapshot,
+  getServerMathCardSnapshot,
+  setMathCardOpen,
+  subscribeToMathCard,
+} from "../lib/mathCard";
 import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
 import { BlankHint } from "../components/ui/BlankHint";
@@ -1032,10 +1039,19 @@ export default function Home() {
 
   // Whether the Math card is up, and the top bar button that toggles it. The
   // card reads the fractal, the variant and the view the renderer draws, and
-  // holds nothing of its own but whether it is expanded.
-  const [mathOpen, setMathOpen] = useState(false);
+  // holds nothing of its own but whether it is shown and expanded, which the
+  // mathCard store keeps in localStorage. It starts shown, collapsed.
+  const { open: mathOpen, expanded: mathExpanded } = useSyncExternalStore(
+    subscribeToMathCard,
+    getMathCardSnapshot,
+    getServerMathCardSnapshot,
+  );
   const mathButtonRef = useRef<HTMLButtonElement>(null);
-  const closeMath = useCallback(() => setMathOpen(false), []);
+  const closeMath = useCallback(() => setMathCardOpen(false), []);
+  const toggleMath = useCallback(
+    () => setMathCardOpen(!getMathCardSnapshot().open),
+    [],
+  );
 
   // `?` opens the help from anywhere on the page, not only from the canvas,
   // which is what the canvas-local arrow handlers cannot do. The decision is
@@ -1712,6 +1728,8 @@ export default function Home() {
   // power for the Multibrot): the switcher's second row and the Settings select
   // are both drawn from it.
   const variants = fractalVariants(fractalType);
+  const blankHintShown =
+    !tourPlaying && blankLink !== null && blankLink === currentLink;
 
   return (
     <div className="fractal-stage bg-gray-950" data-tour={tourPlaying}>
@@ -1728,7 +1746,7 @@ export default function Home() {
           onSurprise={handleSurprise}
           canSurprise={canSurprise}
           onTour={() => tourMode.buttonStart()}
-          onMath={() => setMathOpen((open) => !open)}
+          onMath={toggleMath}
           mathOpen={mathOpen}
           mathButtonRef={mathButtonRef}
           onHelp={() => setHelpOpen(true)}
@@ -1784,12 +1802,17 @@ export default function Home() {
           {/* Said when the settled picture has nothing in it, with the way
               back; it takes no pointer events outside its own box. */}
           <BlankHint
-            show={
-              !tourPlaying && blankLink !== null && blankLink === currentLink
-            }
+            show={blankHintShown}
             onBack={handleBack}
             canGoBack={historyState.canGoBack}
             belowChips={variants !== null}
+            mathCard={
+              mathOpen && !tourOverlayOpen
+                ? mathExpanded
+                  ? "expanded"
+                  : "collapsed"
+                : "hidden"
+            }
           />
 
           {/* One click to another fractal, and for Julia one to another
@@ -1821,6 +1844,7 @@ export default function Home() {
                 colorScheme,
               }}
               belowChips={variants !== null}
+              stepAside={blankHintShown}
               onClose={closeMath}
               returnFocusRef={mathButtonRef}
             />

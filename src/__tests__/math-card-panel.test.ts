@@ -15,6 +15,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { HELP_SECTIONS } from "../lib/helpEntries";
+import {
+  DEFAULT_MATH_CARD_STATE,
+  getServerMathCardSnapshot,
+} from "../lib/mathCard";
 
 function source(path: string): string {
   return readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
@@ -23,6 +27,7 @@ function source(path: string): string {
 const page = source("../app/page.tsx");
 const topBar = source("../components/ui/TopBar.tsx");
 const card = source("../components/ui/MathCard.tsx");
+const hint = source("../components/ui/BlankHint.tsx");
 const view = source("../components/ui/MathView.tsx");
 const typings = source("../types/mathml.d.ts");
 
@@ -51,9 +56,38 @@ describe("the Math button", () => {
   });
 
   it("is wired to a toggle, so the button opens and closes the card", () => {
-    expect(page).toContain("onMath={() => setMathOpen((open) => !open)}");
+    expect(page).toContain("onMath={toggleMath}");
+    expect(page).toContain("setMathCardOpen(!getMathCardSnapshot().open)");
     expect(page).toContain("mathOpen={mathOpen}");
     expect(page).toContain("mathButtonRef={mathButtonRef}");
+  });
+});
+
+describe("the card's default", () => {
+  it("is shown: the page reads it from the store, whose default is open", () => {
+    expect(page).toMatch(
+      /const \{ open: mathOpen, expanded: mathExpanded \} = useSyncExternalStore\(\s*subscribeToMathCard,\s*getMathCardSnapshot,\s*getServerMathCardSnapshot,/,
+    );
+    // The old page state started false; no second copy of the flag may return.
+    expect(page).not.toMatch(/useState\(false\);\s*\n\s*const mathButtonRef/);
+    expect(page).not.toContain("setMathOpen");
+    expect(DEFAULT_MATH_CARD_STATE).toEqual({ open: true, expanded: false });
+    expect(getServerMathCardSnapshot()).toBe(DEFAULT_MATH_CARD_STATE);
+  });
+
+  it("tells the blank hint which way the card is, so the two stay apart", () => {
+    expect(page).toMatch(/<BlankHint[\s\S]*?mathCard=\{/);
+    expect(hint).toContain("top-[6.75rem]");
+    expect(hint).toContain("sm:pl-[23rem]");
+  });
+
+  it("steps aside on a phone while the blank hint shows, which has no room for both", () => {
+    expect(page).toMatch(/<MathCard[\s\S]*?stepAside=\{blankHintShown\}/);
+    expect(page).toMatch(/<BlankHint[\s\S]*?show=\{blankHintShown\}/);
+    expect(card).toContain('stepAside ? "max-sm:hidden" : ""');
+    // The hint then keeps the place it had before the card was on by default.
+    expect(hint).toContain("max-sm:top-14");
+    expect(hint).toContain("max-sm:top-24");
   });
 });
 
@@ -91,7 +125,9 @@ describe("the card on the page", () => {
 
   it("moves down a row for the switcher's chips, as the blank hint does", () => {
     expect(page).toMatch(/<MathCard[\s\S]*?belowChips=\{variants !== null\}/);
-    expect(card).toContain('belowChips ? "top-24" : "top-14"');
+    expect(card).toContain(
+      'belowChips ? "top-[5.25rem] sm:top-[5.75rem]" : "top-14"',
+    );
   });
 });
 
@@ -104,15 +140,24 @@ describe("the card", () => {
 
   it("collapses and expands with a button that says which it is", () => {
     expect(card).toContain("aria-expanded={expanded}");
-    expect(card).toContain("setExpanded(!expanded)");
+    expect(card).toContain("setMathCardExpanded(!expanded)");
   });
 
-  it("keeps the choice through the session store, not in browser storage of its own", () => {
+  it("keeps the choice through the shared store, not in browser storage of its own", () => {
     expect(card).toContain("useSyncExternalStore(");
     expect(card).not.toMatch(/sessionStorage|localStorage/);
   });
 
-  it("closes on Escape, on the window, and gives focus back to the Math button", () => {
+  it("clips the collapsed line on a phone instead of wrapping it", () => {
+    expect(card).toContain("max-sm:truncate");
+    expect(card).toContain("max-w-[calc(100%-1.5rem)]");
+    expect(card).toContain("max-w-[22rem]");
+  });
+
+  it("closes on Escape only from the card or the Math button, so dialogs keep Escape", () => {
+    expect(card).toContain(
+      "if (!inCard && active !== returnFocusRef?.current) return;",
+    );
     expect(card).toContain('event.key !== "Escape"');
     expect(card).toContain('window.addEventListener("keydown", handleKeyDown)');
     expect(card).toContain(
@@ -203,5 +248,8 @@ describe("the help entry", () => {
     expect(math).toBeDefined();
     expect(math?.action).toMatch(/Escape/);
     expect(math?.action).toMatch(/tour/i);
+    // The card starts shown, so the entry must not say the button opens it.
+    expect(math?.action).toMatch(/starts|from the first visit|by default/i);
+    expect(math?.action).toMatch(/remember/i);
   });
 });

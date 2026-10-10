@@ -48,8 +48,9 @@ describe("the page's wiring", () => {
 
   it("shows it only for the view it was found blank on, and not during a tour", () => {
     expect(page).toMatch(
-      /show=\{\s*!tourPlaying &&\s*blankLink !== null &&\s*blankLink === currentLink\s*\}/,
+      /const blankHintShown =\s*!tourPlaying &&\s*blankLink !== null &&\s*blankLink === currentLink;/,
     );
+    expect(page).toMatch(/<BlankHint\s+show=\{blankHintShown\}/);
   });
 
   it("asks only of a settled full render, after the delay, and clears on cleanup", () => {

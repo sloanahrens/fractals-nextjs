@@ -13,11 +13,11 @@ import { describeFractalMath } from "../../lib/fractalMath";
 import {
   type MathCardView,
   formatViewNumbers,
-  getExpandedSnapshot,
-  getServerExpandedSnapshot,
+  getMathCardSnapshot,
+  getServerMathCardSnapshot,
   mathCardDelayMs,
-  setExpanded,
-  subscribeToExpanded,
+  setMathCardExpanded,
+  subscribeToMathCard,
 } from "../../lib/mathCard";
 import { PLACES, placeAtView } from "../../lib/places";
 import { MathView } from "./MathView";
@@ -31,6 +31,13 @@ interface MathCardProps {
   view: MathCardView;
   /** Whether the switcher shows its second row, which pushes the card down. */
   belowChips: boolean;
+  /**
+   * Whether the blank-view hint is showing. Under 640 px the picture is too
+   * short for the switcher, the card and the hint together, so the card steps
+   * aside (hidden, still mounted) until the view moves; from 640 px up the hint
+   * sits below it or beside it instead (`BlankHint`).
+   */
+  stepAside?: boolean;
   /** Closes the card: Escape calls it. */
   onClose: () => void;
   /** The Math button, so Escape can hand focus back to it. */
@@ -70,11 +77,14 @@ const ROW_LABEL = "text-xs font-medium uppercase tracking-wide text-white/60";
  * the card cannot disagree with the picture. It is read-only.
  *
  * The numbers follow the live view, throttled to the link writer's cadence.
- * The expanded or collapsed choice is kept for the session
- * (`src/lib/mathCard.ts`). Escape closes the card; there is no focus trap, so
- * Tab moves through it and on. The page does not render it while a tour plays
- * or the drawer or Help is open, so the card is never over a dialog and the
- * Escape listener exists only while it is on screen. The wrapper takes no
+ * It starts shown and collapsed, and both choices are kept in the browser
+ * (`src/lib/mathCard.ts`). Escape closes the card only while focus is in it or
+ * on the Math button, since the card is up by default and an Escape elsewhere
+ * is not for it; there is no focus trap, so Tab moves through it and on. The
+ * page does not render it while a tour plays or the drawer or Help is open, so
+ * the card is never over a dialog and the Escape listener exists only while it
+ * is on screen. Under 640 px the collapsed line is clipped with an ellipsis
+ * rather than wrapped, to stay one line tall. The wrapper takes no
  * pointer events, so the canvas around the card still pans, and it stops short
  * of the Nearby strip's height.
  */
@@ -83,13 +93,14 @@ export function MathCard({
   variant,
   view,
   belowChips,
+  stepAside = false,
   onClose,
   returnFocusRef,
 }: MathCardProps) {
-  const expanded = useSyncExternalStore(
-    subscribeToExpanded,
-    getExpandedSnapshot,
-    getServerExpandedSnapshot,
+  const { expanded } = useSyncExternalStore(
+    subscribeToMathCard,
+    getMathCardSnapshot,
+    getServerMathCardSnapshot,
   );
   const headingId = useId();
   const detailsId = useId();
@@ -134,11 +145,15 @@ export function MathCard({
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
 
+      // The card is up from the first visit, so an Escape pressed elsewhere is
+      // not aimed at it: it closes the card from the card or the Math button.
+      const active = document.activeElement;
+      const inCard = cardRef.current?.contains(active) ?? false;
+      if (!inCard && active !== returnFocusRef?.current) return;
+
       // Focus inside the card would fall to the page when it goes; the Math
       // button it came from is the place to put it back.
-      if (cardRef.current?.contains(document.activeElement)) {
-        returnFocusRef?.current?.focus();
-      }
+      if (inCard) returnFocusRef?.current?.focus();
       onClose();
     };
 
@@ -165,15 +180,15 @@ export function MathCard({
 
   return (
     <div
-      className={`pointer-events-none absolute bottom-[9.75rem] left-3 z-10 flex min-h-11 items-start ${
-        belowChips ? "top-24" : "top-14"
-      }`}
+      className={`pointer-events-none absolute bottom-[9.75rem] left-3 z-10 flex min-h-11 max-w-[calc(100%-1.5rem)] items-start ${
+        belowChips ? "top-[5.25rem] sm:top-[5.75rem]" : "top-14"
+      } ${stepAside ? "max-sm:hidden" : ""}`}
     >
       <section
         ref={cardRef}
         role="region"
         aria-labelledby={headingId}
-        className="pointer-events-auto max-h-full max-w-[22rem] overflow-y-auto rounded-lg bg-gray-900/85 px-3 py-2 text-sm text-white shadow backdrop-blur"
+        className="pointer-events-auto max-h-full min-w-0 max-w-[22rem] overflow-y-auto rounded-lg bg-gray-900/85 px-3 py-2 text-sm text-white shadow backdrop-blur"
       >
         <h2 id={headingId} className={expanded ? ROW_LABEL : "sr-only"}>
           Math: {math.title}
@@ -184,17 +199,21 @@ export function MathCard({
             type="button"
             aria-expanded={expanded}
             aria-controls={expanded ? detailsId : undefined}
-            onClick={() => setExpanded(!expanded)}
+            onClick={() => setMathCardExpanded(!expanded)}
             className="shrink-0 rounded-md bg-white/10 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <span aria-hidden="true">{expanded ? "▾" : "▸"} </span>
             {expanded ? "Less" : "More"}
           </button>
-          <p className="flex flex-wrap items-baseline gap-x-2 text-base">
+          {/* Collapsed on a phone the line is clipped with an ellipsis rather
+              than wrapped, so the card stays one line tall. */}
+          <p
+            className={`min-w-0 text-base ${expanded ? "" : "max-sm:truncate"}`}
+          >
             <MathView expr={math.rule} />
             {math.setting && (
               <>
-                <span aria-hidden="true">,</span>
+                <span aria-hidden="true">, </span>
                 <MathView expr={math.setting.value} />
               </>
             )}

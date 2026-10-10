@@ -2,26 +2,30 @@
  * The Math card's pure parts
  *
  * What the card prints for a view, how often it may redraw while the view
- * moves, and the expanded-or-collapsed choice kept for the session. The choice
- * must survive a storage that is missing or throws, since a private window or
- * blocked site data is an ordinary browser, not an error.
+ * moves, and what the card remembers (shown or hidden, collapsed or expanded).
+ * That must survive a storage that is missing, throws or holds junk, since a
+ * private window or blocked site data is an ordinary browser, not an error.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PLACES } from "../places";
 import { LINK_WRITE_INTERVAL_MS } from "../viewLinkState";
 import {
+  DEFAULT_MATH_CARD_STATE,
+  LEGACY_EXPANDED_KEY,
   MATH_CARD_STORAGE_KEY,
   MATH_CARD_UPDATE_MS,
   formatViewNumbers,
-  getExpandedSnapshot,
-  getServerExpandedSnapshot,
+  getMathCardSnapshot,
+  getServerMathCardSnapshot,
+  loadMathCardState,
   mathCardDelayMs,
-  readExpanded,
-  resetExpandedMemory,
-  setExpanded,
-  subscribeToExpanded,
-  writeExpanded,
+  parseMathCardState,
+  resetMathCardMemory,
+  saveMathCardState,
+  setMathCardExpanded,
+  setMathCardOpen,
+  subscribeToMathCard,
   type MathCardStorage,
   type MathCardView,
 } from "../mathCard";
@@ -48,7 +52,7 @@ function fakeStorage(initial: Record<string, string> = {}) {
 }
 
 afterEach(() => {
-  resetExpandedMemory();
+  resetMathCardMemory();
   vi.unstubAllGlobals();
 });
 
@@ -121,32 +125,118 @@ describe("the refresh cadence", () => {
   });
 });
 
-describe("the expanded choice in storage", () => {
-  it("reads a stored 1 as expanded and everything else as collapsed", () => {
-    expect(
-      readExpanded(fakeStorage({ [MATH_CARD_STORAGE_KEY]: "1" }).storage),
-    ).toBe(true);
-    expect(
-      readExpanded(fakeStorage({ [MATH_CARD_STORAGE_KEY]: "0" }).storage),
-    ).toBe(false);
-    expect(
-      readExpanded(fakeStorage({ [MATH_CARD_STORAGE_KEY]: "yes" }).storage),
-    ).toBe(false);
-    expect(readExpanded(fakeStorage().storage)).toBe(false);
+describe("what the card remembers", () => {
+  const stored = (open: unknown, expanded: unknown) =>
+    JSON.stringify({ v: 1, open, expanded });
+
+  it("starts shown and collapsed", () => {
+    expect(DEFAULT_MATH_CARD_STATE).toEqual({ open: true, expanded: false });
+    expect(getServerMathCardSnapshot()).toEqual(DEFAULT_MATH_CARD_STATE);
   });
 
-  it("writes 1 and 0 under one key", () => {
+  it("reads a stored version-1 value", () => {
+    for (const [open, expanded] of [
+      [true, false],
+      [true, true],
+      [false, false],
+      [false, true],
+    ]) {
+      expect(parseMathCardState(stored(open, expanded))).toEqual({
+        open,
+        expanded,
+      });
+    }
+  });
+
+  it("keeps the default for a field that is missing or not a boolean", () => {
+    expect(parseMathCardState('{"v":1}')).toEqual(DEFAULT_MATH_CARD_STATE);
+    expect(parseMathCardState('{"v":1,"open":false}')).toEqual({
+      open: false,
+      expanded: false,
+    });
+    expect(parseMathCardState(stored("no", 1))).toEqual(
+      DEFAULT_MATH_CARD_STATE,
+    );
+    expect(parseMathCardState(stored(null, true))).toEqual({
+      open: true,
+      expanded: true,
+    });
+  });
+
+  it("refuses JSON junk, other shapes and other versions", () => {
+    for (const raw of [
+      "",
+      "not json",
+      "{",
+      "null",
+      "1",
+      '"1"',
+      "true",
+      "[]",
+      "[1,0]",
+      '{"open":false,"expanded":true}',
+      '{"v":2,"open":false}',
+      '{"v":"1","open":false}',
+    ]) {
+      expect(parseMathCardState(raw), raw).toBeNull();
+    }
+    expect(parseMathCardState(null)).toBeNull();
+  });
+
+  it("loads the default from an empty storage or none at all", () => {
+    expect(loadMathCardState(fakeStorage().storage)).toEqual(
+      DEFAULT_MATH_CARD_STATE,
+    );
+    expect(loadMathCardState(undefined)).toEqual(DEFAULT_MATH_CARD_STATE);
+    expect(loadMathCardState(undefined, undefined)).not.toBe(
+      DEFAULT_MATH_CARD_STATE,
+    );
+  });
+
+  it("loads the default for corrupt storage rather than a half-read value", () => {
+    const { storage } = fakeStorage({ [MATH_CARD_STORAGE_KEY]: "{oops" });
+
+    expect(loadMathCardState(storage)).toEqual(DEFAULT_MATH_CARD_STATE);
+  });
+
+  it("reads fr-1tk's session value once, when there is no versioned one", () => {
+    const session = (value: string) =>
+      fakeStorage({ [LEGACY_EXPANDED_KEY]: value }).storage;
+
+    expect(loadMathCardState(fakeStorage().storage, session("1"))).toEqual({
+      open: true,
+      expanded: true,
+    });
+    expect(loadMathCardState(fakeStorage().storage, session("0"))).toEqual({
+      open: true,
+      expanded: false,
+    });
+    expect(loadMathCardState(fakeStorage().storage, session("yes"))).toEqual(
+      DEFAULT_MATH_CARD_STATE,
+    );
+    // The versioned value wins over the old one.
+    const { storage } = fakeStorage({
+      [MATH_CARD_STORAGE_KEY]: stored(false, false),
+    });
+    expect(loadMathCardState(storage, session("1"))).toEqual({
+      open: false,
+      expanded: false,
+    });
+    // A corrupt versioned value falls back to the old one, then the default.
+    const corrupt = fakeStorage({ [MATH_CARD_STORAGE_KEY]: "junk" }).storage;
+    expect(loadMathCardState(corrupt, session("1")).expanded).toBe(true);
+  });
+
+  it("writes one versioned key and nothing under the old one", () => {
     const { storage, data } = fakeStorage();
 
-    writeExpanded(storage, true);
-    expect(data).toEqual({ [MATH_CARD_STORAGE_KEY]: "1" });
-    writeExpanded(storage, false);
-    expect(data).toEqual({ [MATH_CARD_STORAGE_KEY]: "0" });
-  });
+    saveMathCardState(storage, { open: false, expanded: true });
 
-  it("treats a missing storage as collapsed and ignores a write to it", () => {
-    expect(readExpanded(undefined)).toBe(false);
-    expect(() => writeExpanded(undefined, true)).not.toThrow();
+    expect(data).toEqual({
+      [MATH_CARD_STORAGE_KEY]: '{"v":1,"open":false,"expanded":true}',
+    });
+    expect(MATH_CARD_STORAGE_KEY).toMatch(/\.v1$/);
+    expect(loadMathCardState(storage)).toEqual({ open: false, expanded: true });
   });
 
   it("survives a storage that throws on every call", () => {
@@ -159,56 +249,106 @@ describe("the expanded choice in storage", () => {
       },
     };
 
-    expect(readExpanded(hostile)).toBe(false);
-    expect(() => writeExpanded(hostile, true)).not.toThrow();
+    expect(loadMathCardState(hostile, hostile)).toEqual(
+      DEFAULT_MATH_CARD_STATE,
+    );
+    expect(() =>
+      saveMathCardState(hostile, { open: false, expanded: false }),
+    ).not.toThrow();
+    expect(() =>
+      saveMathCardState(undefined, { open: false, expanded: false }),
+    ).not.toThrow();
   });
 });
 
-describe("the store the card subscribes to", () => {
-  it("is collapsed on the server", () => {
-    expect(getServerExpandedSnapshot()).toBe(false);
+describe("the store the card and the page subscribe to", () => {
+  it("reads localStorage until this page changes the state", () => {
+    const { storage } = fakeStorage({
+      [MATH_CARD_STORAGE_KEY]: JSON.stringify({
+        v: 1,
+        open: false,
+        expanded: true,
+      }),
+    });
+    vi.stubGlobal("window", { localStorage: storage });
+
+    expect(getMathCardSnapshot()).toEqual({ open: false, expanded: true });
   });
 
-  it("reads the session's storage until this page changes the choice", () => {
-    const { storage } = fakeStorage({ [MATH_CARD_STORAGE_KEY]: "1" });
-    vi.stubGlobal("window", { sessionStorage: storage });
+  it("is the default for a fresh visitor", () => {
+    vi.stubGlobal("window", {
+      localStorage: fakeStorage().storage,
+      sessionStorage: fakeStorage().storage,
+    });
 
-    expect(getExpandedSnapshot()).toBe(true);
+    expect(getMathCardSnapshot()).toEqual({ open: true, expanded: false });
   });
 
-  it("keeps a change in storage and tells the subscribers", () => {
+  it("carries fr-1tk's session choice over", () => {
+    vi.stubGlobal("window", {
+      localStorage: fakeStorage().storage,
+      sessionStorage: fakeStorage({ [LEGACY_EXPANDED_KEY]: "1" }).storage,
+    });
+
+    expect(getMathCardSnapshot()).toEqual({ open: true, expanded: true });
+  });
+
+  it("keeps each change, saves it and tells the subscribers", () => {
     const { storage, data } = fakeStorage();
-    vi.stubGlobal("window", { sessionStorage: storage });
+    vi.stubGlobal("window", { localStorage: storage });
     const heard = vi.fn();
-    const unsubscribe = subscribeToExpanded(heard);
+    const unsubscribe = subscribeToMathCard(heard);
 
-    setExpanded(true);
+    setMathCardOpen(false);
+    expect(getMathCardSnapshot()).toEqual({ open: false, expanded: false });
+    expect(data[MATH_CARD_STORAGE_KEY]).toBe(
+      '{"v":1,"open":false,"expanded":false}',
+    );
 
-    expect(getExpandedSnapshot()).toBe(true);
-    expect(data[MATH_CARD_STORAGE_KEY]).toBe("1");
-    expect(heard).toHaveBeenCalledTimes(1);
+    // One choice does not undo the other.
+    setMathCardExpanded(true);
+    expect(getMathCardSnapshot()).toEqual({ open: false, expanded: true });
+    expect(heard).toHaveBeenCalledTimes(2);
 
     unsubscribe();
-    setExpanded(false);
-    expect(heard).toHaveBeenCalledTimes(1);
-    expect(getExpandedSnapshot()).toBe(false);
+    setMathCardOpen(true);
+    expect(heard).toHaveBeenCalledTimes(2);
+    expect(getMathCardSnapshot()).toEqual({ open: true, expanded: true });
   });
 
-  it("still toggles for the life of the page when storage refuses the write", () => {
+  it("says nothing and writes nothing when a call changes nothing", () => {
+    const { storage, data } = fakeStorage();
+    vi.stubGlobal("window", { localStorage: storage });
+    const heard = vi.fn();
+    subscribeToMathCard(heard);
+
+    setMathCardOpen(true);
+    setMathCardExpanded(false);
+
+    expect(heard).not.toHaveBeenCalled();
+    expect(data).toEqual({});
+  });
+
+  it("still works for the life of the page when storage is blocked", () => {
     vi.stubGlobal("window", {
+      get localStorage(): Storage {
+        throw new Error("blocked");
+      },
       get sessionStorage(): Storage {
         throw new Error("blocked");
       },
     });
 
-    expect(getExpandedSnapshot()).toBe(false);
-    setExpanded(true);
-    expect(getExpandedSnapshot()).toBe(true);
+    expect(getMathCardSnapshot()).toEqual({ open: true, expanded: false });
+    setMathCardOpen(false);
+    setMathCardExpanded(true);
+    expect(getMathCardSnapshot()).toEqual({ open: false, expanded: true });
   });
 
   it("returns a stable value between changes, as useSyncExternalStore needs", () => {
-    vi.stubGlobal("window", { sessionStorage: fakeStorage().storage });
+    vi.stubGlobal("window", { localStorage: fakeStorage().storage });
 
-    expect(getExpandedSnapshot()).toBe(getExpandedSnapshot());
+    expect(getMathCardSnapshot()).toBe(getMathCardSnapshot());
+    expect(getServerMathCardSnapshot()).toBe(getServerMathCardSnapshot());
   });
 });
