@@ -58,6 +58,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **Pinch** (`src/lib/pinch.ts`): The pure helpers behind two-finger zoom — finger distance, midpoint, the zoom factor between two steps, and scale-about-a-point
+- **Wheel zoom** (`src/lib/wheelZoom.ts`): The zoom factor one wheel event asks for — an exponential of how far it scrolled
 - **Canvas navigation** (`src/lib/canvasNavigation.ts`): The wheel, drag, touch and key listeners on the canvas, and the key-to-bounds switch
 - **Render quality** (`src/lib/renderQuality.ts`): Whether a redraw is a low-resolution preview or a full-resolution render
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
@@ -170,7 +171,35 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 ## Version Notes
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-10-10_
+
+### Wheel zoom follows the scroll amount (2026-10-10)
+
+- `ZoomPanManager.handleWheel` zoomed by exactly 10% per event whatever the
+  event's size. A mouse notch is about one event, so that felt right, but a
+  trackpad swipe is dozens of tiny events plus momentum after the fingers lift,
+  so one light swipe zoomed 2x to 20x. On the canvas-first page every scroll is
+  a zoom, and the owner landed at 127x in a blank field outside the set.
+- `src/lib/wheelZoom.ts`: `wheelZoomFactor(deltaY, deltaMode, ctrlKey,
+  viewportHeight)` is `exp(-delta * k)`. The delta is `deltaY` in pixels, lines
+  times 16, or pages times the viewport height (a `deltaMode` it does not know
+  is pixels), clamped to +-120 after that conversion so one huge event cannot
+  jump. `k` is 0.0016 for a plain wheel (a 100-unit notch is 1.17x, near the
+  old 1.1) and 0.01 with Control held, because a trackpad pinch arrives as
+  Control+wheel with small deltas. A zero or non-finite delta is 1.
+- Because the factor is an exponential, scroll adds up: 30 events of 3 are one
+  event of 90 (about 1.15x), and zooming in then out by the same delta
+  multiplies to 1, so a reversal returns the bounds.
+- Only the factor changed. `zoom()` still centres the new view on the complex
+  point under the cursor and `clampZoom` still limits it; `handleWheel` still
+  returns null for a zero `deltaY` and calls `preventDefault` otherwise
+  (Control+wheel included, so the browser does not zoom the page). The gesture
+  start and end reporting in `canvasNavigation.ts` is untouched. The Help row
+  and README name no step size, so neither changed.
+- `wheelZoom.test.ts` drives the function; `zoomPan.test.ts` drives
+  `handleWheel` through a swipe, a round trip, line mode, Control and the
+  clamp; the notch in `canvasNavigation.test.ts` is `wheelZoomFactor(-100, ...)`
+  rather than a literal 1.1.
 
 ### Pinch to zoom (2026-10-09)
 

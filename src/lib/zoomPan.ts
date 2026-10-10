@@ -11,6 +11,7 @@ import {
   touchDistance,
   touchMidpoint,
 } from "./pinch";
+import { wheelZoomFactor } from "./wheelZoom";
 
 /** Where the two fingers of a pinch were at its last step, in canvas pixels. */
 interface PinchState {
@@ -121,7 +122,9 @@ export class ZoomPanManager {
   }
 
   /**
-   * Handle mouse wheel zoom
+   * Handle mouse wheel zoom. A Control+wheel event, which is how a trackpad
+   * pinch arrives, is prevented like any other so the browser does not zoom
+   * the page.
    * @param event - Wheel event
    * @param currentBounds - Current fractal bounds
    * @returns New fractal bounds, or null if the event was not a zoom
@@ -140,8 +143,14 @@ export class ZoomPanManager {
 
     const pixel = this.pixelFrom(event.clientX, event.clientY, event.target);
 
-    // Determine zoom direction and factor
-    const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+    // How far the wheel turned sets the factor, so a trackpad swipe of many
+    // small events zooms by what the swipe was worth and not by a step each.
+    const zoomFactor = wheelZoomFactor(
+      event.deltaY,
+      event.deltaMode,
+      event.ctrlKey,
+      typeof window === "undefined" ? 0 : window.innerHeight,
+    );
 
     return this.zoom(pixel.x, pixel.y, zoomFactor, currentBounds);
   }

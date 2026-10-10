@@ -263,6 +263,7 @@ dependencies and needs nothing else.
 │   │   ├── viewLinkState.ts        # What a link means for the page, and the address-bar throttle
 │   │   ├── wander.ts               # One Auto-wander step
 │   │   ├── wanderController.ts     # The walk's countdown and what suspends it
+│   │   ├── wheelZoom.ts            # The zoom factor one wheel event asks for, from how far it scrolled
 │   │   ├── zoomPan.ts              # Zoom and pan manager
 │   │   └── zoomScale.ts            # Logarithmic zoom slider mapping, coordinate formatting
 │   ├── __tests__/          # Route tests, and tests that read page.tsx and the Makefile
