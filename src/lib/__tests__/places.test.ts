@@ -16,6 +16,7 @@ import {
 import { JULIA_CONSTANTS, parseJuliaConstant } from "../julia";
 import {
   MAX_ZOOM,
+  BASE_HEIGHT,
   MIN_ZOOM,
   autoIterations,
   calculateZoomBounds,
@@ -24,6 +25,7 @@ import type { ColorScheme } from "../../types/fractal";
 import {
   FEATURED_PLACE_IDS,
   PLACES,
+  REAL_AXIS_MATCHES_MANDELBROT,
   featuredPlace,
   placeColorScheme,
   placesForFractal,
@@ -652,6 +654,16 @@ describe("featuredPlace", () => {
       expect(featuredPlace(fractal).colorScheme).toBeDefined();
     });
 
+    it("is off the real axis where that axis is the Mandelbrot set's", () => {
+      if (REAL_AXIS_MATCHES_MANDELBROT[fractal] !== true) return;
+      const featured = featuredPlace(fractal);
+
+      expect(
+        offRealAxis(featured),
+        `${featured.id} lies on the real axis, where ${fractal} draws the Mandelbrot set`,
+      ).toBe(true);
+    });
+
     it("is not blank, at the count Auto draws it at", async () => {
       const featured = featuredPlace(fractal);
       const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
@@ -692,6 +704,50 @@ describe("featuredPlace", () => {
 
   it("falls back to the Mandelbrot set's for an id it does not know", () => {
     expect(featuredPlace("no-such-fractal")).toBe(featuredPlace("mandelbrot"));
+  });
+});
+
+describe("the real-axis guard", () => {
+  it("lists only fractals the picker offers, and the Tricorn", () => {
+    const listed = Object.keys(REAL_AXIS_MATCHES_MANDELBROT);
+
+    expect(listed).toContain("tricorn");
+    for (const id of listed) {
+      expect(FRACTAL_TYPES.map((type) => type.id)).toContain(id);
+    }
+  });
+
+  it("refuses the left-arm view the Tricorn button used to land on", () => {
+    const along = PLACES.find((place) => place.id === "tricorn-along-the-arm");
+
+    expect(along).toBeDefined();
+    expect(offRealAxis(along as Place)).toBe(false);
+  });
+
+  it("accepts a view whose centre is a share of its height off the axis", () => {
+    const place = PLACES.find((p) => p.id === "tricorn-star") as Place;
+
+    expect(offRealAxis(place)).toBe(true);
+    expect(offRealAxis({ ...place, centerY: 0 })).toBe(false);
+    // The bound is inclusive: exactly 5% of the view's height clears it.
+    const edge = (OFF_AXIS_VIEW_HEIGHTS * BASE_HEIGHT) / place.zoom;
+    expect(offRealAxis({ ...place, centerY: edge })).toBe(true);
+    expect(offRealAxis({ ...place, centerY: -edge })).toBe(true);
+    expect(offRealAxis({ ...place, centerY: edge * 0.99 })).toBe(false);
+  });
+
+  it("really is the Mandelbrot set on the axis for each fractal it lists", () => {
+    // The flag's claim, not just its use: the orbit of a real c is the same.
+    for (const id of Object.keys(REAL_AXIS_MATCHES_MANDELBROT)) {
+      const kind = resolveFractalKind(id, "");
+      const mandelbrot = resolveFractalKind("mandelbrot", "");
+      for (let re = -2; re <= 0.5; re += 0.05) {
+        const point = { real: re, imaginary: 0 };
+        expect(kind.iterations(point, 200, false)).toBe(
+          mandelbrot.iterations(point, 200, false),
+        );
+      }
+    }
   });
 });
 
@@ -759,6 +815,16 @@ const FEATURED_DETAIL_SHARE = 0.2;
 
 /** A picture is blank when fewer than this share of it differs from its corner. */
 const BLANK_SHARE = 0.05;
+
+/** How far a centre must be from the real axis, in heights of its view. */
+const OFF_AXIS_VIEW_HEIGHTS = 0.05;
+
+/** Whether a place's centre is clear of the real axis by a share of its view. */
+function offRealAxis(place: Place): boolean {
+  const viewHeight = BASE_HEIGHT / place.zoom;
+
+  return Math.abs(place.centerY) >= OFF_AXIS_VIEW_HEIGHTS * viewHeight;
+}
 
 /**
  * The smallest stand-in for a 2D canvas that FractalRenderer touches, with the
