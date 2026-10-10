@@ -164,6 +164,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         action: "Save the canvas at its full resolution",
       },
       {
+        keys: "Math",
+        action:
+          "Button in the top bar that shows the mathematics of the picture on a card under the fractal buttons: the rule repeated for every point and the fractal's setting with its real value, on one line. More adds where each point starts, what the setting means, the view's centre, width, zoom, iteration cap and colours, how a point is coloured and a few plain sentences, and names the place when you are on one. The numbers follow the view as you zoom and pan. Escape or the button closes it; the card is hidden during a tour",
+      },
+      {
         keys: "Help / ?",
         action: "Open this help, from the button or the ? key",
       },

@@ -70,7 +70,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
 - **Site origin** (`src/lib/siteOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `generateMetadata` in `src/app/layout.tsx` puts on og:image, twitter:image and og:url
-- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
+- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Math/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
@@ -78,6 +78,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia chips land
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
 - **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
+- **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers. **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -181,6 +182,112 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Math card: the rule, the settings and the view's numbers (2026-10-10)
+
+- A Math button in the top bar (beside Help, `aria-pressed`) toggles a card over
+  the left of the canvas that shows the mathematics of the picture: layer 1 of 3
+  of the owner-approved math design (fr-1tk; the pointer probe and the orbit plot
+  are separate beads). Every fractal is one small formula plus a handful of
+  numbers, and the card reads the same state the renderer uses (the page's
+  `fractalType`, `variant`, `centerX`, `centerY`, `zoomLevel`,
+  `effectiveMaxIterations`, `autoIterationsOn`, `colorScheme`), so it cannot
+  disagree with the picture. Read-only.
+- `src/lib/fractalMath.ts`: `describeFractalMath(fractalId, variant)` returns a
+  `FractalMath` `{ title, rule, start, setting, blurb, escape }`. `FRACTAL_MATH`
+  maps each `FRACTAL_TYPES` id to a function of the variant; an id this build
+  does not know gets the Mandelbrot set's, as `resolveFractalKind` does. A
+  formula is a `MathExpr`, a small typed tree (`number`, `identifier`,
+  `operator`, `superscript`, `subscript`, `fraction`, `row`, `conjugate`, `abs`,
+  and `text` for the few words a formula carries, "the pixel's point"), never a
+  string of markup. `text` is the one kind beyond the bead's list: "z starts at
+  the pixel's point" needs words. The descriptors: Mandelbrot `z -> z^2 + c` from
+  `z0 = 0, c = the pixel's point`; Julia the same rule from `z0 = the pixel's
+  point` with the setting `c = a + bi` (the named constant's value, or the custom
+  point, or the first named constant when the name cannot be read, as the
+  renderer draws); Burning Ship `z -> (|Re z| + i|Im z|)^2 + c`; Tricorn `z ->
+  conj(z)^2 + c`; Multibrot `z -> z^d + c` with the setting `d = 3|4|5` (a name
+  that is not a power draws, and shows, 3); Newton `z -> z - (z^3 - 1)/(3 z^2)`
+  from the pixel's point, whose escape sentence says the point is done when
+  `z^3` is within 0.000001 of 1 and the colour is the root it reached. The
+  setting's `label` is its meaning in a phrase ("Julia constant "Douady rabbit",
+  added at every step"), shown beside its value in the expanded card.
+- `toPlainText(expr)` is the pure walk that reads a tree aloud, and is the
+  `aria-label` on the typeset `<math>` (`role="img"`, so the glyphs are not read
+  out one by one): `z becomes z squared plus c`; a conjugated letter is "z bar";
+  squared and cubed in words, any other power "to the power d"; `abs` "the
+  absolute value of x,"; a fraction "the fraction ... over ... end fraction". Each
+  descriptor's rule, start and setting have an exact-string test. `complexExpr`
+  and `formatComplex` write a + bi from two numbers through `formatCoordinate`
+  (six significant digits): a zero part is dropped (never both), an imaginary part
+  of exactly 1 is `i`, the formulas use the typographic minus and the text an
+  ASCII hyphen so a copied centre still parses.
+- `MathView` renders the tree as the `<math>` family, which Chrome, Safari and
+  Firefox draw natively with no dependency or font; React builds the MathML
+  namespace on its own. `src/types/mathml.d.ts` adds the JSX typings React lacks
+  (`math`, `mrow`, `mn`, `mi`, `mo`, `mtext`, `msup`, `msub`, `mfrac`, `mover`);
+  `mover`'s `accent` is the string `"true"`, since React 19 warns about a
+  boolean on an unknown attribute. No `dangerouslySetInnerHTML`, no new package.
+- `MathCard` is a `role="region"` labelled by its heading (`useId`), no focus
+  trap. The header line is always shown: a More/Less button
+  (`aria-expanded`, `aria-controls` when expanded), the rule, and the setting's
+  value. Expanded adds: where each point starts, the setting and its meaning,
+  centre (a + bi), width of the view in the plane (`BASE_WIDTH / zoom`), zoom
+  (`formatZoom`, the slider's formatter), the iteration cap with "(Auto)" when
+  Auto chose it, the colour scheme's Settings name, the place's name when the view
+  is within 1% of a catalogue place (`placeAtView` in `places.ts`, the tolerance
+  `suggest` already uses to leave the place you are on out of its list, variant
+  included), how a point is judged and the blurb.
+- The page renders the card only while `mathOpen && !tourPlaying &&
+  !tourOverlayOpen`, so a tour or an open drawer or Help takes it away and brings
+  it back as it was (`mathOpen` is not reset), it is never over a dialog, and its
+  Escape listener (on the window; it hands focus back to the Math button when
+  focus was inside the card) exists only while the card is on screen. It sits in
+  the canvas's wrapper after the switcher: `left-3`, `top-14`, or `top-24` while
+  the switcher shows its chip row (`belowChips`, as the blank hint does), and
+  `bottom-[9.75rem]`, 150 px of strip plus a gap, with `min-h-11` so the
+  collapsed line always has room. The wrapper takes no pointer events (the canvas
+  around the card still pans); the card scrolls (`max-h-full overflow-y-auto`)
+  when the picture is too short to hold it. On a 375x667 phone the canvas is 281
+  px tall: the Mandelbrot card expanded is 69 px of scrolling area clear of the
+  strip, and with the chip row (Julia, Multibrot) the one-line card overlaps the
+  strip's top 9 px, which is the price of `min-h-11`; at 1280x800 the expanded
+  card is 352x460 and clear. Measured in headless Chrome with an iframe harness
+  (so the viewport is the iframe's), not by eye.
+- The numbers are throttled to the link writer's cadence (`MATH_CARD_UPDATE_MS =
+  LINK_WRITE_INTERVAL_MS`, 500 ms; `mathCardDelayMs` is `linkWriteDelayMs`): a
+  drag or a wheel burst redraws the card at most twice a second. The fractal and
+  its setting are not throttled, and a change of either shows its own numbers at
+  once (`Shown.key`), so the rule and the centre never disagree for a frame. The
+  state changes only in the timer's callback, never in an effect body
+  (`react-hooks/set-state-in-effect`).
+- Expanded or collapsed is kept for the session: `getExpandedSnapshot` /
+  `setExpanded` / `subscribeToExpanded` are the external store behind a
+  `useSyncExternalStore` (server snapshot: collapsed), over `sessionStorage` under
+  `fractals.mathCard.expanded` ("1"/"0"), every access behind try/catch (merely
+  reaching `window.sessionStorage` can throw) and the last choice also held in
+  memory, so the button works for the life of the page where storage refuses.
+  Whether the card is open at all is page state and not kept: a reload starts
+  with it closed, as the Settings drawer does.
+- The top bar needed room. Seven buttons were 401 px wide at 375 px (the last one
+  ended 26 px past the edge), so under `sm` the buttons are `px-1.5` (was `px-2`),
+  the groups `gap-0.5`, the bar `px-1` and `gap-1`; the last button now ends at
+  371 of 375 (measured by an iframe harness in headless Chrome, the dev server
+  restarted first, since it served the old classes). From `sm` up nothing
+  changed. At 320 px the bar already overflowed with six buttons (they ended at
+  367) and still does, by 35 px (was 47 before this change, 81 with the seventh
+  button unshrunk); the labels are never shortened.
+- Tests: `fractalMath.test.ts` (the guard that `FRACTAL_MATH`'s keys are exactly
+  the `FRACTAL_TYPES` ids, two or three sentences in every blurb, no markup in any
+  text, the exact reading of every rule, start and setting, the Julia fallback,
+  the Multibrot's non-power, `formatComplex`/`complexExpr` and `toPlainText`),
+  `mathCard.test.ts` (the view's numbers, the cadence, the storage helpers with a
+  missing and a throwing storage, the store), `placeAtView.test.ts` (every
+  catalogue place from its own numbers, agreement with `suggest`, the 1%
+  tolerance, variants), and `math-card-panel.test.ts` (sources: the button beside
+  Help, hidden for a tour and the dialogs, the region and label, Escape, no focus
+  trap, read-only, native MathML with typings for every element it uses, the help
+  entry).
 
 ### Newton: a sixth fractal, coloured by root and speed (2026-10-10)
 
