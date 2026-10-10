@@ -62,7 +62,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Blank view** (`src/lib/blankView.ts`) and **BlankHint** (`src/components/ui/BlankHint.tsx`): The detector for a nearly one-colour picture, and the quiet "Nothing to see here" pill with a Back button
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, the colour scheme's two own settings among them (`r=1` reversed, `o` the shift), and a decoder that judges every value on its own and leaves out what it cannot read; `linkWithoutColour` drops everything that colours a picture without changing what it is made of
-- **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
+- **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing (the frame of the fractal the link names for a missing centre or zoom, so a fractal-only link opens on that fractal's own default view rather than the Mandelbrot set's, and the page's opening view for everything else — and so for a link naming no fractal at all), the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
 - **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **Export size** (`src/lib/exportSize.ts`): The sizes the Download PNG controls offer — the canvas, 2x and 4x, with the largest whole multiple within 12 megapixels standing in for a candidate the cap rules out — the `_2x`/`_4x` an export file is named with, the shared part-before-the-extension rule (`appendToFileName`), and the 250 ms throttle on the button's progress text
@@ -194,6 +194,50 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### A link that names a fractal and no centre opens on that fractal's frame (2026-10-10)
+
+- fr-99q. A hand-written or truncated link can name a picture and no place in
+  it: `#v=1&f=julia&k=Dendrite&z=400` carries no `x` or `y`, and the reader
+  filled the missing centre from the page's own view — the Mandelbrot set's,
+  centred on -0.75. Framed there, a Julia set is empty plane, which is what
+  showed on staging (the preview image for that link was a flat colour). The
+  centre and the zoom a link does not carry now come from the named fractal's
+  own default view, so such a link opens on that fractal's whole view, at
+  whatever zoom it did ask for.
+- **The whole fix is in `viewLinkToUpdates`** (`src/lib/viewLinkState.ts`), and
+  that is why it is complete: the page (`viewLinkUpdatesFrom`), the preview
+  (`previewFor`), the card (`parseOgQuery`) and a tour stop (`tourLink.stopAt`)
+  all fill a link's missing fields through that one call, so the browser and
+  every image agree by construction rather than by three lists kept in step. The
+  three fields are judged one at a time (`decoded.centerX ?? view.centerX`, and
+  so for `y` and `z`), so a link carrying a zoom and no centre keeps the zoom it
+  asked for. A link naming no fractal is filled from `defaultViewFor` of the
+  fractal it falls back to, which is the page's own opening view, so that case
+  is byte for byte what it was; a link carrying all of `x`, `y` and `z` never
+  reaches the defaults at all.
+- `DEFAULT_VIEW_LINK_UPDATES` is unchanged: it is still the page's opening view
+  and the page still takes its initial state from it. The codec, the key order,
+  the version, the clamping and the `MAX_FRAGMENT_LENGTH` limit are untouched,
+  as is every fractal's default view.
+- Tests: `viewLinkState.test.ts` (every `FRACTAL_TYPES` id from a fractal-only
+  link lands on its own `defaultViewFor` frame and still resolves to its own
+  kind; a zoom without a centre and a centre without the rest; a set of
+  fractal-less fragments still equal to `DEFAULT_VIEW_LINK_UPDATES`),
+  `ogView.test.ts` (the same for the card's bounds and key; the reported
+  Dendrite link's card is `cardBounds(0, 0, 400)`; and the pixels, where the
+  card's frame is a varied picture at 21% one colour and the Mandelbrot set's
+  centre under the same Julia kind is a single colour at 100%, which is what the
+  bug was),
+  `viewPreview.test.ts` (a fractal-only link's fragment equals
+  `encodeView(viewLinkToUpdates(decodeView(query)))` — the agreement the fix is
+  about — and `/api/og` accepts it; the Dendrite link's line and fragment), and
+  `viewQuery.test.ts`, whose Julia case pinned the old Mandelbrot fallback and
+  now names `defaultViewFor("julia")`. `make gate` is green.
+- Docs: the `viewLink.ts` doc comments on reading and on writing, the
+  `viewLinkState.ts` ones on the module and on `viewLinkToUpdates`, the README's
+  Sharing a View and Link preview sections, and the View link state bullet in
+  Project Architecture.
 
 ### Colour controls: Reverse and Shift in Settings, repainting live and part of the view (2026-10-10)
 

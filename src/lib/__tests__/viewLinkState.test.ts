@@ -13,6 +13,11 @@
 import { describe, expect, it } from "vitest";
 
 import { getAvailableColorSchemes } from "../colorMapping";
+import {
+  FRACTAL_TYPES,
+  defaultViewFor,
+  resolveFractalKind,
+} from "../fractalTypes";
 import { JULIA_CONSTANTS } from "../julia";
 import { decodeView, encodeView, type ViewLinkState } from "../viewLink";
 import {
@@ -215,6 +220,68 @@ describe("viewLinkToUpdates", () => {
     expect(viewLinkToUpdates(decodeView("#v=1&f=julia")).variant).toBe(
       DEFAULT_VIEW_LINK_UPDATES.variant,
     );
+  });
+
+  it("opens a fractal-only link on that fractal's own frame", () => {
+    // A hand-written or truncated link can name a picture and no place in it.
+    // The page's own centre is the Mandelbrot set's, so filling a Julia link in
+    // with it draws empty plane; each fractal's default view is the frame the
+    // switcher would have opened on, and the one `/api/og` and the preview must
+    // draw too since they read the link through this same call.
+    for (const type of FRACTAL_TYPES) {
+      const fragment = `#v=1&f=${type.id}`;
+      const view = defaultViewFor(type.id);
+
+      expect(viewLinkToUpdates(decodeView(fragment)), type.id).toMatchObject({
+        fractalType: type.id,
+        centerX: view.centerX,
+        centerY: view.centerY,
+        zoomLevel: view.zoom,
+      });
+
+      // The variant a fractal-only link cannot carry is its own default, so a
+      // Julia link still draws Julia and a Multibrot link still draws z^3.
+      const updates = viewLinkToUpdates(decodeView(fragment));
+
+      expect(
+        resolveFractalKind(updates.fractalType, updates.variant).id,
+        type.id,
+      ).toBe(type.id);
+    }
+  });
+
+  it("keeps a zoom or a centre the link does carry, and defaults only the rest", () => {
+    // The three are judged one at a time: a link that names a Julia set and a
+    // zoom is asking for that Julia set's whole view at that zoom, not for the
+    // Mandelbrot set's centre moved.
+    const zoomOnly = viewLinkToUpdates(
+      decodeView("#v=1&f=julia&k=Dendrite&z=400"),
+    );
+
+    expect(zoomOnly.centerX).toBe(0);
+    expect(zoomOnly.centerY).toBe(0);
+    expect(zoomOnly.zoomLevel).toBe(400);
+
+    const xOnly = viewLinkToUpdates(decodeView("#v=1&f=burning-ship&x=0.25"));
+
+    expect(xOnly.centerX).toBe(0.25);
+    expect(xOnly.centerY).toBe(defaultViewFor("burning-ship").centerY);
+    expect(xOnly.zoomLevel).toBe(defaultViewFor("burning-ship").zoom);
+  });
+
+  it("leaves a link naming no fractal on exactly the page's opening view", () => {
+    // The fractal such a link falls back to is the one the page opens on, so
+    // its frame is that view's frame and nothing moves. This is the rule the
+    // fix must not disturb: `DEFAULT_VIEW_LINK_UPDATES` is still both the
+    // page's initial state and a fractal-less link's answer.
+    for (const fragment of ["", "#v=1", "#v=1&s=ocean", "#v=1&x=oops&z=typo"]) {
+      expect(viewLinkToUpdates(decodeView(fragment)), fragment).toMatchObject({
+        fractalType: DEFAULT_VIEW_LINK_UPDATES.fractalType,
+        centerX: DEFAULT_VIEW_LINK_UPDATES.centerX,
+        centerY: DEFAULT_VIEW_LINK_UPDATES.centerY,
+        zoomLevel: DEFAULT_VIEW_LINK_UPDATES.zoomLevel,
+      });
+    }
   });
 
   it("changes nothing for a hostile fragment", () => {

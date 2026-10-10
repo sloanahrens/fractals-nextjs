@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveFractalKind } from "../fractalTypes";
+import { nearUniformShare } from "../blankView";
+import {
+  FRACTAL_TYPES,
+  defaultViewFor,
+  resolveFractalKind,
+} from "../fractalTypes";
 import {
   BASE_HEIGHT,
   autoIterations,
   calculateZoomBounds,
 } from "../mandelbrot";
+import { renderRgba } from "../renderRgba";
+import type { FractalBounds } from "../../types/fractal";
 import {
   OG_HEIGHT,
   OG_MAX_ITERATIONS,
@@ -15,6 +22,7 @@ import {
   type OgView,
 } from "../ogView";
 import { decodeView } from "../viewLink";
+import { viewLinkToUpdates } from "../viewLinkState";
 
 function view(query: string): OgView {
   const parsed = parseOgQuery(query);
@@ -89,6 +97,46 @@ describe("parseOgQuery", () => {
     expect(opening.kind.id).toBe("mandelbrot");
     expect(opening.bounds).toEqual(cardBounds(-0.75, 0, 1));
     expect(opening.colorScheme).toBe("fire");
+  });
+
+  it("opens a link that names a fractal and no centre on that fractal's own frame", () => {
+    // What the card draws has to be what the page draws, and a link like the
+    // one that showed the bug names a picture and no place in it. The frame is
+    // the fractal's default view, not the Mandelbrot set's.
+    for (const type of FRACTAL_TYPES) {
+      const frame = defaultViewFor(type.id);
+      const card = view(`v=1&f=${type.id}`);
+
+      expect(card.bounds, type.id).toEqual(
+        cardBounds(frame.centerX, frame.centerY, frame.zoom),
+      );
+      expect(card.key, type.id).toContain(`x=${frame.centerX}`);
+    }
+
+    // The reported link: the Dendrite at 400x, whole. It drew a flat colour
+    // because the missing centre was the Mandelbrot set's; now it draws the
+    // Dendrite, which is the acceptance this test is for.
+    const dendrite = view("v=1&f=julia&k=Dendrite&z=400");
+
+    expect(dendrite.kind.id).toBe("julia");
+    expect(dendrite.bounds).toEqual(cardBounds(0, 0, 400));
+    // The same link read for the page is the same view, which is what keeps
+    // the card and the browser from disagreeing.
+    expect(
+      viewLinkToUpdates(decodeView("v=1&f=julia&k=Dendrite&z=400")),
+    ).toMatchObject({ centerX: 0, centerY: 0, zoomLevel: 400 });
+
+    // The pixels: a varied picture, and the one the Mandelbrot set's centre
+    // drew alongside it is shown to have been a single colour.
+    const drawn = (bounds: FractalBounds): number =>
+      nearUniformShare(
+        renderRgba(bounds, 64, 48, 200, "classic", dendrite.kind),
+        64,
+        48,
+      );
+
+    expect(drawn(dendrite.bounds)).toBeLessThan(0.6);
+    expect(drawn(cardBounds(-0.75, 0, 400))).toBeGreaterThan(0.98);
   });
 
   describe("iterations", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultVariant } from "../fractalTypes";
+import { FRACTAL_TYPES, defaultVariant, defaultViewFor } from "../fractalTypes";
 import { encodeTourLink } from "../tourLink";
 import { decodeView, encodeView } from "../viewLink";
 import { parseOgQuery } from "../ogView";
@@ -55,6 +55,40 @@ describe("previewFor", () => {
     expect(previewFor({ ...JULIA, x: "oops" })).toBeNull();
     expect(previewFor({ ...JULIA, s: "neon" })).toBeNull();
     expect(previewFor({ ...JULIA, f: "lyapunov" })).toBeNull();
+  });
+
+  it("previews a fractal-only link as that fractal's whole view, as the page opens it", () => {
+    // A link can name a picture and no place in it, and the preview has to be
+    // the view the page would open — the fractal's own frame, which is what
+    // `viewLinkToUpdates` fills in for the page as well. Equal fragments is the
+    // agreement: one text, one view, wherever it is read.
+    const asParams = (query: string): SearchParams =>
+      Object.fromEntries(new URLSearchParams(query));
+
+    for (const type of FRACTAL_TYPES) {
+      const query = `v=1&f=${type.id}`;
+      const preview = previewFor(asParams(query));
+      const frame = defaultViewFor(type.id);
+
+      expect(preview, type.id).not.toBeNull();
+      expect(preview!.fragment, type.id).toBe(
+        encodeView(viewLinkToUpdates(decodeView(query))),
+      );
+      expect(decodeView(preview!.fragment), type.id).toMatchObject({
+        centerX: frame.centerX,
+        centerY: frame.centerY,
+        zoomLevel: frame.zoom,
+      });
+      expect(parseOgQuery(preview!.fragment).ok, type.id).toBe(true);
+    }
+
+    // The reported link, in the words the card is described with.
+    const dendrite = previewFor(asParams("v=1&f=julia&k=Dendrite&z=400"));
+
+    expect(dendrite!.line).toBe("Julia set, Dendrite, 400x");
+    expect(dendrite!.fragment).toBe(
+      "v=1&f=julia&k=Dendrite&x=0&y=0&z=400&s=classic&i=auto&w=800&h=600",
+    );
   });
 
   it("writes known fields only: unknown keys never reach the fragment", () => {
