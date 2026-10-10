@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * One-off generator for the link-preview assets: public/og-card.png (1200x630),
- * src/app/icon.png (192x192) and src/app/apple-icon.png (180x180).
+ * One-off generator for the link-preview assets: public/og-card-2.png
+ * (1200x630), src/app/icon.png (192x192) and src/app/apple-icon.png (180x180).
  *
  * It is not part of `make gate` and not part of the Docker image. Run it from
  * the repository root when the card should change, and commit the three PNGs:
@@ -9,6 +9,12 @@
  *   node scripts/make-og-card.mjs                      # write the three assets
  *   node scripts/make-og-card.mjs --sheet out.png      # contact sheet of candidates
  *   node scripts/make-og-card.mjs --place <id> --scheme <name> --icon-crop x,y,size
+ *
+ * The text on the card — the title lines and the tagline — is `src/lib/siteText.ts`'s,
+ * the same module the page's description and alt text come from, so the card
+ * and the head cannot say different things (fr-3y2). A new card means a new
+ * file name here and in `pageMetadata.ts`, so a chat app that cached the old
+ * one fetches this one.
  *
  * What it uses, all of it already on a development machine:
  *   - esbuild (a dependency of Vitest) bundles the explorer's own
@@ -44,17 +50,20 @@ const CHROME =
 const CARD_WIDTH = 1200;
 const CARD_HEIGHT = 630;
 const CARD_MAX_BYTES = 300 * 1024;
-
-const TITLE = ["Fractal", "Explorer"];
-const SUBTITLE = "Wander the Mandelbrot, Julia and Burning Ship sets";
+const CARD_FILE = "og-card-2.png";
 
 // The place, scheme and framing the shipped card was cut from. `shift` moves
 // the view's centre by that many view-heights, to put the subject where the
 // gradient leaves it visible.
-const DEFAULT_PLACE = "julia-classic-deep-spiral";
+const DEFAULT_PLACE = "newton-junction";
 const DEFAULT_SCHEME = undefined; // the place's own
-const DEFAULT_SHIFT = { x: 0, y: 0 };
-// Square crop of the raw render the icons are cut from: left, top, side.
+// The junction sits a little right of centre, where the gradient leaves it
+// bright and the title has the dark half to itself.
+const DEFAULT_SHIFT = { x: -0.35, y: 0 };
+// Square crop of the raw render the icons are cut from: left, top, side. Tuned
+// for the fr-nd5 card, the julia spiral, which is the crop the icons in the
+// tree are; fr-3y2 re-cut the card and left the icons alone, so a run with
+// another place rewrites them and the crop wants checking by eye then.
 const DEFAULT_ICON_CROP = "700,195,240";
 
 function argument(name) {
@@ -74,6 +83,7 @@ async function bundle() {
         import { PLACES } from "./src/lib/places";
         import { resolveFractalKind } from "./src/lib/fractalTypes";
         import { autoIterations, BASE_HEIGHT } from "./src/lib/mandelbrot";
+        import { CARD_TAGLINE, CARD_TITLE_LINES } from "./src/lib/siteText";
 
         function drawPlace(place, scheme, width, height, shift) {
           const canvas = document.createElement("canvas");
@@ -132,13 +142,13 @@ async function bundle() {
           ctx.font = "800 132px Inter";
           const left = 72;
           let y = 250;
-          for (const line of job.title) {
+          for (const line of CARD_TITLE_LINES) {
             ctx.fillText(line, left, y);
             y += 128;
           }
           ctx.fillStyle = "#cbd5e1";
           ctx.font = "400 34px Inter";
-          const words = job.subtitle.split(" ");
+          const words = CARD_TAGLINE.split(" ");
           const lines = [];
           let current = "";
           for (const word of words) {
@@ -299,8 +309,6 @@ async function main() {
     shift,
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    title: TITLE,
-    subtitle: SUBTITLE,
   });
 
   const cardPng = await sharp(decode(card))
@@ -310,7 +318,7 @@ async function main() {
     throw new Error(`card is ${cardPng.length} bytes, over ${CARD_MAX_BYTES}`);
   }
   mkdirSync(join(ROOT, "public"), { recursive: true });
-  writeFileSync(join(ROOT, "public", "og-card.png"), cardPng);
+  writeFileSync(join(ROOT, "public", CARD_FILE), cardPng);
 
   const square = sharp(decode(raw)).extract({
     left,
@@ -330,7 +338,7 @@ async function main() {
     writeFileSync(join(ROOT, "src", "app", file), png);
   }
   console.log(
-    `og-card.png ${cardPng.length} bytes; place ${place}, scheme ${scheme ?? "(its own)"}`,
+    `${CARD_FILE} ${cardPng.length} bytes; place ${place}, scheme ${scheme ?? "(its own)"}`,
   );
 }
 

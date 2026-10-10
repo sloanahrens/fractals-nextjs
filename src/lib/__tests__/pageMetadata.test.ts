@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { DESCRIPTION, TITLE, pageMetadata } from "../pageMetadata";
+import { ogUrl, pageMetadata } from "../pageMetadata";
+import { DESCRIPTION, TITLE } from "../siteText";
 
 const ORIGIN = "https://fractals.example.com";
 const VIEW = {
@@ -27,17 +28,42 @@ function images(metadata: ReturnType<typeof pageMetadata>) {
 }
 
 describe("pageMetadata without a view", () => {
-  it("is the static card exactly as fr-nd5 left it", () => {
+  it("is the static card, on the origin", () => {
     for (const params of [undefined, {}, { utm_source: "x" }, { v: "1" }]) {
       const metadata = pageMetadata(ORIGIN, params);
 
       expect(metadata.title).toBe(TITLE);
       expect(metadata.description).toBe(DESCRIPTION);
-      expect(metadata.openGraph?.url).toBe(`${ORIGIN}/`);
-      expect(images(metadata).og.url).toBe(`${ORIGIN}/og-card.png`);
-      expect(images(metadata).twitter.url).toBe(`${ORIGIN}/og-card.png`);
+      expect(images(metadata).og.url).toBe(`${ORIGIN}/og-card-2.png`);
+      expect(images(metadata).twitter.url).toBe(`${ORIGIN}/og-card-2.png`);
       expect(String(metadata.metadataBase)).toBe(`${ORIGIN}/`);
     }
+  });
+
+  it("leaves og:url to `ogUrl`, which the page renders itself", () => {
+    // Next's metadata API would strip the root's slash, so nothing in the
+    // Metadata object carries a url and the page writes the tag (`ogUrl`).
+    expect(pageMetadata(ORIGIN, { v: "1" }).openGraph).not.toHaveProperty(
+      "url",
+    );
+  });
+});
+
+describe("ogUrl", () => {
+  it("is the origin under its own trailing slash", () => {
+    for (const params of [undefined, {}, { utm_source: "x" }, { v: "1" }]) {
+      expect(ogUrl(ORIGIN, params)).toBe(`${ORIGIN}/`);
+    }
+  });
+
+  it("is the view's own address when the query names one", () => {
+    expect(ogUrl(ORIGIN, VIEW)).toBe(`${ORIGIN}/?${FRAGMENT}`);
+  });
+
+  it("stays on the origin it was given", () => {
+    expect(ogUrl("http://localhost:3000", VIEW)).toBe(
+      `http://localhost:3000/?${FRAGMENT}`,
+    );
   });
 });
 
@@ -48,7 +74,6 @@ describe("pageMetadata with a view", () => {
 
     expect(og.url).toBe(`${ORIGIN}/api/og?${FRAGMENT}`);
     expect(twitter.url).toBe(og.url);
-    expect(metadata.openGraph?.url).toBe(`${ORIGIN}/?${FRAGMENT}`);
     expect(og.alt).toBe("Julia set, Dendrite, 400x, drawn by Fractal Explorer");
   });
 

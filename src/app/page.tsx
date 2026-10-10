@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { pageMetadata } from "@/lib/pageMetadata";
+import { ogUrl, pageMetadata } from "@/lib/pageMetadata";
 import type { SearchParams } from "@/lib/viewPreview";
 import FractalExplorer from "./FractalExplorer";
 import { requestOrigin } from "./requestOrigin";
@@ -19,6 +19,21 @@ export async function generateMetadata({
   return pageMetadata(await requestOrigin(), await searchParams);
 }
 
-export default function Page() {
-  return <FractalExplorer />;
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  // og:url is the one head tag the page writes itself, because Next's metadata
+  // API cannot keep the root's slash (`ogUrl` says why). React hoists a `<meta>`
+  // rendered here into the head, and `pageMetadata` leaves the field out, so
+  // there is one og:url and it is this one.
+  const url = ogUrl(await requestOrigin(), await searchParams);
+
+  return (
+    <>
+      <meta property="og:url" content={url} />
+      <FractalExplorer />
+    </>
+  );
 }

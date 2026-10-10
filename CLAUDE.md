@@ -73,6 +73,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
 - **Site origin** (`src/lib/siteOrigin.ts`, read per request by `src/app/requestOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `pageMetadata` (`src/lib/pageMetadata.ts`, called by `generateMetadata` in `src/app/layout.tsx` and `src/app/page.tsx`) puts on og:image, twitter:image and og:url
 - **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>`; a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form; `generateMetadata` in the server page turns the search parameters into a view-specific og:image at `/api/og` or, for no view, the static card; see the Version Note of 2026-10-10 (fr-cr5)
+- **Site text** (`src/lib/siteText.ts`): The app's own words about itself — the document title, the description built from `FRACTAL_TYPES` labels, the social card's tagline and title lines, and the card's alt text — so the page's head and `scripts/make-og-card.mjs` read one place; see the Version Note of 2026-10-10 (fr-3y2)
 - **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Math/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
@@ -271,6 +272,65 @@ _Last updated: 2026-10-10_
   callback and not in the handler, the deps that re-read a view moving under a
   resting pointer, the listeners and their cleanup, the card's prop and rows,
   and the Help wording).
+
+### Social card re-cut; the app's own words in one module (2026-10-10)
+
+- fr-3y2. The card's tagline named three fractals ("Wander the Mandelbrot, Julia
+  and Burning Ship sets") and the picker offers six, so the preview undersold
+  the app and would drift again with every fractal added. The card is re-cut
+  with a line that counts nothing and names none, and the words the head and the
+  card use are now one module.
+- `src/lib/siteText.ts`: `TITLE`, `CARD_TITLE_LINES`, `CARD_TAGLINE` ("Wander
+  the fractals: zoom, switch and explore"), `FRACTAL_NAMES` (the `FRACTAL_TYPES`
+  labels), `joinNames` ("a, b and c"), `DESCRIPTION`, `TWITTER_DESCRIPTION` and
+  `CARD_ALT`. The description is built from those labels, so adding a fractal
+  updates "Explore the Mandelbrot, Julia, Burning Ship, Tricorn, Multibrot and
+  Newton fractals ..." with no second edit; `siteText.test.ts` fails if a
+  `FRACTAL_TYPES` label is missing from it, and also if a label or a digit
+  appears in the tagline, if the tagline is longer than 60 characters (the
+  proxy a Node suite can hold for the card's two lines) or if `CARD_ALT` stops
+  carrying the tagline.
+- `pageMetadata.ts` imports `TITLE`, `DESCRIPTION`, `TWITTER_DESCRIPTION` and
+  `CARD_ALT` from it and no longer defines them (which is why
+  `pageMetadata.test.ts` imports the two from `../siteText`).
+  `scripts/make-og-card.mjs` bundles it too — its Chrome entry imports
+  `CARD_TITLE_LINES` and `CARD_TAGLINE` — so the picture and the head cannot
+  say different things. The old `SUBTITLE`/`TITLE` constants in the script are
+  gone.
+- The card is `public/og-card-2.png`, drawn from `newton-junction` in its own
+  (rainbow) scheme with the view shifted −0.35 view-heights, which puts the
+  six-sector junction right of centre where the gradient leaves it bright and
+  the title has the dark half. Picked by eye from a contact sheet of the six
+  featured places (`scripts/make-og-card.mjs --sheet`) drawn at 400 px: the
+  Julia spirals are busy, the ship's armada and the Tricorn are mostly one flat
+  green, the Multibrot copy is small on a field, and Newton's pinwheel is the
+  one that reads at a glance (contact sheets at 400 and then the card itself at
+  1200x630). 149,648 bytes, under the 300 KB the script enforces. The name
+  carries a 2 because a chat app that cached the old card will not ask for it
+  again: `CARD_PATH` (`/og-card-2.png`), `CARD_FILE` in the script and `CARD`
+  in the integration tier all name it, and `public/og-card.png` is deleted.
+  `src/app/icon.png` and `apple-icon.png` are untouched (favicon work is out of
+  scope here), so they are the fr-nd5 crop and not this render's.
+- og:url is now the origin under its own slash. Next's metadata API cannot say
+  it: `resolveAbsoluteUrlWithPathname` turns any url whose pathname is `/` with
+  no query into `origin` (`new URL(...).pathname === '/' && searchParams.size
+  === 0 ? result.origin : result.href`), whatever `metadataBase` says, and the
+  only config that changes that is `trailingSlash: true` — measured against a
+  standalone build, that one makes og:url `http://host/` but also sends
+  `/api/health` and `/api/og?...` to 308 redirects, so it was rejected.
+  `ogUrl(origin, searchParams)` in `pageMetadata.ts` builds the string
+  (`<origin>/`, or `<origin>/?<fragment>` for a view) and
+  `src/app/page.tsx` renders `<meta property="og:url" content={url} />` itself;
+  React hoists it into the head (verified on the standalone build: one og:url
+  tag, inside `<head>`, `http://127.0.0.1:4321/`), and `pageMetadata` leaves
+  `openGraph.url` out so there is exactly one. `pageMetadata.test.ts` drives
+  `ogUrl` and asserts the Metadata object has no `url`; the integration tier now
+  requires `og:url` to be `<origin>/` rather than accepting either spelling.
+- Docs: the README's integration list, its Project Structure (`siteText.ts`, the
+  card's new name, the regenerating paragraph) and its Link preview section say
+  all of it; this note is the CLAUDE.md record.
+- Not changed: the icons, `/api/og`, the per-view preview, the layout, and
+  `trailingSlash` (it stays off).
 
 ### Per-view previews: Copy link carries the view in the query (2026-10-10)
 
