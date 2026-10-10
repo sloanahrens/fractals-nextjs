@@ -171,6 +171,33 @@ describe("encodeView", () => {
     });
   });
 
+  it("writes the Newton fractal as f=newton, with no k, and reads it back", () => {
+    const view = {
+      fractalType: "newton",
+      // A variant left over from Julia is not written beside a fractal that
+      // takes none.
+      variant: "Dendrite",
+      centerX: 0,
+      centerY: 0,
+      zoomLevel: 8,
+      colorScheme: "rainbow" as const,
+      autoIterationsOn: true,
+      canvasWidth: 800,
+      canvasHeight: 600,
+    };
+    const link = encodeView(view);
+
+    expect(link).toBe("v=1&f=newton&x=0&y=0&z=8&s=rainbow&i=auto&w=800&h=600");
+    expect(decodeView(`#${link}`)).toMatchObject({
+      fractalType: "newton",
+      centerX: 0,
+      centerY: 0,
+      zoomLevel: 8,
+      colorScheme: "rainbow",
+    });
+    expect(decodeView(`#${link}`).variant).toBeUndefined();
+  });
+
   it("writes the Multibrot's power as k and reads it back", () => {
     for (const power of ["3", "4", "5"]) {
       const link = encodeView({
@@ -256,7 +283,7 @@ describe("encodeView", () => {
     // halves agree about what a link holds. The version is always written.
     expect(
       encodeView({
-        fractalType: "newton",
+        fractalType: "lyapunov",
         centerX: 42,
         centerY: 0,
         zoomLevel: 3,

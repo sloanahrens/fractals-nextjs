@@ -78,7 +78,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Fractal buttons",
         action:
-          "Mandelbrot, Julia, Burning Ship, Tricorn and Multibrot, top left of the picture, the current one lit: one click flies to that fractal's showpiece place, and Back returns to where you were. With Julia on, a row of chips picks its constant (Classic, Dendrite, Douady rabbit, Siegel disk) and goes to the whole of that set; Custom opens Settings at the Real box to type your own. With Multibrot on, a Power row picks z^3, z^4 or z^5 and goes to the whole set of that power",
+          "Mandelbrot, Julia, Burning Ship, Tricorn, Multibrot and Newton, top left of the picture (the row scrolls sideways on a narrow screen), the current one lit: one click flies to that fractal's showpiece place, and Back returns to where you were. With Julia on, a row of chips picks its constant (Classic, Dendrite, Douady rabbit, Siegel disk) and goes to the whole of that set; Custom opens Settings at the Real box to type your own. With Multibrot on, a Power row picks z^3, z^4 or z^5 and goes to the whole set of that power. Newton, the three basins of z^3 - 1, has no setting: each root has its own colour family, shaded by how fast Newton's method reaches it",
       },
       {
         keys: "Nearby tile",

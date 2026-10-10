@@ -50,6 +50,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
 - **Tricorn** (`src/lib/tricorn.ts`): The Tricorn (Mandelbar) formula — the Mandelbrot loop with z conjugated before squaring, z -> conj(z)^2 + c — behind its own fractal kind
 - **Multibrot** (`src/lib/multibrot.ts`): The Mandelbrot loop with a higher power, z -> z^d + c for d = 3, 4, 5 — `createMultibrotKind(power)` and `parseMultibrotPower`, the power being the fractal's variant
+- **Newton** (`src/lib/newton.ts`): Newton's method for z^3 - 1 as a fractal kind — the orbit's root and its speed packed into the one number the renderer takes, the three roots in thirds of 0..maxIterations; the first fractal that is not an escape-time set
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
 - **Tour engine** (`src/lib/tour.ts`): Where an unattended tour goes next — `nextTourStop` over the places catalogue from an injected random function, with the dwell and crossfade times, the fractal-switch odds and the recent window
@@ -76,7 +77,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia chips land
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
-- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
+- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -87,7 +88,7 @@ The main page (`src/app/page.tsx`) uses React hooks for:
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
-- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Tricorn, three Multibrot) and custom fractal configurations
+- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Tricorn, three Multibrot, two Newton) and custom fractal configurations
 
 ### Component Structure
 
@@ -180,6 +181,131 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Newton: a sixth fractal, coloured by root and speed (2026-10-10)
+
+- The Newton fractal of z^3 - 1, owner-approved 2026-10-10 (fr-y6u), is the
+  picture of Newton's method z -> z - (z^3 - 1) / (3 z^2) started at each pixel:
+  which of the three cube roots of 1 (1 and -1/2 +- (sqrt 3 / 2) i) the orbit
+  reaches, shaded by how fast. It is the first fractal here that is not an
+  escape-time set, and the renderer loop is untouched.
+- The risk named in the bead was that `FractalKind.iterations` returns one number
+  and `mapIterationsToColor` paints `iterations / maxIterations` along a scheme
+  (black from `maxIterations` up), so the root and the speed share one number.
+  `newtonKind` (`src/lib/newton.ts`) returns `(root + NEWTON_BAND_MARGIN +
+  (1 - 2 NEWTON_BAND_MARGIN) s / (s + NEWTON_HALF_SHADE_STEPS)) * NEWTON_BAND *
+  maxIterations`: root 0 (z = 1), 1 (the root above the axis) and 2 each own a
+  third of the range (`NEWTON_BAND` = 1/3), `s` is the step count, the margin is
+  0.04 of a band and the half-shade is 6 steps. Decided and why:
+  - BAND is a share of the cap, not a count of steps: the colour mapping
+    normalises by `maxIterations`, so a root's third has to scale with it for the
+    three roots to land in three different parts of every scheme at any Auto or
+    manual iteration count. The packed number is therefore always in
+    0..maxIterations and never reaches it for a settled point, so no settled
+    point is drawn black.
+  - Shading is `s / (s + 6)`, a saturating curve of the step count and not the
+    count over the cap, so the picture does not depend on the iteration count
+    (the same point has the same colour at a cap of 100 and 1000; only the
+    black dust changes). Over the default view (400x300, whole counts) the
+    median point settles in 6 steps, the middle half in 5 to 7 and nine in ten
+    in 4 to 13, with a tail past 50 beside the boundary, which the curve grades
+    instead of clipping.
+  - The margin keeps the slowest shade of one root and the fastest of the next
+    apart, so two basins never touch in colour, and keeps a slow point off the
+    band's top edge.
+- The loop. The orbit starts at the pixel and stops when `|z^3 - 1| < 1e-6`
+  (`NEWTON_TOLERANCE`) at the start of a lap (a point at a root takes 0 steps), or
+  at the cap. The step is written (2z + 1/z^2) / 3, which is the same map without
+  forming z^3, so a far point does not overflow to infinity and then NaN. A z of 0
+  has no step, an iterate that stops being finite stops the orbit, and a NaN or
+  infinite pixel is treated the same: all return the cap (black). The root is the
+  nearest of the three once settled. The smooth count is `n + max(-1, log2(ln tol /
+  ln residual))`: near a simple root the residual's logarithm doubles per step, so
+  the lap that first passes the tolerance overshoots by a fraction in (-1, 0], and
+  this runs continuously from the lap before it (a residual of exactly 0, which
+  `-0.5` reaches in one step, is clamped to -1).
+- Exact facts the tests and the places lean on. Newton's map commutes with a turn
+  of 120 degrees (N(wz) = wN(z)), so rotating a point moves its band on by one and
+  keeps its shading, and mirroring about the real axis swaps roots 1 and 2. The
+  map sends 0 to infinity, and its preimages of 0 are the roots of z^3 = -1/2:
+  -2^(-1/3) = -0.793701 and 0.396850 +- 0.687401i. The six-sector junction at the
+  origin reappears at each of them (drawn at zoom 150 at -0.793701 it is the origin's
+  picture). The origin's junction is scale invariant: zoom 1000 at the origin looks
+  like zoom 8. -0.5 is sent to the root 1 in one step.
+- Registered like the Tricorn, with no variant: `FRACTAL_TYPES` has `{ id:
+  "newton", label: "Newton" }` after the Multibrot, `resolveFractalKind("newton",
+  ...)` returns `newtonKind` whatever variant the page holds, `fractalVariants` is
+  `null`, so the switcher draws no second row and the codec writes `f=newton` and no
+  `k`. `defaultViewFor("newton")` is (0, 0) at zoom 1: there is no set to frame, the
+  map is three-fold symmetric about the origin where all three basins meet, and that
+  frame (x -2..2, y -1.5..1.5) is 40% / 30% / 30% basin of the roots 1,
+  -1/2 + (sqrt 3 / 2) i and -1/2 - (sqrt 3 / 2) i on a 400x300 grid, with each root
+  at least 0.6 inside the frame (a test holds both).
+- Two built-in views, `newton-overview` (the default frame, rainbow) and
+  `newton-junction` (the origin at zoom 8, rainbow), under the per-fractal guards
+  (`presets.test.ts` counts 14 fractal-owned views and 20 built-ins).
+- Nine places in `places.ts` (`NEWTON_PLACES`; the test allows 8 to 10): the three
+  basins, where all three meet (zoom 8), the same junction at 1000x, a second
+  junction at -0.7937, a basin pinched into a lens (centre -0.5, zoom 4, a dark dot
+  at the preimage of the root 1), two junctions on one boundary, a chain of
+  junctions, a chain of bulbs on a straight boundary and the root at 1 beside the
+  boundary. A place needs two basins in the frame, since a deep view inside one is
+  a flat field however well chosen; `places.test.ts` checks that every Newton place
+  has at least two bands each over 5% of a 40x40 grid. The featured place is
+  `newton-junction` (rainbow): a pinwheel of six sectors in three colour families
+  with bulbs along the boundaries; the whole-basins place is the opening view, which
+  a switch should not repeat.
+- Colour schemes, checked by eye. Every place was drawn in all five schemes on
+  contact sheets at 240x180 with whole counts (what a tile shows), and the
+  default view in all five schemes at 400x300 with smooth counts (what the page
+  draws), through the real renderer in headless Chrome. The sheet drawer was a
+  throwaway copy of `make-og-card.mjs`'s `--sheet` that took views (fractal,
+  centre, zoom, scheme) in place of place ids, which is what a place not yet in the
+  catalogue needs. What read:
+  - Rainbow reads best: three hues, one per root (yellow/orange, magenta/violet,
+    cyan/green) with rings of shade inside each, and the three roots' dark centres.
+  - Fire and grayscale read clearly: three levels (red / orange / white and dark /
+    mid / light) with shading inside each, but a wide empty basin fills a place
+    with one flat level.
+  - Classic is busy over the wide view, where its colours repeat between roots so
+    a basin can be brown, white and orange at once, but gives clean purple / green /
+    blue families on the pinwheels and chains.
+  - Ocean is the weakest: three blues (dark, mid, light) that stay readable but
+    separate least.
+  The scheme each place names is the one it read best in, and then re-measured at
+  64x48 with `nearUniformShare` (the share one colour holds, whole counts): the
+  three-basin view is 16% in classic, 21% in rainbow, 31% in fire and grayscale and
+  37% in ocean, the featured junction 22% in rainbow (8% classic, 33% fire, 35%
+  ocean, 32% grayscale), and the two places with a wide empty basin on one side (the
+  bulb chain and the root at 1) are 56 to 67% in fire and grayscale, which is why
+  they name classic (21%) and rainbow (30%). A deep view inside one basin is one
+  colour family and is blank to the detector, as it should be.
+- The blank detector (fr-2oa) needs no change. The whole-basins view is not blank
+  because three basins show: its commonest colour is at most 37% in any scheme. It
+  was already run against every fractal's default view in every scheme and every
+  place; `blankView.test.ts` adds the Newton whole view with the 60% bound and shows
+  a deep view in one basin is blank.
+- The button row. Six buttons are 375 px wide, so the row now scrolls sideways at
+  375 px by about 28 px (351 of room inside the gutters) as well as at 320 px by
+  about 83 (296), with `scrollIntoView` keeping the lit button in view: clicking
+  Newton at 375 px lands on the junction with the button visible and `aria-pressed`
+  true. Measured by a DevTools session in headless Chrome (`mobile` emulation at 375
+  and 320), not by eye. Squeezing the padding to `px-1` would still scroll by 4 px,
+  so the labels and `px-1.5` stay.
+- Tests: `newton.test.ts` (the id, the band for a point at each root and near one,
+  disjoint bands and clear of their edges over a grid, agreement with a textbook
+  Newton oracle on the root and the step count, z = 2 in five steps worked by
+  hand on the real axis, -0.5 in one, z = 0, far, huge, infinite and NaN points
+  returning a finite number in range, a cap too low to settle, no settled point
+  black, whole against smooth within a step and continuous along a line, the same
+  colour at caps 100 and 1000, the 120 degree turn by one and two bands with the
+  same shading and the mirror, three colour families and shading in every scheme,
+  the default frame's roots and shares), the Newton cases in `fractalTypes.test.ts`,
+  `viewLink.test.ts`, `viewLinkState.test.ts`, `presets.test.ts` and
+  `places.test.ts`, and the new counts in `tour.test.ts` (six fractals; the
+  200-hop share floor went from 20 to 10, since twelve seeds ranged from 4 to 74
+  over six fractals). The three tests that used "newton" as an unknown fractal id
+  now use "lyapunov".
 
 ### Multibrot: a fifth fractal with a power row (2026-10-10)
 

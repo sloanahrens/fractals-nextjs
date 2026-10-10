@@ -35,13 +35,15 @@ const RESTING = "bg-white/10 text-white hover:bg-white/20";
 
 /**
  * The one-click way to change fractal: Mandelbrot, Julia, Burning Ship,
- * Tricorn and Multibrot as a row of buttons over the top left of the canvas, the current one
- * pressed, and while the current fractal takes a setting (`fractalVariants`;
- * Julia's constant, the Multibrot's power) a second row of chips for it, with
- * the setting's name as a quiet caption before them. A fractal with none gets
- * no second row. The button row is about 323 px wide, which fits a 375 px
- * screen; on a 320 px one it scrolls sideways, as the chip row does, with the
- * lit button kept in view.
+ * Tricorn, Multibrot and Newton as a row of buttons over the top left of the
+ * canvas, the current one pressed, and while the current fractal takes a
+ * setting (`fractalVariants`; Julia's constant, the Multibrot's power) a second
+ * row of chips for it, with the setting's name as a quiet caption before them.
+ * A fractal with none gets no second row. The six buttons are 375 px wide
+ * (measured in headless Chrome), more than the 351 px a 375 px screen leaves
+ * inside the gutters, so the row scrolls sideways there by about 28 px and on a
+ * 320 px screen by about 83, as the chip row does, with the lit button kept in
+ * view.
  *
  * It is drawn inside the canvas's own wrapper, so it sits under the top bar and
  * clear of the progress line, and below the blank-picture hint's row, which the

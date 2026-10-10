@@ -662,6 +662,111 @@ const MULTIBROT_PLACES: readonly Place[] = [
   },
 ];
 
+// Nine places on the Newton fractal of z^3 - 1, from contact sheets drawn
+// headless in all five schemes at 240x180 with whole counts (what a tile
+// shows). Rainbow separates the three roots best, three hues with rings of
+// shade inside each; fire and grayscale give three clear levels (red, orange,
+// white; dark, mid, light); classic is busy over a wide view and works on the
+// pinwheels and chains, where the colours repeat between roots; ocean is three
+// blues and the weakest. Each place has the scheme it read best in, then
+// re-measured at 64x48 for the largest share one colour holds (the numbers are
+// in the Newton note of CLAUDE.md): a place that has a wide empty basin on one side
+// (the bulb chain, the root at 1) names the scheme that leaves the least of it,
+// since fire and grayscale put 56 to 67% of those two in one colour. The
+// picture is three basins and the boundary where they all meet, so the places
+// are the whole thing and the boundary's own features, and a place needs two
+// basins in the frame: a deep view inside one basin is a flat field, however
+// well chosen. Several numbers are exact, not picked by eye. The map sends z = 0
+// to infinity and its three preimages -2^(-1/3) = -0.793701 and 0.396850 +-
+// 0.687401i are the points where the boundary's six-sector junction reappears
+// (z^3 = -1/2 is where 2z + 1/z^2 vanishes), so the origin and each of those are
+// the same pinwheel at any zoom. A centre of -0.5 is a preimage of the root 1
+// (2(-0.5) + 1/0.25 = 3, divided by 3), which is the dark dot a basin shows at
+// each such point. The whole-basins place is at the Newton default view.
+const NEWTON_PLACES: readonly Place[] = [
+  {
+    id: "newton-whole",
+    name: "The three basins",
+    fractal: "newton",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "newton-junction",
+    name: "Where all three basins meet",
+    fractal: "newton",
+    centerX: 0,
+    centerY: 0,
+    zoom: 8,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "newton-junction-1000x",
+    name: "The same junction at 1000x",
+    fractal: "newton",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1000,
+    colorScheme: "classic",
+  },
+  {
+    id: "newton-junction-copy",
+    name: "A second junction at -0.7937",
+    fractal: "newton",
+    centerX: -0.793701,
+    centerY: 0,
+    zoom: 150,
+    colorScheme: "fire",
+  },
+  {
+    id: "newton-lens",
+    name: "A basin pinched into a lens",
+    fractal: "newton",
+    centerX: -0.5,
+    centerY: 0,
+    zoom: 4,
+    colorScheme: "grayscale",
+  },
+  {
+    id: "newton-two-junctions",
+    name: "Two junctions on one boundary",
+    fractal: "newton",
+    centerX: 0.2,
+    centerY: 0.55,
+    zoom: 12,
+    colorScheme: "classic",
+  },
+  {
+    id: "newton-junction-chain",
+    name: "A chain of junctions",
+    fractal: "newton",
+    centerX: 0.4,
+    centerY: 0.3,
+    zoom: 10,
+    colorScheme: "ocean",
+  },
+  {
+    id: "newton-bulb-chain",
+    name: "A chain of bulbs on a straight boundary",
+    fractal: "newton",
+    centerX: 0.1208,
+    centerY: 0.525,
+    zoom: 100,
+    colorScheme: "classic",
+  },
+  {
+    id: "newton-root-and-boundary",
+    name: "The root at 1 beside the boundary",
+    fractal: "newton",
+    centerX: 0.7,
+    centerY: 0,
+    zoom: 3,
+    colorScheme: "rainbow",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -673,6 +778,7 @@ export const PLACES: readonly Place[] = [
   ...BURNING_SHIP_PLACES,
   ...TRICORN_PLACES,
   ...MULTIBROT_PLACES,
+  ...NEWTON_PLACES,
 ];
 
 /**
@@ -736,6 +842,16 @@ export function placesForFractal(fractal: string): Place[] {
  *   given the scheme with the least flat field of their own (the whole sets and
  *   the notch 46-57% in classic, the rest 31-40% except the junction, 73%: two
  *   big black bulbs, which is not the featured place).
+ * - Newton: where all three basins meet. The origin drawn at zoom 8 is a
+ *   pinwheel of six sectors in the three colour families of the roots with
+ *   bulbs strung along the boundaries, which reads as nothing but this
+ *   fractal and has no flat field (22% one colour in rainbow, 32 to 35% in
+ *   fire, grayscale and ocean, 8% in classic). The whole-basins place is the
+ *   opening view, so a switch should not repeat it; the rest of the Newton
+ *   places were compared on the same sheet and are a basin pinched into a lens
+ *   (a dark dot at its centre), two chains of junctions, a chain of bulbs
+ *   and the root at 1 beside the boundary, each a variation on what the
+ *   pinwheel already shows.
  *
  * The others were redrawn and kept: each is at most 21% one colour (the
  * guard in `places.test.ts` holds every one under 60%).
@@ -746,6 +862,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   "burning-ship": "burning-ship-armada",
   tricorn: "tricorn-star",
   multibrot: "multibrot-3-small-copy",
+  newton: "newton-junction",
 };
 
 /**

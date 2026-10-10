@@ -61,6 +61,30 @@ describe("viewLinkToUpdates", () => {
     });
   });
 
+  it("puts a Newton link's fractal on the page and leaves the variant standing", () => {
+    expect(
+      viewLinkToUpdates(
+        decodeView("#v=1&f=newton&x=0&y=0&z=8&s=rainbow&i=auto&w=800&h=600"),
+      ),
+    ).toMatchObject({
+      fractalType: "newton",
+      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
+      centerX: 0,
+      centerY: 0,
+      zoomLevel: 8,
+      colorScheme: "rainbow",
+    });
+  });
+
+  it("drops a variant a Newton link carries, which the fractal cannot use", () => {
+    expect(
+      viewLinkToUpdates(decodeView("#v=1&f=newton&k=4&x=0&y=0&z=1")),
+    ).toMatchObject({
+      fractalType: "newton",
+      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
+    });
+  });
+
   it("applies a canvas size and an iteration count that are not the defaults", () => {
     // The example link happens to carry the page's own canvas size and an auto
     // count, so it cannot tell a read field from a defaulted one. This one

@@ -14,6 +14,7 @@ import {
   variantOn,
 } from "../fractalTypes";
 import { createMultibrotKind } from "../multibrot";
+import { newtonKind } from "../newton";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
 
@@ -34,7 +35,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the five fractals in order, each once", () => {
+  it("offers the six fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -43,6 +44,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "burning-ship", label: "Burning Ship" },
       { id: "tricorn", label: "Tricorn" },
       { id: "multibrot", label: "Multibrot" },
+      { id: "newton", label: "Newton" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -61,6 +63,11 @@ describe("resolveFractalKind", () => {
         expected.iterations(point, CAP, true),
       );
     }
+  });
+
+  it("draws the Newton fractal for its own id, whatever variant is beside it", () => {
+    expect(resolveFractalKind("newton", "Dendrite")).toBe(newtonKind);
+    expect(resolveFractalKind("newton", "")).toBe(newtonKind);
   });
 
   it("draws the Mandelbrot set for its own id", () => {
@@ -115,7 +122,7 @@ describe("resolveFractalKind", () => {
   it("falls back to the Mandelbrot set for an unknown id", () => {
     // A picker choice from a version that knows a fractal this build does not
     // renders the familiar set rather than a blank canvas.
-    expect(resolveFractalKind("newton", "Dendrite")).toBe(mandelbrotKind);
+    expect(resolveFractalKind("lyapunov", "Dendrite")).toBe(mandelbrotKind);
     expect(resolveFractalKind("", "")).toBe(mandelbrotKind);
   });
 
@@ -234,8 +241,16 @@ describe("defaultViewFor", () => {
     });
   });
 
-  it("falls back to the Mandelbrot view for an unknown id", () => {
+  it("frames the Newton fractal about the origin at zoom 1, holding all three roots", () => {
     expect(defaultViewFor("newton")).toEqual({
+      centerX: 0,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
+  it("falls back to the Mandelbrot view for an unknown id", () => {
+    expect(defaultViewFor("lyapunov")).toEqual({
       centerX: -0.75,
       centerY: 0,
       zoom: 1,
@@ -269,11 +284,12 @@ describe("fractalVariants", () => {
     ]);
   });
 
-  it("gives the Mandelbrot set, the Burning Ship, the Tricorn and an unknown id no row", () => {
+  it("gives the Mandelbrot set, the Burning Ship, the Tricorn, Newton and an unknown id no row", () => {
     expect(fractalVariants("mandelbrot")).toBeNull();
     expect(fractalVariants("burning-ship")).toBeNull();
     expect(fractalVariants("tricorn")).toBeNull();
     expect(fractalVariants("newton")).toBeNull();
+    expect(fractalVariants("lyapunov")).toBeNull();
   });
 
   it("describes only Julia and the Multibrot among the picker's fractals", () => {
@@ -292,6 +308,7 @@ describe("defaultVariant", () => {
     expect(defaultVariant("burning-ship")).toBe("");
     expect(defaultVariant("tricorn")).toBe("");
     expect(defaultVariant("newton")).toBe("");
+    expect(defaultVariant("lyapunov")).toBe("");
   });
 
   it("is power 3 for the Multibrot", () => {
