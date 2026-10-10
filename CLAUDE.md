@@ -53,6 +53,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
 - **View link** (`src/lib/viewLink.ts`): The view as a URL fragment and back — one short key per field, and a decoder that judges every value on its own and leaves out what it cannot read
 - **View link state** (`src/lib/viewLinkState.ts`): The page's half of a link — what a decoded link means as the state the page holds, the defaults a link's missing fields leave standing, the one reading a fragment gets whether the page loaded with it or was pasted one later, and the throttle that limits how often the address bar is written
+- **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
@@ -158,6 +159,58 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-09_
+
+### Deliberate jumps are browser history entries (2026-10-09)
+
+- The address bar followed the view with `replaceState` alone, so the browser's
+  Back left the page after any amount of exploring. A jump now makes a history
+  entry: a preset (built-in or saved), Apply Coordinates, a pick from the
+  Fractal select and a pick from the Julia constant select. Wheel, drag, keys,
+  the zoom buttons, Reset View, a random-walk step and the sliders still only
+  rewrite the current entry, exactly as before; the throttle
+  (`shouldWriteLink`, 500 ms) is untouched for them.
+- A jump handler calls `beginJump()` in `page.tsx`, which does two things. It
+  writes the view being left into the current entry first (only if that view
+  has been drawn), because the follower may be holding that write back for the
+  throttle and the jump's render would cancel it; and it bumps `jumpSerial`.
+  The follower effect compares that count with `handledJumpRef` once the jump's
+  view has been drawn, and then calls `pushViewLink` instead of the throttled
+  write: one `history.pushState` for the new fragment, past the throttle. The
+  count is state, not a flag, because a jump that lands on the view already
+  shown causes no render of its own; `pushViewLink` returns when the address
+  bar already holds the fragment, so such a jump makes no entry.
+- Back and Forward are not a second path. They change the fragment, so the
+  existing `hashchange` listener (fr-psx) applies it through `applyViewLink`;
+  the listener first tells the journey with `journey.arrive`. A view equal to
+  the one on screen sets nothing, so no render starts. A pasted link is a real
+  browser entry already (it is an address-bar navigation), so it needs no
+  push, and `arrive` records it as a new step. `popstate` is not listened to.
+- `src/lib/journey.ts` is the record of what the page believes the entries
+  are, so tests can assert it without a browser. `Journey` holds fragments as
+  `window.location.hash` gives them (`#v=1&...`, and `""` for the entry the
+  page opened on when it had none). `push` drops the entries ahead and ignores
+  the fragment already current; the oldest is dropped past 200
+  (`MAX_JOURNEY_ENTRIES`); `replace` is what the follower's `replaceState`
+  does to the current entry; `arrive(fragment)` matches a fragment against the
+  entry before, then the entry after (so a view on both sides of the current
+  one follows Back, which leaves the current fragment right), else pushes it.
+  The browser keeps the entries; the journey is only the page's record, so a
+  Back past the page's own entries (after a reload, say) arrives as a new step
+  rather than moving the journey.
+- Typing in the Real and Imaginary boxes is not a jump. It fires on every
+  readable keystroke and goes to `handleJuliaConstantChange` directly, so it
+  rewrites the entry the Custom pick belongs to instead of leaving one per
+  digit; choosing Custom changes the controls and not the picture, so it makes
+  none either.
+- If `pushState` throws, `pushViewLink` writes the fragment with `replaceState`
+  instead (itself guarded) and the journey keeps the step; nothing reaches the
+  user.
+- `src/lib/__tests__/journey.test.ts` covers the stack;
+  `src/__tests__/journey-history-panel.test.ts` reads `page.tsx` for the
+  wiring a Node suite cannot render — which handlers begin a jump and which do
+  not, the push after the draw and past the throttle, the `hashchange` path.
+  The check in `share-link-panel.test.ts` that the page never pushes now says
+  there is exactly one `pushState` and the follower's writer has none.
 
 ### Preset button labels are no longer clipped (2026-10-09)
 

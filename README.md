@@ -187,6 +187,7 @@ dependencies and needs nothing else.
 - **Saving an Image**: The Download PNG button saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
 - **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Navigation panel copies the current URL and says "Link copied" for two seconds; a browser that will not take a clipboard write shows the URL in a read-only field with the text already selected. A link shows the view it names — the fields it carries applied together, the page's defaults left standing for the rest — whether it is opened as the page loads or pasted into the address bar of a page already open, where it changes that page's view without a reload; either way the fields the link could not be read for are the page's defaults rather than a refusal, so the URL is the view and the address bar is rewritten to match it. A link names no preset
+  The browser's Back and Forward buttons retrace jumps: choosing a preset, applying coordinates, or picking another fractal or Julia constant from its select adds a history entry, while dragging, zooming, the keys, the sliders and the random walk only update the current one.
 - **Random Walk**: Tick Random walk in the Navigation panel and set the seconds between steps (1 to 120, 5 by default). Once each render finishes the walk waits that long and then moves the view one step, staying on the selected fractal; the line under the controls counts the wait down. Untick the box to stop, and move the view by hand — drag, wheel, key, button or preset — to start the interval again. The walk pauses while the tab is in the background
 
 ## Project Structure
@@ -220,6 +221,7 @@ dependencies and needs nothing else.
 │   │   ├── fractalTypes.ts         # The Fractal select's list, and choice to kind and default view
 │   │   ├── helpEntries.ts          # Help overlay text and the rule behind the ? key
 │   │   ├── integrationTarget.ts    # STAGING_URL and EXPECT_SHA for the integration tier
+│   │   ├── journey.ts              # The page's record of its history entries (jumps)
 │   │   ├── julia.ts                # Julia sets, named constants and custom:<re>,<im> names
 │   │   ├── mandelbrot.ts           # Mandelbrot iteration and coordinates
 │   │   ├── manualBounds.ts         # Checks the Manual Coordinates boxes
