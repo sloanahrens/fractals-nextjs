@@ -78,6 +78,7 @@ import {
   readManualCoordinate,
 } from "../lib/manualBounds";
 import { opensHelpShortcut } from "../lib/helpEntries";
+import { Journey } from "../lib/journey";
 import { encodeView } from "../lib/viewLink";
 import {
   DEFAULT_VIEW_LINK_UPDATES,
@@ -498,6 +499,12 @@ export default function Home() {
     };
   }, [wander]);
 
+  // What the page believes the browser's history entries for this document are:
+  // the fragment each holds, and which one the page is on. The browser keeps
+  // the entries; this is the record, so what a jump and a Back did can be read
+  // without a browser (see `Journey`).
+  const [journey] = useState(() => new Journey());
+
   // Putting a fragment into effect is one path, taken by both the read at mount
   // and the read on every later change of the fragment. It moves the view
   // through the same setters every control uses, so the canvas, the sliders and
@@ -537,8 +544,12 @@ export default function Home() {
     if (linkAppliedRef.current) return;
     linkAppliedRef.current = true;
 
+    // The entry the page opened on is the journey's first, whatever it says —
+    // an empty fragment included: it is the place Back returns to when the
+    // first jump is taken before any render has written the address bar.
+    journey.replace(window.location.hash);
     applyViewLink(window.location.hash);
-  }, [applyViewLink]);
+  }, [applyViewLink, journey]);
 
   // A fragment can also arrive at a page that is already open — a link pasted
   // into the address bar, or a same-document link followed to a different
@@ -553,16 +564,24 @@ export default function Home() {
   // rest, rather than the fragment being ignored and the bar left describing a
   // picture that is not on screen.
   //
-  // The address-bar follower cannot feed this: it moves the bar with
-  // `history.replaceState`, which fires no `hashchange`, so the only events
-  // here are the user's own.
+  // The browser's Back and Forward arrive here too: they land on an entry a
+  // jump made with `pushState` and change the fragment to that entry's, so
+  // retracing the journey is the same apply path as a paste and not a second
+  // one. The journey is told first, so its record of where the page is stands
+  // before the view moves.
+  //
+  // Nothing the page writes can feed this: `replaceState` and `pushState` fire
+  // no `hashchange`, so the only events here are the user's own.
   useEffect(() => {
-    const handleHashChange = () => applyViewLink(window.location.hash);
+    const handleHashChange = () => {
+      journey.arrive(window.location.hash);
+      applyViewLink(window.location.hash);
+    };
 
     window.addEventListener("hashchange", handleHashChange);
 
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [applyViewLink]);
+  }, [applyViewLink, journey]);
 
   // The view as a link, rebuilt whenever anything a link carries moves. Both
   // halves of the feature read it: the effect below writes it to the address
@@ -599,13 +618,72 @@ export default function Home() {
   // reads. Zero is "never", which is a first write nothing holds back.
   const lastLinkWriteRef = useRef(0);
 
-  const writeViewLink = useCallback((fragment: string, nowMs: number) => {
-    // replaceState, not an assignment to location.hash: the address bar is
-    // recording where the user already is, so it is not a place to go back to,
-    // and a fragment assignment would reload the page.
-    window.history.replaceState(null, "", fragment);
-    lastLinkWriteRef.current = nowMs;
+  // replaceState, not an assignment to location.hash: the address bar is
+  // recording where the user already is, so it is not a place to go back to,
+  // and a fragment assignment would reload the page.
+  const replaceAddressBar = useCallback((fragment: string) => {
+    try {
+      window.history.replaceState(null, "", fragment);
+    } catch {
+      // A browser that refuses the write leaves the address bar behind the
+      // view. The link is a convenience; the page does not stop for it.
+    }
   }, []);
+
+  // The entry this rewrites is the one the journey is on.
+  const writeViewLink = useCallback(
+    (fragment: string, nowMs: number) => {
+      replaceAddressBar(fragment);
+      journey.replace(fragment);
+      lastLinkWriteRef.current = nowMs;
+    },
+    [journey, replaceAddressBar],
+  );
+
+  // A jump is a deliberate move to a view the user would want to come back
+  // from: a preset, typed coordinates, another fractal or Julia constant. The
+  // handlers that make one call `beginJump`, which only counts it. The count is
+  // state because the view a jump lands on is not known until the render its
+  // setters cause, and a jump that lands on the view already shown causes none:
+  // the follower below compares the count with the last one it handled, in the
+  // render that follows either way.
+  const [jumpSerial, setJumpSerial] = useState(0);
+  const handledJumpRef = useRef(0);
+
+  // The entry a jump pushes is the view it lands on, so the entry before it has
+  // to hold the view being left. The follower may be holding that write back
+  // for the throttle, and the jump's render would cancel it, so the view on
+  // screen is written into the current entry before the jump moves anything.
+  // A view still being drawn is not on the canvas and is not written.
+  const beginJump = () => {
+    if (renderedLink !== "" && renderedLink === currentLink) {
+      const leaving = `#${currentLink}`;
+
+      if (window.location.hash !== leaving) writeViewLink(leaving, Date.now());
+    }
+    setJumpSerial((serial) => serial + 1);
+  };
+
+  // Make a jump's view a history entry of its own.
+  const pushViewLink = useCallback(
+    (fragment: string, nowMs: number) => {
+      if (window.location.hash === fragment) return;
+
+      try {
+        window.history.pushState(null, "", fragment);
+      } catch {
+        // pushState throws in a sandboxed frame or when the browser caps the
+        // entries. The view still has to reach the address bar, so it is
+        // written over the current entry instead.
+        replaceAddressBar(fragment);
+      }
+      // The journey keeps the step either way: it is the page's own record and
+      // works without the browser.
+      journey.push(fragment);
+      lastLinkWriteRef.current = nowMs;
+    },
+    [journey, replaceAddressBar],
+  );
 
   // The address bar follows the view — a random walk step, a control, a wheel,
   // a preset, a link — but only once that view has been drawn, which is also
@@ -615,6 +693,15 @@ export default function Home() {
 
     const next = `#${currentLink}`;
     const now = Date.now();
+
+    // A jump is written the moment its view has been drawn, as a new entry and
+    // without waiting out the throttle: it is one write per deliberate move,
+    // and held back it would take in the gesture that follows.
+    if (jumpSerial !== handledJumpRef.current) {
+      handledJumpRef.current = jumpSerial;
+      pushViewLink(next, now);
+      return;
+    }
 
     if (
       shouldWriteLink(window.location.hash, next, now, lastLinkWriteRef.current)
@@ -649,7 +736,7 @@ export default function Home() {
 
       return () => window.clearTimeout(timer);
     }
-  }, [currentLink, renderedLink, writeViewLink]);
+  }, [currentLink, renderedLink, jumpSerial, pushViewLink, writeViewLink]);
 
   // What the Copy link button last did: the confirmation a clipboard gave, or
   // the field a browser without one gets instead. The manual half carries the
@@ -839,6 +926,7 @@ export default function Home() {
     // Calculate center and zoom from manual bounds
     const view = boundsToView(checked.bounds);
 
+    beginJump();
     setCenterX(view.centerX);
     setCenterY(view.centerY);
     setZoomLevel(view.scale);
@@ -871,6 +959,7 @@ export default function Home() {
   };
 
   const handleFractalTypeChange = (typeId: string) => {
+    beginJump();
     setFractalType(typeId);
     applyDefaultView(typeId);
   };
@@ -882,12 +971,19 @@ export default function Home() {
     applyDefaultView("julia");
   };
 
+  // The select is the deliberate act, so picking a constant from it is a jump;
+  // typing a point into the Real and Imaginary boxes is not. That edit fires on
+  // every readable keystroke and goes to `handleJuliaConstantChange` directly,
+  // refining the view the way a drag does instead of leaving an entry behind
+  // for each digit.
+  //
   // The select's Custom option. It starts from the point the picture is
   // already drawn with, so choosing it changes the controls and not the
   // picture: the constant is the same, only spelled as a custom name, and the
   // view stays where it was.
   const handleJuliaSelect = (value: string) => {
     if (value !== CUSTOM_OPTION_VALUE) {
+      beginJump();
       handleJuliaConstantChange(value);
       return;
     }
@@ -967,6 +1063,8 @@ export default function Home() {
   const handlePresetSelect = (preset: FractalPreset) => {
     // Calculate center and zoom from preset bounds
     const view = boundsToView(preset.bounds);
+
+    beginJump();
 
     // A view belongs to a fractal, and loading it puts the picker back on that
     // fractal — for a Julia view, on its constant too — before the view itself.

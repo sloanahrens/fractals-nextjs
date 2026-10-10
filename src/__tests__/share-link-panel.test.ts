@@ -165,9 +165,13 @@ describe("the address bar", () => {
   });
 
   it("is moved with replaceState, so a view is not a place to go back to", () => {
+    // Only a deliberate jump makes an entry, and that is `pushViewLink`'s one
+    // call (journey-history-panel.test.ts); the follower and Copy link write
+    // through `writeViewLink`, which only rewrites the current entry.
     expect(page).toContain("window.history.replaceState(");
-    expect(page).not.toContain("location.hash =");
-    expect(page).not.toContain("pushState");
+    expect(page).not.toMatch(/location\.hash\s*=[^=]/);
+    expect(functionBody(page, "writeViewLink")).not.toContain("pushState");
+    expect(page.match(/pushState\(/g)).toHaveLength(1);
   });
 
   it("is written for a drawn view only, and only as often as the throttle allows", () => {
