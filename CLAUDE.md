@@ -46,6 +46,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Fractal kinds** (`src/lib/fractalKinds.ts`): The registry of drawable fractals, and the id lookup that falls back to the Mandelbrot set
 - **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, and the choice-to-kind and choice-to-default-view resolvers
 - **Julia sets** (`src/lib/julia.ts`): The four named Julia constants, the `custom:<re>,<im>` spelling that names any other point, and the factory that turns one into a fractal kind
+- **Custom constant input** (`src/lib/customConstantInput.ts`): The Real and Imaginary boxes' text turned into a `custom:<re>,<im>` name or the sentence that says why not, and the Custom option's select value
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
 - **Wander step** (`src/lib/wander.ts`): One random-walk step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Wander controller** (`src/lib/wanderController.ts`): The walk's clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
@@ -158,14 +159,55 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-09_
 
+### Custom Julia constant controls (2026-10-09)
+
+- The Julia constant select offers a fifth option, "Custom", after the named
+  four. While `juliaConstant` is a readable custom name the select shows it and
+  two labelled text boxes, Real and Imaginary (`inputMode="decimal"`), sit under
+  it holding the point's numbers; for a named constant the boxes are not
+  rendered. The option's value is `CUSTOM_OPTION_VALUE`, which is neither a
+  constant's name nor a custom name, so the page can tell a pick of Custom from
+  a pick of a constant; `juliaConstant` itself never holds it.
+- Choosing Custom from a named constant writes that constant's point through
+  `customConstantName` and does nothing else: the same picture, spelled as a
+  custom name, so the view is not reframed. It is `handleJuliaSelect`, which
+  hands every other pick to `handleJuliaConstantChange` unchanged.
+- `src/lib/customConstantInput.ts` is the pure step between the boxes and the
+  name: `parseCustomConstantInput(realText, imaginaryText)` answers
+  `{ constant }` (the `custom:<re>,<im>` name) or `{ error }` (one sentence,
+  the Real box judged first). A box is a plain decimal, optionally signed, from
+  -2 to 2 inclusive after trimming; an empty box, text, exponent notation
+  (`1e3`), a comma used as the decimal separator (`0,5`, which gets its own
+  sentence) and a number past the range are all errors. `isCustomJuliaConstant`
+  is the predicate behind the select's value and the boxes' guard.
+- `editJuliaInput` runs that on every keystroke. An error is shown under the
+  boxes as a `role="status"` paragraph in a `min-h-5` container of its own, like
+  the coordinate messages, and returns before `juliaConstant` is touched, so the
+  last valid constant stays drawn and nothing is cancelled or redrawn. A valid
+  pair goes to `handleJuliaConstantChange`, the select's own handler, so the
+  renderer's cancel-and-redraw path and the default reframing are unchanged and
+  the address bar follows by the existing link path. A pair that names the
+  constant already held (`0.50` for `0.5`) is skipped, so retyping a digit does
+  not reframe the view.
+- The boxes hold what was typed (`juliaRealText`, `juliaImaginaryText`), and
+  follow the constant when it moves for another reason — a link, a pasted
+  fragment, a saved view, the select — by adjusting during the render that sees
+  a new name, against `syncedJuliaConstant`. A name the boxes themselves
+  produced is recorded as synced where it is set, which is what stops a half
+  typed `0.` being rewritten to `0`. That render also clears the message.
+- `src/lib/__tests__/customConstantInput.test.ts` covers the listed cases
+  (empty, `abc`, `1e3`, `2.0001`, `-2`, `0.5`, surrounding spaces, the comma);
+  `src/__tests__/custom-julia-constant-panel.test.ts` reads `page.tsx` for the
+  wiring a Node suite cannot render.
+
 ### A constant can be any point, written out (2026-10-09)
 
 - A Julia constant is a point of the plane and the app carries one as a string
   everywhere — the page's state, a preset's `juliaConstant`, a link's `k=` — so
   the four named ones are four of those strings and a fifth spelling names any
-  other point: `custom:<re>,<im>`, for example `custom:-0.8,0.156`. Nothing on
-  screen changes yet and no control can produce one; this landing is the format
-  and the readers, and a later bead adds the controls.
+  other point: `custom:<re>,<im>`, for example `custom:-0.8,0.156`. This landing
+  is the format and the readers; the controls that produce one are the section
+  above it.
 - `src/lib/julia.ts` owns the spelling: `CUSTOM_CONSTANT_PREFIX`,
   `customConstantName(real, imaginary)` (each part rounded to six decimals and
   written as plain decimal digits with the trailing zeros dropped, at most 26
@@ -188,9 +230,7 @@ _Last updated: 2026-10-09_
   link round trip and a save/load byte for byte, because a name is stored and
   carried as text and is never re-rendered from its numbers.
 - The page's own preset format is unchanged: a custom constant is another value
-  in the `juliaConstant` string it already had. The Julia `Select` still offers
-  the four, so a view loaded from a custom name leaves it showing no option —
-  which is what the follow-up bead's controls are for.
+  in the `juliaConstant` string it already had.
 
 ### Help overlay (2026-10-09)
 

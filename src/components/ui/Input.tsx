@@ -7,6 +7,7 @@ interface InputProps {
   value: string;
   onChange: (value: string) => void;
   type?: "text" | "number";
+  inputMode?: "decimal" | "numeric" | "text";
   step?: string;
   min?: number;
   max?: number;
@@ -20,6 +21,7 @@ export function Input({
   value,
   onChange,
   type = "text",
+  inputMode,
   step,
   min,
   max,
@@ -39,6 +41,7 @@ export function Input({
       <input
         id={inputId}
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         step={step}
