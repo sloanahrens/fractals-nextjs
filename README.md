@@ -27,9 +27,10 @@ Next Fractals is a real-time fractal generator that allows users to explore the 
 - **Zoom Controls**: Zoom with the mouse wheel, the Zoom In/Out buttons and the Zoom Level slider, which is logarithmic — equal slider steps are equal zoom ratios from 1x to 10000x
 - **Pan Navigation**: Click and drag to explore different regions, or drag with one finger on a touch screen
 - **Keyboard Navigation**: Focus the image, then pan with the arrow keys and zoom with `+` and `-`
-- **Help Overlay**: A Help button in the top bar, or the `?` key from anywhere on the page, opens a dialog listing every way to drive the explorer — mouse and touch, keyboard, the random walk, and the views and links
+- **Help Overlay**: A Help button in the top bar, or the `?` key from anywhere on the page, opens a dialog listing every way to drive the explorer — mouse and touch, keyboard, nearby places and Surprise me, Auto-wander, and the views and links
 - **Center Controls**: Precise positioning with coordinate input under a line that reads the zoom and centre of the view on screen ("Zoom 400x at -0.7453, 0.1127"), and four boxes under Manual Coordinates that apply a view you type in: Apply says so when a box cannot be read or runs the wrong way, and notes when a box of another shape is fitted around its centre to the view's 4:3
-- **Random Walk**: Tick Random walk in the Navigation card of the Settings drawer and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose
+- **Surprise me**: A button in the middle of the top bar flies to one of the nearby places at random, the way a Nearby tile does — the same crossfade and a single history entry — and never to the place you are already looking at. Press it again for another; it is disabled when no place is near enough to offer
+- **Auto-wander**: Tick Auto-wander in the Auto-wander card of the Settings drawer and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose
 - **Nearby Strip**: A strip along the bottom of the picture, headed "Nearby, worth a look", shows small pictures of up to six named places near the view — click one, or Tab to it and press Enter, and the picture flies there with a short crossfade. A More tile rotates in the next suggestions
 - **Back and Forward**: Buttons in the top bar retrace the places you jumped to, and are disabled at the ends of the trail
 - **Download PNG**: In the Settings drawer, save the canvas at its full resolution, named from the fractal and the view it shows
@@ -192,8 +193,9 @@ dependencies and needs nothing else.
 - **Saving an Image**: The Download PNG button in the Settings drawer saves the canvas at its full resolution, under the fractal's name and the view's centre and zoom
 - **Controls During a Render**: Controls stay usable while a render runs; using one cancels that render and draws the new view instead
 - **Sharing a View**: Once a render finishes the address bar carries the view, so it can be bookmarked or copied from the browser itself. Copy link in the Settings drawer's Navigation card copies the current URL and says "Link copied" for two seconds; a browser that will not take a clipboard write shows the URL in a read-only field with the text already selected. A link shows the view it names — the fields it carries applied together, the page's defaults left standing for the rest — whether it is opened as the page loads or pasted into the address bar of a page already open, where it changes that page's view without a reload; either way the fields the link could not be read for are the page's defaults rather than a refusal, so the URL is the view and the address bar is rewritten to match it. A link names no preset
-  The browser's Back and Forward buttons, and the top bar's, retrace jumps: choosing a preset, applying coordinates, picking another fractal or Julia constant from its select, or choosing a Nearby tile adds a history entry, while dragging, zooming, the keys, the sliders and the random walk only update the current one.
-- **Random Walk**: Tick Random walk in the Navigation card of the Settings drawer and set the seconds between steps (1 to 120, 5 by default). Once each render finishes the walk waits that long and then moves the view one step, staying on the selected fractal; the line under the controls counts the wait down. Untick the box to stop, and move the view by hand — drag, wheel, key, button or preset — to start the interval again. The walk pauses while the tab is in the background
+  The browser's Back and Forward buttons, and the top bar's, retrace jumps: choosing a preset, applying coordinates, picking another fractal or Julia constant from its select, or choosing a Nearby tile adds a history entry, while dragging, zooming, the keys, the sliders and Auto-wander only update the current one.
+- **Surprise me**: The top bar's centre button picks one place at random from the six the Nearby strip would lead with and goes there exactly as a tile click does, so the transition is the same and the jump is one history entry. It never picks the place the view already is, so pressing it again right away always goes somewhere new, and it is disabled when no place is near enough to offer
+- **Auto-wander**: Tick Auto-wander in the Auto-wander card of the Settings drawer (it was the Random walk checkbox in the Navigation card) and set the seconds between steps (1 to 120, 5 by default). Once each render finishes, the view waits that long and then moves one step, staying on the selected fractal; the line under the controls counts the wait down. Untick the box to stop, and move the view by hand — drag, wheel, key, button or preset — to start the interval again. Auto-wander pauses while the tab is in the background
 
 ## Project Structure
 
@@ -240,7 +242,7 @@ dependencies and needs nothing else.
 │   │   ├── viewReadout.ts          # The "Zoom 400x at -0.7453, 0.1127" line above the coordinate boxes
 │   │   ├── viewLink.ts             # A view as a URL fragment, and back
 │   │   ├── viewLinkState.ts        # What a link means for the page, and the address-bar throttle
-│   │   ├── wander.ts               # One random-walk step
+│   │   ├── wander.ts               # One Auto-wander step
 │   │   ├── wanderController.ts     # The walk's countdown and what suspends it
 │   │   ├── zoomPan.ts              # Zoom and pan manager
 │   │   └── zoomScale.ts            # Logarithmic zoom slider mapping, coordinate formatting

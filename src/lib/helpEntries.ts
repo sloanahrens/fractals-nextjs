@@ -80,6 +80,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         action: "Show the next suggestions in the strip",
       },
       {
+        keys: "Surprise me",
+        action:
+          "Button in the top bar that flies to one of the nearby places at random, never the one you are on; press it again for another",
+      },
+      {
         keys: "Back / Forward",
         action:
           "Buttons in the top bar that retrace the places you jumped to, as the browser's own do; each is disabled when there is nowhere to go",
@@ -87,17 +92,17 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    title: "Random walk",
+    title: "Auto-wander",
     entries: [
       {
-        keys: "Random walk",
+        keys: "Auto-wander",
         action:
-          "Tick it in the Navigation card of the Settings drawer and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose",
+          "Tick it in the Auto-wander card of the Settings drawer and the view moves to a nearby interesting view every few seconds, staying on the fractal you chose",
       },
       {
         keys: "Seconds between steps",
         action:
-          "How long the walk waits between steps, from 1 to 120, 5 by default",
+          "How long Auto-wander waits between steps, from 1 to 120, 5 by default",
       },
     ],
   },

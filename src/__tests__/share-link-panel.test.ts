@@ -79,11 +79,11 @@ describe("the copy link control", () => {
     // one of those would pass wherever the button was.
     const viewButtons = page.search(/>\s*Reset View\s*</);
     const copyButton = page.search(/>\s*Copy link\s*</);
-    const randomWalk = page.indexOf('label="Random walk"');
+    const autoWander = page.indexOf('label="Auto-wander"');
 
     expect(viewButtons).toBeGreaterThan(-1);
     expect(copyButton).toBeGreaterThan(viewButtons);
-    expect(randomWalk).toBeGreaterThan(copyButton);
+    expect(autoWander).toBeGreaterThan(copyButton);
     // The button fires the handler the rest of this file follows.
     expect(page).toContain("onClick={handleCopyLink}");
     expect(page).toContain("const handleCopyLink = ");

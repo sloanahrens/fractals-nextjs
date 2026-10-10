@@ -81,6 +81,7 @@ import {
 import { opensHelpShortcut } from "../lib/helpEntries";
 import { Journey, historyButtons } from "../lib/journey";
 import { PLACES, suggest, type Place } from "../lib/places";
+import { surpriseTarget } from "../lib/surprise";
 import {
   CROSSFADE_MS,
   NEARBY_POOL_SIZE,
@@ -251,7 +252,7 @@ export default function Home() {
   // Preset system
   const [currentPreset, setCurrentPreset] = useState<string>("");
 
-  // Random walk. The controller owns the clock — when a step is due, and when
+  // Auto-wander. The controller owns the clock — when a step is due, and when
   // it must wait — and this page owns what a step does and tells the controller
   // when a render starts and finishes. The mode is deliberately not remembered
   // between visits.
@@ -800,7 +801,7 @@ export default function Home() {
     overlay.style.opacity = "0";
   }, [currentLink, renderedLink]);
 
-  // The address bar follows the view — a random walk step, a control, a wheel,
+  // The address bar follows the view — an auto-wander step, a control, a wheel,
   // a preset, a link — but only once that view has been drawn, which is also
   // what keeps a drag from rewriting it while the gesture is still moving.
   useEffect(() => {
@@ -1251,6 +1252,26 @@ export default function Home() {
     wander.notifyActivity();
   };
 
+  // Surprise me: a place picked at random from the ones the strip would lead
+  // with, reached the way a tile is — `handlePlaceSelect` — so it has the same
+  // crossfade and makes one history entry. The view is read at the press, so a
+  // second press right after the first starts from the place the first chose
+  // and cancels its render the way any other move does. The button is disabled
+  // when nothing is near enough to offer.
+  const placeView = {
+    fractal: fractalType,
+    juliaConstant,
+    centerX,
+    centerY,
+    zoom: zoomLevel,
+  };
+  const canSurprise = surpriseTarget(placeView, PLACES, () => 0) !== null;
+
+  const handleSurprise = () => {
+    const target = surpriseTarget(placeView, PLACES);
+    if (target) handlePlaceSelect(target);
+  };
+
   const handleNearbyMore = () => {
     setNearby((previous) => ({
       ...previous,
@@ -1334,6 +1355,8 @@ export default function Home() {
         onForward={handleForward}
         canGoBack={historyState.canGoBack}
         canGoForward={historyState.canGoForward}
+        onSurprise={handleSurprise}
+        canSurprise={canSurprise}
         onHelp={() => setHelpOpen(true)}
         onSettings={() => setSettingsOpen(true)}
         settingsOpen={settingsOpen}
@@ -1479,9 +1502,16 @@ export default function Home() {
                 className="w-full px-3 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-lg bg-gray-50"
               />
             )}
+          </div>
+        </div>
 
+        {/* Auto-wander: the view moves to a nearby interesting view every few
+            seconds. The clock and the step are the wander controller's. */}
+        <div className="bg-white p-6 rounded-lg shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Auto-wander</h3>
+          <div className="space-y-4">
             <Checkbox
-              label="Random walk"
+              label="Auto-wander"
               checked={wanderOn}
               onChange={handleWanderChange}
             />
