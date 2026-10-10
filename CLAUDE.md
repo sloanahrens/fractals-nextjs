@@ -49,6 +49,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Fractal picker** (`src/lib/fractalTypes.ts`): The list the Fractal select renders, the choice-to-kind and choice-to-default-view resolvers, and the per-fractal variant descriptor (`fractalVariants`, `defaultVariant`, `variantOn`)
 - **Julia sets** (`src/lib/julia.ts`): The four named Julia constants, the `custom:<re>,<im>` spelling that names any other point, and the factory that turns one into a fractal kind
 - **Custom constant input** (`src/lib/customConstantInput.ts`): The Real and Imaginary boxes' text turned into a `custom:<re>,<im>` name or the sentence that says why not, and the Custom option's select value
+- **Julia map** (`src/lib/juliaMap.ts`, `src/components/ui/JuliaMap.tsx`): The Mandelbrot set drawn small in the Settings drawer as the map of Julia constants — point at it or drag along it and the constant is the point under the pointer — the clamped pixel-to-point mapping and back, and the arrow-key step
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
 - **Tricorn** (`src/lib/tricorn.ts`): The Tricorn (Mandelbar) formula — the Mandelbrot loop with z conjugated before squaring, z -> conj(z)^2 + c — behind its own fractal kind
 - **Multibrot** (`src/lib/multibrot.ts`): The Mandelbrot loop with a higher power, z -> z^d + c for d = 3, 4, 5 — `createMultibrotKind(power)` and `parseMultibrotPower`, the power being the fractal's variant
@@ -190,6 +191,125 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Julia map: pick the constant by pointing at a small Mandelbrot inset (2026-10-10)
+
+- fr-owi. With Julia on, the Settings drawer's Rendering Parameters card now
+  carries the Mandelbrot set drawn small as the map of Julia constants: point at
+  it, or drag along it, and the constant becomes the point under the pointer, so
+  the picture on the canvas turns into that Julia set as the pointer moves. It is
+  the fifth way to name a constant — the four named chips, the Custom boxes, a
+  link, a saved view — and it is not a sixth: a pick is spelled `custom:<re>,<im>`
+  by `customConstantName`, goes through the page's one `variant` state, is written
+  by the link codec and is remembered by Back exactly as a typed constant is.
+- **`src/lib/juliaMap.ts`** is the pure half and holds every constant:
+  `JULIA_MAP_WIDTH` (160), `JULIA_MAP_HEIGHT` (120), `JULIA_MAP_ITERATIONS` (60),
+  `JULIA_MAP_ARROW_STEP` (1/50), `JULIA_MAP_LABEL`, `juliaMapBounds()`, and the
+  two clamps-and-maps that are each other's inverse:
+  `insetPointToComplex(x, y, width, height, bounds)` and
+  `complexToInsetPoint(point, width, height, bounds)`. Both hold a pixel outside
+  the inset to the nearer edge, so a drag that runs off it keeps picking the
+  edge's point and a ring for a constant the frame cannot show sits on the edge
+  rather than somewhere it is not; a value that is not a number, and an inset
+  with no extent on an axis, both read as the start of that axis, which is what
+  keeps a NaN out of a constant's name. `stepJuliaMapPoint(point, horizontal,
+  vertical, width, height, bounds)` is one arrow key: `JULIA_MAP_ARROW_STEP` of
+  the width in both axes (the inset is the frame's own 4:3 shape, so a pixel is
+  the same step either way), back through the same clamped mapping.
+- **The frame departs from the bead's wording, on purpose.** The bead says "the
+  Mandelbrot base view (`calculateZoomBounds` at zoom 1)", which the app's own
+  opening view reads as centred on -0.75; `juliaMapBounds()` is the base view
+  (4 by 3) centred on the **origin** instead, x -2 to 2 by y -1.5 to 1.5. That is
+  the box `julia.ts` lets a custom constant name — each part within 2 — so every
+  point of the inset is a constant `customConstantName` will accept. Framed on
+  the opening view, the left 0.75 units of a 4-unit map (19% of the width, and
+  the whole region left of the set's own -2 tip) would name points the app
+  refuses, and pointing there would do nothing at all. The set's left tip sits on
+  the frame's left edge, which is where the picture of the set has always ended.
+- **The plane is drawn the way this app draws the plane.** The picture comes from
+  `renderRgba` with `mandelbrotKind`, so its rows go through `pixelToComplex` as
+  every other picture here does — the imaginary part growing *down* the canvas —
+  and the ring is placed by the same mapping. That is the property that matters:
+  the ring sits exactly where the constant is drawn. The picture is the Mandelbrot
+  set, which is symmetric about the real axis, so it reads the same way round
+  either way; what it buys is that the ring and the picture cannot disagree. One
+  consequence worth knowing: `ArrowUp` steps towards a *smaller* imaginary part.
+- **`src/components/ui/JuliaMap.tsx`** is the control: a 160 x 120 canvas with an
+  `aria-hidden` SVG ring over it (two circles, a dark one under a light one,
+  because one stroke cannot be seen on every colour scheme), inside a focusable
+  div (`tabIndex={0}`, `aria-label={JULIA_MAP_LABEL}`, `touch-none`, a focus ring)
+  with a one-line caption under it. It holds **no state at all**: the picture is
+  written straight onto the canvas from the render, as the strip's thumbnails are
+  written onto their tiles.
+- Drawing is once per colour scheme, on a macrotask of its own, and only after
+  the main picture has settled (`settled`; `if (!settled) return;` is the first
+  thing the effect does), so the chart of the parameter plane never competes with
+  the picture it is a chart of. Each scheme's `ImageData` is kept in a ref, so a
+  scheme the visitor has already seen is put back synchronously with no render,
+  and a scheme change or a revisit costs nothing. `JULIA_MAP_ITERATIONS` is 60
+  because a boundary point of the set is a pixel wide at this size whatever the
+  cap: the map is a chart, not a picture to walk into.
+- **The order in the card is load-bearing, not cosmetic.** The map sits directly
+  under the Julia constant select and *above* the Real and Imaginary boxes
+  (`{fractalType === "julia" && (<JuliaMap …/>)}` then the
+  `isCustomVariant(fractalType, variant) && …` block). A pick makes the constant
+  a custom one, which makes those two boxes appear; with the map below them it
+  was pushed 66 px down the panel under a pointer that was mid-drag, and the drag
+  landed where the map used to be (found in headless Chrome, before this order).
+  Everything above the map is fixed once the fractal is Julia, so nothing can
+  move it while a gesture is on.
+- **One gesture is one history entry.** `onGestureStart` is called once, on
+  pointer down, and is the page's `beginJump`; the drag's moves only set the
+  constant, so they rewrite the entry that jump is making instead of leaving one
+  each. Measured in headless Chrome against the production build with real mouse
+  and touch input: `history.length` is unchanged through a whole drag and grows
+  by exactly one when it ends, and Back returns to the constant the gesture
+  started from. `setPointerCapture` on the press means a drag that leaves the
+  inset keeps picking.
+- **A pick changes `c` and not the view.** `handleJuliaMapPick` names the point
+  with `customConstantName` and sets it with `setVariant` alone — the path the
+  Custom option of the select already took — so the visitor's zoom and centre
+  stay, the picture follows the pointer live, and the Real and Imaginary boxes
+  (the render-phase sync), the select, the address bar and the link all follow
+  the state. It returns for a point that names the constant already drawn, which
+  would otherwise start a render for nothing, and it calls `wander.notifyActivity()`
+  so the walk's countdown restarts as it does for any hand-made move. Reframing
+  through `handleVariantChange` was rejected: it would throw the visitor's zoom
+  away between one pointer move and the next.
+- Keyboard. The arrow keys step the constant `JULIA_MAP_ARROW_STEP` of the width
+  and `preventDefault`, so the drawer does not scroll under them. A key press is
+  a refinement rather than a jump — the same rule typing into the boxes follows —
+  so it writes the address bar but adds no history entry.
+- `tourSettled` in `FractalExplorer.tsx` is now **`pictureSettled`**: the tour and
+  the map both ask whether a full render has drawn the view, and the name that
+  used to be the tour's alone was wrong for the second caller.
+- Verified in headless Chrome (CDP, real `Input.dispatchMouseEvent` and
+  `Input.dispatchTouchEvent`, against the standalone production build): the map
+  is drawn after the picture settles (alpha 255 at the centre, real Mandelbrot
+  colours); a press at the Douady rabbit's place gives exactly `-0.123` and
+  `0.745` and rings at 75.08, 89.8 — the pixel that point maps to; a mouse drag
+  and a touch drag each update the constant on every move and leave exactly one
+  entry; Back restores `k=Classic`; the arrow keys move `+0.08` real and `-0.08`
+  imaginary (a fiftieth of the 4-wide frame) and add no entry; a touch drag does
+  not scroll the drawer (`touch-action: none`); changing the colour scheme
+  redraws the map in it and returning to a scheme restores its cached pixels
+  exactly; and the inset is present for Julia and absent for the Mandelbrot set
+  and the Multibrot.
+- Docs: the README's Julia Map bullet and its Project Structure (`JuliaMap.tsx`,
+  `juliaMap.ts`), and a "Julia map" row in the Help overlay's Nearby places
+  group.
+- Tests: `src/lib/__tests__/juliaMap.test.ts` (the frame and its corners, the
+  whole set inside it, every corner and named constant naming a constant, the
+  inset's shape against the frame's, the clamp at both ends, a NaN pixel, an
+  inset with no extent, the inverse and its round trip, the four named constants
+  inside the map, the arrow step in both axes and at the edges), and
+  `src/__tests__/julia-map-panel.test.ts` (sources: the map in the drawer and
+  only for Julia, its place between the select and the boxes, the props, what a
+  pick does and does not do, the canvas size and pipeline, the wait for the
+  settle and the macrotask, the per-scheme cache and the absence of any state,
+  the ring, the focus and the arrow keys, the pointer wiring and the one
+  `onGestureStart`). `tour-mode-panel.test.ts` and `wander-hop-panel.test.ts`
+  name `pictureSettled` where they named `tourSettled`. `make gate` is green.
 
 ### Wallpaper shapes: export the view as Desktop, Phone or Square (2026-10-10)
 

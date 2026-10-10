@@ -268,7 +268,9 @@ describe("starting and stopping", () => {
     expect(page).toContain(
       '!isRendering && renderedLink !== "" && renderedLink === currentLink',
     );
-    expect(page).toContain("tourMode.setConditions({ settled: tourSettled })");
+    expect(page).toContain(
+      "tourMode.setConditions({ settled: pictureSettled })",
+    );
   });
 });
 

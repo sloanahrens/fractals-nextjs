@@ -81,6 +81,11 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Mandelbrot, Julia, Burning Ship, Tricorn, Multibrot and Newton, top left of the picture (the row scrolls sideways on a narrow screen), the current one lit: one click flies to that fractal's showpiece place, and Back returns to where you were. With Julia on, a row of chips picks its constant (Classic, Dendrite, Douady rabbit, Siegel disk) and goes to the whole of that set; Custom opens Settings at the Real box to type your own. With Multibrot on, a Power row picks z^3, z^4 or z^5 and goes to the whole set of that power. Newton, the three basins of z^3 - 1, has no setting: each root has its own colour family, shaded by how fast Newton's method reaches it",
       },
       {
+        keys: "Julia map",
+        action:
+          "In Settings, under the Julia constant, the Mandelbrot set drawn small as the map of its constants: point at it, or drag along it, and the constant becomes the point under your pointer, so the picture on the canvas turns into that Julia set as you move. One Back returns to the constant you started from. Focus it and the arrow keys move the constant a step at a time instead",
+      },
+      {
         keys: "Nearby tile",
         action:
           "Click a picture in the strip along the bottom, or Tab to it and press Enter, to fly to that place; hover or focus a tile to read its name",

@@ -76,7 +76,9 @@ describe("a blank landing", () => {
     expect(settled).toBeGreaterThan(-1);
     expect(handler).toBeGreaterThan(-1);
     expect(settled).toBeGreaterThan(handler);
-    expect(effectContaining("wander.notifySettled()")).toContain("tourSettled");
+    expect(effectContaining("wander.notifySettled()")).toContain(
+      "pictureSettled",
+    );
   });
 });
 

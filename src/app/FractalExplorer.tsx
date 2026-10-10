@@ -39,6 +39,7 @@ import {
   FractalConfig,
   FractalBounds,
   ColorScheme,
+  ComplexNumber,
   ZoomState,
 } from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
@@ -78,7 +79,11 @@ import {
   isCustomJuliaConstant,
   parseCustomConstantInput,
 } from "../lib/customConstantInput";
-import { customConstantName, parseJuliaConstant } from "../lib/julia";
+import {
+  JULIA_CONSTANTS,
+  customConstantName,
+  parseJuliaConstant,
+} from "../lib/julia";
 import { BLANK_HINT_DELAY_MS, canvasIsBlank } from "../lib/blankView";
 import { createRng, nextWanderView } from "../lib/wander";
 import {
@@ -146,6 +151,7 @@ import { CustomPresetManager } from "../components/ui/CustomPresetManager";
 import { VersionFooter } from "../components/ui/VersionFooter";
 import { HelpDialog } from "../components/ui/HelpDialog";
 import { FractalSwitcher } from "../components/ui/FractalSwitcher";
+import { JuliaMap } from "../components/ui/JuliaMap";
 import { MathCard } from "../components/ui/MathCard";
 import {
   getMathCardSnapshot,
@@ -1398,6 +1404,33 @@ export default function Home() {
     handleVariantChange(result.constant);
   };
 
+  // The Julia map, which is drawn under the constant controls for Julia alone:
+  // the map of constants is the Mandelbrot set's parameter plane, and only the
+  // Julia family is indexed by a point of it (the Multibrot's setting is a
+  // power).
+  //
+  // The point the ring marks is the constant the picture is drawn with. A name
+  // this build cannot read is drawn as the first named constant, which is what
+  // the renderer draws for it too.
+  const juliaConstantPoint = useMemo(
+    () => parseJuliaConstant(variant) ?? JULIA_CONSTANTS[0].constant,
+    [variant],
+  );
+
+  // A pick sets the constant to the point under the pointer. It goes to
+  // `setVariant` alone — the path the Custom chip's own pick takes — so the view
+  // stays where it is and the picture follows the pointer live, and the Real and
+  // Imaginary boxes, the select and the address bar follow the state as they do
+  // for a constant typed into them. A point that names the constant already
+  // drawn is not a new constant, and a new one would start a render.
+  const handleJuliaMapPick = (point: ComplexNumber) => {
+    const name = customConstantName(point.real, point.imaginary);
+    if (name === null || name === variant) return;
+
+    setVariant(name);
+    wander.notifyActivity();
+  };
+
   const resetToDefault = () => {
     applyDefaultView(fractalType);
     setMaxIterations(100);
@@ -1823,14 +1856,14 @@ export default function Home() {
     });
   });
 
-  // What the clock needs to know about the page. A tour starts over a settled
-  // picture only — a full render has drawn the view on screen — and never over
-  // the drawer or the help.
-  const tourSettled =
+  // Whether a full render has drawn the view on screen. A tour starts over such
+  // a picture only and never over the drawer or the help, and the Julia map is
+  // drawn once there is one, so neither is the picture it is drawn while.
+  const pictureSettled =
     !isRendering && renderedLink !== "" && renderedLink === currentLink;
   useEffect(() => {
-    tourMode.setConditions({ settled: tourSettled });
-  }, [tourMode, tourSettled]);
+    tourMode.setConditions({ settled: pictureSettled });
+  }, [tourMode, pictureSettled]);
 
   // What one step of Auto-wander does. A drift takes a small step from the view
   // on screen with the fractal on screen and puts it up the way any other view
@@ -1877,8 +1910,8 @@ export default function Home() {
 
   // A drift that has settled on a blank picture is replaced at once by a hop.
   useEffect(() => {
-    if (tourSettled) wander.notifySettled();
-  }, [wander, tourSettled]);
+    if (pictureSettled) wander.notifySettled();
+  }, [wander, pictureSettled]);
 
   const tourOverlayOpen = settingsOpen || helpOpen;
   useEffect(() => {
@@ -2484,6 +2517,23 @@ export default function Home() {
                     : []),
                 ]}
                 onChange={handleVariantSelect}
+              />
+            )}
+
+            {/* Which Julia set, pointed at rather than typed: the Mandelbrot
+                  set is the map of its constants. It sits directly under the
+                  select, above the two boxes, and that order is not cosmetic:
+                  a pick makes the constant a custom one, and boxes appearing
+                  above the map would push it down under a pointer that is
+                  mid-drag, so the pick would land where the map used to be.
+                  What is below the map may come and go without moving it. */}
+            {fractalType === "julia" && (
+              <JuliaMap
+                point={juliaConstantPoint}
+                colorScheme={colorScheme}
+                settled={pictureSettled}
+                onGestureStart={beginJump}
+                onPick={handleJuliaMapPick}
               />
             )}
 
