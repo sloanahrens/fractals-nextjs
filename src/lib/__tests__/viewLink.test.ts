@@ -16,6 +16,7 @@ import {
 } from "../mandelbrot";
 import {
   CANVAS_SIZES,
+  decodeTour,
   decodeView,
   encodeView,
   type ViewLinkState,
@@ -500,5 +501,99 @@ describe("the round trip", () => {
         Math.abs(state[field]);
       expect(error).toBeLessThan(1e-9);
     }
+  });
+});
+
+describe("decodeTour", () => {
+  it("reads #tour, with or without its #, as a request for a tour", () => {
+    expect(decodeTour("#tour")).toBe(true);
+    expect(decodeTour("tour")).toBe(true);
+  });
+
+  it("reads tour=1 beside a view of this version", () => {
+    expect(decodeTour(`#${EXAMPLE_LINK}&tour=1`)).toBe(true);
+    expect(decodeTour(`#tour=1&${EXAMPLE_LINK}`)).toBe(true);
+    expect(decodeTour("v=1&tour=1")).toBe(true);
+  });
+
+  it("asks for nothing from a view alone, or from any other value of tour", () => {
+    expect(decodeTour(`#${EXAMPLE_LINK}`)).toBe(false);
+    expect(decodeTour(`#${EXAMPLE_LINK}&tour=0`)).toBe(false);
+    expect(decodeTour(`#${EXAMPLE_LINK}&tour=`)).toBe(false);
+    expect(decodeTour(`#${EXAMPLE_LINK}&tour=true`)).toBe(false);
+    expect(decodeTour(`#${EXAMPLE_LINK}&tour=11`)).toBe(false);
+  });
+
+  it("does not read tour=1 in a link of another version, or in none", () => {
+    expect(decodeTour("#tour=1")).toBe(false);
+    expect(decodeTour("#v=2&tour=1")).toBe(false);
+    expect(decodeTour("#x=1&tour=1")).toBe(false);
+  });
+
+  it("is exact about the bare spelling", () => {
+    for (const fragment of [
+      "#Tour",
+      "#TOUR",
+      "#tour ",
+      "# tour",
+      "#tours",
+      "#tour/",
+      "#tour&",
+      "#tour=",
+      "##tour",
+      "#/tour",
+    ]) {
+      expect(decodeTour(fragment), fragment).toBe(false);
+    }
+  });
+
+  it("answers false for garbage without throwing", () => {
+    const garbage = [
+      "",
+      "#",
+      "%",
+      "#%E0%A4%A",
+      "#v=1&tour=%",
+      "#&&&&",
+      "#=",
+      "#\u0000tour",
+      undefined as unknown as string,
+      null as unknown as string,
+      42 as unknown as string,
+    ];
+
+    for (const fragment of garbage) {
+      expect(() => decodeTour(fragment)).not.toThrow();
+      expect(decodeTour(fragment), String(fragment)).toBe(false);
+    }
+  });
+
+  it("reads the first value of a repeated tour key", () => {
+    expect(decodeTour("#v=1&tour=1&tour=0")).toBe(true);
+    expect(decodeTour("#v=1&tour=0&tour=1")).toBe(false);
+  });
+
+  it("refuses a fragment past the length the decoder reads", () => {
+    const padding = `&pad=${"x".repeat(600)}`;
+
+    expect(decodeTour(`#${EXAMPLE_LINK}&tour=1${padding}`)).toBe(false);
+  });
+
+  it("leaves what encodeView writes, and what decodeView reads, as they were", () => {
+    for (const state of sampleStates()) {
+      const link = encodeView(state);
+
+      // The tour is something opening a link does, never part of the view.
+      expect(link).not.toContain("tour");
+      expect(decodeTour(link)).toBe(false);
+
+      // Asking for one beside the view changes nothing about the view.
+      expectSameState(decodeView(`${link}&tour=1`), state);
+      expect(decodeTour(`#${link}&tour=1`)).toBe(true);
+    }
+  });
+
+  it("reads #tour as no view at all, so the page opens on its own", () => {
+    expect(decodeView("#tour")).toEqual({});
   });
 });

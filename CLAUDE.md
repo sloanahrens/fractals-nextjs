@@ -51,6 +51,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
 - **Tour engine** (`src/lib/tour.ts`): Where an unattended tour goes next — `nextTourStop` over the places catalogue from an injected random function, with the dwell and crossfade times, the fractal-switch odds and the recent window
+- **Tour mode** (`src/lib/tourMode.ts`) and **wake lock** (`src/lib/wakeLock.ts`): The screensaver's clock — the idle start, the `#tour` and button starts, the hops, and the conditions that make it wait or give way — and the best-effort screen lock held while it plays; `decodeTour` in `src/lib/viewLink.ts` reads the `#tour` link
 - **Wander controller** (`src/lib/wanderController.ts`): The Auto-wander clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
 - **Blank view** (`src/lib/blankView.ts`) and **BlankHint** (`src/components/ui/BlankHint.tsx`): The detector for a nearly one-colour picture, and the quiet "Nothing to see here" pill with a Back button
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
@@ -65,7 +66,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Render quality** (`src/lib/renderQuality.ts`): Whether a redraw is a low-resolution preview or a full-resolution render
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
-- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Back/Forward/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
+- **Top bar** (`src/components/ui/TopBar.tsx`) and **idle fade** (`src/lib/idleFade.ts`, `src/components/ui/useIdleVisibility.ts`): The floating title/Surprise me/Tour/Back/Forward/Help/Settings bar, the clock that fades it after two seconds without input, and the hook that holds it up on focus
 - **Nearby strip** (`src/components/ui/NearbyStrip.tsx`) and **strip policy** (`src/lib/nearbyStrip.ts`): The "Nearby, worth a look" thumbnails laid over the bottom of the canvas, and the pure rules behind them — when the suggestions refresh, which page of them shows, the crossfade time
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
@@ -175,6 +176,103 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-10_
 
+### Tour mode (2026-10-10)
+
+- A screensaver: after about 20 s with no input, at once when the address is
+  `#tour`, or at once when the top bar's Tour button is pressed, the page hides
+  the bar, the strip and every control and hops place to place with a
+  crossfade, about 8 s at each. Any key, touch, click, pointer move or wheel
+  ends it and everything is back, on the place the tour was showing.
+  Auto-wander is as it was.
+- `src/lib/tourMode.ts` is the clock and the rules, with no DOM: `TourMode`
+  (built once, timers read from the globals so the Vitest suite drives it on
+  fake ones) holds a state, `idle` -> `armed` -> `playing` -> `stopped`, and
+  the page's `TourConditions` (`overlayOpen`, `inputFocused`, `tabHidden`,
+  `windowFocused`, `settled`). `TOUR_IDLE_START_MS` is 20000. `idle` is a
+  page a tour may not start by itself on; `armed` is the idle wait running, or
+  a start asked for waiting on the tab or the render; `stopped` is `armed` for
+  a machine that has played, so the left-alone page tours again after another
+  20 s. The events are `activity()`, `hashTour()`, `buttonStart()`, `stop()`
+  and the hop timer; `setConditions(patch)` is how the page reports itself.
+  The constructor starts no timer (the first `setConditions` does), so
+  building one in a server render is harmless; `dispose()` goes back to `idle`
+  so a strict-mode remount re-arms.
+- Starting. The idle wait runs only where no drawer or Help is open, no text
+  field is focused, the tab is visible and the window is focused. An ask
+  (`hashTour`, `buttonStart`) is refused (returns false) only while a drawer,
+  a dialog or a text field has the user's attention; otherwise it plays at
+  once or, if the tab is hidden or the picture is not drawn, waits for both.
+  Every start waits for `settled` (a full render has drawn the view on screen),
+  so a tour never begins over a render in flight. Input does not withdraw an
+  ask, since someone opened `#tour`; opening a drawer does.
+- Playing. The first hop is made at the start (`onHop(true)`), then the dwell
+  runs from each time the picture settles, so a slow render lengthens a stay.
+  A hop that causes no render does not stall it. A hidden tab holds the hop
+  timer and gives the next dwell in full when it is seen; a window losing focus
+  does not stop a tour. A drawer, dialog or focused field appearing stops it.
+- `page.tsx` holds `tourState` and the one flag `tourPlaying = tourState ===
+  "playing"`. While it is true the top bar is not rendered, `NearbyStrip` gets
+  `hidden`, the progress line and the blank-picture hint are left out, the stage
+  has `data-tour="true"` (`globals.css`: no pointer, no focus ring on the
+  canvas), and a `role="status"` line says "Tour playing. Press any key to
+  stop." Stopping is the flag going false, which brings every one back; the
+  drawer and Help are closed `<dialog>`s that a tour never touches.
+- A hop is `nextTourStop(...)` over `PLACES` with `Math.random`, started from
+  `initialTourState(placeView)` at the first hop, and goes through
+  `handlePlaceSelect(place, { tour: true })` — the tile's handler, with
+  `TOUR_CROSSFADE_MS` instead of `CROSSFADE_MS` and no `beginJump`. With
+  `prefers-reduced-motion` the existing `startCrossfade` cut applies, and the
+  dwell is unchanged because the clock knows nothing of motion.
+- History. The address bar is left alone while a tour plays: the follower
+  effect stands down on `tourPlaying`. The first hop writes the view being left
+  into the current entry (`writeLeavingView`, the half of `beginJump` that does
+  that), which is what replaces `#tour` or a `tour=1` link in the bar, and
+  keeps that entry on the view before the tour. A tour's end counts as one jump
+  (`seenTourState`, adjusted during the render that sees the flag fall, which
+  bumps `jumpSerial`), so the follower makes the one `pushState` for the place
+  on screen once it is drawn and the Nearby strip refreshes for it. A long tour
+  adds no entry; Back after a stop returns to the view before the tour. This
+  differs from replacing the entry on every hop, which would have lost that
+  view. A `hashchange` calls `tourMode.stop()` first: a navigation made in the
+  browser's own chrome sends the page no input event.
+- Input. A capture-phase listener on the window for `TOUR_ACTIVITY_EVENTS`
+  (`pointermove`, `pointerdown`, `keydown`, `touchstart`, `wheel`) calls
+  `activity()`. A `pointermove` at the position the last one had is not input
+  (`pointerMoved`): hiding the bar changes the page under a resting pointer and
+  the browser reports a move at the same place. A repeated `keydown` is ignored
+  while a tour plays, so a key held from before does not end it. Focus into an
+  `INPUT`, `SELECT`, `TEXTAREA` or editable region (`isTextEntry`) sets
+  `inputFocused`.
+- Link. `decodeTour(fragment)` in `viewLink.ts` is true for exactly `#tour`, or
+  for a link of version 1 with `tour=1`; a bare `tour=1`, another value or
+  another version asks for nothing, and it never throws. `encodeView` and
+  `decodeView` are unchanged, so a tour is never written and `#tour` decodes to
+  no fields (the opening Mandelbrot view). `applyViewLink` calls
+  `tourMode.hashTour()` after setting the view, so a load and a paste are the
+  same path.
+- `src/lib/wakeLock.ts`: `holdScreenAwake(navigator.wakeLock, document)` asks
+  for a `screen` lock while the tour plays, asks again when the tab comes back
+  (a browser drops it on hide), releases on stop, and swallows every failure.
+- Auto-wander is held while a tour plays by the same `wander.setHidden` it uses
+  for a hidden tab (`wanderController.ts` is unchanged); it gets a fresh
+  interval when the tour ends.
+- The Tour button is in the top bar's centre beside Surprise me (the bar fits
+  375 px with six buttons: the last ends at 367). The Help overlay has a Tour
+  group (`helpEntries.ts`).
+- Tests: `tourMode.test.ts` (fake time: 20 s of silence starts one, activity
+  resets, activity while playing stops, the asks start at once, a drawer or
+  field refuses, a render in flight or a hidden tab waits, dwell from the
+  settle, dispose), `wakeLock.test.ts`, `viewLink.test.ts` (`decodeTour`:
+  spellings, garbage, round trip), and `tour-mode-panel.test.ts` (sources: the
+  button, one flag hiding the bar, strip, progress line and hint, the hop
+  through the tile's handler, the follower standing down, the one entry at the
+  end, listeners, the lock). Checked in headless Chrome at 1280x800 against the
+  dev server: `#tour` starts with the bar and strip gone and the bar replaced
+  by the view's link, a mouse move stops it and one entry is added, Back returns
+  to the opening view; 22 s of quiet starts one and a key stops it; the button
+  starts one and a click stops it, with Back and Forward moving between the
+  views.
+
 ### A blank picture says so (2026-10-10)
 
 - A deep scroll can land in a region with nothing to see (the owner reached 127x
@@ -206,13 +304,14 @@ _Last updated: 2026-10-10_
 
 ### Tour engine (2026-10-10)
 
-- `src/lib/tour.ts` is the decision logic of a Tour and changes no screen:
-  nothing in the page imports it yet. No browser API, no timers.
+- `src/lib/tour.ts` is the decision logic of a Tour and changes no screen
+  itself (the Tour mode note above has the page that runs it). No browser API,
+  no timers.
   `nextTourStop(state, places, rng)` returns `{ place, state }`; `TourState` is
   `{ view, recent, hopsSinceSwitch }` and `initialTourState(view)` makes one.
   The constants are `TOUR_DWELL_MS` (8000), `TOUR_CROSSFADE_MS` (1500),
   `TOUR_FRACTAL_SWITCH_ODDS` (1/6), `TOUR_RECENT_LIMIT` (12), plus
-  `TOUR_SWITCH_LOCKOUT_HOPS` (2) and `TOUR_NEAR_CANDIDATES` (8). The next bead
+  `TOUR_SWITCH_LOCKOUT_HOPS` (2) and `TOUR_NEAR_CANDIDATES` (8). `tourMode.ts`
   owns the clock, the crossfade and the idle start.
 - A hop draws `rng` twice, the switch roll then the pick, so a seeded walk
   replays. A hop within `TOUR_SWITCH_LOCKOUT_HOPS` of a switch cannot switch.
@@ -412,8 +511,8 @@ _Last updated: 2026-10-10_
   events), and `useIdleVisibility(hold)` is the bar's alone, so the hook lost
   its `resetKey`. `hidden` is an optional prop (default false): true renders
   nothing, so no tile mounts and the store is asked for nothing, and the
-  `cancelAll` cleanup also runs on a change of `hidden`. It is for a later Tour
-  mode to hide the strip. The strip's height, gradient and tile size are as
+  `cancelAll` cleanup also runs on a change of `hidden`. It is for Tour mode to
+  hide the strip, which it does. The strip's height, gradient and tile size are as
   they were.
 - Suggestions refresh by `nearbyRefreshDue` (`nearbyStrip.ts`): a full render
   has settled on the view (`renderedLink === currentLink`) and the count of

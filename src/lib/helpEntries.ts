@@ -102,6 +102,26 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
+    title: "Tour",
+    entries: [
+      {
+        keys: "Tour",
+        action:
+          "Button in the top bar that starts a tour: every control hides and the picture drifts from place to place, about 8 seconds at each, fading between them. Any key, touch, click or mouse movement stops it and brings everything back on the place it was showing; Back returns to where you were before",
+      },
+      {
+        keys: "20 seconds of quiet",
+        action:
+          "Leave the page alone for 20 seconds, with this window in front and the Settings drawer and this help shut, and a tour starts by itself",
+      },
+      {
+        keys: "#tour",
+        action:
+          "Open the page with #tour on the end of its address, or add &tour=1 to a view link, and the tour starts as soon as the picture is drawn",
+      },
+    ],
+  },
+  {
     title: "Auto-wander",
     entries: [
       {

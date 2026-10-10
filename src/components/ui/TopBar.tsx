@@ -18,6 +18,8 @@ interface TopBarProps {
   onSurprise: () => void;
   /** Whether there is a place to go to; Surprise me is disabled without. */
   canSurprise: boolean;
+  /** Starts a tour at once, without waiting out the idle time. */
+  onTour: () => void;
   /** Opens the help overlay. */
   onHelp: () => void;
   /** Opens the Settings drawer. */
@@ -36,9 +38,9 @@ const BUTTON_CLASSES =
 const TITLE_CLASSES = "sr-only text-lg font-semibold sm:not-sr-only";
 
 /**
- * The floating bar over the canvas: the title on the left, Surprise me in the
- * middle, then Back, Forward, Help and Settings on the right. Under `sm` the
- * title stays in the page for a screen reader but is not drawn, so the five
+ * The floating bar over the canvas: the title on the left, Surprise me and Tour
+ * in the middle, then Back, Forward, Help and Settings on the right. Under `sm`
+ * the title stays in the page for a screen reader but is not drawn, so the six
  * buttons fit a phone's width.
  *
  * Back and Forward retrace the journey — the views the user jumped to — through
@@ -51,7 +53,9 @@ const TITLE_CLASSES = "sr-only text-lg font-semibold sm:not-sr-only";
  * being on a control inside the bar, hold it up (`useIdleVisibility`).
  *
  * Surprise me takes the user to one of the places the Nearby strip would
- * offer, chosen at random; it is disabled when there are none.
+ * offer, chosen at random; it is disabled when there are none. Tour, beside it,
+ * starts the screensaver tour at once; the page takes the bar away while it
+ * plays, so this component has nothing of its own to hide.
  *
  * A faded bar takes no pointer events: the touch that brings it back should
  * not also press whatever button is under the finger.
@@ -63,6 +67,7 @@ export function TopBar({
   canGoForward,
   onSurprise,
   canSurprise,
+  onTour,
   onHelp,
   onSettings,
   settingsOpen,
@@ -80,14 +85,19 @@ export function TopBar({
       }`}
     >
       <h1 className={TITLE_CLASSES}>Fractal Explorer</h1>
-      <button
-        type="button"
-        onClick={onSurprise}
-        disabled={!canSurprise}
-        className={BUTTON_CLASSES}
-      >
-        Surprise me
-      </button>
+      <div className="flex gap-1 sm:gap-2">
+        <button
+          type="button"
+          onClick={onSurprise}
+          disabled={!canSurprise}
+          className={BUTTON_CLASSES}
+        >
+          Surprise me
+        </button>
+        <button type="button" onClick={onTour} className={BUTTON_CLASSES}>
+          Tour
+        </button>
+      </div>
       <div className="flex gap-1 sm:justify-self-end sm:gap-2">
         <button
           type="button"

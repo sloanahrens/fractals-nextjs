@@ -98,9 +98,13 @@ describe("the entry a jump makes", () => {
 
   it("leaves the view being left in the entry before it", () => {
     const begin = functionBody("beginJump");
+    const leaving = functionBody("writeLeavingView");
 
-    expect(begin).toContain("renderedLink === currentLink");
-    expect(begin.indexOf("writeViewLink(")).toBeLessThan(
+    // The write is only of a view that has been drawn.
+    expect(leaving).toContain("renderedLink === currentLink");
+    expect(leaving).toContain("writeViewLink(");
+    expect(begin.indexOf("writeLeavingView()")).toBeGreaterThan(-1);
+    expect(begin.indexOf("writeLeavingView()")).toBeLessThan(
       begin.indexOf("setJumpSerial("),
     );
   });

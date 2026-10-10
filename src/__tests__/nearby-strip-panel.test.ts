@@ -101,9 +101,7 @@ describe("the Nearby strip", () => {
     // Hooks run first, then the early return, so no tile mounts and no tile
     // can ask the store for a picture.
     expect(strip).toContain("if (hidden || places.length === 0) return null;");
-    expect(strip.indexOf("if (hidden ||")).toBeLessThan(
-      strip.indexOf("<Tile"),
-    );
+    expect(strip.indexOf("if (hidden ||")).toBeLessThan(strip.indexOf("<Tile"));
     // What was queued before it was hidden is dropped.
     expect(strip).toContain(
       "useEffect(() => () => store.cancelAll(), [store, listKey, hidden]);",
@@ -273,11 +271,12 @@ describe("the crossfade", () => {
   });
 
   it("fades out over 400 ms once the new view is drawn, or the user moves off it", () => {
-    expect(page).toContain("CROSSFADE_MS");
+    // A tile's fade is the default; a tour's hop asks for its own.
+    expect(page).toMatch(/durationMs = CROSSFADE_MS/);
     expect(page).toContain("renderedLink !== target");
     expect(page).toContain("currentLink === target");
     expect(page).toContain('overlay.style.opacity = "0"');
-    expect(page).toMatch(/opacity \$\{CROSSFADE_MS\}ms/);
+    expect(page).toMatch(/opacity \$\{crossfadeMsRef\.current\}ms/);
   });
 });
 
