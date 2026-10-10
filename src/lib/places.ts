@@ -38,6 +38,25 @@ export type PlaceView = Pick<
   "fractal" | "juliaConstant" | "centerX" | "centerY" | "zoom"
 >;
 
+/**
+ * The colours a place is shown in: its own when it names any, else the page's.
+ *
+ * One rule for both halves of a visit, so they cannot drift apart: a Nearby
+ * tile is drawn in this scheme and a click on it applies this scheme. A place
+ * that names its colours is therefore the same picture whatever scheme the
+ * page happens to be in, and only a place that names none follows the page.
+ *
+ * @param place - The place being drawn or visited
+ * @param current - The page's colour scheme at that moment
+ * @returns The scheme the tile is drawn in and the click sets
+ */
+export function placeColorScheme(
+  place: Pick<Place, "colorScheme">,
+  current: ColorScheme,
+): ColorScheme {
+  return place.colorScheme ?? current;
+}
+
 // The catalogue. Every zoom is inside the explorer's range (`MAX_ZOOM`, the
 // float64 wall the presets are held to), every Mandelbrot place is drawn at the
 // count Auto picks for its zoom, and every centre is written with at most ten

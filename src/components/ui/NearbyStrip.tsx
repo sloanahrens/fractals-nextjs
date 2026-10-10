@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import type { ColorScheme } from "../../types/fractal";
-import type { Place } from "../../lib/places";
+import { placeColorScheme, type Place } from "../../lib/places";
 import {
   DEFAULT_THUMBNAIL_HEIGHT,
   DEFAULT_THUMBNAIL_WIDTH,
@@ -21,7 +21,10 @@ export const NEARBY_LABEL = "Nearby, worth a look";
 interface NearbyStripProps {
   /** The places to show, best first. An empty list shows no strip. */
   places: readonly Place[];
-  /** The colours the thumbnails are drawn in: the page's current scheme. */
+  /**
+   * The page's current scheme, which draws the tiles whose place names no
+   * scheme of its own; the others keep theirs (`placeColorScheme`).
+   */
   colorScheme: ColorScheme;
   /** True while the main render runs, which holds the thumbnails back. */
   paused: boolean;
@@ -71,15 +74,21 @@ interface TileProps {
  * The picture is asked of the store when the tile mounts and drawn straight
  * onto the canvas when it is ready, so a cached one appears at once and a slow
  * one fills in without a re-render. The strip remounts its tiles when the list
- * or the colours change, which is what asks again.
+ * changes, which is what asks again.
+ *
+ * It is drawn in `placeColorScheme(place, colorScheme)`, the scheme a click on
+ * it applies. A place that names its colours keeps them when the page's scheme
+ * changes, so its effect has nothing new to ask for and its picture is not
+ * repainted; only a place that names none follows the page.
  */
 function Tile({ place, colorScheme, store, onSelect }: TileProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scheme = placeColorScheme(place, colorScheme);
 
   useEffect(() => {
     let mounted = true;
 
-    store.request(place, colorScheme, (entry) => {
+    store.request(place, scheme, (entry) => {
       const canvas = canvasRef.current;
       if (mounted && canvas) drawEntry(canvas, entry);
     });
@@ -87,7 +96,7 @@ function Tile({ place, colorScheme, store, onSelect }: TileProps) {
     return () => {
       mounted = false;
     };
-  }, [store, place, colorScheme]);
+  }, [store, place, scheme]);
 
   return (
     <button
@@ -141,10 +150,12 @@ export function NearbyStrip({
     createThumbnailStore({ render: createCanvasThumbnailRender() }),
   );
 
-  // What the tiles are asked for is the list and the colours. Changing either
-  // drops whatever is queued for the old ones before the new tiles ask; React
-  // runs every cleanup of a commit ahead of its new effects.
-  const listKey = `${colorScheme}:${places.map((place) => place.id).join(",")}`;
+  // What the tiles are asked for is the list. Changing it drops whatever is
+  // queued for the old one before the new tiles ask; React runs every cleanup
+  // of a commit ahead of its new effects. The page's colours are not part of
+  // it: a colour change must not cancel the renders of tiles that keep their
+  // own scheme, and a tile that follows the page asks again by itself.
+  const listKey = places.map((place) => place.id).join(",");
 
   // A new list is news: it arrives after a render settles, which can be well
   // past the two seconds a strip that came in with the page would have waited.

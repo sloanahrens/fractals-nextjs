@@ -1,15 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ColorScheme } from "../../types/fractal";
+import { FractalRenderer } from "../fractalRenderer";
+import { resolveFractalKind } from "../fractalTypes";
+import { autoIterations, calculateZoomBounds } from "../mandelbrot";
 import {
   createCanvasThumbnailRender,
   createThumbnailStore,
-  thumbnailIterations,
   type ThumbnailEntry,
   type ThumbnailImage,
   type ThumbnailRenderRequest,
 } from "../placeThumbnails";
-import { PLACES, type Place } from "../places";
+import { PLACES, placeColorScheme, type Place } from "../places";
 
 const WIDTH = 4;
 const HEIGHT = 3;
@@ -638,14 +640,6 @@ describe("createThumbnailStore", () => {
   });
 });
 
-describe("thumbnailIterations", () => {
-  it("is half of Auto's count, never under the slider's floor", () => {
-    expect(thumbnailIterations(1)).toBe(50);
-    expect(thumbnailIterations(10000)).toBe(380);
-    expect(thumbnailIterations(Number.NaN)).toBe(50);
-  });
-});
-
 describe("createCanvasThumbnailRender", () => {
   // Real timers: FractalRenderer yields on setTimeout while it draws.
   beforeEach(() => {
@@ -735,6 +729,119 @@ describe("createCanvasThumbnailRender", () => {
       expect(entry.image.data).toHaveLength(64 * 48 * 4);
       expect(differingFromCorner(entry.image)).toBeGreaterThanOrEqual(0.05);
     }
+  });
+
+  /**
+   * The picture a click on the place draws, at 64x48: the place's view at the
+   * 4:3 shape of the page's canvas, the iteration count Auto picks for its
+   * zoom, and the scheme the click sets. Built from the place and the page's
+   * own functions, not from the thumbnail render, so the comparison below has
+   * two sides.
+   */
+  async function mainRenderOf(
+    candidate: Place,
+    current: ColorScheme,
+    scheme = placeColorScheme(candidate, current),
+  ): Promise<Uint8ClampedArray> {
+    const canvas = createFakeCanvas(64, 48);
+    const renderer = new FractalRenderer(
+      canvas,
+      resolveFractalKind(candidate.fractal, candidate.juliaConstant ?? ""),
+    );
+
+    await renderer.renderFractal(
+      {
+        bounds: calculateZoomBounds(
+          candidate.centerX,
+          candidate.centerY,
+          candidate.zoom,
+        ),
+        maxIterations: autoIterations(candidate.zoom),
+        width: 64,
+        height: 48,
+        colorScheme: scheme,
+      },
+      undefined,
+      false,
+    );
+
+    return canvas.getContext("2d")!.getImageData(0, 0, 64, 48).data;
+  }
+
+  /** The mean absolute difference per colour channel, 0 to 255. */
+  function meanChannelDifference(
+    first: Uint8ClampedArray,
+    second: Uint8ClampedArray,
+  ): number {
+    let sum = 0;
+    let count = 0;
+
+    for (let pixel = 0; pixel < 64 * 48; pixel++) {
+      for (let channel = 0; channel < 3; channel++) {
+        sum += Math.abs(
+          first[pixel * 4 + channel] - second[pixel * 4 + channel],
+        );
+        count++;
+      }
+    }
+
+    return sum / count;
+  }
+
+  // The tile and the picture a click draws are two renders of one place. At
+  // 64x48 they measure 0.00 on every place in the catalogue: same view, same
+  // count, same scheme. Before the thumbnail drew at Auto's count it drew at
+  // half of it, and the palette position of a pixel is its iteration count
+  // over the maximum, so the same comparison measured 3 to 118 per channel.
+  // The bound leaves room for nothing but float rounding; anything a viewer
+  // could see is far above it.
+  const THUMBNAIL_MAIN_DIFFERENCE_BOUND = 1;
+
+  it.each(PLACES.map((candidate) => [candidate.id, candidate] as const))(
+    "%s looks like the picture a click on it draws",
+    async (_id, candidate) => {
+      const render = createCanvasThumbnailRender(createFakeCanvas);
+      // The page is in a scheme no place uses by default; a place that names
+      // none follows it, and the two sides must follow it alike.
+      const current: ColorScheme = "grayscale";
+      const thumbnail = await render({
+        place: candidate,
+        scheme: placeColorScheme(candidate, current),
+        width: 64,
+        height: 48,
+        signal: new AbortController().signal,
+      });
+
+      expect(
+        meanChannelDifference(
+          thumbnail.data,
+          await mainRenderOf(candidate, current),
+        ),
+      ).toBeLessThanOrEqual(THUMBNAIL_MAIN_DIFFERENCE_BOUND);
+    },
+    30000,
+  );
+
+  it("would notice a tile drawn in the page's scheme instead of the place's", async () => {
+    // The bug this guards: the tile in the page's colours, the click in the
+    // place's own. Rendering that tile must exceed the bound.
+    const candidate = byId("mandelbrot-lightning");
+    const render = createCanvasThumbnailRender(createFakeCanvas);
+    const wrongTile = await render({
+      place: candidate,
+      scheme: "grayscale",
+      width: 64,
+      height: 48,
+      signal: new AbortController().signal,
+    });
+
+    expect(candidate.colorScheme).not.toBe("grayscale");
+    expect(
+      meanChannelDifference(
+        wrongTile.data,
+        await mainRenderOf(candidate, "grayscale"),
+      ),
+    ).toBeGreaterThan(THUMBNAIL_MAIN_DIFFERENCE_BOUND);
   });
 
   it("rejects when aborted instead of returning a half-drawn picture", async () => {

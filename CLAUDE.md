@@ -68,7 +68,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
-- **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, and `suggest` — which of them are near a given view
+- **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — and `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 
@@ -172,6 +172,37 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-10_
+
+### Nearby tiles show what the click shows (2026-10-10)
+
+- A tile was drawn in the page's current colour scheme while a click applied
+  `place.colorScheme ?? colorScheme`, and every place in the catalogue names
+  a scheme, so a tile and its destination were in different colours (mean
+  difference of 43 to 97 out of 255 on staging). `placeColorScheme(place,
+  current)` in `places.ts` is now the one rule: the place's scheme when it
+  names one, else the page's. `Tile` in `NearbyStrip.tsx` asks the thumbnail
+  store for that scheme and `handlePlaceSelect` sets it, so they cannot drift;
+  the page's scheme is only the fallback for a place that names none.
+- The strip's list key is the places alone, no longer the page's scheme. A
+  colour change used to cancel the queue and remount every tile; now a tile
+  whose place names its own scheme has the same `place` and `scheme` in its
+  effect and is not asked or repainted, and a tile that follows the page asks
+  again by itself. The cache key was already `place.id|scheme`, so a place with
+  its own scheme is only ever cached under it.
+- The same comparison showed a second cause. A pixel's colour is its iteration
+  count over the maximum, and thumbnails drew at half of `autoIterations`
+  (`thumbnailIterations`, removed), so even in the right scheme they sat on a
+  different part of the palette: 3 to 118 per channel against the click's
+  picture, with the scheme held equal. They draw at `autoIterations(zoom)`
+  now, which at 64x48 costs next to nothing.
+- `places.test.ts` tests `placeColorScheme` and, for every place and each of
+  the five schemes as the page's, that the tile's scheme is the click's.
+  `placeThumbnails.test.ts` renders every place's thumbnail and, separately,
+  the picture the click draws (same view and 4:3 shape, Auto's count, the
+  shared scheme) at 64x48 and fails above a mean difference of 1 per channel;
+  the measured difference is 0.00 for all 39, and a tile in the wrong scheme
+  is shown to exceed the bound. `nearby-strip-panel.test.ts` reads the sources
+  for the shared call at both sites and the scheme-free list key.
 
 ### Wheel zoom follows the scroll amount (2026-10-10)
 
@@ -297,9 +328,10 @@ _Last updated: 2026-10-10_
   scrolls sideways; only the tiles take pointer events, so the canvas under
   the gaps still pans. It renders nothing for an empty list.
 - The pictures come from a `createThumbnailStore` the component owns, drawn in
-  the page's current colour scheme. The page passes `paused={isRendering}`,
+  `placeColorScheme(place, colorScheme)`: the place's own scheme, else the
+  page's. The page passes `paused={isRendering}`,
   which is `store.pause()`/`resume()`, so the strip never competes with the
-  picture being waited for. Tiles are keyed by the list and scheme and ask the
+  picture being waited for. Tiles are keyed by the list and ask the
   store when they mount and draw straight onto their canvas when it answers (a
   cached one is immediate, no state); a changed list `cancelAll()`s in the
   cleanup that runs before the new tiles ask. A failed thumbnail is the store's
@@ -517,11 +549,9 @@ _Last updated: 2026-10-10_
 - The real render draws with `FractalRenderer` on an `OffscreenCanvas`, or a
   detached `<canvas>` where there is none, one canvas and renderer per call so
   an aborted render cannot paint over the next. It draws at
-  `thumbnailIterations(zoom)`, half of `autoIterations` and never under
-  `MIN_ITERATIONS`: 64 columns cannot show what the last iterations resolve.
-  Every place in `PLACES` stays non-blank at that count (checked once, not
-  guarded by a test). An abort rejects instead of returning the half-drawn
-  canvas.
+  `autoIterations(zoom)`, the count a click on the tile draws the place at
+  (see the 2026-10-10 note below for why it is no longer half of that). An
+  abort rejects instead of returning the half-drawn canvas.
 - `src/lib/__tests__/placeThumbnails.test.ts` runs the store on fake timers
   against a render the test finishes by hand — cache hit, LRU order,
   in-flight sharing, ordering, cancel mid-render and a late finish, failure

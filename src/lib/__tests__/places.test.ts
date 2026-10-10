@@ -13,14 +13,25 @@ import {
   autoIterations,
   calculateZoomBounds,
 } from "../mandelbrot";
+import type { ColorScheme } from "../../types/fractal";
 import {
   PLACES,
+  placeColorScheme,
   placesForFractal,
   suggest,
   type Place,
   type PlaceView,
 } from "../places";
 import { decodeView, encodeView } from "../viewLink";
+
+/** Every colour scheme the page offers, for a test that varies the page's. */
+const SCHEMES: readonly ColorScheme[] = [
+  "classic",
+  "fire",
+  "ocean",
+  "rainbow",
+  "grayscale",
+];
 
 /** A hand-built place on the Mandelbrot set; a test overrides what it is about. */
 function place(id: string, overrides: Partial<Place> = {}): Place {
@@ -419,6 +430,45 @@ describe("PLACES", () => {
 
       expect(here.length, id).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  it("shows every place in the scheme a click on it sets, whatever the page is in", () => {
+    // The tile is drawn in `placeColorScheme(place, current)` and the click
+    // applies the same call, so the catalogue guard is that the call is a
+    // function of the place alone when the place names a scheme, and of the
+    // page's when it does not.
+    for (const entry of PLACES) {
+      for (const current of SCHEMES) {
+        const expected = entry.colorScheme ?? current;
+
+        expect(
+          placeColorScheme(entry, current),
+          `${entry.id} in ${current}`,
+        ).toBe(expected);
+      }
+    }
+  });
+
+  describe("placeColorScheme", () => {
+    it("is the place's own scheme when it names one", () => {
+      const fire = place("fire", { colorScheme: "fire" });
+
+      expect(placeColorScheme(fire, "classic")).toBe("fire");
+      expect(placeColorScheme(fire, "ocean")).toBe("fire");
+    });
+
+    it("is the page's scheme for a place that names none, and follows it", () => {
+      const plain = place("plain");
+
+      expect(placeColorScheme(plain, "classic")).toBe("classic");
+      expect(placeColorScheme(plain, "rainbow")).toBe("rainbow");
+    });
+
+    it("does not treat a scheme named like the page's as absent", () => {
+      const classic = place("classic", { colorScheme: "classic" });
+
+      expect(placeColorScheme(classic, "fire")).toBe("classic");
+    });
   });
 
   it("lists placesForFractal in catalogue order", () => {

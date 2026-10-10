@@ -1,11 +1,7 @@
 import type { ColorRGB, ColorScheme } from "../types/fractal";
 import { FractalRenderer } from "./fractalRenderer";
 import { resolveFractalKind } from "./fractalTypes";
-import {
-  autoIterations,
-  calculateZoomBounds,
-  MIN_ITERATIONS,
-} from "./mandelbrot";
+import { autoIterations, calculateZoomBounds } from "./mandelbrot";
 import type { Place } from "./places";
 
 /** A rendered thumbnail: RGBA pixels, row by row, ready for `putImageData`. */
@@ -339,16 +335,6 @@ export function createThumbnailStore({
   };
 }
 
-/**
- * The iteration count a thumbnail is drawn at: half of what Auto picks for the
- * zoom, never under the slider's floor. Sixty-four columns cannot show the
- * filigree the last iterations resolve, so a thumbnail pays for the structure
- * that survives at its size and not for the rest.
- */
-export function thumbnailIterations(zoom: number): number {
-  return Math.max(MIN_ITERATIONS, Math.round(autoIterations(zoom) / 2));
-}
-
 /** The part of a canvas the thumbnail render needs, which an off-screen one has too. */
 type ThumbnailCanvas = HTMLCanvasElement | OffscreenCanvas;
 
@@ -410,7 +396,12 @@ export function createCanvasThumbnailRender(
       await renderer.renderFractal(
         {
           bounds: calculateZoomBounds(place.centerX, place.centerY, place.zoom),
-          maxIterations: thumbnailIterations(place.zoom),
+          // Exactly what Auto picks, which is the count a click on the tile
+          // draws the place at. It is not cut down to save work: a pixel's
+          // colour is its iteration count over the maximum, so half the count
+          // lands on another part of the palette and the tile stops looking
+          // like the picture the click shows. At 64x48 the full count is cheap.
+          maxIterations: autoIterations(place.zoom),
           width,
           height,
           colorScheme: scheme,
