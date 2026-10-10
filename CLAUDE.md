@@ -50,6 +50,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
+- **Tour engine** (`src/lib/tour.ts`): Where an unattended tour goes next — `nextTourStop` over the places catalogue from an injected random function, with the dwell and crossfade times, the fractal-switch odds and the recent window
 - **Wander controller** (`src/lib/wanderController.ts`): The Auto-wander clock — the countdown that says when a step is due, and the states that suspend it: a render in flight, a hidden tab, the mode switched off
 - **Blank view** (`src/lib/blankView.ts`) and **BlankHint** (`src/components/ui/BlankHint.tsx`): The detector for a nearly one-colour picture, and the quiet "Nothing to see here" pill with a Back button
 - **Zoom scale** (`src/lib/zoomScale.ts`): The logarithmic zoom slider mapping, and the six-digit coordinate formatter
@@ -202,6 +203,44 @@ _Last updated: 2026-10-10_
   renderer, asserting none is blank; it also shows the inside of the set and the
   field outside it are. `blank-hint-panel.test.ts` reads the sources for the
   wiring.
+
+### Tour engine (2026-10-10)
+
+- `src/lib/tour.ts` is the decision logic of a Tour and changes no screen:
+  nothing in the page imports it yet. No browser API, no timers.
+  `nextTourStop(state, places, rng)` returns `{ place, state }`; `TourState` is
+  `{ view, recent, hopsSinceSwitch }` and `initialTourState(view)` makes one.
+  The constants are `TOUR_DWELL_MS` (8000), `TOUR_CROSSFADE_MS` (1500),
+  `TOUR_FRACTAL_SWITCH_ODDS` (1/6), `TOUR_RECENT_LIMIT` (12), plus
+  `TOUR_SWITCH_LOCKOUT_HOPS` (2) and `TOUR_NEAR_CANDIDATES` (8). The next bead
+  owns the clock, the crossfade and the idle start.
+- A hop draws `rng` twice, the switch roll then the pick, so a seeded walk
+  replays. A hop within `TOUR_SWITCH_LOCKOUT_HOPS` of a switch cannot switch.
+  Any other hop switches with the chance that makes **one hop in six** a switch
+  over a long tour, not the plain 1/6: with the lockout, rolling 1/6 on the
+  eligible hops gives 1/8 overall, and the acceptance rate is 1/6, so the roll
+  is `odds / (1 - lockout * odds)` = 1/4. A switch picks a place of another
+  fractal, preferring one not in `recent`.
+- A hop that stays takes `suggest(view, places, places.length)` (the fractal's
+  places but the one the view is on, nearest first), chooses by `rng` among the
+  nearest 8 not in `recent`, and widens when that is empty: the unvisited places
+  of the fractal past the nearest 8, then the nearest 8 again, then every other
+  place of the fractal. The widening step between the spec's two fallbacks
+  exists so a place is not repeated while the fractal has an unvisited one
+  (Julia and the ship have 10 places against a window of 12). A fractal with no
+  other place is left by a switch that skips the roll and the lockout.
+- `recent` holds each id once, oldest first, at most 12. The place comes back as
+  the catalogue has it: its colours are `placeColorScheme(place, current)`, the
+  caller's to apply, so schemes change as places do and the engine invents none.
+  With no other place anywhere the place the view is on comes back (found with
+  `suggest`, so "is the view" is its tolerance), or a place made from the view
+  when the catalogue is empty; neither throws.
+- `tour.test.ts` runs the engine on a seeded generator: determinism and no
+  mutation, never the current place, no repeat inside the window while the pool
+  has an alternative, a bounded `recent`, the switch rate over 5000 hops within
+  1/6 ± 0.03, a gap of more than two hops between switches, every fractal
+  reached, a 200-hop run's shares, and empty, one-place, one-fractal and
+  unmeasurable-view catalogues.
 
 ### Nearby tiles show what the click shows (2026-10-10)
 
