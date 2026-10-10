@@ -341,14 +341,35 @@ _Last updated: 2026-10-10_
   pressed button and fixed name, one shared handler, the hiding rule, the draw
   order, the nudge's try/catch storage and reduced-motion CSS).
 
+### Tricorn lands on its star, not the Mandelbrot needle (2026-10-10)
+
+- fr-6oi's pick, `tricorn-along-the-arm`, is centred on the real axis, where
+  the Tricorn is exactly the Mandelbrot set (a real z is its own conjugate): at
+  800x600 it is the same picture as `mandelbrot-needle-bulbs`, so the Tricorn
+  button showed the Mandelbrot set. The featured place is `tricorn-star` again
+  (classic; centre 0.872, 1.51 at zoom 50): off the axis, a black body with
+  three arms and antennae. The contact-sheet comparison (all nine Tricorn
+  places at 800x600 against the Mandelbrot set, and the other four featured
+  places) is in `FEATURED_PLACE_IDS`'s comment; the Mandelbrot, Julia, Burning
+  Ship and Multibrot landings were kept, none duplicating another button's.
+- `REAL_AXIS_MATCHES_MANDELBROT` (`places.ts`, `{ tricorn: true }`) names the
+  fractals whose real axis is the Mandelbrot set's; `places.test.ts` fails a
+  featured place of one of them whose centre is within 5% of its view's height
+  of the axis, naming the id, and checks the flag's claim on the orbit. A
+  Multibrot is not listed: its powers of 3 and up differ on the axis. A new
+  fractal that conjugates or otherwise keeps real orbits real adds itself here.
+- The sheets were drawn at 800x600 with a throwaway copy of
+  `make-og-card.mjs` whose sheet width and height were changed; the script's
+  own `--sheet` is 400 px wide at the card's 1.91:1 shape.
+
 ### Featured places are held to a flat-field guard (2026-10-10)
 
 - The Tricorn button landed on `tricorn-star`, which in the classic scheme is a
   flat bright-green field with one thin black arm. Every place was drawn on a
   contact sheet (`node scripts/make-og-card.mjs --sheet out.png --places
-  id[:scheme],...`) and the Tricorn's featured place is now
+  id[:scheme],...`) and the Tricorn's featured place became
   `tricorn-along-the-arm` (rainbow): a black bulb, a chain of smaller ones and
-  filaments on red. Seahorse Valley, the Classic spirals and the armada were
+  filaments on red (superseded by fr-gxr above: that view is on the real axis). Seahorse Valley, the Classic spirals and the armada were
   redrawn and kept. `FEATURED_PLACE_IDS`'s comment records what was compared.
 - `nearUniformShare(pixels, width, height)` in `blankView.ts` is the share of
   the 32x24 sample grid within `BLANK_COLOR_DISTANCE` of the commonest sample
@@ -408,8 +429,8 @@ _Last updated: 2026-10-10_
   body meets an arm, a small Tricorn (a baby copy at about -1.768 on the real
   axis), a bulb on the upper arm, and a star on an antenna. The set repeats a
   feature on each of its three arms, so some frames run diagonally. The
-  featured place was first `tricorn-star`; it is `tricorn-along-the-arm` now
-  (see the featured-places note above). A candidate drawn far out on the real axis (a speck
+  featured place is `tricorn-star` (see the featured-places notes above:
+  fr-6oi moved it to `tricorn-along-the-arm`, fr-gxr moved it back). A candidate drawn far out on the real axis (a speck
   at -1.94, zoom 200) was dropped: too dark to read even at the thumbnail size.
   Thumbnails, Surprise me, Tour and Auto-wander hops pick the new places up with
   no further code; `tour.test.ts` now expects four fractals.

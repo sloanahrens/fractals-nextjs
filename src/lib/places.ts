@@ -703,17 +703,28 @@ export function placesForFractal(fractal: string): Place[] {
  *   in a field of one colour, which is what the constant chips are for.
  * - Burning Ship: the Armada. Masts standing on the hull's silhouette, the one
  *   view that reads as a ship; the closer views are textures.
- * - Tricorn: along the left arm (fr-6oi). The star on an antenna (fr-vpv's
- *   first pick) is a flat bright-green field with one thin black arm in the
- *   classic scheme, so a click on Tricorn led with an empty picture. All nine
- *   places were drawn in their own schemes, the whole set and the star also in
- *   rainbow, and the arm's bulb with its antennae in rainbow was the one
- *   that shows form and colour together: a black bulb, a chain of smaller ones
- *   and yellow-green filaments on red, only 13% one colour at 64x48 (the star:
- *   29%). The others lost: the whole set is the opening view; two bulbs, the
- *   left-arm bulb and the upper-arm bulb are black blobs on deep blue; the
- *   frayed edge, the body meeting an arm and the small Tricorn are fields of
- *   one colour or a texture with no outline.
+ * - Tricorn: the star on an antenna (fr-gxr). Along the left arm, the pick
+ *   before it (fr-6oi), lies on the real axis, where the Tricorn is exactly
+ *   the Mandelbrot set (conjugating a real z changes nothing): drawn at 800x600
+ *   it is a needle with bulbs on a red field, the same picture as
+ *   `mandelbrot-needle-bulbs` on the same sheet, so a click on Tricorn showed
+ *   the Mandelbrot set again. All nine places were redrawn at 800x600 in their
+ *   own schemes, the whole set, the star and the small Tricorn also in rainbow,
+ *   fire and ocean, beside the Mandelbrot set's whole view, needle bulbs and
+ *   spiral galaxy. The whole set and the small Tricorn show three arms but
+ *   sit on the axis (the whole set is also the opening view, which a switch
+ *   should not repeat); the left-arm bulb is the Mandelbrot needle again; two
+ *   bulbs and the upper-arm bulb are black blobs on deep blue; the frayed edge
+ *   and the body meeting an arm are fields with no outline. The star is the
+ *   one off-axis view where the three-fold form is the picture: a black body
+ *   with three arms, one up and two down, and antennae carrying their own
+ *   chains of bulbs. It keeps classic: in rainbow and ocean the same star sits
+ *   on a flat red or blue field and in fire the antennae are lost in dark red.
+ *   fr-6oi dropped the star for a flat green field judged at 200x150; at
+ *   800x600 the arms and their edge read, and the guard in `places.test.ts`
+ *   still holds it to the flat-field limit. Another fractal whose real axis is
+ *   the Mandelbrot set's must keep its featured place off the axis
+ *   (`REAL_AXIS_MATCHES_MANDELBROT`, tested).
  * - Multibrot: the small copy of the z^3 set. A two-lobed set, one disc above
  *   the other, riding on the big set's edge among filaments in full colour; it
  *   reads as the Multibrot rather than the Mandelbrot set, which the
@@ -733,8 +744,21 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   mandelbrot: "mandelbrot-seahorse-valley",
   julia: "julia-classic-spirals",
   "burning-ship": "burning-ship-armada",
-  tricorn: "tricorn-along-the-arm",
+  tricorn: "tricorn-star",
   multibrot: "multibrot-3-small-copy",
+};
+
+/**
+ * The fractals whose real axis is the Mandelbrot set's own.
+ *
+ * Conjugating a real z changes nothing, so the Tricorn's orbit of a real c is
+ * the Mandelbrot orbit and a view centred on the axis shows what the
+ * Mandelbrot button already shows. The Multibrot's powers of 3 and up differ
+ * on the axis, so it is not listed. `places.test.ts` keeps the featured place
+ * of every fractal listed here off the axis.
+ */
+export const REAL_AXIS_MATCHES_MANDELBROT: Readonly<Record<string, boolean>> = {
+  tricorn: true,
 };
 
 /**
