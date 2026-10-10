@@ -57,6 +57,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Journey** (`src/lib/journey.ts`): The page's record of its browser history entries — a stack of view-link fragments with push, back, forward, replace and the arrival of a fragment the browser landed on, capped at 200
 - **Download naming** (`src/lib/download.ts`): The filename a saved canvas is written under
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
+- **Pinch** (`src/lib/pinch.ts`): The pure helpers behind two-finger zoom — finger distance, midpoint, the zoom factor between two steps, and scale-about-a-point
 - **Canvas navigation** (`src/lib/canvasNavigation.ts`): The wheel, drag, touch and key listeners on the canvas, and the key-to-bounds switch
 - **Render quality** (`src/lib/renderQuality.ts`): Whether a redraw is a low-resolution preview or a full-resolution render
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
@@ -171,14 +172,54 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 _Last updated: 2026-10-09_
 
+### Pinch to zoom (2026-10-09)
+
+- Two fingers on the canvas zoom it. `src/lib/pinch.ts` holds the pure parts:
+  `touchDistance`, `touchMidpoint`, `pinchFactor` (the new distance over the
+  last step's, and 1 when either distance is zero or not a number, so fingers
+  on one spot never divide by zero) and `scaleAboutPoint(bounds, from, to,
+  factor, width, height)`, which scales the view so the point that was under
+  `from` ends under `to`. With `from` and `to` the midpoint at the previous
+  and the current step, one call is both the zoom and the pan of a pinch whose
+  fingers travel together.
+- `scaleAboutPoint` clamps the new zoom with `clampZoom` (1x to 10000x, the
+  wheel path's limits) *before* it works out the anchor. The page clamps the
+  zoom again in `applyView`, but it keeps the centre it was given; clamping
+  only there would let a pinch at a limit slide the anchor off the fingers.
+- `ZoomPanManager` keeps a `pinchState` (the distance and midpoint of the last
+  step, in canvas pixels). A touchstart with two or more touches ends any pan
+  and measures the first two; touchmove with two or more steps the pinch; a
+  touchend that leaves one finger down hands over to `startPan` at that
+  finger, so the view does not move until the finger does; one that leaves
+  two or more re-measures the pair. `handleTouchEnd(event?)` without an event
+  ends everything, which is what `touchcancel` does. A move with no start (the
+  listener attached with fingers down) is taken as the baseline and moves
+  nothing.
+- `canvasNavigation.ts` calls `preventDefault` on `touchmove` while two or
+  more fingers are down (the listener was already non-passive; the canvas also
+  has `touch-action: none`). A touch is one gesture from the first finger down
+  to the last finger up, opened once and closed once however it changes
+  between pan and pinch: ending it when the touches fall below two would draw
+  a full-resolution picture only for the hand-over pan to cancel it.
+  `touchcancel` closes it at once.
+- A pinch goes through `applyView` like the wheel and a drag, so it counts as
+  no deliberate move: the address bar's current entry follows it and no entry
+  is pushed.
+- `pinch.test.ts` drives the helpers (scale up and down, anchor fixed, both
+  limits, zero distance, shape kept); `zoomPan.test.ts` and
+  `canvasNavigation.test.ts` drive the manager and the listeners, including
+  the hand-over to a pan, the three-finger re-measure, cancel and the single
+  start and end of a gesture. `helpEntries.ts` has a "Two-finger pinch" row.
+
 ### Guided-exploration design is in the repo (2026-10-09)
 
 - `docs/design/guided-exploration.md` is the design the canvas-first page, the
   Nearby strip, Surprise me, Back and Forward, and the Settings drawer were
   built to, as approved on 2026-10-09. Its "As built" section lists where the
-  code differs from the text (the top bar's order, no pinch, the strip's six
-  tiles from a pool of 18, thumbnails paused rather than started late, no
-  in-memory history fallback); the code is the truth.
+  code differs from the text (the top bar's order, pinch built after the
+  first landing, the strip's six tiles from a pool of 18, thumbnails paused
+  rather than started late, no in-memory history fallback); the code is the
+  truth.
 - README, this file and the Help entries were audited against the code in the
   same landing. The README's Project Structure tree now names every module
   under `src/components/ui` and `src/lib`, including `surprise.ts`, and the
@@ -601,7 +642,8 @@ stays gone instead of measuring its classes._
   renders (Mouse and touch, Keyboard, Random walk, Views and links; later
   Nearby places was added and Random walk became Auto-wander) as
   `{ title, entries: { keys, action }[] }[]`. It lists only what this build
-  really does — one-finger drag but no pinch, since `zoomPan.ts` ignores a
+  really does — one-finger drag, and a two-finger pinch since fr-5p9 (see the
+  Pinch section above); it had been "no pinch" while `zoomPan.ts` ignored a
   touch with more than one finger.
 - The `?` listener is on the window rather than the canvas, because help has
   to be reachable with focus anywhere on the page; the canvas-local arrow keys

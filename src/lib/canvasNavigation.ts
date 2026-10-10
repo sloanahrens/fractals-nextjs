@@ -99,23 +99,54 @@ export function attachCanvasNavigation(
     gesture?.onGestureEnd?.();
   };
 
+  // A touch gesture is one gesture from the first finger down to the last
+  // finger up, however many times it changes between a pan and a pinch on the
+  // way: lifting one finger of a pinch hands over to a pan, and ending the
+  // gesture there would draw the full-resolution picture only for the pan to
+  // cancel it. So it opens once and closes once.
+  let touchGestureOpen = false;
+
+  const closeTouchGesture = () => {
+    if (!touchGestureOpen) return;
+
+    touchGestureOpen = false;
+    gesture?.onGestureEnd?.();
+  };
+
   const handleTouchStart = (event: TouchEvent) => {
     manager.handleTouchStart(event);
-    // A multi-touch start is the browser's gesture, not ours.
-    if (manager.isPanning()) {
+    if ((manager.isPanning() || manager.isPinching()) && !touchGestureOpen) {
+      touchGestureOpen = true;
       gesture?.onGestureStart?.();
     }
   };
 
   const handleTouchMove = (event: TouchEvent) => {
+    // Two fingers down are a pinch, and the browser's reading of the same
+    // movement is to zoom the page or scroll it, so it is told no.
+    if (event.touches.length >= 2) {
+      event.preventDefault();
+    }
+
     publish(manager.handleTouchMove(event, getBounds()));
   };
 
-  const handleTouchEnd = () => {
-    if (!manager.isPanning()) return;
+  const handleTouchEnd = (event: TouchEvent) => {
+    if (!touchGestureOpen) return;
+
+    manager.handleTouchEnd(event);
+    if (!manager.isPanning() && !manager.isPinching()) {
+      closeTouchGesture();
+    }
+  };
+
+  // A cancelled touch ends every finger's part in the gesture, whatever the
+  // event still lists as touching.
+  const handleTouchCancel = () => {
+    if (!touchGestureOpen) return;
 
     manager.handleTouchEnd();
-    gesture?.onGestureEnd?.();
+    closeTouchGesture();
   };
 
   canvas.addEventListener("wheel", handleWheel, { passive: false });
@@ -128,7 +159,7 @@ export function attachCanvasNavigation(
   canvas.addEventListener("touchstart", handleTouchStart);
   canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
   canvas.addEventListener("touchend", handleTouchEnd);
-  canvas.addEventListener("touchcancel", handleTouchEnd);
+  canvas.addEventListener("touchcancel", handleTouchCancel);
 
   return () => {
     if (wheelEndTimer !== null) clearTimeout(wheelEndTimer);
@@ -141,7 +172,7 @@ export function attachCanvasNavigation(
     canvas.removeEventListener("touchstart", handleTouchStart);
     canvas.removeEventListener("touchmove", handleTouchMove);
     canvas.removeEventListener("touchend", handleTouchEnd);
-    canvas.removeEventListener("touchcancel", handleTouchEnd);
+    canvas.removeEventListener("touchcancel", handleTouchCancel);
   };
 }
 

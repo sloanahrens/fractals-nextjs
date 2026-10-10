@@ -58,6 +58,22 @@ describe("the help sections", () => {
       expect(new Set(keys).size, section.title).toBe(keys.length);
     }
   });
+
+  it("lists both touch gestures, and says pinch zooms", () => {
+    const touch = HELP_SECTIONS.find(
+      (section) => section.title === "Mouse and touch",
+    )!;
+    const byKeys = new Map(touch.entries.map((e) => [e.keys, e.action]));
+
+    expect(byKeys.get("One-finger drag")).toMatch(/pan/i);
+    expect(byKeys.get("Two-finger pinch")).toMatch(/zoom/i);
+  });
+
+  it("no longer says pinch is missing", () => {
+    const text = JSON.stringify(HELP_SECTIONS);
+
+    expect(text).not.toMatch(/no pinch|not supported|unsupported/i);
+  });
 });
 
 describe("the ? shortcut", () => {
