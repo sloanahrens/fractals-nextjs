@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ComplexNumber } from "../../types/fractal";
 import { burningShipKind } from "../burningShip";
+import { tricornKind } from "../tricorn";
 import {
   FRACTAL_TYPES,
   defaultVariant,
@@ -31,13 +32,14 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the three fractals in order, each once", () => {
+  it("offers the four fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
       { id: "mandelbrot", label: "Mandelbrot" },
       { id: "julia", label: "Julia" },
       { id: "burning-ship", label: "Burning Ship" },
+      { id: "tricorn", label: "Tricorn" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -69,6 +71,11 @@ describe("resolveFractalKind", () => {
       burningShipKind,
     );
     expect(resolveFractalKind("burning-ship", "")).toBe(burningShipKind);
+  });
+
+  it("draws the Tricorn for its own id, whatever constant is beside it", () => {
+    expect(resolveFractalKind("tricorn", "Dendrite")).toBe(tricornKind);
+    expect(resolveFractalKind("tricorn", "")).toBe(tricornKind);
   });
 
   it("falls back to the Mandelbrot set for an unknown id", () => {
@@ -177,6 +184,14 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("frames the Tricorn about the origin, which its three arms turn about", () => {
+    expect(defaultViewFor("tricorn")).toEqual({
+      centerX: 0,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("falls back to the Mandelbrot view for an unknown id", () => {
     expect(defaultViewFor("newton")).toEqual({
       centerX: -0.75,
@@ -200,9 +215,10 @@ describe("fractalVariants", () => {
     );
   });
 
-  it("gives the Mandelbrot set, the Burning Ship and an unknown id no row", () => {
+  it("gives the Mandelbrot set, the Burning Ship, the Tricorn and an unknown id no row", () => {
     expect(fractalVariants("mandelbrot")).toBeNull();
     expect(fractalVariants("burning-ship")).toBeNull();
+    expect(fractalVariants("tricorn")).toBeNull();
     expect(fractalVariants("newton")).toBeNull();
   });
 
@@ -220,6 +236,7 @@ describe("defaultVariant", () => {
     expect(defaultVariant("julia")).toBe(JULIA_CONSTANTS[0].name);
     expect(defaultVariant("mandelbrot")).toBe("");
     expect(defaultVariant("burning-ship")).toBe("");
+    expect(defaultVariant("tricorn")).toBe("");
     expect(defaultVariant("newton")).toBe("");
   });
 
@@ -242,6 +259,7 @@ describe("isVariantValue", () => {
     expect(isVariantValue("julia", undefined)).toBe(false);
     expect(isVariantValue("mandelbrot", "Classic")).toBe(false);
     expect(isVariantValue("burning-ship", "")).toBe(false);
+    expect(isVariantValue("tricorn", "Classic")).toBe(false);
   });
 });
 
@@ -255,5 +273,6 @@ describe("isCustomVariant", () => {
   it("is false for a fractal that allows no custom value, whatever the page holds", () => {
     expect(isCustomVariant("mandelbrot", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("burning-ship", "custom:-0.8,0.156")).toBe(false);
+    expect(isCustomVariant("tricorn", "custom:-0.8,0.156")).toBe(false);
   });
 });

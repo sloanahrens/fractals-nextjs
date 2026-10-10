@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   ),
   title: "Next Fractals - Interactive Fractal Explorer",
   description:
-    "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets and the Burning Ship with customizable parameters, zoom controls, and preset configurations.",
+    "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets, the Burning Ship and the Tricorn with customizable parameters, zoom controls, and preset configurations.",
   keywords: [
     "fractals",
     "mandelbrot",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
         : "http://localhost:3000"),
     title: "Nextjs Fractals - Interactive Fractal Explorer",
     description:
-      "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets and the Burning Ship with customizable parameters, zoom controls, and preset configurations.",
+      "Generate beautiful fractals with real-time parameter adjustment. Explore the Mandelbrot set, Julia sets, the Burning Ship and the Tricorn with customizable parameters, zoom controls, and preset configurations.",
     images: [
       {
         url: "/fractal-preview.png",

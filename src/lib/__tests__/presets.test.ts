@@ -278,7 +278,7 @@ describe("built-in preset framing", () => {
 
 describe("built-in views for the other fractals", () => {
   it("has presets to measure, so the guards below cannot pass vacuously", () => {
-    expect(FRACTAL_OWNED_PRESETS).toHaveLength(7);
+    expect(FRACTAL_OWNED_PRESETS).toHaveLength(9);
   });
 
   it("frames each one at the canvas's 4:3 shape", () => {
@@ -333,8 +333,8 @@ describe("built-in views for the other fractals", () => {
 });
 
 describe("BUILTIN_PRESETS", () => {
-  it("ships thirteen presets with unique ids and names", () => {
-    expect(BUILTIN_PRESETS).toHaveLength(13);
+  it("ships fifteen presets with unique ids and names", () => {
+    expect(BUILTIN_PRESETS).toHaveLength(15);
 
     const ids = BUILTIN_PRESETS.map((preset) => preset.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -508,10 +508,11 @@ describe("the fractal a saved view belongs to", () => {
 });
 
 describe("the built-in views each fractal lists", () => {
-  it("offers six Mandelbrot views, five Julia and two Burning Ship", () => {
+  it("offers six Mandelbrot views, five Julia, two Burning Ship and two Tricorn", () => {
     expect(presetsForFractal(BUILTIN_PRESETS, "mandelbrot")).toHaveLength(6);
     expect(presetsForFractal(BUILTIN_PRESETS, "julia")).toHaveLength(5);
     expect(presetsForFractal(BUILTIN_PRESETS, "burning-ship")).toHaveLength(2);
+    expect(presetsForFractal(BUILTIN_PRESETS, "tricorn")).toHaveLength(2);
   });
 
   it("lists every built-in view under exactly one fractal", () => {
@@ -668,6 +669,23 @@ describe("reading views out of storage", () => {
     expect(presetFractal(stored)).toBe("julia");
     expect(presetVariant(stored)).toBe("Dendrite");
     expect(presetsForFractal(getCustomPresets(), "julia")).toEqual([stored]);
+    expect(presetsForFractal(getCustomPresets(), "mandelbrot")).toEqual([]);
+  });
+
+  it("round-trips a Tricorn view saved now, listed under the Tricorn alone and carrying no constant", () => {
+    saveCustomPreset({
+      ...CUSTOM_PRESET,
+      ...presetFractalFields("tricorn", "Dendrite"),
+    });
+
+    const [stored] = getCustomPresets();
+
+    expect(stored.juliaConstant).toBeUndefined();
+    expect(presetFractal(stored)).toBe("tricorn");
+    expect(resolveFractalKind("tricorn", presetVariant(stored)).id).toBe(
+      "tricorn",
+    );
+    expect(presetsForFractal(getCustomPresets(), "tricorn")).toEqual([stored]);
     expect(presetsForFractal(getCustomPresets(), "mandelbrot")).toEqual([]);
   });
 

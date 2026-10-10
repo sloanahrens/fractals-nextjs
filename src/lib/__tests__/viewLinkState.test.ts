@@ -45,6 +45,22 @@ describe("viewLinkToUpdates", () => {
     });
   });
 
+  it("puts a Tricorn link's fractal on the page and leaves the constant standing", () => {
+    expect(
+      viewLinkToUpdates(
+        decodeView(
+          "#v=1&f=tricorn&x=-1.768&y=0&z=60&s=classic&i=auto&w=800&h=600",
+        ),
+      ),
+    ).toMatchObject({
+      fractalType: "tricorn",
+      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
+      centerX: -1.768,
+      centerY: 0,
+      zoomLevel: 60,
+    });
+  });
+
   it("applies a canvas size and an iteration count that are not the defaults", () => {
     // The example link happens to carry the page's own canvas size and an auto
     // count, so it cannot tell a read field from a defaulted one. This one

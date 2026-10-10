@@ -8,6 +8,7 @@ import {
   parseJuliaConstant,
 } from "./julia";
 import { mandelbrotKind } from "./mandelbrot";
+import { tricornKind } from "./tricorn";
 
 /**
  * A fractal the explorer offers, as the picker shows it: the id the rest of
@@ -28,6 +29,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "mandelbrot", label: "Mandelbrot" },
   { id: "julia", label: "Julia" },
   { id: "burning-ship", label: "Burning Ship" },
+  { id: "tricorn", label: "Tricorn" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -65,7 +67,7 @@ const JULIA_VARIANTS: FractalVariants = {
 /**
  * The setting a fractal takes, or null for a fractal that takes none.
  * @param fractalId - Id of the fractal
- * @returns Its variant descriptor; null for Mandelbrot, Burning Ship and any id this build does not know
+ * @returns Its variant descriptor; null for every fractal but Julia and for any id this build does not know
  */
 export function fractalVariants(fractalId: string): FractalVariants | null {
   return fractalId === "julia" ? JULIA_VARIANTS : null;
@@ -114,8 +116,8 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
  * The formula a picker choice draws.
  *
  * The picker names a fractal and the renderer wants a {@link FractalKind}. For
- * the Mandelbrot set and the Burning Ship those are the same thing. Julia is a
- * family rather than a picture, so the choice carries a constant as well — one
+ * the Mandelbrot set, the Burning Ship and the Tricorn those are the same
+ * thing. Julia is a family rather than a picture, so the choice carries a constant as well — one
  * of the named four, or a custom spelling of any other point — and a name this
  * build cannot read falls back to the first named constant instead of to a
  * blank canvas.
@@ -128,6 +130,7 @@ export function resolveFractalKind(
   variant: string,
 ): FractalKind {
   if (typeId === "burning-ship") return burningShipKind;
+  if (typeId === "tricorn") return tricornKind;
   if (typeId !== "julia") return mandelbrotKind;
 
   const constant = parseJuliaConstant(variant);
@@ -148,7 +151,8 @@ export interface FractalDefaultView {
  * The fractals are pictures of different points, so none can inherit another's
  * view: the Mandelbrot set is framed around -0.75, a Julia set is symmetric
  * about the origin whatever its constant, and the ship sits below and left of
- * the origin, around -0.45 by -0.5, at the size that holds the whole of it.
+ * the origin, around -0.45 by -0.5, at the size that holds the whole of it, and
+ * the Tricorn is turned onto itself by 120 degrees about the origin.
  * @param typeId - Id of the fractal to frame
  * @returns The centre and zoom that fractal opens on
  */
@@ -158,6 +162,17 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   if (typeId === "burning-ship") {
     return { centerX: -0.45, centerY: -0.5, zoom: 1 };
   }
+
+  // The Tricorn's three arms point to -2 and to 1 +- 1.73i, the left tip turned
+  // by 120 degrees each way, so the set maps onto itself about the origin and
+  // the origin frames all three arms alike. Zoom 1 is the widest view the
+  // explorer has (4 by 3, x from -2 to 2, y from -1.5 to 1.5): the left arm and
+  // the body are whole and the other two arms run off the top and bottom edges,
+  // losing the last 0.23 of their thin tips. Chosen from renders at 400x300 of
+  // (0, 0) and (-0.25, 0), both at zoom 1: the second moved the left tip off
+  // the frame's edge and no more of the others in, at the cost of the symmetry,
+  // so the centre stays on the origin.
+  if (typeId === "tricorn") return { centerX: 0, centerY: 0, zoom: 1 };
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }

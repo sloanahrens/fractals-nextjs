@@ -78,7 +78,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Fractal buttons",
         action:
-          "Mandelbrot, Julia and Burning Ship, top left of the picture, the current one lit: one click flies to that fractal's showpiece place, and Back returns to where you were. With Julia on, a row of chips picks its constant (Classic, Dendrite, Douady rabbit, Siegel disk) and goes to the whole of that set; Custom opens Settings at the Real box to type your own",
+          "Mandelbrot, Julia, Burning Ship and Tricorn, top left of the picture, the current one lit: one click flies to that fractal's showpiece place, and Back returns to where you were. With Julia on, a row of chips picks its constant (Classic, Dendrite, Douady rabbit, Siegel disk) and goes to the whole of that set; Custom opens Settings at the Real box to type your own",
       },
       {
         keys: "Nearby tile",
