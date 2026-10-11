@@ -175,6 +175,11 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Copy a link to the view on screen to share: it opens on the same view and previews as that view in a chat. The address bar already follows the view, so it can be bookmarked as it is",
       },
       {
+        keys: "Share",
+        action:
+          "Where your browser has a share sheet — phones, and Safari or Chrome — Share beside Copy link hands it the same link under the view's own title, so it goes to a chat or an app in one tap. The button is not there where the browser has no sheet, and Copy link is the whole story there. Dismissing the sheet shares nothing and leaves everything as it was",
+      },
+      {
         keys: "Copy tour link",
         action:
           "Copy the places you have just visited, up to the last eight of them, as a walk to share: whoever opens the link sees the first place and is then taken through the rest, about 8 seconds at each, and is carried on wandering from the last one. It needs at least two places, so it stays off until you have been somewhere. Any key, touch or click stops the walk for good",
