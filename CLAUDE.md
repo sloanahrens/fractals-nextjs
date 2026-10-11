@@ -78,6 +78,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
 - **Site origin** (`src/lib/siteOrigin.ts`, read per request by `src/app/requestOrigin.ts`): The origin a request was served from — forwarded host, else host, validated — that `pageMetadata` (`src/lib/pageMetadata.ts`, called by `generateMetadata` in `src/app/layout.tsx` and `src/app/page.tsx`) puts on og:image, twitter:image and og:url
 - **Query link and view preview** (`src/lib/viewQuery.ts`, `src/lib/viewPreview.ts`, `src/lib/pageMetadata.ts`): Copy link copies the view as `<origin><path>?<fragment>` and Copy tour link copies a walk the same way (`copyTourUrl`); a page load reads a query or a hash (hash wins) and rewrites the bar to the hash form, a tour link in either counting as a link; `generateMetadata` in the server page turns the search parameters into og:image, the pre-built picture of the nearest place of that view's fractal, or the static card when there is no view; `previewFor` reads a tour link first, so a walk previews as its first stop; see the Version Notes of 2026-10-10 (fr-cr5, fr-d3u, fr-xnl, fr-bo2)
+- **Share sheet** (`src/lib/shareView.ts`): The browser's own share sheet, for the view on screen — `shareSheet(navigator)` is the sheet this browser opens or null where it has none, and that one test is the whole of whether the Share button is drawn, read after mounting through `useSyncExternalStore` (the server snapshot is false) so neither the prerendered HTML nor the first client render has the button and hydration cannot mismatch; `shareViewPayload` builds what the sheet is handed from `copyLinkUrl` — the query-form URL Copy link copies, so the two cannot disagree — under `shareTitle`, the view's own `describeViewLine` line plus `TITLE`, which is the title the head gives the same link; `canSharePayload` asks `navigator.canShare` about that very payload where the browser has it and counts a browser without it as a yes; `shareOutcome` says a dismissal (`AbortError`) is silent and anything else falls back to Copy link's clipboard flow; the page's `handleShare` is the whole of the wiring; see the Version Note of 2026-10-11 (fr-jca)
 - **Tour link** (`src/lib/tourLink.ts`): Up to eight views in order in one fragment — one column per codec field (`v=1&t.f=mandelbrot~julia&t.x=…`), each stop written and read by `viewLink`'s own encoder and decoder, so a stop is judged exactly as a single view is; a stop carries no canvas size and no count when its zoom picks one; see the Version Note of 2026-10-10 (fr-d3u)
 - **Tour playlist** (`src/lib/tourPlaylist.ts`): Playing a tour link — the stops still to show and the view on screen (`PlaylistState`), `createPlaylist`, `nextPlaylistStop` (which skips a stop that is the view already up, and answers null when the walk is over so the ordinary tour takes over), `stopPlaylist` (stopping is final), `sameView` (every field but the canvas size) and `playlistStops`, the places a journey would be shared as; the page reads a walk on load, applies its first stop, and hops through the rest with the tour's own crossfade and dwell; see the Version Note of 2026-10-10 (fr-bo2)
 - **Site text** (`src/lib/siteText.ts`): The app's own words about itself — the document title, the description built from `FRACTAL_TYPES` labels, the social card's tagline and title lines, and the card's alt text — so the page's head and `scripts/make-og-card.mjs` read one place; see the Version Note of 2026-10-10 (fr-3y2)
@@ -198,7 +199,98 @@ the human may push one. See the Gas Town rules at the end of this file.
 
 ## Version Notes
 
-_Last updated: 2026-10-10_
+_Last updated: 2026-10-11_
+
+### Share: the browser's own share sheet, where there is one (2026-10-11)
+
+- fr-jca. A phone can send a view to a chat in one tap rather than through the
+  clipboard, so the Settings drawer's Navigation card now has a **Share**
+  button beside Copy link, drawn only where the browser has a sheet to open.
+  It hands the sheet the *same link* Copy link copies — the query form, on this
+  origin and path — under the view's own title, and changes nothing else: the
+  copy buttons, the address bar and the page's state are as they were.
+- **`src/lib/shareView.ts`** is the new module and holds every decision, so the
+  page's `handleShare` is wiring and a Node suite drives the rest.
+  `shareSheet(navigator)` is `navigator.share` as a callable, or null where the
+  browser has none — the whole of the visibility test, and the reason a desktop
+  Firefox sees no button at all. `shareViewPayload({ origin, pathname, link,
+  line })` is `{ title: shareTitle(line), url: copyLinkUrl(origin, pathname,
+  link) }`, so the URL is Copy link's own builder (the page still has exactly
+  one `copyLinkUrl(` in it, and a test pins that) rather than a second form
+  that could drift, and `shareTitle` is `${line} - ${TITLE}` from `siteText.ts`
+  — the same title `pageMetadata.ts` gives the head for the same link, so the
+  sheet and a chat that follows the link say the same words. The `line` is
+  `describeViewLine`'s ("Julia set, Dendrite, 400x"), so the payload describes
+  the view rather than the app.
+  `canSharePayload(navigator, payload)` asks `navigator.canShare` about the
+  payload actually being sent where the browser has it (a browser that throws
+  instead of answering has not said yes) and counts one without it as a yes;
+  `shareOutcome(error)` answers `"cancelled"` for an `AbortError` — the visitor
+  dismissing the sheet, which is their own answer and says nothing — and
+  `"fallback"` for everything else.
+- **No hydration mismatch is structural, not remembered.** The button is gated
+  on `useSyncExternalStore(subscribeToShareSupport, getShareSupportSnapshot,
+  getServerShareSupportSnapshot)`, the shape `orbitPlot.ts` already uses for
+  `prefers-reduced-motion`: the server snapshot is `false`, the client snapshot
+  is read once after mounting, and there is nothing to subscribe to because a
+  browser does not grow a share sheet while the page is open (so a `setState` in
+  an effect — which `react-hooks/set-state-in-effect` refuses here — is not
+  needed either). The button is therefore in neither the prerendered HTML nor
+  the first client render, and a browser that has a sheet gains it on hydration.
+- **The handler** (`FractalExplorer.tsx`). `handleShare` builds the link the way
+  Copy link does — `viewLinkFor(cycleShiftRef.current)`, so the palette is the
+  one the canvas is painted with even while it is cycling — and never calls
+  `writeViewLink`: the sheet needs nothing of the address bar, which already
+  names the view on screen. A browser with no sheet, and one that says this
+  payload is not shareable, are the same answer and go through the same
+  `copyUrl(payload.url)` Copy link uses, so a failed share is the old flow —
+  "Link copied", or the read-only field where the clipboard refuses — rather
+  than a button that did nothing. A dismissal calls nothing; a non-abort
+  rejection calls `copyUrl`. `navigator.share` is called on the navigator it
+  came from (a WebIDL method detached from its receiver is allowed to refuse)
+  and a synchronous throw is caught and falls back the same way. The button is
+  `variant="secondary" size="sm"` like its neighbours and its text is its
+  accessible name.
+- **Not changed**: Copy link and Copy tour link (their panel tests are
+  untouched), the address bar and the journey, the clipboard path (`copyUrl`
+  is still the page's one `clipboard.writeText`), the page's state, the query
+  codec, and every server-side path.
+- **Verified in headless Chrome** (CDP against the standalone production build
+  on port 3145, `Page.addScriptToEvaluateOnNewDocument` for the share sheet).
+  The prerendered HTML carries no Share button (zero `<button …>Share</button>`
+  while Copy link is there) and the button is in the DOM after mounting, so the
+  server and the first client render agree; Chrome 154 for Testing on macOS has
+  `navigator.share` itself, so the plain page already draws the button. Clicking
+  it handed the sheet `{title: "Mandelbrot set, 1x - Next Fractals - Interactive
+  Fractal Explorer", url: "http://127.0.0.1:3145/?v=1&f=mandelbrot&x=-0.75&y=0&z=1&s=classic&i=auto&w=800&h=600"}`,
+  and `navigator.canShare` was asked about that same payload. A view with its
+  own palette (`?v=1&f=julia&k=Dendrite&z=400&s=fire&r=1&o=0.25`) arrived as
+  `…?v=1&f=julia&k=Dendrite&x=0&y=0&z=400&s=fire&r=1&o=0.25&i=auto&w=800&h=600`
+  under "Julia set, Dendrite, 400x - …", with the address bar left on the hash
+  form (Share writes nothing to it). An `AbortError` left every status line
+  empty and drew no field; an `Error`, and a sheet that threw synchronously
+  instead of rejecting, each put the URL in the read-only field with "Press
+  Ctrl+C to copy" — the copy flow, which is what the headless clipboard's
+  refusal gets. With `canShare` answering no, `navigator.share` was never called
+  at all. With `navigator.share` removed the page drew no Share button, Copy
+  link and Copy tour link sat side by side as before and Copy link still worked.
+  No console output of any kind — no hydration warning — in any run.
+- Tests: the new `src/lib/__tests__/shareView.test.ts` (no sheet for a
+  navigator without `share`, a null, or something else under that name; the
+  sheet called with the payload on the navigator it came from; the server
+  snapshot false; `canSharePayload` a yes from a browser that cannot answer,
+  the browser's own answer where there is one, and a no from one that throws;
+  `shareOutcome` silent for an `AbortError` of any shape and fallback for an
+  `Error`, another `DOMException`, `null`, `undefined` and a bare string; the
+  payload's URL equal to `copyLinkUrl`'s and carrying no `#`; the title) and
+  the new `src/__tests__/share-panel.test.ts` (sources: the button beside Copy
+  link and only there, its style and its `{shareOffered && (`, the store read
+  with no `setShareOffered` anywhere, the handler's link, payload, title and
+  the one `copyLinkUrl(` left in the page, no address-bar write, the fallback
+  through `copyUrl`, and the one `clipboard.writeText`). `make gate` is green.
+- Docs: the README's Sharing a View bullet, its Project Structure
+  (`shareView.ts`), a "Share" row in the Help overlay's Views and links group,
+  and the Share sheet bullet in Project Architecture.
 
 ### /api/og stops rendering: a 308 to the pre-built picture, and the renderer is gone (2026-10-10)
 

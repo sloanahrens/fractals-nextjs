@@ -148,6 +148,16 @@ import {
 } from "../lib/nearbyStrip";
 import { decodeTour, encodeView, linkWithoutColour } from "../lib/viewLink";
 import { copyLinkUrl, copyTourUrl, readLocationLink } from "../lib/viewQuery";
+import { describeViewLine } from "../lib/viewPreview";
+import {
+  canSharePayload,
+  getServerShareSupportSnapshot,
+  getShareSupportSnapshot,
+  shareOutcome,
+  shareSheet,
+  shareViewPayload,
+  subscribeToShareSupport,
+} from "../lib/shareView";
 import {
   TOUR_CROSSFADE_MS,
   initialTourState,
@@ -1403,6 +1413,56 @@ export default function Home() {
       copyLinkUrl(window.location.origin, window.location.pathname, link),
     );
   }, [copyUrl, viewLinkFor, writeViewLink]);
+
+  // Whether this browser opens a share sheet at all. It is read after mounting
+  // and never while rendering — the server snapshot says no and the client
+  // snapshot is looked at afterwards — so the button is in neither the
+  // prerendered HTML nor the first client render, and hydration cannot
+  // mismatch. Where there is no sheet the button is not drawn and Copy link is
+  // the whole story.
+  const shareOffered = useSyncExternalStore(
+    subscribeToShareSupport,
+    getShareSupportSnapshot,
+    getServerShareSupportSnapshot,
+  );
+
+  // Share: the same link Copy link copies, handed to the phone's own sheet so
+  // it goes to a chat in one tap rather than through a clipboard. The payload
+  // is the helper's — the query form of the view on screen, under the view's
+  // own title — and it is the same text Copy link writes, so what the sheet
+  // shows and what a chat previews are one URL. The address bar is left alone:
+  // it names the view on screen already, and the sheet needs nothing of it.
+  const handleShare = useCallback(() => {
+    const link = viewLinkFor(cycleShiftRef.current);
+    const payload = shareViewPayload({
+      origin: window.location.origin,
+      pathname: window.location.pathname,
+      link,
+      line: describeViewLine(viewLinkUpdatesFrom(`#${link}`)),
+    });
+
+    const open = shareSheet(navigator);
+    // A browser that will not open a sheet for this payload is a browser
+    // without one, so the link goes to the clipboard instead — which is what
+    // Copy link does, down to the field for a clipboard that refuses.
+    if (open === null || !canSharePayload(navigator, payload)) {
+      copyUrl(payload.url);
+      return;
+    }
+
+    const onRejected = (error: unknown) => {
+      // Dismissing the sheet is the visitor's own answer and says nothing;
+      // anything else leaves the link to Copy link's fallbacks.
+      if (shareOutcome(error) === "fallback") copyUrl(payload.url);
+    };
+
+    try {
+      open(payload).then(undefined, onRejected);
+    } catch {
+      // A browser that throws instead of rejecting is refused all the same.
+      copyUrl(payload.url);
+    }
+  }, [copyUrl, viewLinkFor]);
 
   // The stops a tour link would name for the journey so far: the places the
   // visitor has walked, in order, with the view on screen last. It is worked out
@@ -2980,6 +3040,15 @@ export default function Home() {
               <Button onClick={handleCopyLink} variant="secondary" size="sm">
                 Copy link
               </Button>
+              {/* Only where the browser has a sheet to open; everywhere else
+                  Copy link is the whole story. It is drawn after mounting, so
+                  it is in neither the prerendered HTML nor the first client
+                  render. */}
+              {shareOffered && (
+                <Button onClick={handleShare} variant="secondary" size="sm">
+                  Share
+                </Button>
+              )}
               <Button
                 onClick={handleCopyTourLink}
                 disabled={!canCopyTourLink}
