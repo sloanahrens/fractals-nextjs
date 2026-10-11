@@ -72,7 +72,8 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **ZoomPanManager** (`src/lib/zoomPan.ts`): Interactive controls for navigation
 - **Pinch** (`src/lib/pinch.ts`): The pure helpers behind two-finger zoom — finger distance, midpoint, the zoom factor between two steps, and scale-about-a-point
 - **Wheel zoom** (`src/lib/wheelZoom.ts`): The zoom factor one wheel event asks for — an exponential of how far it scrolled
-- **Canvas navigation** (`src/lib/canvasNavigation.ts`): The wheel, drag, touch and key listeners on the canvas, and the key-to-bounds switch
+- **Canvas navigation** (`src/lib/canvasNavigation.ts`): The wheel, drag and touch listeners on the canvas, and the key-to-bounds switch (`keyNavigationBounds`) that the page's own key listener calls
+- **Page keys** (`src/lib/pageKeys.ts`): Which keypresses drive the view from anywhere on the page — the arrows and `+`/`-`/`=`/`_` (pan and zoom) and `R` (reset, exactly as Reset View does) — `pageKeyAction` declining a press whose target is a field, a slider, a button, a link, an editable region, the Math card or an open dialog, and any combination with Control, Meta or Alt; the page reads it off the window in `FractalExplorer.tsx`, so the canvas no longer handles its own keys and one press moves the view once
 - **Render quality** (`src/lib/renderQuality.ts`): Whether a redraw is a low-resolution preview or a full-resolution render
 - **Manual bounds** (`src/lib/manualBounds.ts`): What the Manual Coordinates boxes make of the four numbers typed in
 - **Build facts** (`src/lib/version.ts`): The build time, deploy time, commit and revision, and the footer wording
@@ -291,6 +292,119 @@ _Last updated: 2026-10-11_
 - Docs: the README's Sharing a View bullet, its Project Structure
   (`shareView.ts`), a "Share" row in the Help overlay's Views and links group,
   and the Share sheet bullet in Project Architecture.
+
+### The view keys work anywhere on the page, and R resets (2026-10-11)
+
+- fr-ia7. The arrows panned and `+`/`-` zoomed only while the canvas itself had
+  focus (`handleCanvasKeyDown`), so a keyboard user had to Tab to the image
+  first — and nothing on the page reset the view from the keyboard. Both are
+  fixed by one listener on the window: the arrows pan, `+`/`-`/`=`/`_` zoom and
+  **R puts the view back to the fractal's own default frame**, exactly as Reset
+  View does, from wherever focus happens to be. A field, a slider, a button, a
+  link, an editable region, the Settings drawer, the Help overlay and the Math
+  card all keep their own keys, and so does any combination with Control, Meta
+  or Alt.
+- **`src/lib/pageKeys.ts`** is the new module and the whole rule.
+  `PAGE_VIEW_KEYS` is the eight pan-and-zoom keys; `pageKeyAction(event)`
+  answers `"view"`, `"reset"` or null from the parts of the event the decision
+  needs — `key`, the three modifiers, the target's tag name, whether it is
+  contenteditable, and whether it sits inside an open dialog or the Math card.
+  It declines `INPUT` (a range slider is an input, which is what keeps the
+  arrow keys driving the Zoom Level slider rather than the picture), `SELECT`,
+  `TEXTAREA`, `BUTTON` and `A`. Like `opensHelpShortcut` beside it, the rule is
+  pure and takes no DOM, so every accept and every decline is a Node test.
+  Shift is not among the modifiers it checks: it is how `+`, `_` and `R` are
+  typed, so a rule that refused it could offer no zoom in and no capital R.
+- **The page reads it off the window** (`FractalExplorer.tsx`): one
+  `useEffect` adds `handlePageKeyDown` to `keydown`, and the canvas's own
+  `onKeyDown` is **gone**. One listener rather than two, deliberately: React's
+  synthetic handler and a window one would each see a key pressed with the
+  picture focused and move the view twice. The step and the bounds maths are
+  still `keyNavigationBounds`'s, so one gesture means one thing; the live
+  `boundsRef` rather than the committed state, so a held key's repeats each
+  step from the view the last one produced.
+- **The four facts about the focused element are read in the handler**:
+  `target?.tagName`, `target?.isContentEditable`, `Boolean(target?.closest(
+  "dialog[open]"))` — the drawer and the Help overlay are both `<dialog>`, so
+  one selector covers both — and `mathCardPanelRef.current?.contains(target)`,
+  which needed no new markup because the page already holds the card's panel.
+  `preventDefault` is called only after the rule has answered and only for a
+  key the page acts on, so page scroll and the browser's own shortcuts are
+  untouched everywhere else.
+- **R is `resetToDefault`, the Reset View button's own handler**, so the two
+  cannot drift; it is not a jump (Reset View is not one), so it rewrites the
+  current history entry rather than pushing one, and it restarts the walk's
+  countdown through `applyDefaultView` exactly as the button does.
+- **A tour takes the page over, so the view keys stand down while one plays**
+  — `pageKeyAction` declines when `tourPlaying`. The tour is documented in five
+  places as "any key, touch, click or mouse movement stops it and brings
+  everything back on the place it was showing", and a page-wide listener that
+  also panned would break that: the key would stop the tour *and* jump the
+  picture a tenth of the way from the place it stopped on. This is also the
+  page's own pattern — the address bar's follower, the probe, the palette
+  cycling and the strip all stand down for a tour. The key still ends the tour
+  exactly where it did before, through the window capture listener.
+- **The guard asks about the keypress and not about the page, and that is not
+  a detail.** The tour's input listener is on the window in the *capture*
+  phase, so it sees every key before this one does — and it stops the tour as
+  it goes, so by the time the page's handler runs, React's `tourPlaying` is
+  already false and the key that stopped the tour would move the picture
+  anyway. Measured in headless Chrome: `defaultPrevented` was false at the
+  handler and the view still panned exactly one step. So `handleActivity`
+  writes `keyEndedTourRef` — whether a tour was playing when this keydown
+  arrived — *before* it gives the walk up and calls `activity()`, for every
+  keydown including a repeat, and the handler declines on
+  `tourPlaying || keyEndedTourRef.current`. Three consecutive headless runs
+  then held the view still through the key that stopped a tour, with the tour
+  still stopping.
+- **Auto-wander is deliberately not in that guard.** A key during a walk moves
+  the view and restarts the countdown, which is what the canvas-focused keys
+  did before this landing and what the walk is built around ("every manual move
+  restarts the interval"); standing them down would be a new restriction rather
+  than the "identically to the canvas-focused behaviour" the bead asks for.
+  R during a walk resets the view and restarts the countdown like any other
+  manual move.
+- **Two handlers became `useCallback`s and nothing about them changed.**
+  `applyDefaultView` (deps `[wander]`) and `resetToDefault` (deps
+  `[applyDefaultView, fractalType]`) are now stable, so the listener effect is
+  not torn down and re-added on every render and `react-hooks/exhaustive-deps`
+  stays quiet — the page had no warnings before this landing and has none
+  after. The render path, the follower, the renderer, the crossfade and the
+  tour are untouched.
+- Docs: the Help overlay's Keyboard section loses its stale "Tab — Focus the
+  image, so the keys below reach it" row and gains R's, and each row says the
+  keys work from anywhere on the page; the README's Keyboard Navigation feature
+  bullet, its Keyboard usage row and its Project Structure (`pageKeys.ts`); and
+  the Page keys bullet in Project Architecture.
+- Tests: the new `src/lib/__tests__/pageKeys.test.ts` (every pan and zoom key,
+  `r` and `R`, eleven keys the page leaves alone, Control/Meta/Alt, Shift as
+  the way `+`, `_` and `R` are typed, each of the five declining tag names
+  including a slider, a contenteditable, an open dialog and the Math card, and
+  the body, the canvas and no target at all — plus the guard that
+  `PAGE_VIEW_KEYS` is exactly what `keyNavigationBounds` reads, both ways), the
+  new `src/__tests__/page-keyboard-panel.test.ts` (sources: the listener on the
+  window with its cleanup, the canvas handler gone and exactly one
+  `keyNavigationBounds` call left, the facts handed to the rule, the early
+  return, the reset through `resetToDefault`, the live bounds ref, the two
+  `preventDefault` sites, and the Help and README wording), and the updated
+  `canvas-first-page.test.ts` assertion (the canvas keeps its role, label and
+  focus; its keys are the page's now). `make gate` is green.
+- **Verified in headless Chrome** (CDP against the standalone production build
+  on 127.0.0.1, real `Input.dispatchKeyEvent`): with the body focused an
+  ArrowRight pans −0.75 → −0.35 (a tenth of the 4-unit span at zoom 1), `+`
+  doubles the zoom, and R returns the opening link byte for byte; a press on
+  the **focused canvas** pans exactly one step (−0.75 → −1.15, not the two a
+  doubled handler would give); an arrow in a checkbox and `r` in a field leave
+  the view alone; the Zoom Level slider takes the arrow itself (its own value
+  0 → 0.001) and the page does not pan as well; an arrow on a button does
+  nothing; Control+Arrow is the browser's; and with the drawer shut the keys
+  drive the view again, the address bar following to `x=0.446332778` and on to
+  `x=0.8426655559`. One thing measured and worth knowing: in some headless runs
+  the render crawls at about one percent a second (Chrome throttling the
+  yielding loop the renderer uses), so the address bar — which only follows a
+  view that has been drawn — lags well behind; the live view moved correctly on
+  every press in every run, and this is the renderer's own timing, not this
+  landing's.
 
 ### /api/og stops rendering: a 308 to the pre-built picture, and the renderer is gone (2026-10-10)
 
