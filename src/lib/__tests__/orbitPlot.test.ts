@@ -136,6 +136,7 @@ describe("orbitMinExtent and hasEscapeCircle", () => {
   it("draws the escape circle for every kind but Newton's", () => {
     expect(hasEscapeCircle("mandelbrot")).toBe(true);
     expect(hasEscapeCircle("tricorn")).toBe(true);
+    expect(hasEscapeCircle("celtic")).toBe(true);
     expect(hasEscapeCircle("something-new")).toBe(true);
     expect(hasEscapeCircle(NEWTON)).toBe(false);
   });

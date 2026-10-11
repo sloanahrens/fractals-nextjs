@@ -183,6 +183,30 @@ describe("encodeView", () => {
     });
   });
 
+  it("writes the Celtic set as f=celtic, with no k, and reads it back", () => {
+    const view = {
+      fractalType: "celtic",
+      centerX: -1.3,
+      centerY: 0.7,
+      zoomLevel: 4,
+      colorScheme: "classic" as const,
+      autoIterationsOn: true,
+      canvasWidth: 800,
+      canvasHeight: 600,
+    };
+    const link = encodeView(view);
+
+    expect(link).toBe(
+      "v=1&f=celtic&x=-1.3&y=0.7&z=4&s=classic&i=auto&w=800&h=600",
+    );
+    expect(decodeView(`#${link}`)).toMatchObject({
+      fractalType: "celtic",
+      centerX: -1.3,
+      centerY: 0.7,
+      zoomLevel: 4,
+    });
+  });
+
   it("writes the Newton fractal as f=newton, with no k, and reads it back", () => {
     const view = {
       fractalType: "newton",

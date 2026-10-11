@@ -767,6 +767,69 @@ const NEWTON_PLACES: readonly Place[] = [
   },
 ];
 
+// Drawn headless on contact sheets at 400x300 in several schemes, the readable
+// ones kept and their centre and zoom written in as the render had them. The
+// set is the Mandelbrot set's on the real axis (the fold changes nothing while
+// the imaginary part is 0) and has its mirror symmetry, so the interesting
+// frames sit off the axis: the body's flat left edge (the fold line), the
+// arcs under it, and the dust of small copies to its left.
+const CELTIC_PLACES: readonly Place[] = [
+  {
+    id: "celtic-whole",
+    name: "The whole Celtic set",
+    fractal: "celtic",
+    centerX: -0.8,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "celtic-nose",
+    name: "Two bulbs on the nose",
+    fractal: "celtic",
+    centerX: 0.15,
+    centerY: 0.15,
+    zoom: 4,
+    colorScheme: "classic",
+  },
+  {
+    id: "celtic-lace",
+    name: "Lace and small copies",
+    fractal: "celtic",
+    centerX: -1.3,
+    centerY: 0.7,
+    zoom: 4,
+    colorScheme: "classic",
+  },
+  {
+    id: "celtic-arrowhead",
+    name: "An arrowhead among the lace",
+    fractal: "celtic",
+    centerX: -1.2,
+    centerY: 0.05,
+    zoom: 6,
+    colorScheme: "classic",
+  },
+  {
+    id: "celtic-fold-line",
+    name: "The fold line and its arcs",
+    fractal: "celtic",
+    centerX: -0.75,
+    centerY: 0.6,
+    zoom: 3,
+    colorScheme: "classic",
+  },
+  {
+    id: "celtic-branching-dust",
+    name: "Branching dust",
+    fractal: "celtic",
+    centerX: -1.75,
+    centerY: 0.15,
+    zoom: 10,
+    colorScheme: "classic",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -779,6 +842,7 @@ export const PLACES: readonly Place[] = [
   ...TRICORN_PLACES,
   ...MULTIBROT_PLACES,
   ...NEWTON_PLACES,
+  ...CELTIC_PLACES,
 ];
 
 /**
@@ -853,6 +917,12 @@ export function placesForFractal(fractal: string): Place[] {
  *   (a dark dot at its centre), two chains of junctions, a chain of bulbs
  *   and the root at 1 beside the boundary, each a variation on what the
  *   pinwheel already shows.
+ * - Celtic: the whole set, which is also the view the Fractal select opens it
+ *   on (`FEATURED_IS_OPENING_VIEW` in the test). The set's real axis is the
+ *   Mandelbrot set's, so a deep view on the axis would repeat that button, and
+ *   the whole set is the picture that says what is different: a flat-edged
+ *   black body with a pointed nose, arcs of colour under the fold line and a
+ *   dust of small copies to its left. 25% one colour in classic at 64x48.
  *
  * The others were redrawn and kept: each is at most 21% one colour (the
  * guard in `places.test.ts` holds every one under 60%).
@@ -864,6 +934,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   tricorn: "tricorn-whole",
   multibrot: "multibrot-3-small-copy",
   newton: "newton-junction",
+  celtic: "celtic-whole",
 };
 
 /**
@@ -878,6 +949,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
  */
 export const REAL_AXIS_MATCHES_MANDELBROT: Readonly<Record<string, boolean>> = {
   tricorn: true,
+  celtic: true,
 };
 
 /**

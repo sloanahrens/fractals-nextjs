@@ -37,7 +37,7 @@ docker run --rm -p 8080:8080 fractals-nextjs:test
 
 ## Project Architecture
 
-This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set, Julia, Burning Ship, Tricorn, Multibrot and Newton fractals using Canvas API. Key architectural decisions:
+This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set, Julia, Burning Ship, Tricorn, Multibrot, Newton and Celtic fractals using Canvas API. Key architectural decisions:
 
 ### Core Rendering System
 
@@ -54,6 +54,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Julia map** (`src/lib/juliaMap.ts`, `src/components/ui/JuliaMap.tsx`): The Mandelbrot set drawn small in the Settings drawer as the map of Julia constants — point at it or drag along it and the constant is the point under the pointer — the clamped pixel-to-point mapping and back, and the arrow-key step
 - **Burning Ship** (`src/lib/burningShip.ts`): The Burning Ship formula — the Mandelbrot loop with both parts of z folded onto the positive side before squaring — behind its own fractal kind
 - **Tricorn** (`src/lib/tricorn.ts`): The Tricorn (Mandelbar) formula — the Mandelbrot loop with z conjugated before squaring, z -> conj(z)^2 + c — behind its own fractal kind
+- **Celtic** (`src/lib/celtic.ts`): The Celtic Mandelbrot formula — the Mandelbrot loop with the real part of the square folded by an absolute value, z -> (|Re(z^2)| + i Im(z^2)) + c, that is x' = |x^2 - y^2| + cx and y' = 2xy + cy — behind its own fractal kind
 - **Multibrot** (`src/lib/multibrot.ts`): The Mandelbrot loop with a higher power, z -> z^d + c for d = 3, 4, 5 — `createMultibrotKind(power)` and `parseMultibrotPower`, the power being the fractal's variant
 - **Newton** (`src/lib/newton.ts`): Newton's method for z^3 - 1 as a fractal kind — the orbit's root and its speed packed into the one number the renderer takes, the three roots in thirds of 0..maxIterations; the first fractal that is not an escape-time set
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
@@ -90,7 +91,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, `nearestPlace` — the place a view previews as, the whole rule behind `ogImage` — and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia and Multibrot chips land
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
-- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
+- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Tricorn / Multibrot / Newton / Celtic buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
 - **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers, the probe's rows and the orbit plot (`OrbitPlot.tsx`); it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
 - **Math probe** (`src/lib/mathProbe.ts`, `escapeInfo` on `FractalKind` in `src/types/fractal.ts`): The number under the pointer, what its orbit did and the colour the picture paints it, shown in the expanded Math card — `probePoint(kind, point, maxIterations, scheme)` reads the count from the kind (whole steps for the words, the smooth count for the colour) and `describeProbe(fractalId, info, cap)` words it; every kind ships `escapeInfo(point, maxIterations)`, an optional method the probe falls back to the count for; `createFrameThrottle` is the one-point-per-frame rule and `pointerToCanvasPixel` the CSS-to-canvas scaling; `shouldClearProbe` is the rule that holds the probe while the pointer is on the Math card rather than the picture, so the plot and its Play control stay reachable. **A kind's `escapeInfo` must agree with its `iterations`** — `escapeInfo.test.ts` and the pixel parity in `mathProbe.test.ts` hold it to a drawn view
 - **Orbit plot** (`src/lib/orbitPlot.ts`, `src/components/ui/OrbitPlot.tsx`, `orbit` on `FractalKind` in `src/types/fractal.ts`): The path that point took, drawn under the probe's rows in the expanded Math card — `orbit` is the points the kind's own loop visits (optional, as `escapeInfo` is; `orbitFor` answers the point alone for a kind without it), the probe keeps 60 steps of it in `PointProbe.orbit`, `orbitToPlot(orbit, size, minExtent)` places them in a square plot (frame never inside the escape circle nor past twice it, values that are not numbers read as the origin), `describeOrbit(fractalId, info, steps)` is the `aria-label`, `orbitStepColour` paints a dot through the picture's own mapping, and a Play control walks it a step every 120 ms (off under `prefers-reduced-motion`). **A kind's `orbit` must be the same walk as its `iterations` and `escapeInfo`** — `orbit.test.ts` holds the path to the count for every kind
@@ -106,7 +107,7 @@ The main page (`src/app/FractalExplorer.tsx`, a client component; `src/app/page.
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
-- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Tricorn, three Multibrot, two Newton) and custom fractal configurations
+- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Tricorn, three Multibrot, two Newton, two Celtic) and custom fractal configurations
 
 ### Component Structure
 
@@ -201,6 +202,83 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-11_
+
+### Celtic Mandelbrot: a seventh fractal (2026-10-11)
+
+- fr-gx5. The Celtic Mandelbrot set is the Mandelbrot loop with the real part of
+  the square folded by an absolute value: z -> (|Re(z^2)| + i Im(z^2)) + c, that
+  is x' = |x^2 - y^2| + cx and y' = 2xy + cy, from z = 0, escape when |z|^2 > 4.
+  It is the first fractal added with no new machinery: it follows the Tricorn and
+  the Burning Ship line for line.
+- **`src/lib/celtic.ts`** exports `celticKind` (id `celtic`) with `iterations`,
+  `escapeInfo` and `orbit`, all the same loop (the count returns the step index of
+  the escape, the cap for an orbit that does not, and the shared smooth count;
+  `escapeInfo.test.ts`, `orbit.test.ts` and the pixel parity in `mathProbe.test.ts`
+  hold the three together). No interior shortcut: the cardioid test is closed
+  form for the Mandelbrot set only.
+- **Two exact facts the tests lean on.** The fold touches only the real part, so
+  conj(z_n(c)) is z_n(conj c) step for step and the set keeps the Mandelbrot
+  set's mirror symmetry about the real axis, bit for bit; and on the real axis y
+  stays 0 and |x^2| is x^2, so the counts agree with the Mandelbrot kind's there,
+  smoothing included. It has no symmetry about the imaginary axis. Worked by
+  hand, c = i is in the Mandelbrot set and escapes the Celtic loop at step 2
+  (0, i, 1 + i, 3i), and c = 2 escapes at 1 in both. Every step's real part is at
+  least c's, which is what the Math card's escape sentence says the orbit plot
+  shows.
+- **The smooth count has a seam where the whole count steps**, measured: the
+  shared formula is the Mandelbrot one with escape radius 2, exact only as the
+  radius grows, and with |c| of order 1 the escaping point's size is |z|^2 + c
+  rather than |z|^2. Along a line well outside the set the seam is under 0.5 of a
+  whole step and everywhere else the smooth count moves by under 0.01 between
+  samples 1e-5 apart (`celtic.test.ts`). The Mandelbrot kind has the same seam; it
+  is the convention, left alone.
+- **Registered like the Tricorn, with no variant**: `FRACTAL_TYPES` has `{ id:
+  "celtic", label: "Celtic" }` after Newton, `resolveFractalKind("celtic", ...)`
+  returns `celticKind` whatever variant the page holds, `fractalVariants` is
+  `null` so there is no second row and the codec writes `f=celtic` with no `k`;
+  `viewLink`, `presetFractal` and the tour link read the id through
+  `FRACTAL_TYPES`, so a link and a saved view round-trip with no change to
+  either. `viewPreview.ts` names it "Celtic Mandelbrot" in a link's line.
+- **`defaultViewFor("celtic")` is (-0.8, 0) at zoom 1.** Measured with a 0.004
+  grid at a cap of 400 the set spans x -1.78..0.33 (the spike at -2 is thinner
+  than the grid) by y -1.55..1.55, so the body runs a little past zoom 1's
+  1.5 at the top and bottom, which is the widest view there is, and -0.8 is the
+  middle of the real extent: the spike and the nose are both inside with 0.8 to
+  spare. Corners are sky; the set is 10 to 60% of a 60x45 grid.
+- **Six places** (`CELTIC_PLACES`, the test allows 4 to 6), each picked from
+  contact sheets at 400x300 through the real pipeline and then held to the
+  catalogue's guards (not blank, at most 60% one colour at 64x48 with whole
+  counts, link round trip): the whole set (25% one colour), two bulbs on the nose
+  (47%), lace and small copies (25%), an arrowhead among the lace (48%), the fold
+  line and its arcs (39%) and branching dust (20%). Every place is in classic: the
+  contact sheets in rainbow, fire and ocean were flat fields (46 to 79% one
+  colour) or dark. The real axis is the Mandelbrot set, so
+  `REAL_AXIS_MATCHES_MANDELBROT` lists `celtic` and no place is zoomed in on it.
+  **The featured place is the whole set**, which is also the view the Fractal
+  select opens the fractal on, so `places.test.ts` exempts it from "a switch goes
+  somewhere" the way it does the Tricorn (`FEATURED_IS_OPENING_VIEW`), and the
+  "opens each fractal on a place" test is satisfied by the same place.
+- **Two built-in views** (`celtic-overview`, the default frame; `celtic-lace`,
+  the lace at zoom 4), under the per-fractal guards in `presets.test.ts` (16
+  fractal-owned views, 22 built-ins).
+- **Math card**: `FRACTAL_MATH.celtic` — title "Celtic Mandelbrot set", the rule
+  z -> (|Re(z^2)| + i Im(z^2)) + c, starting at 0 with c the pixel's point, no
+  setting, a three-sentence blurb and the shared escape sentence with one more
+  about what the orbit plot shows. `fractalMath.test.ts` reads the rule aloud.
+- **`npm run make-og-previews`** was run and the six `public/og/celtic-*.jpg`
+  files committed (16 to 167 KB, all at quality 80; the set is 75 pictures,
+  5.0 MB). Nothing else in `public/og/` changed.
+- **The button row**: seven buttons are wider than the six's 375 px, so the row
+  scrolls sideways at 375 and 320 px as it already did. It was not re-measured
+  in a browser; the switcher's classes are unchanged.
+- Tests: the new `src/lib/__tests__/celtic.test.ts`, and the Celtic cases added
+  to `fractalTypes`, `viewLink`, `viewLinkState`, `viewPreview`, `tourLink`,
+  `escapeInfo`, `orbit`, `mathProbe`, `orbitPlot`, `renderRgba`, `fractalMath`,
+  `places`, `presets` and `tour` tests, and the switcher panel test, each
+  extended to the new count rather than loosened.
+- Docs: the README (intro, Fractal Types, Switcher, Custom Presets, Project
+  Structure, Mathematics), the Help overlay's switcher row, the design doc's As
+  built, and this note.
 
 ### Share: the browser's own share sheet, where there is one (2026-10-11)
 

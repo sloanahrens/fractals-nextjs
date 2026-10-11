@@ -58,6 +58,12 @@ const TRICORN = stop({
   centerY: 1.51,
   zoomLevel: 50,
 });
+const CELTIC = stop({
+  fractalType: "celtic",
+  centerX: -1.3,
+  centerY: 0.7,
+  zoomLevel: 4,
+});
 const MULTIBROT = stop({
   fractalType: "multibrot",
   variant: "4",
@@ -77,7 +83,15 @@ const NEWTON = stop({
   reverse: true,
 });
 
-const EVERY_FRACTAL = [MANDELBROT, JULIA, SHIP, TRICORN, MULTIBROT, NEWTON];
+const EVERY_FRACTAL = [
+  MANDELBROT,
+  JULIA,
+  SHIP,
+  TRICORN,
+  MULTIBROT,
+  NEWTON,
+  CELTIC,
+];
 
 describe("encodeTourLink", () => {
   it("writes one column per field, in the codec's order", () => {

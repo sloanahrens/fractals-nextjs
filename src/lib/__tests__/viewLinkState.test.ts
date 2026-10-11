@@ -76,6 +76,22 @@ describe("viewLinkToUpdates", () => {
     });
   });
 
+  it("puts a Celtic link's fractal on the page and leaves the constant standing", () => {
+    expect(
+      viewLinkToUpdates(
+        decodeView(
+          "#v=1&f=celtic&x=-1.3&y=0.7&z=4&s=classic&i=auto&w=800&h=600",
+        ),
+      ),
+    ).toMatchObject({
+      fractalType: "celtic",
+      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
+      centerX: -1.3,
+      centerY: 0.7,
+      zoomLevel: 4,
+    });
+  });
+
   it("puts a Newton link's fractal on the page and leaves the variant standing", () => {
     expect(
       viewLinkToUpdates(
