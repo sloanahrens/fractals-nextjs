@@ -59,16 +59,18 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Keyboard",
     entries: [
       {
-        keys: "Tab",
-        action: "Focus the image, so the keys below reach it",
-      },
-      {
         keys: "ArrowLeft / ArrowRight / ArrowUp / ArrowDown",
-        action: "Pan the view a tenth of its own width or height",
+        action:
+          "Pan the view a tenth of its own width or height, from anywhere on the page: focus does not have to be on the image first",
       },
       {
         keys: "+ / -",
-        action: "Zoom in and out about the centre",
+        action: "Zoom in and out about the centre, from anywhere on the page",
+      },
+      {
+        keys: "R",
+        action:
+          "Put the view back on the fractal's own default frame, exactly as the Reset View button does, from anywhere on the page",
       },
     ],
   },

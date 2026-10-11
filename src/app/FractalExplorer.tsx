@@ -101,6 +101,7 @@ import {
   readManualCoordinate,
 } from "../lib/manualBounds";
 import { opensHelpShortcut } from "../lib/helpEntries";
+import { pageKeyAction } from "../lib/pageKeys";
 import { Journey, historyButtons } from "../lib/journey";
 import {
   PLACES,
@@ -513,6 +514,12 @@ export default function Home() {
   // an ordinary tour, which wanders by `tour.ts`'s rules.
   const playlistRef = useRef<PlaylistState | null>(null);
   const [tourState, setTourState] = useState<TourModeState>("idle");
+  // Whether the keypress being dispatched is one a tour was playing for. The
+  // tour's own listener reads every key first, in the capture phase, and stops
+  // the tour as it goes — so by the time the page's key handler sees the same
+  // event `tourPlaying` is already false. It reads this instead, which the
+  // capture listener writes before it stops anything.
+  const keyEndedTourRef = useRef(false);
   const tourEngineRef = useRef<TourState | null>(null);
   const [tourMode] = useState(
     () => new TourMode({ onChange: (next) => setTourState(next) }),
@@ -1547,22 +1554,6 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Arrow keys pan the view and `+`/`-` zoom it, for a user who cannot use a
-  // pointer. The keys are read off the canvas itself, so they only move the
-  // view while the canvas has focus and Tab still reaches every control.
-  const handleCanvasKeyDown = (
-    event: ReactKeyboardEvent<HTMLCanvasElement>,
-  ) => {
-    const next = keyNavigationBounds(event.key, bounds);
-    if (!next) return;
-
-    // An arrow key would otherwise scroll the page under the focused canvas,
-    // moving the view out of sight.
-    event.preventDefault();
-
-    applyView(boundsToView(next));
-  };
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1741,18 +1732,21 @@ export default function Home() {
   // Put a view on screen without touching anything else. Both ways of choosing
   // a fractal go through here, so neither can leave the sliders showing a view
   // the canvas is not on.
-  const applyDefaultView = (typeId: string) => {
-    const view = defaultViewFor(typeId);
+  const applyDefaultView = useCallback(
+    (typeId: string) => {
+      const view = defaultViewFor(typeId);
 
-    setCenterX(view.centerX);
-    setCenterY(view.centerY);
-    setZoomLevel(view.zoom);
-    setCurrentPreset("");
+      setCenterX(view.centerX);
+      setCenterY(view.centerY);
+      setZoomLevel(view.zoom);
+      setCurrentPreset("");
 
-    // Choosing another fractal is also a manual move: the walk carries on from
-    // the new fractal's own default view rather than stopping.
-    wander.notifyActivity();
-  };
+      // Choosing another fractal is also a manual move: the walk carries on
+      // from the new fractal's own default view rather than stopping.
+      wander.notifyActivity();
+    },
+    [wander],
+  );
 
   // The page holds one variant across fractals, so going to a fractal that
   // takes one (Julia, the Multibrot) brings a value it can draw: the one held
@@ -1849,14 +1843,72 @@ export default function Home() {
     wander.notifyActivity();
   };
 
-  const resetToDefault = () => {
+  const resetToDefault = useCallback(() => {
     applyDefaultView(fractalType);
     setMaxIterations(100);
     setAutoIterationsOn(true);
     setColorScheme(DEFAULT_VIEW_LINK_UPDATES.colorScheme);
     setReverse(DEFAULT_VIEW_LINK_UPDATES.reverse);
     setShift(DEFAULT_VIEW_LINK_UPDATES.shift);
-  };
+  }, [applyDefaultView, fractalType]);
+
+  // The view keys, read off the window rather than off the canvas, so a
+  // keyboard user can drive the explorer from wherever focus happens to be:
+  // the arrows pan, `+` and `-` zoom and R puts the view back to the fractal's
+  // own default frame, exactly as Reset View does, entries and all.
+  //
+  // One listener rather than two, because the canvas's own handler and a
+  // window one would both see a key pressed with the picture focused and move
+  // the view twice. The bounds maths and the step are `keyNavigationBounds`'s,
+  // the same call the canvas made, so one gesture still means one thing.
+  //
+  // Whether a press is the page's at all is `pageKeyAction`'s decision — a key
+  // typed into a field, a slider, a button or a link belongs to the control,
+  // and so does one inside the Settings drawer, the Help overlay or the Math
+  // card, which answer their own. A tour takes the page over, so a key while
+  // one plays stops it and leaves the picture where the tour had reached.
+  // Only a key the page acts on has its default taken away, so page scroll and
+  // the browser's own shortcuts are untouched everywhere else.
+  const handlePageKeyDown = useCallback(
+    (event: globalThis.KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const action = pageKeyAction({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        targetTagName: target?.tagName ?? "",
+        targetIsContentEditable: target?.isContentEditable ?? false,
+        targetInDialog: Boolean(target?.closest("dialog[open]")),
+        targetInMathCard: mathCardPanelRef.current?.contains(target) ?? false,
+        // A tour takes the page over while it plays — and the tour's own
+        // listener has already stopped it by the time this one runs, so the
+        // question is asked of the keypress rather than of the page.
+        tourPlaying: tourPlaying || keyEndedTourRef.current,
+      });
+      if (!action) return;
+
+      if (action === "reset") {
+        event.preventDefault();
+        resetToDefault();
+        return;
+      }
+
+      const next = keyNavigationBounds(event.key, boundsRef.current);
+      if (!next) return;
+
+      // An arrow key would otherwise scroll the page under the picture, moving
+      // the view out of sight.
+      event.preventDefault();
+      applyView(boundsToView(next));
+    },
+    [applyView, resetToDefault, tourPlaying],
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handlePageKeyDown);
+    return () => window.removeEventListener("keydown", handlePageKeyDown);
+  }, [handlePageKeyDown]);
 
   // Export sizes: the screen size saves the canvas on screen, and a larger one
   // draws the same view again on a canvas of its own. The Shape select says
@@ -2549,6 +2601,14 @@ export default function Home() {
         // The page under a resting pointer changing is not someone.
         if (!moved) return;
       }
+      // Whether this keypress is the tour's to take. It is, for every key
+      // while a tour plays — including a repeat, and including the key that
+      // stops it, which this listener is about to do — so the page's own key
+      // handler knows to leave the picture where the tour had reached.
+      if (event.type === "keydown") {
+        keyEndedTourRef.current = tourMode.state === "playing";
+      }
+
       // A key held down before the tour began repeats into it.
       if ((event as KeyboardEvent).repeat && tourMode.state === "playing") {
         return;
@@ -2851,7 +2911,6 @@ export default function Home() {
             role="img"
             aria-label={describeBounds(bounds, fractalLabel)}
             tabIndex={0}
-            onKeyDown={handleCanvasKeyDown}
             className="fractal-canvas block focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
             style={
               {

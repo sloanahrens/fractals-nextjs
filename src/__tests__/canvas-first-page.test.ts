@@ -213,11 +213,15 @@ describe("the canvas", () => {
     expect(css).toContain("aspect-ratio: var(--canvas-aspect");
   });
 
-  it("keeps its role, its label, its focus and its keys", () => {
+  it("keeps its role, its label and its focus", () => {
     expect(page).toContain('role="img"');
     expect(page).toContain("aria-label={describeBounds(bounds, fractalLabel)}");
     expect(page).toContain("tabIndex={0}");
-    expect(page).toContain("onKeyDown={handleCanvasKeyDown}");
+    // Its keys are the page's now, read off the window so they work wherever
+    // focus is (`pageKeys.ts`); the canvas handles none of them itself, which
+    // is what keeps a focused picture from moving the view twice per press.
+    expect(page).not.toContain("handleCanvasKeyDown");
+    expect(page).toContain('window.addEventListener("keydown", handlePageKeyDown)');
   });
 
   it("shows render progress as a line on its top edge, and says it as text", () => {
