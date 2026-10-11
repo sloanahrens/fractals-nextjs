@@ -395,6 +395,40 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasHeight: 600,
     fractal: "newton",
   },
+  {
+    id: "celtic-overview",
+    name: "Celtic Mandelbrot",
+    description: "The whole Celtic set, flat-edged body and spike",
+    // The Celtic default view (-0.8, 0) at zoom 1: 4 by 3 about (-0.8, 0).
+    bounds: {
+      minReal: -2.8,
+      maxReal: 1.2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "celtic",
+  },
+  {
+    id: "celtic-lace",
+    name: "Celtic lace",
+    description: "Lace and small copies to the left of the Celtic body",
+    // Centre (-1.3, 0.7) at zoom 4: 1 by 0.75.
+    bounds: {
+      minReal: -1.8,
+      maxReal: -0.8,
+      minImaginary: 0.325,
+      maxImaginary: 1.075,
+    },
+    maxIterations: 400,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "celtic",
+  },
 ];
 
 /**

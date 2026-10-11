@@ -206,6 +206,7 @@ describe("the counting and colouring steps", () => {
       resolveFractalKind("julia", "Dendrite"),
       resolveFractalKind("burning-ship", ""),
       resolveFractalKind("tricorn", ""),
+      resolveFractalKind("celtic", ""),
       resolveFractalKind("multibrot", "4"),
       resolveFractalKind("newton", ""),
     ];
@@ -250,6 +251,7 @@ describe("the scheme's own settings through the pipeline", () => {
     resolveFractalKind("julia", "Dendrite"),
     resolveFractalKind("burning-ship", ""),
     resolveFractalKind("tricorn", ""),
+    resolveFractalKind("celtic", ""),
     resolveFractalKind("multibrot", "4"),
     resolveFractalKind("newton", ""),
   ];

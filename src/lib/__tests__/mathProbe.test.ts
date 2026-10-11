@@ -32,6 +32,7 @@ import {
 import { createMultibrotKind } from "../multibrot";
 import { newtonKind } from "../newton";
 import { renderRgba } from "../renderRgba";
+import { celticKind } from "../celtic";
 import { tricornKind } from "../tricorn";
 import type { ColorScheme, FractalKind } from "../../types/fractal";
 
@@ -48,6 +49,7 @@ const KINDS: { name: string; kind: FractalKind; packsOutcomes?: boolean }[] = [
   { name: "julia", kind: createJuliaKind({ real: -0.8, imaginary: 0.156 }) },
   { name: "burning-ship", kind: burningShipKind },
   { name: "tricorn", kind: tricornKind },
+  { name: "celtic", kind: celticKind },
   { name: "multibrot 3", kind: createMultibrotKind(3) },
   { name: "multibrot 5", kind: createMultibrotKind(5) },
   // Newton's count is its root and its speed packed together rather than a

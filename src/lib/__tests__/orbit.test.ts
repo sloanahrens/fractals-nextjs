@@ -17,6 +17,7 @@ import { escapeTimeOrbit, mandelbrotKind } from "../mandelbrot";
 import { ORBIT_MAX_STEPS, orbitFor } from "../mathProbe";
 import { MULTIBROT_POWERS, createMultibrotKind } from "../multibrot";
 import { NEWTON_ROOTS, NEWTON_TOLERANCE, newtonKind } from "../newton";
+import { celticKind } from "../celtic";
 import { tricornKind } from "../tricorn";
 import type { ComplexNumber, FractalKind } from "../../types/fractal";
 
@@ -83,6 +84,16 @@ const CASES: KindCase[] = [
   {
     name: "tricorn",
     kind: tricornKind,
+    starts: atOrigin,
+    neverEnds: ORIGIN,
+    neverEndsLength: (maxSteps) => maxSteps + 1,
+    endsAt: { point: { real: 2, imaginary: 0 }, steps: 1 },
+    endedLength: (steps) => steps + 2,
+    escapes: true,
+  },
+  {
+    name: "celtic",
+    kind: celticKind,
     starts: atOrigin,
     neverEnds: ORIGIN,
     neverEndsLength: (maxSteps) => maxSteps + 1,
@@ -216,15 +227,16 @@ describe("a Julia orbit", () => {
 
 describe("the escape-time kinds' first step", () => {
   it("sends c = 2 to 2 and then out, each in its own arithmetic", () => {
-    // The ship folds nothing at 0, the Tricorn conjugates nothing at 0, and
-    // z^3 of 2 is 8, so all three reach 2 and then leave the radius: the
-    // Mandelbrot path is the same two steps.
+    // The ship folds nothing at 0, the Tricorn conjugates nothing at 0, the
+    // Celtic fold has nothing negative to flip, and z^3 of 2 is 8, so all four
+    // reach 2 and then leave the radius: the Mandelbrot path is the same two
+    // steps.
     const expected = [
       { real: 0, imaginary: 0 },
       { real: 2, imaginary: 0 },
     ];
 
-    for (const kind of [burningShipKind, tricornKind]) {
+    for (const kind of [burningShipKind, tricornKind, celticKind]) {
       expect(kind.orbit!({ real: 2, imaginary: 0 }, 4).slice(0, 2)).toEqual(
         expected,
       );
@@ -301,6 +313,7 @@ describe("every kind this app ships", () => {
       createJuliaKind({ real: -0.8, imaginary: 0.156 }),
       burningShipKind,
       tricornKind,
+      celticKind,
       ...MULTIBROT_POWERS.map(createMultibrotKind),
       newtonKind,
     ];

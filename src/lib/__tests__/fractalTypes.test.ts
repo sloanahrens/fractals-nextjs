@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ComplexNumber } from "../../types/fractal";
 import { burningShipKind } from "../burningShip";
+import { celticKind } from "../celtic";
 import { tricornKind } from "../tricorn";
 import {
   FRACTAL_TYPES,
@@ -35,7 +36,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the six fractals in order, each once", () => {
+  it("offers the seven fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -45,6 +46,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "tricorn", label: "Tricorn" },
       { id: "multibrot", label: "Multibrot" },
       { id: "newton", label: "Newton" },
+      { id: "celtic", label: "Celtic" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -81,6 +83,11 @@ describe("resolveFractalKind", () => {
       burningShipKind,
     );
     expect(resolveFractalKind("burning-ship", "")).toBe(burningShipKind);
+  });
+
+  it("draws the Celtic set for its own id, whatever variant is beside it", () => {
+    expect(resolveFractalKind("celtic", "Dendrite")).toBe(celticKind);
+    expect(resolveFractalKind("celtic", "")).toBe(celticKind);
   });
 
   it("draws the Tricorn for its own id, whatever constant is beside it", () => {
@@ -233,6 +240,14 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("frames the Celtic set about the middle of its real extent, spike and nose both inside", () => {
+    expect(defaultViewFor("celtic")).toEqual({
+      centerX: -0.8,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("frames the Multibrot about the origin at zoom 1, holding all three powers", () => {
     expect(defaultViewFor("multibrot")).toEqual({
       centerX: 0,
@@ -284,11 +299,12 @@ describe("fractalVariants", () => {
     ]);
   });
 
-  it("gives the Mandelbrot set, the Burning Ship, the Tricorn, Newton and an unknown id no row", () => {
+  it("gives the Mandelbrot set, the Burning Ship, the Tricorn, Newton, the Celtic set and an unknown id no row", () => {
     expect(fractalVariants("mandelbrot")).toBeNull();
     expect(fractalVariants("burning-ship")).toBeNull();
     expect(fractalVariants("tricorn")).toBeNull();
     expect(fractalVariants("newton")).toBeNull();
+    expect(fractalVariants("celtic")).toBeNull();
     expect(fractalVariants("lyapunov")).toBeNull();
   });
 
@@ -308,6 +324,7 @@ describe("defaultVariant", () => {
     expect(defaultVariant("burning-ship")).toBe("");
     expect(defaultVariant("tricorn")).toBe("");
     expect(defaultVariant("newton")).toBe("");
+    expect(defaultVariant("celtic")).toBe("");
     expect(defaultVariant("lyapunov")).toBe("");
   });
 
@@ -354,6 +371,7 @@ describe("isVariantValue", () => {
     expect(isVariantValue("mandelbrot", "Classic")).toBe(false);
     expect(isVariantValue("burning-ship", "")).toBe(false);
     expect(isVariantValue("tricorn", "Classic")).toBe(false);
+    expect(isVariantValue("celtic", "Classic")).toBe(false);
   });
 });
 
@@ -368,6 +386,7 @@ describe("isCustomVariant", () => {
     expect(isCustomVariant("mandelbrot", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("burning-ship", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("tricorn", "custom:-0.8,0.156")).toBe(false);
+    expect(isCustomVariant("celtic", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("multibrot", "custom:-0.8,0.156")).toBe(false);
   });
 });
@@ -388,7 +407,13 @@ describe("variantOn", () => {
   });
 
   it("leaves the value alone for a fractal that takes none, so Julia -> Mandelbrot -> Julia keeps the constant", () => {
-    for (const id of ["mandelbrot", "burning-ship", "tricorn", "newton"]) {
+    for (const id of [
+      "mandelbrot",
+      "burning-ship",
+      "tricorn",
+      "newton",
+      "celtic",
+    ]) {
       expect(variantOn(id, "Dendrite"), id).toBe("Dendrite");
       expect(variantOn(id, "4"), id).toBe("4");
     }

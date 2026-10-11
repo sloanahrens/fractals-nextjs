@@ -421,6 +421,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   tricorn: [8, 10],
   multibrot: [10, 12],
   newton: [8, 10],
+  celtic: [4, 6],
 };
 
 describe("PLACES", () => {
@@ -904,7 +905,7 @@ function zoomedInOnRealAxis(place: Place): boolean {
  * on a view and a button repeating it; the Tricorn's whole set is the picture
  * that shows it best (fr-hbe), and nothing opens on it but a switch.
  */
-const FEATURED_IS_OPENING_VIEW = new Set(["tricorn"]);
+const FEATURED_IS_OPENING_VIEW = new Set(["tricorn", "celtic"]);
 
 /**
  * The smallest stand-in for a 2D canvas that FractalRenderer touches, with the

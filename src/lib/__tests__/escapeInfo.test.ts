@@ -16,6 +16,7 @@ import { createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
 import { MULTIBROT_POWERS, createMultibrotKind } from "../multibrot";
 import { NEWTON_ROOTS, newtonKind } from "../newton";
+import { celticKind } from "../celtic";
 import { tricornKind } from "../tricorn";
 import type { ComplexNumber, FractalKind } from "../../types/fractal";
 
@@ -71,6 +72,13 @@ const CASES: KindCase[] = [
   {
     name: "tricorn",
     kind: tricornKind,
+    neverEnds: ORIGIN,
+    endsAt: { point: { real: 2, imaginary: 0 }, steps: 1 },
+    packsOutcomes: false,
+  },
+  {
+    name: "celtic",
+    kind: celticKind,
     neverEnds: ORIGIN,
     endsAt: { point: { real: 2, imaginary: 0 }, steps: 1 },
     packsOutcomes: false,
@@ -207,6 +215,7 @@ describe("every kind this app ships", () => {
       createJuliaKind({ real: -0.8, imaginary: 0.156 }),
       burningShipKind,
       tricornKind,
+      celticKind,
       ...MULTIBROT_POWERS.map(createMultibrotKind),
       newtonKind,
     ];

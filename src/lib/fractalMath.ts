@@ -307,6 +307,30 @@ const TRICORN: FractalMath = {
   escape: ESCAPE_RADIUS_2,
 };
 
+/** z squared in brackets, the thing Celtic's Re and Im are read off. */
+const SQUARE_OF_Z = row(OPEN, superscript(z, number(2)), CLOSE);
+
+const CELTIC: FractalMath = {
+  title: "Celtic Mandelbrot set",
+  rule: rule(
+    row(
+      OPEN,
+      abs(row(identifier("Re", "the real part of"), SQUARE_OF_Z)),
+      PLUS,
+      identifier("i"),
+      operator(INVISIBLE_TIMES),
+      identifier("Im", "the imaginary part of"),
+      SQUARE_OF_Z,
+      CLOSE,
+    ),
+  ),
+  start: START_AT_ZERO,
+  setting: null,
+  blurb:
+    "The same game as the Mandelbrot set, with one twist: after squaring, the real part of the result is flipped to be positive. That fold gives the set a flat left edge and lacy, knotted loops. Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+  escape: `${ESCAPE_RADIUS_2} In the orbit plot the fold shows as a path that never lands left of c: each step's real part is at least c's, so only c itself pulls the path to the left.`,
+};
+
 const NEWTON: FractalMath = {
   title: "Newton fractal",
   rule: row(
@@ -379,6 +403,7 @@ export const FRACTAL_MATH: Readonly<
   tricorn: () => TRICORN,
   multibrot,
   newton: () => NEWTON,
+  celtic: () => CELTIC,
 };
 
 /**

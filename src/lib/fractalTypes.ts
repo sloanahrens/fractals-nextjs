@@ -14,6 +14,7 @@ import {
   parseMultibrotPower,
 } from "./multibrot";
 import { newtonKind } from "./newton";
+import { celticKind } from "./celtic";
 import { tricornKind } from "./tricorn";
 
 /**
@@ -38,6 +39,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "tricorn", label: "Tricorn" },
   { id: "multibrot", label: "Multibrot" },
   { id: "newton", label: "Newton" },
+  { id: "celtic", label: "Celtic" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -179,6 +181,7 @@ export function resolveFractalKind(
   if (typeId === "burning-ship") return burningShipKind;
   if (typeId === "tricorn") return tricornKind;
   if (typeId === "newton") return newtonKind;
+  if (typeId === "celtic") return celticKind;
   if (typeId === "multibrot") {
     return createMultibrotKind(
       parseMultibrotPower(variant) ?? MULTIBROT_POWERS[0],
@@ -258,6 +261,15 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // CLAUDE.md), the origin junction reads as a pinwheel of three colours with
   // bulbs strung along the three boundaries.
   if (typeId === "newton") return { centerX: 0, centerY: 0, zoom: 1 };
+
+  // The Celtic set is the Mandelbrot set's on the real axis, so it runs from
+  // the thin spike at -2 to the nose at 0.33, and it is mirrored about that
+  // axis. Measured with a 0.004 grid and a cap of 400 it spans x -1.78..0.33
+  // (the spike's last stretch is thinner than the grid) by y -1.55..1.55, so
+  // the body's top and bottom run a little past zoom 1's 1.5, which is the
+  // widest view there is. Centring on the middle of the real extent, -0.8,
+  // leaves the spike and the nose both inside with 0.8 to spare each side.
+  if (typeId === "celtic") return { centerX: -0.8, centerY: 0, zoom: 1 };
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }

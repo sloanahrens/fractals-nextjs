@@ -138,6 +138,12 @@ describe("the rule, read aloud", () => {
     expect(rule("tricorn")).toBe("z becomes z bar squared plus c");
   });
 
+  it("reads the Celtic rule", () => {
+    expect(rule("celtic")).toBe(
+      "z becomes open bracket the absolute value of the real part of open bracket z squared close bracket, plus i times the imaginary part of open bracket z squared close bracket close bracket plus c",
+    );
+  });
+
   it("reads the Multibrot rule with its power as d", () => {
     for (const power of MULTIBROT_POWERS) {
       expect(rule("multibrot", String(power))).toBe(
@@ -158,7 +164,13 @@ describe("where each point starts", () => {
     toPlainText(describeFractalMath(id, defaultVariant(id)).start);
 
   it("starts the Mandelbrot-style sets at zero with c the pixel's point", () => {
-    for (const id of ["mandelbrot", "burning-ship", "tricorn", "multibrot"]) {
+    for (const id of [
+      "mandelbrot",
+      "burning-ship",
+      "tricorn",
+      "multibrot",
+      "celtic",
+    ]) {
       expect(start(id)).toBe("z sub 0 equals 0, c equals the pixel's point");
     }
   });
@@ -171,7 +183,13 @@ describe("where each point starts", () => {
 
 describe("the setting", () => {
   it("is null for a fractal that takes none", () => {
-    for (const id of ["mandelbrot", "burning-ship", "tricorn", "newton"]) {
+    for (const id of [
+      "mandelbrot",
+      "burning-ship",
+      "tricorn",
+      "newton",
+      "celtic",
+    ]) {
       expect(describeFractalMath(id, "").setting).toBeNull();
     }
   });
