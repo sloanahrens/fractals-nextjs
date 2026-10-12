@@ -164,7 +164,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Orbit trap",
         action:
-          "In Settings, above the Shift slider: colour each point by how close its orbit comes to a fixed shape — a point, a line or a circle — instead of by how long it took to escape. Choosing a shape draws the view again once to measure those distances; after that Color Scheme, Reverse, Shift and Cycle colours repaint at once, as they do for the usual picture, and Reset colours turns the trap off. The shape travels in a link, Copy tour link and a saved view, but the preview a chat shows for a shared link is the normal picture of that place. A tour or Surprise me goes back to the normal picture by itself",
+          "In Settings, above the Shift slider: colour each point by how close its orbit comes to a fixed shape — a point, a line or a circle — instead of by how long it took to escape. Turning a trap on, off or to another shape draws the view again to measure those distances, which is slower than the usual picture, and the page stays usable while it draws; after that Color Scheme, Reverse, Shift and Cycle colours repaint at once, as they do for the usual picture, and Reset colours turns the trap off. The shape travels in a link, Copy tour link and a saved view, but the preview a chat shows for a shared link is the normal picture of that place. A tour or Surprise me goes back to the normal picture by itself",
       },
       {
         keys: "Cycle colours",
