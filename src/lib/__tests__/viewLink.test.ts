@@ -425,9 +425,45 @@ describe("decodeView", () => {
   it("drops a power it cannot read and keeps the rest of the view", () => {
     // Judged by the one rule in `multibrot.ts`: a power outside 3 to 5, another
     // spelling of one, or text, is dropped and the page keeps its own power.
-    for (const power of ["2", "6", "3.0", "03", "%204", "4%20", "x", "-3"]) {
+    // "2" is deliberately not in this list: it is a Magnet type, so a value the
+    // codec reads is read here too — which fractal a value belongs to is
+    // `viewLinkToUpdates`'s business, and it drops it there — see the test
+    // below.
+    for (const power of ["6", "3.0", "03", "%204", "4%20", "x", "-3"]) {
       expect(decodeView(`v=1&f=multibrot&k=${power}&z=2.5`), power).toEqual({
         fractalType: "multibrot",
+        zoomLevel: 2.5,
+      });
+    }
+  });
+
+  it("reads a variant another fractal owns, and leaves it to the page to place", () => {
+    // The codec asks of a `k` only whether this build reads the value at all:
+    // "2" is the Magnet's second type, so a link naming it beside the Multibrot
+    // comes back with it, and the page's half (`viewLinkToUpdates`) is what
+    // keeps it for a fractal that can draw it and drops it for one that cannot.
+    expect(decodeView("v=1&f=multibrot&k=2&z=2.5")).toEqual({
+      fractalType: "multibrot",
+      variant: "2",
+      zoomLevel: 2.5,
+    });
+  });
+
+  it("reads a Magnet type out of a link", () => {
+    expect(decodeView("v=1&f=magnet&k=2")).toEqual({
+      fractalType: "magnet",
+      variant: "2",
+    });
+  });
+
+  it("drops a magnet type it cannot read and keeps the rest of the view", () => {
+    // Judged by the one rule in `magnet.ts`: a type outside 1 to 2, another
+    // spelling of one, or text, is dropped and the page keeps its own type.
+    // "3" is left out for the reason "2" is left out of the power list above:
+    // it is a Multibrot power, so the codec reads it and the page drops it.
+    for (const type of ["0", "1.0", "01", "%201", "2%20", "x", "-1"]) {
+      expect(decodeView(`v=1&f=magnet&k=${type}&z=2.5`), type).toEqual({
+        fractalType: "magnet",
         zoomLevel: 2.5,
       });
     }

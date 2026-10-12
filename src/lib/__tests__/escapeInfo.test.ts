@@ -17,6 +17,7 @@ import { mandelbrotKind } from "../mandelbrot";
 import { MULTIBROT_POWERS, createMultibrotKind } from "../multibrot";
 import { NEWTON_ROOTS, newtonKind } from "../newton";
 import { celticKind } from "../celtic";
+import { MAGNET_TYPES, createMagnetKind } from "../magnet";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
 import type { ComplexNumber, FractalKind } from "../../types/fractal";
@@ -38,7 +39,16 @@ interface KindCase {
    * speed). False means the count is the step count itself.
    */
   packsOutcomes: boolean;
+  /**
+   * Where the 9x9 agreement grid starts, and how wide it is, for a kind whose
+   * picture is not around the origin. Defaults to the Mandelbrot set's own
+   * corner: x -1.6..0 by y -1..0.6, which holds both endings for most kinds.
+   */
+  grid?: { real: number; imaginary: number; span: number };
 }
+
+/** The grid every kind uses unless its case says otherwise. */
+const DEFAULT_GRID = { real: -1.6, imaginary: -1, span: 1.6 };
 
 const CASES: KindCase[] = [
   {
@@ -99,6 +109,34 @@ const CASES: KindCase[] = [
     packsOutcomes: false,
   },
   {
+    name: "magnet type 1",
+    kind: createMagnetKind(1),
+    // The magnet set is the c whose orbit settles on 1, and the orbit of c = 0
+    // reaches it too slowly to count as settled within the cap, so it runs the
+    // whole cap without escaping: the renderer paints it black.
+    neverEnds: ORIGIN,
+    // c = 2 is the map's pole at the orbit's own start: 2z + c - 2 is zero
+    // there, so there is no first step and the orbit is gone on step 0.
+    endsAt: { point: { real: 2, imaginary: 0 }, steps: 0 },
+    packsOutcomes: false,
+    // The magnet set is not around the origin: its island runs from about
+    // -0.46 to 3.07, so the grid is the part of it with settled black above and
+    // below.
+    grid: { real: 0.6, imaginary: -1.2, span: 2.4 },
+  },
+  {
+    name: "magnet type 2",
+    kind: createMagnetKind(2),
+    neverEnds: ORIGIN,
+    // The first step of c = 1.45 + 0.85i is about 116.6 across, past the
+    // bailout of 100, so the orbit leaves on step 0.
+    endsAt: { point: { real: 1.45, imaginary: 0.85 }, steps: 0 },
+    packsOutcomes: false,
+    // Type II's island is smaller and sits a little left of Type I's, spanning
+    // x -0.20..2.30 by y -1.53..1.53.
+    grid: { real: 0.6, imaginary: -1.2, span: 2.4 },
+  },
+  {
     name: "newton",
     kind: newtonKind,
     // z = 0 has no step (the derivative vanishes) and never settles.
@@ -109,7 +147,9 @@ const CASES: KindCase[] = [
   },
 ];
 
-describe.each(CASES)("$name", ({ kind, neverEnds, endsAt, packsOutcomes }) => {
+describe.each(CASES)(
+  "$name",
+  ({ kind, neverEnds, endsAt, packsOutcomes, grid = DEFAULT_GRID }) => {
   it("reports the whole cap for a point that never ends", () => {
     const info = kind.escapeInfo!(neverEnds, CAP);
 
@@ -132,8 +172,8 @@ describe.each(CASES)("$name", ({ kind, neverEnds, endsAt, packsOutcomes }) => {
     for (let row = 0; row < 9; row++) {
       for (let column = 0; column < 9; column++) {
         const point = {
-          real: -1.6 + (column * 1.6) / 8,
-          imaginary: -1 + (row * 1.6) / 8,
+          real: grid.real + (column * grid.span) / 8,
+          imaginary: grid.imaginary + (row * grid.span) / 8,
         };
         const count = kind.iterations(point, CAP, false);
         const info = kind.escapeInfo!(point, CAP);
@@ -163,7 +203,8 @@ describe.each(CASES)("$name", ({ kind, neverEnds, endsAt, packsOutcomes }) => {
     expect(ended).toBeGreaterThan(0);
     expect(stayed).toBeGreaterThan(0);
   });
-});
+  },
+);
 
 describe("newtonKind's escapeInfo", () => {
   it("names the root the point settled on, 0-based as the kind numbers them", () => {
@@ -226,6 +267,7 @@ describe("every kind this app ships", () => {
       celticKind,
       perpendicularShipKind,
       ...MULTIBROT_POWERS.map(createMultibrotKind),
+      ...MAGNET_TYPES.map(createMagnetKind),
       newtonKind,
     ];
 

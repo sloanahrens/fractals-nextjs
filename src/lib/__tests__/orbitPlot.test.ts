@@ -133,13 +133,22 @@ describe("orbitMinExtent and hasEscapeCircle", () => {
     expect(orbitMinExtent(NEWTON)).toBe(1);
   });
 
-  it("draws the escape circle for every kind but Newton's", () => {
+  it("draws the escape circle only where the radius drawn is the one left", () => {
     expect(hasEscapeCircle("mandelbrot")).toBe(true);
     expect(hasEscapeCircle("tricorn")).toBe(true);
     expect(hasEscapeCircle("celtic")).toBe(true);
     expect(hasEscapeCircle("perpendicular-ship")).toBe(true);
     expect(hasEscapeCircle("something-new")).toBe(true);
     expect(hasEscapeCircle(NEWTON)).toBe(false);
+    // The Magnet's orbits leave at 100 rather than 2, so the circle of 2 would
+    // sit inside the wandering rather than at the edge of the picture.
+    expect(hasEscapeCircle("magnet")).toBe(false);
+  });
+
+  it("still plots the Magnet's orbit in the escape-time frame", () => {
+    // No circle, but the frame is the scale a magnet orbit moves at: its dots
+    // are drawn from the same floor as the escape-time kinds'.
+    expect(orbitMinExtent("magnet")).toBe(ORBIT_ESCAPE_RADIUS);
   });
 });
 

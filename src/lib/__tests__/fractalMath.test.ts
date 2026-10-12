@@ -163,6 +163,18 @@ describe("the rule, read aloud", () => {
       "z becomes z minus the fraction z cubed minus 1 over 3 times z squared end fraction",
     );
   });
+
+  it("reads the first magnetic type's rule", () => {
+    expect(rule("magnet", "1")).toBe(
+      "z becomes the fraction z squared plus c minus 1 over 2 times z plus c minus 2 end fraction squared",
+    );
+  });
+
+  it("reads the second magnetic type's rule", () => {
+    expect(rule("magnet", "2")).toBe(
+      "z becomes the fraction z cubed plus 3 times open bracket c minus 1 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket over 3 times z squared plus 3 times open bracket c minus 2 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket plus 1 end fraction squared",
+    );
+  });
 });
 
 describe("where each point starts", () => {
@@ -177,6 +189,7 @@ describe("where each point starts", () => {
       "multibrot",
       "celtic",
       "perpendicular-ship",
+      "magnet",
     ]) {
       expect(start(id)).toBe("z sub 0 equals 0, c equals the pixel's point");
     }
@@ -248,6 +261,27 @@ describe("the setting", () => {
     const setting = describeFractalMath("multibrot", "Classic").setting;
 
     expect(toPlainText(setting!.value)).toBe("d equals 3");
+  });
+
+  it("shows the Magnet's magnetic type", () => {
+    for (const [type, label] of [
+      ["1", "Type I"],
+      ["2", "Type II"],
+    ]) {
+      const setting = describeFractalMath("magnet", type).setting;
+
+      expect(toPlainText(setting!.value), type).toBe(label);
+    }
+  });
+
+  it("shows the type that is drawn when the variant is not a magnetic type", () => {
+    // A Multibrot power can still be on the page when it switches to the
+    // Magnet for one render; the renderer draws Type I and so does the card.
+    for (const variant of ["4", "Classic", ""]) {
+      const setting = describeFractalMath("magnet", variant).setting;
+
+      expect(toPlainText(setting!.value), variant).toBe("Type I");
+    }
   });
 });
 

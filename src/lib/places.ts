@@ -886,6 +886,69 @@ const PERPENDICULAR_SHIP_PLACES: readonly Place[] = [
   },
 ];
 
+const MAGNET_PLACES: readonly Place[] = [
+  {
+    id: "magnet-1-whole",
+    name: "The whole Magnet set (Type I)",
+    fractal: "magnet",
+    variant: "1",
+    centerX: 1.3,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "magnet-1-curtain",
+    name: "The curtain of disks",
+    fractal: "magnet",
+    variant: "1",
+    centerX: 1.3,
+    centerY: 0,
+    zoom: 4,
+    colorScheme: "classic",
+  },
+  {
+    id: "magnet-1-drift",
+    name: "A drift of disks",
+    fractal: "magnet",
+    variant: "1",
+    centerX: 1.6,
+    centerY: 0,
+    zoom: 8,
+    colorScheme: "classic",
+  },
+  {
+    id: "magnet-1-dust",
+    name: "Dust over the waist",
+    fractal: "magnet",
+    variant: "1",
+    centerX: 0,
+    centerY: 1.2,
+    zoom: 16,
+    colorScheme: "classic",
+  },
+  {
+    id: "magnet-2-whole",
+    name: "The whole Magnet set (Type II)",
+    fractal: "magnet",
+    variant: "2",
+    centerX: 1.3,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "magnet-2-lobe",
+    name: "The bright lobe",
+    fractal: "magnet",
+    variant: "2",
+    centerX: 1.6,
+    centerY: 1.05,
+    zoom: 8,
+    colorScheme: "classic",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -900,6 +963,7 @@ export const PLACES: readonly Place[] = [
   ...NEWTON_PLACES,
   ...CELTIC_PLACES,
   ...PERPENDICULAR_SHIP_PLACES,
+  ...MAGNET_PLACES,
 ];
 
 /**
@@ -988,6 +1052,16 @@ export function placesForFractal(fractal: string): Place[] {
  *   Drawn at 400x300 in all five schemes, classic reads best (16% one colour
  *   at 64x48; rainbow is 16% too, fire and ocean are dark fields), and the
  *   deeper places are all lace and leave the shape out.
+ * - Magnet: a drifted field of disks, NOT a whole-set view, and the deviation
+ *   is deliberate. The Magnet set is the c whose orbit settles on the fixed
+ *   point z = 1, and that is nearly the whole plane: at the frame the fractal
+ *   opens on, which is the widest view there is, the picture is 70% one colour,
+ *   and no frame that reads as the whole set is under 65%, which the featured
+ *   guard below forbids. So the button leads with the structure the picture is
+ *   made of instead -- the drift where the escaping island meets the settled
+ *   black. Measured at the count Auto draws it at, it is 39% one colour at
+ *   64x48 and 41% of a 96x72 grid inside the settled set, and that grid holds
+ *   82 different counts, so it is a picture rather than a flat field.
  *
  * The others were redrawn and kept: each is at most 21% one colour (the
  * guard in `places.test.ts` holds every one under 60%).
@@ -1001,6 +1075,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   newton: "newton-junction",
   celtic: "celtic-whole",
   "perpendicular-ship": "perpendicular-ship-whole",
+  magnet: "magnet-1-drift",
 };
 
 /**

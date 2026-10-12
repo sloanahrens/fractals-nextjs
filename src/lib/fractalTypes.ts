@@ -7,6 +7,12 @@ import {
   isJuliaConstantName,
   parseJuliaConstant,
 } from "./julia";
+import {
+  MAGNET_TYPES,
+  MAGNET_TYPE_LABELS,
+  createMagnetKind,
+  parseMagnetType,
+} from "./magnet";
 import { mandelbrotKind } from "./mandelbrot";
 import {
   MULTIBROT_POWERS,
@@ -48,6 +54,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   // other name the app says (the Math card's title, a link's line, the Help
   // row) are spelled in full.
   { id: "perpendicular-ship", label: "Perp. Ship" },
+  { id: "magnet", label: "Magnet" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -93,14 +100,27 @@ const MULTIBROT_VARIANTS: FractalVariants = {
   allowsCustom: false,
 };
 
+// The magnetic type is written as the plain digit in a link and in storage, so
+// "1" is what a link carries; the chip shows "Type I", which is what a visitor
+// sees, because a bare "1" says nothing about what it chooses between.
+const MAGNET_VARIANTS: FractalVariants = {
+  label: "Type",
+  options: MAGNET_TYPES.map((type) => ({
+    value: String(type),
+    label: MAGNET_TYPE_LABELS[type],
+  })),
+  allowsCustom: false,
+};
+
 /**
  * The setting a fractal takes, or null for a fractal that takes none.
  * @param fractalId - Id of the fractal
- * @returns Its variant descriptor; null for every fractal but Julia and the Multibrot, and for any id this build does not know
+ * @returns Its variant descriptor; null for every fractal but Julia, the Multibrot and the Magnet, and for any id this build does not know
  */
 export function fractalVariants(fractalId: string): FractalVariants | null {
   if (fractalId === "julia") return JULIA_VARIANTS;
   if (fractalId === "multibrot") return MULTIBROT_VARIANTS;
+  if (fractalId === "magnet") return MAGNET_VARIANTS;
 
   return null;
 }
@@ -129,8 +149,9 @@ export function isVariantValue(
 ): value is string {
   if (value == null) return false;
   if (fractalId === "julia") return isJuliaConstantName(value);
+  if (fractalId === "multibrot") return parseMultibrotPower(value) !== null;
 
-  return fractalId === "multibrot" && parseMultibrotPower(value) !== null;
+  return fractalId === "magnet" && parseMagnetType(value) !== null;
 }
 
 /**
@@ -178,9 +199,10 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
  * of the named four, or a custom spelling of any other point — and a name this
  * build cannot read falls back to the first named constant instead of to a
  * blank canvas. The Multibrot is a family of powers, and one it cannot read
- * falls back to 3 the same way.
+ * falls back to 3 the same way; the Magnet is a family of two magnetic types
+ * and an unreadable one falls back to Type I.
  * @param typeId - Id of the fractal the picker selected
- * @param variant - Name of the Julia constant or the Multibrot power; ignored for any other fractal
+ * @param variant - Name of the Julia constant, the Multibrot power or the Magnet type; ignored for any other fractal
  * @returns The kind to draw
  */
 export function resolveFractalKind(
@@ -192,6 +214,9 @@ export function resolveFractalKind(
   if (typeId === "tricorn") return tricornKind;
   if (typeId === "newton") return newtonKind;
   if (typeId === "celtic") return celticKind;
+  if (typeId === "magnet") {
+    return createMagnetKind(parseMagnetType(variant) ?? MAGNET_TYPES[0]);
+  }
   if (typeId === "multibrot") {
     return createMultibrotKind(
       parseMultibrotPower(variant) ?? MULTIBROT_POWERS[0],
@@ -292,6 +317,20 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   if (typeId === "perpendicular-ship") {
     return { centerX: -0.55, centerY: 0, zoom: 1 };
   }
+
+  // The Magnet set is the c whose orbit settles on the attracting fixed point
+  // z = 1, and that is most of the plane; the picture is the island of c whose
+  // orbit runs off to infinity instead, which is what the coloured region of
+  // every one of its pictures is. Type I's island is measured with a 0.02 grid
+  // at a cap of 150 and a 0.005 one at 300, and spans x -0.46..3.07 by y
+  // -2.16..2.16; Type II's is smaller and sits a little left, spanning x
+  // -0.20..2.30 by y -1.53..1.53. Zoom 1 is the widest view the explorer has
+  // (4 by 3), so it is the only frame that can hold either island across, and
+  // it is centred on the middle of Type I's real extent: x -0.7..3.3 covers
+  // both islands and the settled black either side of them, while y -1.5..1.5
+  // crops Type I's top and bottom lobes, which is the most of its height the
+  // explorer can show at once. The corner is the flat black of the settled set.
+  if (typeId === "magnet") return { centerX: 1.3, centerY: 0, zoom: 1 };
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }

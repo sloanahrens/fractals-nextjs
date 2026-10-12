@@ -16,6 +16,7 @@
 import { formatCoordinate } from "./zoomScale";
 import { JULIA_CONSTANTS, parseJuliaConstant } from "./julia";
 import { MULTIBROT_POWERS, parseMultibrotPower } from "./multibrot";
+import { MAGNET_BAILOUT, MAGNET_TOLERANCE, MAGNET_TYPES, MAGNET_TYPE_LABELS, parseMagnetType } from "./magnet";
 
 /**
  * A formula, as a small tree. Nine kinds of node, enough for every rule here:
@@ -375,6 +376,98 @@ const NEWTON: FractalMath = {
     "A point is done when z cubed is within 0.000001 of 1, which means it has settled on one of the three roots. The colour family is the root it reached and the shade is how many steps that took; a point that has not settled within the iteration cap is painted black.",
 };
 
+/** (c − 1) and (c − 2), the two brackets the second magnetic type is built from. */
+const C_MINUS_1 = row(OPEN, c, operator(MINUS), number(1), CLOSE);
+const C_MINUS_2 = row(OPEN, c, operator(MINUS), number(2), CLOSE);
+
+/**
+ * The fraction the first magnetic type squares: (z² + c − 1) / (2z + c − 2).
+ *
+ * The Top and bottom are both 1 at z = 1 whatever c is, which is why 1 is a
+ * fixed point of the map for every c -- the fact the set is built on.
+ */
+const MAGNET_ONE_FRACTION = fraction(
+  row(superscript(z, number(2)), PLUS, c, operator(MINUS), number(1)),
+  row(
+    number(2),
+    operator(INVISIBLE_TIMES),
+    z,
+    PLUS,
+    c,
+    operator(MINUS),
+    number(2),
+  ),
+);
+
+/**
+ * The fraction the second magnetic type squares: the top and bottom are the
+ * pair that agree at z = 1 as well, which is again what makes 1 a fixed point.
+ */
+const MAGNET_TWO_FRACTION = fraction(
+  row(
+    superscript(z, number(3)),
+    PLUS,
+    number(3),
+    operator(INVISIBLE_TIMES),
+    C_MINUS_1,
+    operator(INVISIBLE_TIMES),
+    z,
+    PLUS,
+    C_MINUS_1,
+    operator(INVISIBLE_TIMES),
+    C_MINUS_2,
+  ),
+  row(
+    number(3),
+    operator(INVISIBLE_TIMES),
+    superscript(z, number(2)),
+    PLUS,
+    number(3),
+    operator(INVISIBLE_TIMES),
+    C_MINUS_2,
+    operator(INVISIBLE_TIMES),
+    z,
+    PLUS,
+    C_MINUS_1,
+    operator(INVISIBLE_TIMES),
+    C_MINUS_2,
+    PLUS,
+    number(1),
+  ),
+);
+
+/** The rule of each magnetic type: its own fraction, squared, then c's point added. */
+const MAGNET_RULES: Readonly<Record<number, MathExpr>> = {
+  1: row(z, ARROW, superscript(MAGNET_ONE_FRACTION, number(2))),
+  2: row(z, ARROW, superscript(MAGNET_TWO_FRACTION, number(2))),
+};
+
+/**
+ * The Magnet set's maths: one rule per magnetic type, and the setting says
+ * which.
+ *
+ * The two types are the two fractions of the magnetic model, and the picture
+ * is the same question asked of either: which c have an orbit that comes to
+ * rest on 1. Most of the plane does, so the coloured region of the picture is
+ * the island of c that does not.
+ */
+function magnet(variant: string): FractalMath {
+  const type = parseMagnetType(variant) ?? MAGNET_TYPES[0];
+
+  return {
+    title: "Magnet set",
+    rule: MAGNET_RULES[type],
+    start: START_AT_ZERO,
+    setting: {
+      label: "Magnetic type, which of the model's two maps is drawn",
+      value: text(MAGNET_TYPE_LABELS[type]),
+    },
+    blurb:
+      "Each step forms a fraction out of z and c, squares it, and starts again from there. Almost every c has an orbit that settles on the fixed point z = 1, and that settled set is the flat black of the picture; the colours draw the small island of c whose orbit runs off to infinity instead. The two magnetic types are the same question asked of two different fractions.",
+    escape: `A point is inside when its orbit comes within ${MAGNET_TOLERANCE} of 1, the number the map settles on, and it is painted black like the inside of any other set. A point is outside when |z| passes ${MAGNET_BAILOUT}, which these maps only reach on their way out; the colour is the step on which that happens.`,
+  };
+}
+
 function julia(variant: string): FractalMath {
   // The renderer falls back to the first named constant for a name it cannot
   // read, so the card says the constant that is actually drawn.
@@ -426,6 +519,7 @@ export const FRACTAL_MATH: Readonly<
   "burning-ship": () => BURNING_SHIP,
   "perpendicular-ship": () => PERPENDICULAR_SHIP,
   tricorn: () => TRICORN,
+  magnet,
   multibrot,
   newton: () => NEWTON,
   celtic: () => CELTIC,

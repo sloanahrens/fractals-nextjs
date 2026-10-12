@@ -89,6 +89,17 @@ const NEWTON = stop({
   reverse: true,
 });
 
+const MAGNET = stop({
+  fractalType: "magnet",
+  variant: "2",
+  centerX: 1.6,
+  centerY: 1.05,
+  zoomLevel: 8,
+});
+
+// One stop per fractal, as many as a tour link can hold. The picker offers nine
+// fractals and `MAX_TOUR_STOPS` is eight, so one link cannot name them all;
+// MAGNET is the one left out here and is round-tripped in its own test below.
 const EVERY_FRACTAL = [
   MANDELBROT,
   JULIA,
@@ -130,6 +141,26 @@ describe("encodeTourLink", () => {
     expect(link).toContain("t.o=0.25~");
     expect(link).toContain("t.i=~400");
     expect(decodeTourLink(link!)).toEqual([SHIP, MULTIBROT]);
+  });
+
+  it("carries a magnetic type beside the fractal that draws it", () => {
+    // The type is the codec's `k` field, written beside the fractal that takes
+    // one and read back by the same rules a Julia constant is.
+    const link = encodeTourLink([MAGNET, MANDELBROT]);
+
+    expect(link).toContain("t.f=magnet~mandelbrot");
+    expect(link).toContain("t.k=2~");
+    expect(decodeTourLink(link!)).toEqual([MAGNET, MANDELBROT]);
+  });
+
+  it("drops a magnetic type the Magnet cannot draw, as it drops a bad power", () => {
+    const stops = decodeTourLink(
+      "v=1&t.f=magnet~julia&t.k=3~Dendrite&t.x=1.3~0&t.y=0~0&t.z=1~400",
+    );
+
+    expect(stops![0].fractalType).toBe("magnet");
+    expect(stops![0].variant).toBe("1");
+    expect(stops![1].variant).toBe("Dendrite");
   });
 
   it("refuses fewer than two stops", () => {

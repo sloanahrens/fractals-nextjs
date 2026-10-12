@@ -423,6 +423,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   newton: [8, 10],
   celtic: [4, 6],
   "perpendicular-ship": [4, 6],
+  magnet: [4, 6],
 };
 
 describe("PLACES", () => {
@@ -489,6 +490,20 @@ describe("PLACES", () => {
       // The chip's destination: the power's whole set at the default view.
       expect(wholeSetPlaceFor(power, "multibrot")?.id, power).toBe(
         `multibrot-${power}-whole`,
+      );
+    }
+  });
+
+  it("spreads the Magnet places over both types, each with its own whole set", () => {
+    const places = placesForFractal("magnet");
+
+    for (const type of ["1", "2"]) {
+      const ofType = places.filter((entry) => entry.variant === type);
+
+      expect(ofType.length, type).toBeGreaterThanOrEqual(2);
+      // The chip's destination: the type's whole set at the default view.
+      expect(wholeSetPlaceFor(type, "magnet")?.id, type).toBe(
+        `magnet-${type}-whole`,
       );
     }
   });
