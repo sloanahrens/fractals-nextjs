@@ -183,6 +183,14 @@ describe("the rule, read aloud", () => {
     );
   });
 
+  it("reads the Phoenix rule, with the point before the last in it", () => {
+    for (const name of ["Classic", "Spirals", "Hourglass"]) {
+      expect(rule("phoenix", name), name).toBe(
+        "z sub n plus 1 equals z sub n squared plus c plus p times z sub n minus 1",
+      );
+    }
+  });
+
   it("reads the second magnetic type's rule", () => {
     expect(rule("magnet", "2")).toBe(
       "z becomes the fraction z cubed plus 3 times open bracket c minus 1 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket over 3 times z squared plus 3 times open bracket c minus 2 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket plus 1 end fraction squared",
@@ -206,6 +214,12 @@ describe("where each point starts", () => {
     ]) {
       expect(start(id)).toBe("z sub 0 equals 0, c equals the pixel's point");
     }
+  });
+
+  it("starts Phoenix at the pixel's point with nothing before it", () => {
+    expect(start("phoenix")).toBe(
+      "z sub 0 equals the pixel's point, z sub minus 1 equals 0",
+    );
   });
 
   it("starts Julia and Newton at the pixel's point", () => {
@@ -291,6 +305,41 @@ describe("the setting", () => {
     const setting = describeFractalMath("multibrot", "Classic").setting;
 
     expect(toPlainText(setting!.value)).toBe("d equals 3");
+  });
+
+  it("shows each named Phoenix constant as c and p, with the real values", () => {
+    const expected: Record<string, string> = {
+      Classic: "c equals 0.5667, p equals minus 0.5",
+      Spirals: "c equals 0.3, p equals 0.5",
+      Hourglass: "c equals 0.5667, p equals minus 0.55",
+    };
+
+    for (const [name, reading] of Object.entries(expected)) {
+      const setting = describeFractalMath("phoenix", name).setting;
+
+      expect(setting).not.toBeNull();
+      expect(toPlainText(setting!.value), name).toBe(reading);
+      expect(setting!.label).toContain(name);
+    }
+  });
+
+  it("shows the constant that is drawn when the variant is not a Phoenix constant", () => {
+    // A Julia constant can still be on the page when it switches to Phoenix
+    // for one render; the renderer draws Classic and so does the card.
+    for (const variant of ["Dendrite", "4", ""]) {
+      const setting = describeFractalMath("phoenix", variant).setting;
+
+      expect(toPlainText(setting!.value), variant).toBe(
+        "c equals 0.5667, p equals minus 0.5",
+      );
+    }
+  });
+
+  it("says in a sentence what the extra term does", () => {
+    const { blurb, escape } = describeFractalMath("phoenix", "Classic");
+
+    expect(blurb).toMatch(/number from the step before/);
+    expect(escape).toMatch(/orbit plot/);
   });
 
   it("shows the Magnet's magnetic type", () => {

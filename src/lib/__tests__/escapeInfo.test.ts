@@ -18,6 +18,7 @@ import { MULTIBROT_POWERS, createMultibrotKind } from "../multibrot";
 import { NEWTON_ROOTS, createNewtonKind, newtonKind } from "../newton";
 import { celticKind } from "../celtic";
 import { MAGNET_TYPES, createMagnetKind } from "../magnet";
+import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
 import type { ComplexNumber, FractalKind } from "../../types/fractal";
@@ -135,6 +136,19 @@ const CASES: KindCase[] = [
     // Type II's island is smaller and sits a little left of Type I's, spanning
     // x -0.20..2.30 by y -1.53..1.53.
     grid: { real: 0.6, imaginary: -1.2, span: 2.4 },
+  },
+  {
+    name: "phoenix hourglass",
+    kind: createPhoenixKind({ real: 0.5667, imaginary: -0.55 }),
+    // 0.5i is inside the Hourglass set, so its orbit started there stays.
+    neverEnds: { real: 0, imaginary: 0.5 },
+    // From 1 the orbit is 1.5667 and then 2.5212, outside the radius on the
+    // second step, counted as step 1.
+    endsAt: { point: { real: 1, imaginary: 0 }, steps: 1 },
+    packsOutcomes: false,
+    // The Hourglass set is around the origin, and this grid holds points of it
+    // and points that leave.
+    grid: { real: -1.2, imaginary: -1.2, span: 2.4 },
   },
   {
     name: "newton",
@@ -295,6 +309,7 @@ describe("every kind this app ships", () => {
       perpendicularShipKind,
       ...MULTIBROT_POWERS.map(createMultibrotKind),
       ...MAGNET_TYPES.map(createMagnetKind),
+      ...PHOENIX_CONSTANTS.map((entry) => createPhoenixKind(entry.constant)),
       newtonKind,
     ];
 

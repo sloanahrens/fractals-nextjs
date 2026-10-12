@@ -245,6 +245,39 @@ describe("viewLinkToUpdates", () => {
     }
   });
 
+  it("takes a Phoenix constant only beside Phoenix, and opens an unusable one on Classic", () => {
+    for (const name of ["Classic", "Spirals", "Hourglass"]) {
+      const link = encodeView({
+        ...viewLinkToUpdates(decodeView("#v=1&f=phoenix")),
+        variant: name,
+      });
+
+      expect(link).toContain(`f=phoenix&k=${name}&`);
+      expect(viewLinkUpdatesFrom(`#${link}`)).toMatchObject({
+        fractalType: "phoenix",
+        variant: name,
+      });
+    }
+
+    // A Julia constant, a power or nothing at all beside Phoenix opens it on
+    // its first constant; a Phoenix name beside another fractal is dropped.
+    for (const fragment of [
+      "#v=1&f=phoenix",
+      "#v=1&f=phoenix&k=Dendrite",
+      "#v=1&f=phoenix&k=4",
+    ]) {
+      expect(viewLinkToUpdates(decodeView(fragment)).variant, fragment).toBe(
+        "Classic",
+      );
+    }
+    expect(
+      viewLinkToUpdates(decodeView("#v=1&f=multibrot&k=Spirals")).variant,
+    ).toBe("3");
+    expect(
+      viewLinkToUpdates(decodeView("#v=1&f=julia&k=Hourglass")).variant,
+    ).toBe(DEFAULT_VIEW_LINK_UPDATES.variant);
+  });
+
   it("gives a Julia link with no constant the page's own", () => {
     // The fractal is the part that was asked for; the constant it opens on is
     // the one the app draws for a name it has no answer for, which is what the

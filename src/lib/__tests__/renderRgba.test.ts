@@ -215,6 +215,8 @@ describe("the counting and colouring steps", () => {
       resolveFractalKind("newton", "cycle"),
       resolveFractalKind("magnet", "1"),
       resolveFractalKind("magnet", "2"),
+      resolveFractalKind("phoenix", "Classic"),
+      resolveFractalKind("phoenix", "Hourglass"),
     ];
 
     for (const kind of KINDS) {
@@ -265,6 +267,8 @@ describe("the scheme's own settings through the pipeline", () => {
     resolveFractalKind("newton", "cycle"),
     resolveFractalKind("magnet", "1"),
     resolveFractalKind("magnet", "2"),
+    resolveFractalKind("phoenix", "Classic"),
+    resolveFractalKind("phoenix", "Spirals"),
   ];
   const OPTIONS = [
     {},

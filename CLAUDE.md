@@ -37,7 +37,7 @@ docker run --rm -p 8080:8080 fractals-nextjs:test
 
 ## Project Architecture
 
-This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set, Julia, Burning Ship, Perpendicular Ship, Tricorn, Multibrot, Newton, Celtic and Magnet fractals using Canvas API. Key architectural decisions:
+This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set, Julia, Burning Ship, Perpendicular Ship, Tricorn, Multibrot, Newton, Celtic, Magnet and Phoenix fractals using Canvas API. Key architectural decisions:
 
 ### Core Rendering System
 
@@ -58,6 +58,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Celtic** (`src/lib/celtic.ts`): The Celtic Mandelbrot formula — the Mandelbrot loop with the real part of the square folded by an absolute value, z -> (|Re(z^2)| + i Im(z^2)) + c, that is x' = |x^2 - y^2| + cx and y' = 2xy + cy — behind its own fractal kind
 - **Multibrot** (`src/lib/multibrot.ts`): The Mandelbrot loop with a higher power, z -> z^d + c for d = 3, 4, 5 — `createMultibrotKind(power)` and `parseMultibrotPower`, the power being the fractal's variant
 - **Magnet** (`src/lib/magnet.ts`): The two rational maps of the magnetic model, z -> ((z^2 + c - 1)/(2z + c - 2))^2 (Type I) and z -> ((z^3 + 3(c-1)z + (c-1)(c-2))/(3z^2 + 3(c-2)z + (c-1)(c-2) + 1))^2 (Type II), both from z0 = 0 — `createMagnetKind(type)`, `parseMagnetType` and `MAGNET_TYPES`/`MAGNET_TYPE_LABELS`, the type being the fractal's variant. z = 1 is a superattracting fixed point for every c, so the set is the c whose orbit settles there and that is nearly the whole plane: the picture's flat black is the settled set, and the colours draw the island of c that runs off to infinity instead. Outside is |z| > 100 (`MAGNET_BAILOUT`), smoothed with the shared degree-2 formula carried to that radius; settled is |z - 1| < 1e-6 (`MAGNET_TOLERANCE`); a vanishing denominator is a pole and is counted as the orbit's last step
+- **Phoenix** (`src/lib/phoenix.ts`): A Julia set with a memory, z(n+1) = z(n)^2 + c + p z(n-1) from the pixel with z(-1) = 0 — `createPhoenixKind(constant)`, `PHOENIX_CONSTANTS` (Classic c = 0.5667 p = -0.5, Spirals 0.3 / 0.5, Hourglass 0.5667 / -0.55; the constant is one point with c in `real` and p in `imaginary`) and `parsePhoenixConstant`, the named constant being the fractal's variant, with no Custom choice. The kind's orbit loop carries z(n-1) itself, so the renderer hands it a point as for any other fractal; `iterations`, `escapeInfo` and `orbit` walk the same two-step rule, and escape is |z|^2 > 4 with the shared smooth count. With p = 0 it is exactly the Julia set of c, and c and p being real makes it mirror about the real axis
 - **Newton** (`src/lib/newton.ts`): Newton's method for one of four polynomials as a fractal kind — `NEWTON_POLYNOMIALS`' z^3 - 1 (the default, and what a link with no `k` names), z^4 - 1, z^5 - 1 and z^3 - 2z + 2, each a `NewtonPolynomial` (its roots and the arithmetic of one step, `z - p(z)/p'(z)`); `createNewtonKind(polynomial)` builds the memoized kind for one, and the orbit's root and its speed are packed into the one number the renderer takes, the n roots in n-ths of 0..maxIterations; the first fractal that is not an escape-time set. z^3 - 2z + 2 has an attracting two-step loop beside the origin (0 -> 1 -> 0), whose orbits never settle and are drawn black
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
@@ -93,7 +94,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, `nearestPlace` — the place a view previews as, the whole rule behind `ogImage` — and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and the Julia, Multibrot and Magnet chips land. A place of a fractal that takes a variant names it, so Julia's constants, the Multibrot's powers and the Magnet's magnetic types each have their own whole-set place at the fractal's opening frame; `FEATURED_PLACE_IDS` is judged by the featured guard (at most 60% one colour), which is why the Magnet's button leads with a drift of disks rather than the whole island
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
-- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Perp. Ship / Tricorn / Multibrot / Newton / Celtic buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
+- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Perp. Ship / Tricorn / Multibrot / Newton / Celtic / Magnet / Phoenix buttons, and the Julia constant, Multibrot power, Newton polynomial, Magnet type or Phoenix constant chips, drawn over the top left of the canvas and never faded
 - **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers, the probe's rows and the orbit plot (`OrbitPlot.tsx`); it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
 - **Math probe** (`src/lib/mathProbe.ts`, `escapeInfo` on `FractalKind` in `src/types/fractal.ts`): The number under the pointer, what its orbit did and the colour the picture paints it, shown in the expanded Math card — `probePoint(kind, point, maxIterations, scheme)` reads the count from the kind (whole steps for the words, the smooth count for the colour) and `describeProbe(fractalId, info, cap)` words it; every kind ships `escapeInfo(point, maxIterations)`, an optional method the probe falls back to the count for; `createFrameThrottle` is the one-point-per-frame rule and `pointerToCanvasPixel` the CSS-to-canvas scaling; `shouldClearProbe` is the rule that holds the probe while the pointer is on the Math card rather than the picture, so the plot and its Play control stay reachable. **A kind's `escapeInfo` must agree with its `iterations`** — `escapeInfo.test.ts` and the pixel parity in `mathProbe.test.ts` hold it to a drawn view
 - **Orbit plot** (`src/lib/orbitPlot.ts`, `src/components/ui/OrbitPlot.tsx`, `orbit` on `FractalKind` in `src/types/fractal.ts`): The path that point took, drawn under the probe's rows in the expanded Math card — `orbit` is the points the kind's own loop visits (optional, as `escapeInfo` is; `orbitFor` answers the point alone for a kind without it), the probe keeps 60 steps of it in `PointProbe.orbit`, `orbitToPlot(orbit, size, minExtent)` places them in a square plot (frame never inside the escape circle nor past twice it, values that are not numbers read as the origin), the escape circle of radius 2 is drawn for the kinds that leave it (`hasEscapeCircle` is false for Newton, which has no radius, and for the Magnet, whose orbits leave at 100 and would have the circle of 2 inside their wandering), `describeOrbit(fractalId, info, steps)` is the `aria-label`, `orbitStepColour` paints a dot through the picture's own mapping, and a Play control walks it a step every 120 ms (off under `prefers-reduced-motion`). **A kind's `orbit` must be the same walk as its `iterations` and `escapeInfo`** — `orbit.test.ts` holds the path to the count for every kind
@@ -109,7 +110,7 @@ The main page (`src/app/FractalExplorer.tsx`, a client component; `src/app/page.
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
-- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Perpendicular Ship, two Tricorn, three Multibrot, two Newton, two Celtic, two Magnet) and custom fractal configurations
+- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Perpendicular Ship, two Tricorn, three Multibrot, two Newton, two Celtic, two Magnet, two Phoenix) and custom fractal configurations
 
 ### Component Structure
 
@@ -204,6 +205,108 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-11_
+
+### Phoenix: a tenth fractal, a Julia set with a memory (2026-10-11)
+
+- fr-04l. The Phoenix sets are Julia sets of a two-term step,
+  z(n+1) = z(n)^2 + Re(c) + Im(c) z(n-1), with z(-1) = 0 and the pixel as
+  z(0), escape when |z|^2 > 4. They draw feathered, flame-like shapes. It is
+  the third fractal to use the variant mechanism for a constant (after Julia
+  and, with a power or a type, the Multibrot and the Magnet), and it follows
+  the Tricorn and Celtic line for line elsewhere: no renderer, recolour, link
+  format, tour or export change.
+- **`src/lib/phoenix.ts`** exports `createPhoenixKind(constant)` (id
+  `phoenix`), `PHOENIX_CONSTANTS` and `parsePhoenixConstant`. A kind keeps its
+  own state, so `z(n-1)` lives inside the orbit loop: the renderer hands over a
+  point as for any other fractal. `iterations`, `escapeInfo` and `orbit` are the
+  same two-step loop (x' = x^2 - y^2 + c + p x_prev, y' = 2xy + p y_prev), so
+  the Math card's orbit plot follows the rule the count does;
+  `escapeInfo.test.ts`, `orbit.test.ts` and the pixel parity in
+  `mathProbe.test.ts` hold the three together. The orbit starts at the pixel
+  and z(-1) is not a point of the path. The count is the shared one: the step
+  index of the escape, the cap for an orbit that does not, and
+  `n + 1 - log2(log2|z|)` smooth. There is no interior shortcut.
+- **The constant is a pair of different kinds of number**, c (added every step)
+  and p (the weight of the point two steps back), carried as the real and
+  imaginary parts of one `ComplexNumber` so that "the bead's Re(c) and Im(c)"
+  is literal. Three are named, in the order the row offers them: **Classic**
+  (c = 0.5667, p = -0.5, the constant the fractal is known by: two feathered
+  flames, one above the other), **Spirals** (c = 0.3, p = 0.5: dust arranged in
+  spirals, no point runs the cap) and **Hourglass** (c = 0.5667, p = -0.55: a
+  connected black body pinched at its waist). The last two were picked from
+  contact sheets of about twenty constants drawn through the real pipeline in
+  several schemes, for being unmistakably different from Classic and from each
+  other, and each was then checked to draw a non-blank picture at its whole-set
+  place. There is **no Custom choice** (`allowsCustom: false`): a pair of
+  numbers of different kinds has no map to pick them from the way the Julia map
+  picks a point, and an arbitrary pair is as likely to draw a flat field.
+- **Variant values.** The variant is the constant's name, as a Julia constant's
+  is, so a link carries `k=Classic`, `k=Spirals` or `k=Hourglass` beside
+  `f=phoenix`, and a saved view stores it as `variant`.
+  `fractalVariants("phoenix")` is label "Phoenix constant" with the three
+  options, `defaultVariant("phoenix")` is "Classic", `isVariantValue` takes the
+  three names exactly (no case folding, no padding) and `variantOn` gives
+  Phoenix "Classic" for a value it cannot draw. "Classic" is also a Julia
+  constant's name, and that is harmless: the codec reads a `k` only by asking
+  whether any fractal can draw it, and `viewLinkToUpdates` keeps it only for a
+  fractal that can, as it does for the digits Newton and the Multibrot share.
+  Going from Julia (on "Classic") to Phoenix therefore lands on Phoenix's
+  Classic, and every other Julia constant falls to it as the default.
+- **Exact facts the tests lean on.** With z(-1) = 0 the first step cannot feel
+  p, so it is the Julia step; with p = 0 the whole kind is the Julia kind of c,
+  smooth counts included (`phoenix.test.ts` compares them over a grid). c and p
+  are real and z(-1) starts at 0, so conjugating the pixel conjugates the whole
+  orbit and every set is mirrored about the real axis, bit for bit; there is no
+  symmetry about the imaginary axis. Worked by hand, Classic from z0 = 1 is
+  1, 1.5667, 2.5212 (one step completed before the escape), and from z0 = 0.8
+  the memory term holds the orbit in a step longer than the p = 0 step does
+  (count 2 against 1), which is the test that dropping z(n-1) changes a count.
+  Radius 2 stays right for the constants offered: |c| + |p| is under 1.1.
+- **`defaultViewFor("phoenix")` is the origin at zoom 1.** Measured with a
+  0.01 grid at a cap of 300 (points that run 30 steps or more), Classic spans
+  x -0.67..0.75 by y +-1.27, Spirals x -0.88..0.72 by y +-1.13 and Hourglass
+  x -0.65..0.75 by y +-1.28, all inside zoom 1's x -2..2 by y -1.5..1.5 with 0.2
+  or more clear above and below. `phoenix.test.ts` samples the frame's border
+  for each constant and finds nothing slow to leave.
+- **Two built-in views** (`phoenix-overview`, the Classic set at the default
+  frame; `phoenix-feathers`, the upper flame's edge at zoom 4), under the
+  per-fractal guards in `presets.test.ts` (22 fractal-owned views, 28
+  built-ins).
+- **Six places** (`PHOENIX_PLACES`, the test allows 4 to 6): the whole of each of
+  the three constants (which `wholeSetPlaceFor` must find, one per constant),
+  feathers on Classic's upper flame (zoom 4, classic, 21% one colour at 64x48
+  with whole counts), curls on its tail (zoom 10, rainbow, 17%) and a spiral
+  arm of Spirals (zoom 5, classic, 11%). The whole sets measure 48 to 50% one
+  colour in classic. **The featured place is the whole Classic set**, which is
+  also the view the Fractal select opens the fractal on, so `places.test.ts`
+  exempts it from "a switch goes somewhere" as it does the Tricorn and Celtic
+  sets (`FEATURED_IS_OPENING_VIEW`). Phoenix is not in
+  `REAL_AXIS_MATCHES_MANDELBROT`: its real axis is not the Mandelbrot set's.
+- **Math card**: `FRACTAL_MATH.phoenix` is a function of the variant. The rule
+  is z(n+1) = z(n)^2 + c + p z(n-1) with subscripts, the start `z0 = the pixel's
+  point, z-1 = 0`, the setting "Phoenix constant "Classic", c added at every
+  step and p weighing the point before the last" with the pair written
+  `c = 0.5667, p = -0.5`, a three-sentence blurb that says the extra term feeds
+  the number from the step before back into each new point and so feathers the
+  sets, and the shared escape sentence with one on what the orbit plot shows
+  (each new dot is pulled by the dot before the last). `toPlainText` reads the
+  rule "z sub n plus 1 equals z sub n squared plus c plus p times z sub n minus
+  1". The orbit plot draws the escape circle of 2, as for every escape-time
+  kind.
+- **`npm run make-og-previews`** was run and the six
+  `public/og/phoenix-*.jpg` files committed (25 to 164 KB, all at quality 80).
+  Nothing else in `public/og/` changed.
+- **The button row**: ten buttons are wider than the nine's, so the row
+  scrolls sideways at 375 and 320 px as it already did. It was not re-measured
+  in a browser; the switcher's classes are unchanged.
+- Tests: the new `src/lib/__tests__/phoenix.test.ts`, and the Phoenix cases
+  added to `fractalTypes`, `viewLink`, `viewLinkState`, `viewPreview`,
+  `tourLink`, `escapeInfo`, `orbit`, `mathProbe`, `orbitPlot`, `renderRgba`,
+  `fractalMath`, `places`, `presets` and `tour` tests and the switcher panel
+  test, each extended to the new count rather than loosened.
+- Docs: the README (intro, Fractal Types, Fractal Switcher, Shareable Links,
+  Custom Presets, Math card, Project Structure, Mathematics), the Help
+  overlay's switcher row, the design doc's As built, and this note.
 
 ### Newton is a family: a Polynomial row of four polynomials (2026-10-11)
 

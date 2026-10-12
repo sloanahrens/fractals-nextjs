@@ -18,6 +18,7 @@ import {
 import { createMagnetKind } from "../magnet";
 import { createMultibrotKind } from "../multibrot";
 import { createNewtonKind, newtonKind } from "../newton";
+import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
 
@@ -38,7 +39,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the nine fractals in order, each once", () => {
+  it("offers the ten fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -51,6 +52,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "celtic", label: "Celtic" },
       { id: "perpendicular-ship", label: "Perp. Ship" },
       { id: "magnet", label: "Magnet" },
+      { id: "phoenix", label: "Phoenix" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -145,6 +147,38 @@ describe("resolveFractalKind", () => {
       const resolved = resolveFractalKind("multibrot", variant);
 
       expect(resolved.id, variant).toBe("multibrot");
+      for (const point of points) {
+        expect(resolved.iterations(point, CAP, true), variant).toBe(
+          expected.iterations(point, CAP, true),
+        );
+      }
+    }
+  });
+
+  it("draws the Phoenix set of the constant beside it", () => {
+    const points = sampledPoints();
+
+    for (const entry of PHOENIX_CONSTANTS) {
+      const resolved = resolveFractalKind("phoenix", entry.name);
+      const expected = createPhoenixKind(entry.constant);
+
+      expect(resolved.id).toBe("phoenix");
+      for (const point of points) {
+        expect(resolved.iterations(point, CAP, true), entry.name).toBe(
+          expected.iterations(point, CAP, true),
+        );
+      }
+    }
+  });
+
+  it("falls back to the Classic Phoenix for a name it cannot read", () => {
+    const expected = createPhoenixKind(PHOENIX_CONSTANTS[0].constant);
+    const points = sampledPoints();
+
+    for (const variant of ["", "classic", "3", "Dendrite", "custom:0,0"]) {
+      const resolved = resolveFractalKind("phoenix", variant);
+
+      expect(resolved.id, variant).toBe("phoenix");
       for (const point of points) {
         expect(resolved.iterations(point, CAP, true), variant).toBe(
           expected.iterations(point, CAP, true),
@@ -345,6 +379,18 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("frames Phoenix on the origin at the widest view, which holds every named constant's set", () => {
+    // Measured spans, with a 0.01 grid at a cap of 300: Classic x -0.67..0.75 by
+    // y +-1.27, Spirals x -0.88..0.72 by y +-1.13 and Hourglass x -0.65..0.75 by
+    // y +-1.28, all inside zoom 1's x -2..2 by y -1.5..1.5 (phoenix.test.ts
+    // checks the frame's border).
+    expect(defaultViewFor("phoenix")).toEqual({
+      centerX: 0,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("falls back to the Mandelbrot view for an unknown id", () => {
     expect(defaultViewFor("lyapunov")).toEqual({
       centerX: -0.75,
@@ -393,6 +439,18 @@ describe("fractalVariants", () => {
     ]);
   });
 
+  it("gives Phoenix a captioned row of its three named constants, with no Custom choice", () => {
+    const variants = fractalVariants("phoenix");
+
+    expect(variants?.label).toBe("Phoenix constant");
+    expect(variants?.allowsCustom).toBe(false);
+    expect(variants?.options).toEqual([
+      { value: "Classic", label: "Classic" },
+      { value: "Spirals", label: "Spirals" },
+      { value: "Hourglass", label: "Hourglass" },
+    ]);
+  });
+
   it("gives the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn, the Celtic set and an unknown id no row", () => {
     expect(fractalVariants("mandelbrot")).toBeNull();
     expect(fractalVariants("burning-ship")).toBeNull();
@@ -402,12 +460,12 @@ describe("fractalVariants", () => {
     expect(fractalVariants("lyapunov")).toBeNull();
   });
 
-  it("describes only Julia, the Multibrot, the Newton fractal and the Magnet among the picker's fractals", () => {
+  it("describes only Julia, the Multibrot, the Newton fractal, the Magnet and the Phoenix among the picker's fractals", () => {
     expect(
       FRACTAL_TYPES.filter((type) => fractalVariants(type.id) !== null).map(
         (type) => type.id,
       ),
-    ).toEqual(["julia", "multibrot", "newton", "magnet"]);
+    ).toEqual(["julia", "multibrot", "newton", "magnet", "phoenix"]);
   });
 });
 
@@ -434,6 +492,10 @@ describe("defaultVariant", () => {
 
   it("is Type I for the Magnet", () => {
     expect(defaultVariant("magnet")).toBe("1");
+  });
+
+  it("is the Classic constant for the Phoenix", () => {
+    expect(defaultVariant("phoenix")).toBe("Classic");
   });
 
   it("is always one of the fractal's own options", () => {
@@ -501,6 +563,21 @@ describe("isVariantValue", () => {
     expect(isVariantValue("magnet", "custom:-0.8,0.156")).toBe(false);
   });
 
+  it("accepts exactly the three constant names for Phoenix, and no custom one", () => {
+    for (const name of ["Classic", "Spirals", "Hourglass"]) {
+      expect(isVariantValue("phoenix", name), name).toBe(true);
+    }
+    for (const value of ["classic", "Dendrite", "3", "", "custom:0.5,0.5"]) {
+      expect(isVariantValue("phoenix", value), value).toBe(false);
+    }
+    expect(isVariantValue("phoenix", undefined)).toBe(false);
+    expect(isVariantValue("phoenix", null)).toBe(false);
+    // And the names are Phoenix's alone, "Classic" aside, which Julia also has.
+    expect(isVariantValue("julia", "Spirals")).toBe(false);
+    expect(isVariantValue("multibrot", "Hourglass")).toBe(false);
+    expect(isVariantValue("magnet", "Spirals")).toBe(false);
+  });
+
   it("refuses an unreadable value, and every value of a fractal with no variant", () => {
     expect(isVariantValue("julia", "Newton")).toBe(false);
     expect(isVariantValue("julia", "custom:9,9")).toBe(false);
@@ -531,6 +608,7 @@ describe("isCustomVariant", () => {
     expect(isCustomVariant("multibrot", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("magnet", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("magnet", "1")).toBe(false);
+    expect(isCustomVariant("phoenix", "custom:-0.8,0.156")).toBe(false);
   });
 });
 
@@ -541,6 +619,16 @@ describe("variantOn", () => {
     expect(variantOn("multibrot", "5")).toBe("5");
     expect(variantOn("newton", "cycle")).toBe("cycle");
     expect(variantOn("magnet", "2")).toBe("2");
+    expect(variantOn("phoenix", "Hourglass")).toBe("Hourglass");
+  });
+
+  it("gives Phoenix its first constant for a value it cannot draw, and Julia and the rest theirs for a Phoenix name", () => {
+    expect(variantOn("phoenix", "Dendrite")).toBe("Classic");
+    expect(variantOn("phoenix", "4")).toBe("Classic");
+    expect(variantOn("phoenix", "")).toBe("Classic");
+    expect(variantOn("julia", "Hourglass")).toBe(JULIA_CONSTANTS[0].name);
+    expect(variantOn("multibrot", "Spirals")).toBe("3");
+    expect(variantOn("magnet", "Spirals")).toBe("1");
   });
 
   it("gives a fractal that takes a variant its own default for another fractal's value", () => {

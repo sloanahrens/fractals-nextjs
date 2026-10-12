@@ -18,6 +18,7 @@ import { JULIA_CONSTANTS, parseJuliaConstant } from "./julia";
 import { MULTIBROT_POWERS, parseMultibrotPower } from "./multibrot";
 import { MAGNET_BAILOUT, MAGNET_TOLERANCE, MAGNET_TYPES, MAGNET_TYPE_LABELS, parseMagnetType } from "./magnet";
 import { newtonPolynomialFor } from "./newton";
+import { PHOENIX_CONSTANTS } from "./phoenix";
 
 /**
  * A formula, as a small tree. Nine kinds of node, enough for every rule here:
@@ -531,6 +532,74 @@ function magnet(variant: string): FractalMath {
   };
 }
 
+/** The step's own index, n, and the two it is written against. */
+const N = identifier("n");
+const Z_NEXT = subscript(z, row(N, PLUS, number(1)));
+const Z_NOW = subscript(z, N);
+const Z_BEFORE = subscript(z, row(N, operator(MINUS), number(1)));
+const P = identifier("p");
+
+/** The Phoenix step: the Julia step with the point before the last, scaled by p, added in. */
+const PHOENIX_RULE = row(
+  Z_NEXT,
+  EQUALS,
+  superscript(Z_NOW, number(2)),
+  PLUS,
+  c,
+  PLUS,
+  P,
+  operator(INVISIBLE_TIMES),
+  Z_BEFORE,
+);
+
+/**
+ * The Phoenix set's maths: the rule with its memory term, and the setting says
+ * which pair of c and p is drawn.
+ *
+ * The constant is carried as one point with c in its real part and p in its
+ * imaginary part, so the card writes the two numbers apart, as `c = …, p = …`.
+ * A name this build cannot read is drawn as the first constant and shown as
+ * it, as Julia's is, so the card cannot describe a picture the renderer is not
+ * drawing.
+ */
+function phoenix(variant: string): FractalMath {
+  const named =
+    PHOENIX_CONSTANTS.find((entry) => entry.name === variant) ??
+    PHOENIX_CONSTANTS[0];
+  const { real, imaginary } = named.constant;
+
+  return {
+    title: "Phoenix set",
+    rule: PHOENIX_RULE,
+    start: row(
+      subscript(z, number(0)),
+      EQUALS,
+      PIXELS_POINT,
+      operator(","),
+      subscript(z, row(operator(MINUS), number(1))),
+      EQUALS,
+      number(0),
+    ),
+    setting: {
+      label: `Phoenix constant "${named.name}", c added at every step and p weighing the point before the last`,
+      value: row(
+        c,
+        EQUALS,
+        ...(real < 0 ? [operator(MINUS)] : []),
+        number(formatCoordinate(Math.abs(real))),
+        operator(","),
+        P,
+        EQUALS,
+        ...(imaginary < 0 ? [operator(MINUS)] : []),
+        number(formatCoordinate(Math.abs(imaginary))),
+      ),
+    },
+    blurb:
+      "This is a Julia set with a memory: every step squares the number and adds c, and also adds p times the number from the step before. That extra term feeds the past back into each new point, which feathers the picture into flame-like shapes that a plain Julia set never makes. Points whose numbers stay small are the black body and the rest are coloured by how fast they run away.",
+    escape: `${ESCAPE_RADIUS_2} In the orbit plot the memory shows: the path starts at the pixel, and each new dot is pulled by the dot before the last, so the path spirals less smoothly than a Julia orbit does.`,
+  };
+}
+
 function julia(variant: string): FractalMath {
   // The renderer falls back to the first named constant for a name it cannot
   // read, so the card says the constant that is actually drawn.
@@ -586,6 +655,7 @@ export const FRACTAL_MATH: Readonly<
   multibrot,
   newton,
   celtic: () => CELTIC,
+  phoenix,
 };
 
 /**
