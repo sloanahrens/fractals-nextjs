@@ -17,7 +17,7 @@ import {
 } from "../fractalTypes";
 import { createMagnetKind } from "../magnet";
 import { createMultibrotKind } from "../multibrot";
-import { newtonKind } from "../newton";
+import { createNewtonKind, newtonKind } from "../newton";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
 
@@ -71,9 +71,21 @@ describe("resolveFractalKind", () => {
     }
   });
 
-  it("draws the Newton fractal for its own id, whatever variant is beside it", () => {
+  it("draws the Newton fractal of the polynomial the variant names, and of z^3 - 1 for a value it cannot read", () => {
+    // z^3 - 1 is the picture the app has always drawn, so it is the one a
+    // value from outside falls back to rather than a blank canvas.
     expect(resolveFractalKind("newton", "Dendrite")).toBe(newtonKind);
     expect(resolveFractalKind("newton", "")).toBe(newtonKind);
+    expect(resolveFractalKind("newton", "3")).toBe(newtonKind);
+
+    const fourth = resolveFractalKind("newton", "4");
+    expect(fourth).toBe(createNewtonKind("4"));
+    expect(fourth).not.toBe(newtonKind);
+    // A point arrives at a different root's band under each polynomial, which
+    // is what the picture is made of.
+    expect(fourth.iterations({ real: 0.5, imaginary: 0.5 }, CAP, false)).not.toBe(
+      newtonKind.iterations({ real: 0.5, imaginary: 0.5 }, CAP, false),
+    );
   });
 
   it("draws the Mandelbrot set for its own id", () => {
@@ -368,22 +380,34 @@ describe("fractalVariants", () => {
     ]);
   });
 
-  it("gives the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn, Newton, the Celtic set and an unknown id no row", () => {
+  it("gives the Newton fractal a captioned Polynomial row of the four equations, with no Custom choice", () => {
+    const variants = fractalVariants("newton");
+
+    expect(variants?.label).toBe("Polynomial");
+    expect(variants?.allowsCustom).toBe(false);
+    expect(variants?.options).toEqual([
+      { value: "3", label: "z^3 - 1" },
+      { value: "4", label: "z^4 - 1" },
+      { value: "5", label: "z^5 - 1" },
+      { value: "cycle", label: "z^3 - 2z + 2" },
+    ]);
+  });
+
+  it("gives the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn, the Celtic set and an unknown id no row", () => {
     expect(fractalVariants("mandelbrot")).toBeNull();
     expect(fractalVariants("burning-ship")).toBeNull();
     expect(fractalVariants("perpendicular-ship")).toBeNull();
     expect(fractalVariants("tricorn")).toBeNull();
-    expect(fractalVariants("newton")).toBeNull();
     expect(fractalVariants("celtic")).toBeNull();
     expect(fractalVariants("lyapunov")).toBeNull();
   });
 
-  it("describes only Julia, the Multibrot and the Magnet among the picker's fractals", () => {
+  it("describes only Julia, the Multibrot, the Newton fractal and the Magnet among the picker's fractals", () => {
     expect(
       FRACTAL_TYPES.filter((type) => fractalVariants(type.id) !== null).map(
         (type) => type.id,
       ),
-    ).toEqual(["julia", "multibrot", "magnet"]);
+    ).toEqual(["julia", "multibrot", "newton", "magnet"]);
   });
 });
 
@@ -393,10 +417,15 @@ describe("defaultVariant", () => {
     expect(defaultVariant("mandelbrot")).toBe("");
     expect(defaultVariant("burning-ship")).toBe("");
     expect(defaultVariant("tricorn")).toBe("");
-    expect(defaultVariant("newton")).toBe("");
     expect(defaultVariant("celtic")).toBe("");
     expect(defaultVariant("perpendicular-ship")).toBe("");
     expect(defaultVariant("lyapunov")).toBe("");
+  });
+
+  it("is the first named choice for a fractal that takes one, so Newton opens on z^3 - 1", () => {
+    expect(defaultVariant("multibrot")).toBe("3");
+    expect(defaultVariant("newton")).toBe("3");
+    expect(defaultVariant("magnet")).toBe("1");
   });
 
   it("is power 3 for the Multibrot", () => {
@@ -437,6 +466,20 @@ describe("isVariantValue", () => {
     expect(isVariantValue("julia", "3")).toBe(false);
     expect(isVariantValue("multibrot", "Classic")).toBe(false);
     expect(isVariantValue("multibrot", "custom:-0.8,0.156")).toBe(false);
+  });
+
+  it("accepts the powers, and the cycle name, for the Newton fractal", () => {
+    for (const polynomial of ["3", "4", "5", "cycle"]) {
+      expect(isVariantValue("newton", polynomial), polynomial).toBe(true);
+    }
+    for (const value of ["2", "6", "03", "3.0", " 4", "Cycle", "z^3 - 1", ""]) {
+      expect(isVariantValue("newton", value), value).toBe(false);
+    }
+    expect(isVariantValue("newton", undefined)).toBe(false);
+    expect(isVariantValue("newton", null)).toBe(false);
+    // The cycle is a polynomial of this fractal alone: a power it shares with
+    // the Multibrot is a value of both, and each judges it for itself.
+    expect(isVariantValue("multibrot", "cycle")).toBe(false);
   });
 
   it("accepts exactly the plain spellings of 1 and 2 for the Magnet", () => {
@@ -496,6 +539,7 @@ describe("variantOn", () => {
     expect(variantOn("julia", "Dendrite")).toBe("Dendrite");
     expect(variantOn("julia", "custom:-0.8,0.156")).toBe("custom:-0.8,0.156");
     expect(variantOn("multibrot", "5")).toBe("5");
+    expect(variantOn("newton", "cycle")).toBe("cycle");
     expect(variantOn("magnet", "2")).toBe("2");
   });
 
@@ -511,6 +555,15 @@ describe("variantOn", () => {
     expect(variantOn("magnet", "")).toBe("1");
     // A magnetic type is a value neither of the others can use.
     expect(variantOn("multibrot", "2")).toBe("3");
+    // Newton shares the digits with the Multibrot's powers and has a fourth
+    // value of its own, so each direction has to be judged by what the fractal
+    // it is going to can draw: "4" is a power and a polynomial alike, "cycle"
+    // belongs to Newton and to nothing else.
+    expect(variantOn("newton", "Dendrite")).toBe("3");
+    expect(variantOn("newton", "4")).toBe("4");
+    expect(variantOn("newton", "")).toBe("3");
+    expect(variantOn("multibrot", "cycle")).toBe("3");
+    expect(variantOn("julia", "cycle")).toBe(JULIA_CONSTANTS[0].name);
   });
 
   it("leaves the value alone for a fractal that takes none, so Julia -> Mandelbrot -> Julia keeps the constant", () => {
@@ -519,7 +572,6 @@ describe("variantOn", () => {
       "burning-ship",
       "perpendicular-ship",
       "tricorn",
-      "newton",
       "celtic",
     ]) {
       expect(variantOn(id, "Dendrite"), id).toBe("Dendrite");

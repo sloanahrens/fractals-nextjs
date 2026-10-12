@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { getAvailableColorSchemes } from "../colorMapping";
-import { FRACTAL_TYPES, fractalVariants } from "../fractalTypes";
-import { MAX_CUSTOM_CONSTANT_LENGTH, isJuliaConstantName } from "../julia";
+import { FRACTAL_TYPES, fractalVariants, isVariantValue } from "../fractalTypes";
+import { MAX_CUSTOM_CONSTANT_LENGTH } from "../julia";
 import {
   ITERATION_STEP,
   MAX_ITERATIONS,
@@ -234,11 +234,39 @@ describe("encodeView", () => {
     });
   });
 
-  it("writes the Newton fractal as f=newton, with no k, and reads it back", () => {
+  it("writes the Newton fractal's polynomial as k and reads it back", () => {
+    for (const polynomial of ["3", "4", "5", "cycle"]) {
+      const link = encodeView({
+        fractalType: "newton",
+        variant: polynomial,
+        centerX: 0,
+        centerY: 0,
+        zoomLevel: 8,
+        colorScheme: "rainbow",
+        autoIterationsOn: true,
+        canvasWidth: 800,
+        canvasHeight: 600,
+      });
+
+      expect(link).toBe(
+        `v=1&f=newton&k=${polynomial}&x=0&y=0&z=8&s=rainbow&i=auto&w=800&h=600`,
+      );
+      expect(decodeView(`#${link}`)).toMatchObject({
+        fractalType: "newton",
+        variant: polynomial,
+        centerX: 0,
+        centerY: 0,
+        zoomLevel: 8,
+        colorScheme: "rainbow",
+      });
+    }
+  });
+
+  it("writes a Newton state a polynomial the fractal cannot draw as f=newton and no k", () => {
     const view = {
       fractalType: "newton",
       // A variant left over from Julia is not written beside a fractal that
-      // takes none.
+      // cannot draw it.
       variant: "Dendrite",
       centerX: 0,
       centerY: 0,
@@ -259,6 +287,8 @@ describe("encodeView", () => {
       colorScheme: "rainbow",
     });
     expect(decodeView(`#${link}`).variant).toBeUndefined();
+    // The state's own value is still "Dendrite"; it is the page that falls
+    // back to z^3 - 1 (`viewLinkState.ts`), not the codec that invents one.
   });
 
   it("writes the Multibrot's power as k and reads it back", () => {
@@ -553,9 +583,12 @@ describe("decodeView against a fragment it should not trust", () => {
       expect(FRACTAL_TYPES.map((type) => type.id)).toContain(state.fractalType);
     }
     if (state.variant !== undefined) {
-      // A constant that came back is a name this build reads: one of the four
-      // the picker offers, or a custom spelling of a point.
-      expect(isJuliaConstantName(state.variant)).toBe(true);
+      // A variant that came back is one some fractal this build draws can be
+      // drawn with, which is the whole of the codec's own test: it reads a `k`
+      // without asking which fractal it sits beside.
+      expect(
+        FRACTAL_TYPES.some((type) => isVariantValue(type.id, state.variant)),
+      ).toBe(true);
     }
     if (state.colorScheme !== undefined) {
       expect(

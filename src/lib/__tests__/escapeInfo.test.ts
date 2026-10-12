@@ -15,7 +15,7 @@ import { burningShipKind } from "../burningShip";
 import { createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
 import { MULTIBROT_POWERS, createMultibrotKind } from "../multibrot";
-import { NEWTON_ROOTS, newtonKind } from "../newton";
+import { NEWTON_ROOTS, createNewtonKind, newtonKind } from "../newton";
 import { celticKind } from "../celtic";
 import { MAGNET_TYPES, createMagnetKind } from "../magnet";
 import { perpendicularShipKind } from "../perpendicularShip";
@@ -143,6 +143,33 @@ const CASES: KindCase[] = [
     neverEnds: ORIGIN,
     // -0.5 is sent to the root 1 in one step; 1 is already there, in none.
     endsAt: { point: { real: -0.5, imaginary: 0 }, steps: 1 },
+    packsOutcomes: true,
+  },
+  {
+    name: "newton z^4 - 1",
+    kind: createNewtonKind("4"),
+    // The derivative 4z^3 vanishes at z = 0, so there is no step and no root.
+    neverEnds: ORIGIN,
+    // From 2 on the real axis the orbit reaches the root 1 in six steps.
+    endsAt: { point: { real: 2, imaginary: 0 }, steps: 6 },
+    packsOutcomes: true,
+  },
+  {
+    name: "newton z^5 - 1",
+    kind: createNewtonKind("5"),
+    neverEnds: ORIGIN,
+    // From 2 it takes seven steps to reach the root 1.
+    endsAt: { point: { real: 2, imaginary: 0 }, steps: 7 },
+    packsOutcomes: true,
+  },
+  {
+    name: "newton z^3 - 2z + 2",
+    kind: createNewtonKind("cycle"),
+    // z = 0 is on the map's two-step loop (0 -> 1 -> 0), so it never settles
+    // however high the cap is.
+    neverEnds: ORIGIN,
+    // A point on the real axis beside the loop is drawn into the root 1.
+    endsAt: { point: { real: 0.5, imaginary: 0 }, steps: 8 },
     packsOutcomes: true,
   },
 ];

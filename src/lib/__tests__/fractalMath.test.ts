@@ -158,9 +158,22 @@ describe("the rule, read aloud", () => {
     }
   });
 
-  it("reads Newton's rule", () => {
+  it("reads Newton's rule, with the polynomial's own p(z) and p'(z) in it", () => {
     expect(rule("newton")).toBe(
       "z becomes z minus the fraction z cubed minus 1 over 3 times z squared end fraction",
+    );
+    expect(toPlainText(describeFractalMath("newton", "4").rule)).toBe(
+      "z becomes z minus the fraction z to the power 4 minus 1 over 4 times z cubed end fraction",
+    );
+    expect(toPlainText(describeFractalMath("newton", "5").rule)).toBe(
+      "z becomes z minus the fraction z to the power 5 minus 1 over 5 times z to the power 4 end fraction",
+    );
+    expect(toPlainText(describeFractalMath("newton", "cycle").rule)).toBe(
+      "z becomes z minus the fraction z cubed minus 2 times z plus 2 over 3 times z squared minus 2 end fraction",
+    );
+    // A value this build cannot read is drawn as z^3 - 1 and read as it.
+    expect(toPlainText(describeFractalMath("newton", "garbage").rule)).toBe(
+      rule("newton"),
     );
   });
 
@@ -207,12 +220,29 @@ describe("the setting", () => {
       "mandelbrot",
       "burning-ship",
       "tricorn",
-      "newton",
       "celtic",
       "perpendicular-ship",
     ]) {
       expect(describeFractalMath(id, "").setting).toBeNull();
     }
+  });
+
+  it("shows the Newton fractal's polynomial as the equation it solves", () => {
+    const polynomial = (variant: string) =>
+      toPlainText(describeFractalMath("newton", variant).setting!.value);
+
+    expect(describeFractalMath("newton", "3").setting!.label).toBe(
+      "Polynomial, the equation whose solutions it hunts for",
+    );
+    expect(polynomial("3")).toBe("z cubed minus 1 equals 0");
+    expect(polynomial("4")).toBe("z to the power 4 minus 1 equals 0");
+    expect(polynomial("5")).toBe("z to the power 5 minus 1 equals 0");
+    expect(polynomial("cycle")).toBe(
+      "z cubed minus 2 times z plus 2 equals 0",
+    );
+    // The fallback is the polynomial that is drawn, so the card and the canvas
+    // cannot describe different pictures.
+    expect(polynomial("garbage")).toBe(polynomial("3"));
   });
 
   it("shows each named Julia constant with its real value", () => {

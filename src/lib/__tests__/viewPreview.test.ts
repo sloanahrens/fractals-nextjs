@@ -346,8 +346,11 @@ describe("describeViewLine", () => {
       "Perpendicular Ship, 1x",
     );
     expect(line({ ...base, fractalType: "newton", zoomLevel: 8 })).toBe(
-      "Newton fractal, 8x",
+      "Newton fractal, z^3 - 1, 8x",
     );
+    expect(
+      line({ ...base, fractalType: "newton", variant: "cycle", zoomLevel: 8 }),
+    ).toBe("Newton fractal, z^3 - 2z + 2, 8x");
     expect(line({ ...base, fractalType: "multibrot", variant: "4" })).toBe(
       "Multibrot, z^4, 1x",
     );

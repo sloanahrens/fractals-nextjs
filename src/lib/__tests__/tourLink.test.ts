@@ -82,6 +82,7 @@ const MULTIBROT = stop({
 });
 const NEWTON = stop({
   fractalType: "newton",
+  variant: "3",
   centerX: -0.793701,
   centerY: 0,
   zoomLevel: 150,
@@ -225,7 +226,7 @@ describe("encodeTourLink", () => {
       stop({ fractalType: "burning-ship", centerX: -9.999999999 }),
       stop({ fractalType: "multibrot", variant: "5", centerY: 9.999999999 }),
       stop({ fractalType: "tricorn", zoomLevel: 9999.5 }),
-      stop({ fractalType: "newton", centerX: 9.999999999 }),
+      stop({ fractalType: "newton", variant: "3", centerX: 9.999999999 }),
       JULIA,
       MANDELBROT,
     ];

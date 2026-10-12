@@ -377,6 +377,7 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasWidth: 800,
     canvasHeight: 600,
     fractal: "newton",
+    variant: "3",
   },
   {
     id: "newton-junction",
@@ -394,6 +395,7 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasWidth: 800,
     canvasHeight: 600,
     fractal: "newton",
+    variant: "3",
   },
   {
     id: "celtic-overview",

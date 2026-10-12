@@ -21,8 +21,9 @@ export interface Place {
   /**
    * The fractal's variant: for Julia the constant, as a name or a
    * `custom:<re>,<im>` spelling (`julia.ts`); for the Multibrot its power, "3",
-   * "4" or "5". Present for a place of a fractal that takes one and for no
-   * other.
+   * "4" or "5"; for the Newton fractal the polynomial it solves, "3", "4", "5"
+   * or "cycle"; for the Magnet a magnetic type, "1" or "2". Present for a place
+   * of a fractal that takes one and for no other.
    */
   variant?: string;
   /** Real part of the centre of the view. */
@@ -688,6 +689,7 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-whole",
     name: "The three basins",
     fractal: "newton",
+    variant: "3",
     centerX: 0,
     centerY: 0,
     zoom: 1,
@@ -697,6 +699,7 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-junction",
     name: "Where all three basins meet",
     fractal: "newton",
+    variant: "3",
     centerX: 0,
     centerY: 0,
     zoom: 8,
@@ -706,6 +709,7 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-junction-1000x",
     name: "The same junction at 1000x",
     fractal: "newton",
+    variant: "3",
     centerX: 0,
     centerY: 0,
     zoom: 1000,
@@ -715,6 +719,7 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-junction-copy",
     name: "A second junction at -0.7937",
     fractal: "newton",
+    variant: "3",
     centerX: -0.793701,
     centerY: 0,
     zoom: 150,
@@ -724,6 +729,7 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-lens",
     name: "A basin pinched into a lens",
     fractal: "newton",
+    variant: "3",
     centerX: -0.5,
     centerY: 0,
     zoom: 4,
@@ -733,6 +739,7 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-two-junctions",
     name: "Two junctions on one boundary",
     fractal: "newton",
+    variant: "3",
     centerX: 0.2,
     centerY: 0.55,
     zoom: 12,
@@ -742,6 +749,7 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-junction-chain",
     name: "A chain of junctions",
     fractal: "newton",
+    variant: "3",
     centerX: 0.4,
     centerY: 0.3,
     zoom: 10,
@@ -751,6 +759,7 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-bulb-chain",
     name: "A chain of bulbs on a straight boundary",
     fractal: "newton",
+    variant: "3",
     centerX: 0.1208,
     centerY: 0.525,
     zoom: 100,
@@ -760,10 +769,94 @@ const NEWTON_PLACES: readonly Place[] = [
     id: "newton-root-and-boundary",
     name: "The root at 1 beside the boundary",
     fractal: "newton",
+    variant: "3",
     centerX: 0.7,
     centerY: 0,
     zoom: 3,
     colorScheme: "rainbow",
+  },
+  // The other polynomials the fractal offers, two places each: the whole thing
+  // at the default view (which is where the chip for that polynomial lands, so
+  // it has to sit exactly on `defaultViewFor("newton")`), and one detail. Each
+  // was drawn headless on contact sheets at 300x225 in several schemes and the
+  // readable one kept, as the z^3 - 1 places were.
+  //
+  // z^4 - 1 solves to the fourth roots of 1, one at each point of the compass,
+  // so the four basins meet at the origin in a four-armed star and the lace
+  // along the boundaries between them is the same lace turned a quarter round
+  // each time. The detail is on the diagonal, where the basins of 1 and i
+  // braid; ocean separates its four blues better here than the other schemes,
+  // which put two neighbouring basins in one colour family.
+  {
+    id: "newton-4-whole",
+    name: "The four basins of z^4 - 1",
+    fractal: "newton",
+    variant: "4",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "newton-4-braid",
+    name: "Where the basins of 1 and i braid",
+    fractal: "newton",
+    variant: "4",
+    centerX: 0.7,
+    centerY: 0.7,
+    zoom: 6,
+    colorScheme: "ocean",
+  },
+  // z^5 - 1 solves to the fifth roots of 1, a fifth of a turn apart, so five
+  // basins meet at the origin in a five-armed star and the boundary between any
+  // two of them is the same one turned round. The detail is the braid between
+  // the root at 1 and the one above it; rainbow separates five families better
+  // than any scheme that repeats a hue within four or five steps of the range.
+  {
+    id: "newton-5-whole",
+    name: "The five basins of z^5 - 1",
+    fractal: "newton",
+    variant: "5",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "newton-5-braid",
+    name: "Where the basins of two fifth roots braid",
+    fractal: "newton",
+    variant: "5",
+    centerX: 0.9,
+    centerY: 0.6,
+    zoom: 6,
+    colorScheme: "rainbow",
+  },
+  // z^3 - 2z + 2 has three roots, but its Newton map has an attracting
+  // two-step loop beside the origin instead: it sends 0 to 1 and 1 back to 0,
+  // and the orbits around them are drawn into it and never settle, so they run
+  // the whole cap and are painted black. The whole view shows the three basins
+  // and those two black points; the detail sits on the origin, where the loop's
+  // own basin is a dark disc ringed with the bulbs the map closes round it.
+  {
+    id: "newton-cycle-whole",
+    name: "The three basins of z^3 - 2z + 2",
+    fractal: "newton",
+    variant: "cycle",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "newton-cycle-loop",
+    name: "The basin of the loop between 0 and 1",
+    fractal: "newton",
+    variant: "cycle",
+    centerX: 0,
+    centerY: 0,
+    zoom: 6,
+    colorScheme: "classic",
   },
 ];
 
@@ -1128,9 +1221,10 @@ export function featuredPlace(fractal: string): Place {
  * set is the Julia default view, and a place counts as one when it is that view
  * of that constant. Constants are compared as points, so a custom spelling of a
  * named constant finds the same place. A Multibrot's whole set is likewise the
- * Multibrot default view, one frame for the three powers.
+ * Multibrot default view, one frame for the three powers, and a Newton
+ * polynomial's is the one frame for all four, as a magnetic type's is for both.
  *
- * @param variant - A named Julia constant or a `custom:<re>,<im>` name, or a Multibrot power
+ * @param variant - A named Julia constant or a `custom:<re>,<im>` name, a Multibrot power, a Newton polynomial or a magnetic type
  * @param fractal - The fractal the chip belongs to; Julia unless said
  * @returns The catalogue's whole-set place for it, or null when it has none
  */
@@ -1186,7 +1280,8 @@ function sameConstant(
 
 /**
  * Whether two variants of one fractal are the same picture: Julia constants as
- * points, any other variant (a Multibrot power) as text.
+ * points, any other variant (a Multibrot power, a Newton polynomial, a magnetic
+ * type) as text.
  */
 function sameVariant(
   fractal: string,

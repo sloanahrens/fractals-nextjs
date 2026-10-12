@@ -17,6 +17,7 @@ import { formatCoordinate } from "./zoomScale";
 import { JULIA_CONSTANTS, parseJuliaConstant } from "./julia";
 import { MULTIBROT_POWERS, parseMultibrotPower } from "./multibrot";
 import { MAGNET_BAILOUT, MAGNET_TOLERANCE, MAGNET_TYPES, MAGNET_TYPE_LABELS, parseMagnetType } from "./magnet";
+import { newtonPolynomialFor } from "./newton";
 
 /**
  * A formula, as a small tree. Nine kinds of node, enough for every rule here:
@@ -356,25 +357,87 @@ const CELTIC: FractalMath = {
   escape: `${ESCAPE_RADIUS_2} In the orbit plot the fold shows as a path that never lands left of c: each step's real part is at least c's, so only c itself pulls the path to the left.`,
 };
 
-const NEWTON: FractalMath = {
-  title: "Newton fractal",
-  rule: row(
-    z,
-    ARROW,
-    z,
+/**
+ * The polynomial p(z) Newton's method is hunting the roots of, per variant, as
+ * the rule's numerator and as the setting's value.
+ */
+const NEWTON_POLYNOMIALS: Readonly<Record<string, MathExpr>> = {
+  "3": row(superscript(z, number(3)), operator(MINUS), number(1)),
+  "4": row(superscript(z, number(4)), operator(MINUS), number(1)),
+  "5": row(superscript(z, number(5)), operator(MINUS), number(1)),
+  cycle: row(
+    superscript(z, number(3)),
     operator(MINUS),
-    fraction(
-      row(superscript(z, number(3)), operator(MINUS), number(1)),
-      row(number(3), operator(INVISIBLE_TIMES), superscript(z, number(2))),
-    ),
+    number(2),
+    operator(INVISIBLE_TIMES),
+    z,
+    PLUS,
+    number(2),
   ),
-  start: START_AT_PIXEL,
-  setting: null,
-  blurb:
-    "Newton's method hunts for a solution of z cubed = 1 by improving a guess again and again. The equation has three solutions, the cube roots of 1, and every pixel is a first guess. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took; the borders between the three colours are endlessly tangled.",
-  escape:
-    "A point is done when z cubed is within 0.000001 of 1, which means it has settled on one of the three roots. The colour family is the root it reached and the shade is how many steps that took; a point that has not settled within the iteration cap is painted black.",
 };
+
+/** p'(z), the derivative the step divides by, per variant. */
+const NEWTON_DERIVATIVES: Readonly<Record<string, MathExpr>> = {
+  "3": row(number(3), operator(INVISIBLE_TIMES), superscript(z, number(2))),
+  "4": row(number(4), operator(INVISIBLE_TIMES), superscript(z, number(3))),
+  "5": row(number(5), operator(INVISIBLE_TIMES), superscript(z, number(4))),
+  cycle: row(
+    number(3),
+    operator(INVISIBLE_TIMES),
+    superscript(z, number(2)),
+    operator(MINUS),
+    number(2),
+  ),
+};
+
+/** The plain sentences the card says about each polynomial. */
+const NEWTON_BLURBS: Readonly<Record<string, string>> = {
+  "3": "Newton's method hunts for a solution of z cubed = 1 by improving a guess again and again. The equation has three solutions, the cube roots of 1, and every pixel is a first guess. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took; the borders between the three colours are endlessly tangled.",
+  "4": "Newton's method hunts for a solution of z to the fourth = 1 by improving a guess again and again. The equation has four solutions, the fourth roots of 1, and every pixel is a first guess. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, so four colour families meet along the same endlessly tangled borders.",
+  "5": "Newton's method hunts for a solution of z to the fifth = 1 by improving a guess again and again. The equation has five solutions, the fifth roots of 1, and every pixel is a first guess. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, and five colour families meet along the borders between them.",
+  cycle:
+    "Newton's method hunts for a solution of z cubed minus 2z plus 2 by improving a guess again and again. The equation has three solutions, but beside the origin the method is caught in a loop instead: nought is sent to 1 and 1 straight back to nought, so those points never settle. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, and paints the ones caught in the loop black.",
+};
+
+/** How the card says a point is judged, per polynomial. */
+const NEWTON_ESCAPES: Readonly<Record<string, string>> = {
+  "3": "A point is done when z cubed is within 0.000001 of 1, which means it has settled on one of the three roots. The colour family is the root it reached and the shade is how many steps that took; a point that has not settled within the iteration cap is painted black.",
+  "4": "A point is done when z to the fourth is within 0.000001 of 1, which means it has settled on one of the four roots. The colour family is the root it reached and the shade is how many steps that took; a point that has not settled within the iteration cap is painted black.",
+  "5": "A point is done when z to the fifth is within 0.000001 of 1, which means it has settled on one of the five roots. The colour family is the root it reached and the shade is how many steps that took; a point that has not settled within the iteration cap is painted black.",
+  cycle:
+    "A point is done when z cubed minus 2z plus 2 is within 0.000001 of nought, which means it has settled on one of the three roots. The colour family is the root it reached and the shade is how many steps that took; a point caught in the loop beside the origin, or not settled within the iteration cap, is painted black and the orbit plot draws it circling rather than arriving.",
+};
+
+/**
+ * The Newton fractal's maths: the method's own rule with the polynomial's
+ * p(z) and p'(z) in it, and the equation the setting names.
+ *
+ * The polynomial is the fractal's variant, so the rule, the equation and the
+ * sentences all move with it. A value this build cannot read is drawn as z^3 - 1
+ * and shown as it (`newtonPolynomialFor`'s own fallback), so the card cannot
+ * describe a picture the renderer is not drawing.
+ */
+function newton(variant: string): FractalMath {
+  const polynomial = newtonPolynomialFor(variant).id;
+
+  return {
+    title: "Newton fractal",
+    rule: row(
+      z,
+      ARROW,
+      z,
+      operator(MINUS),
+      fraction(NEWTON_POLYNOMIALS[polynomial], NEWTON_DERIVATIVES[polynomial]),
+    ),
+    start: START_AT_PIXEL,
+    setting: {
+      label: "Polynomial, the equation whose solutions it hunts for",
+      value: row(NEWTON_POLYNOMIALS[polynomial], EQUALS, number(0)),
+    },
+    blurb: NEWTON_BLURBS[polynomial],
+    escape: NEWTON_ESCAPES[polynomial],
+  };
+}
 
 /** (c − 1) and (c − 2), the two brackets the second magnetic type is built from. */
 const C_MINUS_1 = row(OPEN, c, operator(MINUS), number(1), CLOSE);
@@ -521,7 +584,7 @@ export const FRACTAL_MATH: Readonly<
   tricorn: () => TRICORN,
   magnet,
   multibrot,
-  newton: () => NEWTON,
+  newton,
   celtic: () => CELTIC,
 };
 

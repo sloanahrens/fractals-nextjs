@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import type { ComplexNumber } from "../../types/fractal";
+import type { ComplexNumber, FractalKind } from "../../types/fractal";
 import { mapIterationsToColor } from "../colorMapping";
 import { defaultViewFor } from "../fractalTypes";
 import {
   NEWTON_BAND,
   NEWTON_BAND_MARGIN,
   NEWTON_HALF_SHADE_STEPS,
+  NEWTON_POLYNOMIALS,
   NEWTON_ROOTS,
   NEWTON_TOLERANCE,
+  createNewtonKind,
   newtonKind,
+  newtonPolynomialFor,
+  parseNewtonPolynomial,
 } from "../newton";
 
 const CAP = 300;
@@ -501,3 +505,467 @@ describe("the default view", () => {
     }
   });
 });
+
+/** The packed number turned back into its root and its steps, for one polynomial's own band. */
+function unpackWith(value: number, rootCount: number, cap = CAP) {
+  const band = cap / rootCount;
+  const root = Math.floor(value / band);
+  const inBand = value / band - root;
+  const shade = (inBand - NEWTON_BAND_MARGIN) / (1 - 2 * NEWTON_BAND_MARGIN);
+
+  return { root, steps: (shade * NEWTON_HALF_SHADE_STEPS) / (1 - shade) };
+}
+
+/** $\sqrt{2/3}$, the real point where z^3 - 2z + 2 has a vanishing derivative. */
+const CYCLE_POLE = Math.sqrt(2 / 3);
+
+describe("the polynomials the fractal offers", () => {
+  it("offers z^3 - 1 first, then the fourth and fifth powers and the cyclic cubic", () => {
+    expect(NEWTON_POLYNOMIALS.map((polynomial) => polynomial.id)).toEqual([
+      "3",
+      "4",
+      "5",
+      "cycle",
+    ]);
+    expect(NEWTON_POLYNOMIALS.map((polynomial) => polynomial.label)).toEqual([
+      "z^3 - 1",
+      "z^4 - 1",
+      "z^5 - 1",
+      "z^3 - 2z + 2",
+    ]);
+    expect(
+      NEWTON_POLYNOMIALS.map((polynomial) => polynomial.roots.length),
+    ).toEqual([3, 4, 5, 3]);
+    // The first is the picture the app has always drawn, so it is the one a
+    // value this build cannot read falls back to.
+    expect(newtonPolynomialFor("Dendrite").id).toBe("3");
+  });
+
+  it("reads only the app's own spellings, and refuses the rest", () => {
+    for (const id of ["3", "4", "5", "cycle"]) {
+      expect(parseNewtonPolynomial(id), id).toBe(id);
+      expect(createNewtonKind(id).id, id).toBe("newton");
+    }
+
+    for (const value of ["2", "6", "03", "3.0", " 4", "Cycle", "z^3 - 1", ""]) {
+      expect(parseNewtonPolynomial(value), value).toBeNull();
+      expect(newtonPolynomialFor(value).id, value).toBe("3");
+    }
+
+    expect(() => createNewtonKind("Cycle")).toThrow(RangeError);
+    expect(() => createNewtonKind("")).toThrow(RangeError);
+  });
+
+  it("answers the same kind for the same polynomial, so a resolve is stable", () => {
+    expect(createNewtonKind("4")).toBe(createNewtonKind("4"));
+    expect(createNewtonKind("5")).toBe(createNewtonKind("5"));
+    expect(createNewtonKind("cycle")).toBe(createNewtonKind("cycle"));
+    // z^3 - 1 is the kind every Newton link with no polynomial names.
+    expect(createNewtonKind("3")).toBe(newtonKind);
+  });
+});
+
+interface PolynomialCase {
+  id: string;
+  kind: FractalKind;
+  roots: readonly ComplexNumber[];
+  /** A turn that sends each root to the next, or null for a polynomial that has none. */
+  turn: ComplexNumber | null;
+  /** Where the mirror about the real axis sends each root, by index. */
+  mirrored: readonly number[];
+}
+
+const POLYNOMIAL_CASES: PolynomialCase[] = [
+  {
+    id: "4",
+    kind: createNewtonKind("4"),
+    roots: NEWTON_POLYNOMIALS[1].roots,
+    // z^4 - 1's roots are the four points of the compass, so a quarter turn
+    // sends each to the next.
+    turn: { real: 0, imaginary: 1 },
+    mirrored: [0, 3, 2, 1],
+  },
+  {
+    id: "5",
+    kind: createNewtonKind("5"),
+    roots: NEWTON_POLYNOMIALS[2].roots,
+    turn: {
+      real: Math.cos((2 * Math.PI) / 5),
+      imaginary: Math.sin((2 * Math.PI) / 5),
+    },
+    mirrored: [0, 4, 3, 2, 1],
+  },
+  {
+    id: "cycle",
+    kind: createNewtonKind("cycle"),
+    roots: NEWTON_POLYNOMIALS[3].roots,
+    // z^3 - 2z + 2 is not turned onto itself about the origin the way z^d - 1
+    // is: its roots are one real point and a conjugate pair, so only the mirror
+    // is a symmetry.
+    turn: null,
+    mirrored: [0, 2, 1],
+  },
+];
+
+describe.each(POLYNOMIAL_CASES)("the $id polynomial", ({ kind, roots, turn, mirrored }) => {
+  const rootCount = roots.length;
+  const band = CAP / rootCount;
+  const unpack = (value: number) => unpackWith(value, rootCount);
+
+  it("reaches every root, each in its own band at the band's near edge", () => {
+    roots.forEach((root, index) => {
+      const value = kind.iterations(root, CAP, false);
+
+      expect(Math.floor(value / band), `root ${index}`).toBe(index);
+      expect(value, `root ${index}`).toBeCloseTo(
+        (index + NEWTON_BAND_MARGIN) * band,
+        9,
+      );
+    });
+  });
+
+  it("puts every point near a root in that root's band, whole and smooth", () => {
+    roots.forEach((root, index) => {
+      for (const [dx, dy] of [
+        [0.05, 0],
+        [-0.05, 0.03],
+        [0, -0.08],
+        [0.1, 0.1],
+      ]) {
+        const point = { real: root.real + dx, imaginary: root.imaginary + dy };
+        for (const smooth of [false, true]) {
+          const value = kind.iterations(point, CAP, smooth);
+
+          expect(unpack(value).root, `root ${index} ${dx},${dy}`).toBe(index);
+        }
+      }
+    });
+  });
+
+  it("keeps the bands disjoint, each well inside its own share of the range", () => {
+    const nearEdge = NEWTON_BAND_MARGIN * band;
+
+    for (let row = 0; row < 45; row++) {
+      for (let column = 0; column < 60; column++) {
+        const point = {
+          real: -2 + (4 * (column + 0.37)) / 60,
+          imaginary: -1.5 + (3 * (row + 0.61)) / 45,
+        };
+        const value = kind.iterations(point, CAP, false);
+        if (value >= CAP) continue;
+
+        const root = Math.floor(value / band);
+        expect(root).toBeGreaterThanOrEqual(0);
+        expect(root).toBeLessThan(rootCount);
+        expect(value - root * band).toBeGreaterThanOrEqual(nearEdge - 1e-9);
+        expect((root + 1) * band - value).toBeGreaterThan(nearEdge - 1e-9);
+      }
+    }
+  });
+
+  it("returns a number in range, never NaN, for far, huge and non-finite points", () => {
+    const strange = [
+      { real: 1e10, imaginary: 1e10 },
+      { real: -1e154, imaginary: 1e154 },
+      { real: 1.7e308, imaginary: 1.7e308 },
+      { real: Infinity, imaginary: 0 },
+      { real: NaN, imaginary: 1 },
+      { real: 1, imaginary: NaN },
+      { real: 5e-324, imaginary: 0 },
+    ];
+
+    for (const point of strange) {
+      for (const smooth of [false, true]) {
+        const value = kind.iterations(point, CAP, smooth);
+
+        expect(Number.isNaN(value), JSON.stringify(point)).toBe(false);
+        expect(Number.isFinite(value), JSON.stringify(point)).toBe(true);
+        expect(value).toBeGreaterThanOrEqual(0);
+        expect(value).toBeLessThanOrEqual(CAP);
+      }
+    }
+  });
+
+  it("goes further along its band the longer it takes", () => {
+    // Two points of the last root's basin, one much slower than the other: the
+    // slower sits further along that band, and neither leaves it.
+    const [near, far] = [
+      { real: roots[0].real * 1.05, imaginary: roots[0].imaginary * 1.05 },
+      { real: roots[0].real * 6, imaginary: roots[0].imaginary * 6 },
+    ];
+    const fast = kind.iterations(near, CAP, false);
+    const slow = kind.iterations(far, CAP, false);
+
+    if (fast < CAP && slow < CAP) {
+      expect(unpack(fast).root).toBe(unpack(slow).root);
+      expect(fast).toBeLessThan(slow);
+    }
+  });
+
+  it("grades smoothly where the whole count steps, inside one basin", () => {
+    // Along a line, the whole count jumps by one at each ring of a basin and
+    // the smooth count does not jump past it. Only pairs inside one basin are
+    // compared, since the shade restarts at each band's own edge.
+    let previous: { whole: number; smooth: number; root: number } | null = null;
+    let sawWholeJump = false;
+    let compared = 0;
+
+    for (let i = 0; i <= 900; i++) {
+      const point = { real: 1.2 + (1.8 * i) / 900, imaginary: 0.2 };
+      const whole = kind.iterations(point, CAP, false);
+      if (whole >= CAP) {
+        previous = null;
+        continue;
+      }
+      const current = {
+        whole: unpack(whole).steps,
+        smooth: unpack(kind.iterations(point, CAP, true)).steps,
+        root: unpack(whole).root,
+      };
+
+      if (previous !== null && previous.root === current.root) {
+        compared += 1;
+        if (Math.abs(current.whole - previous.whole) >= 0.5) sawWholeJump = true;
+        expect(Math.abs(current.smooth - previous.smooth)).toBeLessThan(0.25);
+      }
+      previous = current;
+    }
+
+    expect(compared).toBeGreaterThan(50);
+    expect(sawWholeJump).toBe(true);
+  });
+
+  if (turn) {
+    it("turns a point about the origin and moves its band on by one, with the same shading", () => {
+      for (let row = 0; row < 30; row++) {
+        for (let column = 0; column < 40; column++) {
+          const point = {
+            real: -2 + (4 * (column + 0.37)) / 40,
+            imaginary: -1.5 + (3 * (row + 0.61)) / 30,
+          };
+          const whole = kind.iterations(point, CAP, false);
+          if (whole >= CAP) continue;
+
+          for (const smooth of [false, true]) {
+            const here = unpack(kind.iterations(point, CAP, smooth));
+            let moved = point;
+            for (let step = 1; step <= rootCount; step++) {
+              moved = rotate(moved, turn);
+              const there = unpack(kind.iterations(moved, CAP, smooth));
+
+              expect(there.root).toBe((here.root + step) % rootCount);
+              if (step < rootCount) {
+                expect(there.steps).toBeCloseTo(here.steps, smooth ? 4 : 6);
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  it("keeps the shading under the mirror about the real axis, moving the bands it has to", () => {
+    for (let row = 0; row < 30; row++) {
+      for (let column = 0; column < 40; column++) {
+        const point = {
+          real: -2 + (4 * (column + 0.37)) / 40,
+          imaginary: -1.5 + (3 * (row + 0.61)) / 30,
+        };
+        const whole = kind.iterations(point, CAP, false);
+        if (whole >= CAP) continue;
+
+        const here = unpack(whole);
+        const there = unpack(
+          kind.iterations(
+            { real: point.real, imaginary: -point.imaginary },
+            CAP,
+            false,
+          ),
+        );
+
+        expect(there.root).toBe(mirrored[here.root]);
+        expect(there.steps).toBeCloseTo(here.steps, 6);
+      }
+    }
+  });
+
+  it("shows one colour family per root in every scheme", () => {
+    for (const scheme of [
+      "classic",
+      "fire",
+      "ocean",
+      "rainbow",
+      "grayscale",
+    ] as const) {
+      const colours = roots.map((root) => {
+        const { r, g, b } = mapIterationsToColor(
+          kind.iterations(root, CAP, false),
+          CAP,
+          scheme,
+        );
+        return `${r},${g},${b}`;
+      });
+
+      expect(new Set(colours).size, scheme).toBe(rootCount);
+    }
+  });
+});
+
+describe("the cyclic cubic, whose map has no root to settle on beside the origin", () => {
+  const kind = createNewtonKind("cycle");
+
+  it("draws 0 and 1, the two-step loop, as the cap", () => {
+    // The map sends 0 to 1 and 1 back to 0 exactly, so neither ever reaches a
+    // root however high the cap is.
+    for (const point of [
+      { real: 0, imaginary: 0 },
+      { real: 1, imaginary: 0 },
+    ]) {
+      expect(kind.iterations(point, CAP, false), JSON.stringify(point)).toBe(
+        CAP,
+      );
+      expect(kind.iterations(point, CAP, true), JSON.stringify(point)).toBe(
+        CAP,
+      );
+      expect(kind.iterations(point, 2000, false)).toBe(2000);
+    }
+  });
+
+  it("draws the points beside the loop as the cap too, since the loop draws them in", () => {
+    for (const point of [
+      { real: 0.01, imaginary: 0 },
+      { real: -0.01, imaginary: 0.02 },
+      { real: 0.99, imaginary: 0.01 },
+      { real: 0, imaginary: 0.1 },
+    ]) {
+      expect(kind.iterations(point, CAP, false), JSON.stringify(point)).toBe(
+        CAP,
+      );
+    }
+  });
+
+  it("leaves the loop for a point far enough out, which settles on a root", () => {
+    // The loop's basin is bounded: points further from the origin than about
+    // 1.2 settle, some of them slowly, which is what the black region's edge
+    // is made of.
+    for (const point of [
+      { real: 0.5, imaginary: 0 },
+      { real: 0.2, imaginary: 0 },
+      { real: 0.95, imaginary: 0 },
+    ]) {
+      expect(kind.iterations(point, CAP, false), JSON.stringify(point)).toBeLessThan(
+        CAP,
+      );
+    }
+  });
+
+  it("draws the two points where the derivative vanishes as the cap, having no step", () => {
+    for (const real of [CYCLE_POLE, -CYCLE_POLE]) {
+      const point = { real, imaginary: 0 };
+
+      expect(kind.iterations(point, CAP, false), String(real)).toBe(CAP);
+      // A step from the point beside them is enormous, and the orbit either
+      // settles on a root or is drawn into the loop: either way a number in
+      // range and never a NaN.
+      const beside = kind.iterations(
+        { real: real + 1e-9, imaginary: 0 },
+        CAP,
+        false,
+      );
+      expect(Number.isFinite(beside)).toBe(true);
+    }
+  });
+
+  it("agrees with textbook Newton about which root every point reaches", () => {
+    const roots = NEWTON_POLYNOMIALS[3].roots;
+
+    for (let row = 0; row < 45; row++) {
+      for (let column = 0; column < 60; column++) {
+        const point = {
+          real: -2 + (4 * (column + 0.37)) / 60,
+          imaginary: -1.5 + (3 * (row + 0.61)) / 45,
+        };
+        const value = kind.iterations(point, CAP, false);
+        const expected = cycleReference(point, CAP, roots);
+
+        if (expected === null) {
+          expect(value, JSON.stringify(point)).toBe(CAP);
+          continue;
+        }
+        expect(value).toBeLessThan(CAP);
+        expect(unpackWith(value, 3).root).toBe(expected.root);
+        expect(unpackWith(value, 3).steps).toBeCloseTo(expected.steps, 6);
+      }
+    }
+  });
+
+  it("draws every point of the plane as something, never black dust that is not the loop", () => {
+    let settled = 0;
+
+    for (let row = 0; row < 40; row++) {
+      for (let column = 0; column < 40; column++) {
+        const value = kind.iterations(
+          {
+            real: -2 + (4 * (column + 0.5)) / 40,
+            imaginary: -1.5 + (3 * (row + 0.5)) / 40,
+          },
+          CAP,
+          false,
+        );
+
+        expect(Number.isFinite(value)).toBe(true);
+        expect(value).toBeGreaterThanOrEqual(0);
+        expect(value).toBeLessThanOrEqual(CAP);
+        if (value < CAP) settled += 1;
+      }
+    }
+
+    // Most of the plane's frame settles on a root; the loop's own basin is the
+    // smaller, black part of it.
+    expect(settled / 1600).toBeGreaterThan(0.5);
+  });
+});
+
+/**
+ * Newton's method for z^3 - 2z + 2 written the textbook way, z - p(z)/p'(z)
+ * with a complex division, as the oracle for the kind's own step. Returns the
+ * index of the root reached and the whole number of steps, or null.
+ */
+function cycleReference(
+  point: ComplexNumber,
+  cap: number,
+  roots: readonly ComplexNumber[],
+) {
+  let { real, imaginary } = point;
+
+  for (let steps = 0; steps < cap; steps++) {
+    const squareReal = real * real - imaginary * imaginary;
+    const squareImaginary = 2 * real * imaginary;
+    const cubeReal = squareReal * real - squareImaginary * imaginary;
+    const cubeImaginary = squareReal * imaginary + squareImaginary * real;
+
+    // p(z) = z^3 - 2z + 2.
+    const valueReal = cubeReal - 2 * real + 2;
+    const valueImaginary = cubeImaginary - 2 * imaginary;
+
+    if (Math.hypot(valueReal, valueImaginary) < NEWTON_TOLERANCE) {
+      const distances = roots.map((root) =>
+        Math.hypot(real - root.real, imaginary - root.imaginary),
+      );
+      return { root: distances.indexOf(Math.min(...distances)), steps };
+    }
+
+    // p'(z) = 3z^2 - 2.
+    const slopeReal = 3 * squareReal - 2;
+    const slopeImaginary = 3 * squareImaginary;
+    const magnitude = slopeReal * slopeReal + slopeImaginary * slopeImaginary;
+    if (magnitude === 0) return null;
+
+    real -=
+      (valueReal * slopeReal + valueImaginary * slopeImaginary) / magnitude;
+    imaginary -=
+      (valueImaginary * slopeReal - valueReal * slopeImaginary) / magnitude;
+  }
+
+  return null;
+}
