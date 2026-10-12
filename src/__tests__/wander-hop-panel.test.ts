@@ -32,15 +32,20 @@ function effectContaining(needle: string): string {
 describe("the step handler", () => {
   const step = effectContaining("wander.setStepHandler(");
 
-  it("takes the step's kind and hops to a place the tour engine chooses", () => {
+  it("takes the step's kind and hops to the next fractal and Look of the variety walk", () => {
     expect(step).toMatch(/setStepHandler\(\(\{ hop \}\) =>/);
-    expect(step).toContain("nextTourStop(");
+    expect(step).toContain("nextWanderHop(");
     expect(step).toContain("PLACES");
+    expect(step).toContain("FRACTAL_TYPES.map((type) => type.id)");
     expect(step).toContain("wanderHopRef");
+    // The Look it starts from is the one on screen.
+    expect(step).toMatch(/placeView,\s*trap,/);
   });
 
-  it("goes there through the tile's handler, replacing the entry", () => {
-    expect(step).toContain("handlePlaceSelect(place, { replace: true })");
+  it("goes there through the tile's handler, replacing the entry, in the hop's Look", () => {
+    expect(step).toMatch(
+      /handlePlaceSelect\([\s\S]*?next\.place \?\? \{[^}]*\.\.\.placeView[^}]*\}[\s\S]*?replace: true,\s*trap: next\.look,/,
+    );
     // Not the tour's crossfade, and not a jump.
     expect(step).not.toContain("tour: true");
     expect(step).not.toContain("beginJump");
@@ -54,7 +59,7 @@ describe("the step handler", () => {
 
   it("keeps the walk's own memory apart from the tour's", () => {
     expect(page).toContain(
-      "const wanderHopRef = useRef<TourState | null>(null)",
+      "const wanderHopRef = useRef<WanderVarietyState>(INITIAL_WANDER_VARIETY)",
     );
     expect(page).toContain(
       "const tourEngineRef = useRef<TourState | null>(null)",

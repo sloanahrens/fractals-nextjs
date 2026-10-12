@@ -318,7 +318,12 @@ describe("a hop that lands on a place", () => {
     expect(functionBody(PAGE, "handleSwitchFractal")).not.toContain(
       "resetColour",
     );
-    expect(PAGE).toContain("handlePlaceSelect(place, { replace: true })");
+    const wanderStep = PAGE.slice(
+      PAGE.indexOf("wander.setStepHandler("),
+      PAGE.indexOf("A drift that has settled on a blank picture"),
+    );
+    expect(wanderStep).toContain("replace: true");
+    expect(wanderStep).not.toContain("resetColour");
   });
 });
 

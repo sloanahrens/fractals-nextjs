@@ -174,6 +174,11 @@ import {
 } from "../lib/tour";
 import { MIN_TOUR_STOPS, decodeTourLink } from "../lib/tourLink";
 import {
+  INITIAL_WANDER_VARIETY,
+  nextWanderHop,
+  type WanderVarietyState,
+} from "../lib/wanderVariety";
+import {
   createPlaylist,
   nextPlaylistStop,
   playlistStops,
@@ -516,11 +521,12 @@ export default function Home() {
     null,
   );
   const [rng] = useState(() => createRng(Date.now()));
-  // The walk's hops (every `WANDER_HOP_EVERY`th step) are the tour engine's
-  // choices, with a memory of their own: what a walk has visited is not what a
-  // tour has. A drift that settles on a blank picture is replaced by a hop, and
-  // the controller asks the canvas whether it is blank.
-  const wanderHopRef = useRef<TourState | null>(null);
+  // The walk's hops (every `WANDER_HOP_EVERY`th step) go to the next fractal
+  // and Look from a shuffled bag of all of them (`wanderVariety.ts`), at a
+  // place the tour engine chooses, with a memory of their own: what a walk has
+  // visited is not what a tour has. A drift that settles on a blank picture is
+  // replaced by a hop, and the controller asks the canvas whether it is blank.
+  const wanderHopRef = useRef<WanderVarietyState>(INITIAL_WANDER_VARIETY);
   const [wander] = useState(
     () => new WanderController({ onCountdown: setWanderCountdown }),
   );
@@ -2261,7 +2267,13 @@ export default function Home() {
       tour = false,
       replace = tour,
       resetColour = false,
-    }: { tour?: boolean; replace?: boolean; resetColour?: boolean } = {},
+      trap: lookOverride,
+    }: {
+      tour?: boolean;
+      replace?: boolean;
+      resetColour?: boolean;
+      trap?: TrapShape | null;
+    } = {},
   ) => {
     const zoom = clampZoom(place.zoom);
     const scheme = placeColorScheme(place, colorScheme);
@@ -2275,9 +2287,15 @@ export default function Home() {
     // The orbit trap goes with them: a tile, a fractal button, a preset and an
     // Auto-wander hop keep the visitor's, and a tour's hop or Surprise me
     // returns to the iteration count, as the tour is curated pictures.
+    // An Auto-wander hop names the Look it lands in (`trap`, null being
+    // Normal), whatever the visitor had.
     const options = resetColour
       ? { reverse: DEFAULT_REVERSE, shift: DEFAULT_SHIFT, trap: DEFAULT_TRAP }
-      : { reverse, shift, trap };
+      : {
+          reverse,
+          shift,
+          trap: lookOverride === undefined ? trap : lookOverride,
+        };
     // A place of a fractal with a variant names its own; one that names none
     // (a hand-built Julia place) keeps the page's, or the fractal's default
     // when the page holds a variant of another fractal.
@@ -2484,16 +2502,24 @@ export default function Home() {
   useEffect(() => {
     wander.setStepHandler(({ hop }) => {
       if (hop) {
-        const { place, state } = nextTourStop(
-          {
-            ...(wanderHopRef.current ?? initialTourState(placeView)),
-            view: placeView,
-          },
+        const next = nextWanderHop(
+          wanderHopRef.current,
+          placeView,
+          trap,
           PLACES,
+          FRACTAL_TYPES.map((type) => type.id),
           rng,
         );
-        wanderHopRef.current = state;
-        handlePlaceSelect(place, { replace: true });
+        wanderHopRef.current = next.state;
+        // A fractal with no other place changes the Look and nothing else, on
+        // the view it is on; the same flight carries either.
+        handlePlaceSelect(
+          next.place ?? { id: "wander-here", name: "Here", ...placeView },
+          {
+            replace: true,
+            trap: next.look,
+          },
+        );
         // A hop onto the view already shown draws nothing, and the next
         // countdown is armed by a render; arm it here as a drift does.
         wander.notifyActivity();

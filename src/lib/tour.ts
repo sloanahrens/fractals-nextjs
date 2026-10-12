@@ -123,6 +123,72 @@ function arrive(state: TourState, place: Place, switched: boolean): TourState {
 }
 
 /**
+ * The next place on the view's own fractal: the nearest places {@link suggest}
+ * offers, chosen among those not visited lately, widening in steps when that
+ * leaves nothing. Null when the fractal has no place but the one the view is
+ * on. Draws `rng` once.
+ */
+function stayStop(
+  state: TourState,
+  places: readonly Place[],
+  rng: () => number,
+): { place: Place; state: TourState } | null {
+  const recent = new Set(state.recent);
+  const unvisited = (candidates: readonly Place[]) =>
+    candidates.filter((place) => !recent.has(place.id));
+
+  // Every place of this fractal but the one the view is on, nearest first.
+  const ranked = suggest(state.view, places, places.length);
+  const nearest = ranked.slice(0, TOUR_NEAR_CANDIDATES);
+  const pool = [unvisited(nearest), unvisited(ranked), nearest, ranked].find(
+    (candidates) => candidates.length > 0,
+  );
+
+  if (pool === undefined) return null;
+
+  const place = pickOne(pool, rng);
+
+  return { place, state: arrive(state, place, false) };
+}
+
+/**
+ * Where a walk that has already chosen its fractal goes next: a place of
+ * `fractal`, by the tour's own rules but none of its odds.
+ *
+ * On the view's own fractal this is the within-fractal hop of
+ * {@link nextTourStop} (the nearest places first, never the one the view is on,
+ * not one visited lately while the fractal has another). On any other fractal
+ * it is the tour's switch pick: a place of that fractal not visited lately,
+ * else any. There is no switch roll and no lockout, because the caller has
+ * decided; `rng` is drawn once. Auto-wander's variety rule
+ * (`wanderVariety.ts`) is the caller.
+ *
+ * @param state - Where the walk is and what it has visited
+ * @param places - The catalogue to choose from
+ * @param fractal - The fractal the place must belong to
+ * @param rng - A random number in [0, 1), like `Math.random`
+ * @returns The place and the state once there, or null when the fractal has no
+ *   place to go to (for the view's own fractal: none but the one it is on)
+ */
+export function nextStopOnFractal(
+  state: TourState,
+  places: readonly Place[],
+  fractal: string,
+  rng: () => number,
+): { place: Place; state: TourState } | null {
+  if (fractal === state.view.fractal) return stayStop(state, places, rng);
+
+  const candidates = places.filter((place) => place.fractal === fractal);
+  if (candidates.length === 0) return null;
+
+  const recent = new Set(state.recent);
+  const fresh = candidates.filter((place) => !recent.has(place.id));
+  const place = pickOne(fresh.length > 0 ? fresh : candidates, rng);
+
+  return { place, state: arrive(state, place, true) };
+}
+
+/**
  * Where an unattended tour goes next.
  *
  * Pure and deterministic: the same state, catalogue and `rng` sequence give the
@@ -173,18 +239,8 @@ export function nextTourStop(
     return { place, state: arrive(state, place, true) };
   }
 
-  // Every place of this fractal but the one the view is on, nearest first.
-  const ranked = suggest(state.view, places, places.length);
-  const nearest = ranked.slice(0, TOUR_NEAR_CANDIDATES);
-  const pool = [unvisited(nearest), unvisited(ranked), nearest, ranked].find(
-    (candidates) => candidates.length > 0,
-  );
-
-  if (pool !== undefined) {
-    const place = pickOne(pool, rng);
-
-    return { place, state: arrive(state, place, false) };
-  }
+  const stay = stayStop(state, places, rng);
+  if (stay !== null) return stay;
 
   // The fractal has no other place. Leaving it is the only move, and the
   // lockout and the roll are about choosing to, so this is neither.
