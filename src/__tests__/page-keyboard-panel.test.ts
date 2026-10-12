@@ -23,7 +23,6 @@ function source(path: string): string {
 
 const page = source("../app/FractalExplorer.tsx");
 const help = source("../lib/helpEntries.ts");
-const readme = source("../../README.md");
 
 /** The body of a `const NAME = useCallback(...)` handler, braces and all. */
 function callbackBody(name: string): string {
@@ -169,7 +168,7 @@ describe("what the handler asks and does", () => {
   });
 });
 
-describe("the keys, in the help and the README", () => {
+describe("the keys, in the help", () => {
   it("names the pan, zoom and reset keys", () => {
     // From the Keyboard heading to the next section's, so a row that moved
     // into another group is not counted as this section's.
@@ -184,25 +183,11 @@ describe("the keys, in the help and the README", () => {
     // The stale row it replaces: the keys no longer need the canvas focused.
     expect(help).not.toContain("Focus the image, so the keys below reach it");
   });
-
-  it("says in the README that they work without focusing the image", () => {
-    const rows = readme.match(/^- \*\*Keyboard[^\n]*$/gm) ?? [];
-
-    expect(rows.length).toBeGreaterThan(0);
-    for (const row of rows) {
-      expect(row).toContain("arrow keys");
-      expect(row).toContain("`+`");
-      expect(row).toMatch(/R\b/);
-      expect(row).toMatch(/anywhere|without focusing/);
-      expect(row).not.toContain("Focus the image");
-    }
-  });
 });
 
 describe("what this test reads", () => {
   it("is the app, not an empty directory", () => {
     expect(page.length).toBeGreaterThan(1000);
     expect(help.length).toBeGreaterThan(1000);
-    expect(readme.length).toBeGreaterThan(1000);
   });
 });

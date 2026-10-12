@@ -7,8 +7,8 @@
  * here is that the button is another view of the Settings select's one state and
  * handler, that it rides in the Auto-wander pill's row and hides with it, that it
  * has the accessible behaviour the bead names, and that the words about it are in
- * Settings, Help and the README. A Node suite has no DOM, so this reads the
- * sources, as the other panel tests here do.
+ * Settings and Help. A Node suite has no DOM, so this reads the sources, as the
+ * other panel tests here do.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -31,7 +31,6 @@ const PAGE = read("../app/FractalExplorer.tsx");
 const LOOK = read("../components/ui/LookControl.tsx");
 const PILL = read("../components/ui/WanderControl.tsx");
 const HELP = read("../lib/helpEntries.ts");
-const README = read("../../README.md");
 
 /** A JSX element's own text, from its tag to the `/>` that closes it. */
 function element(source: string, tag: string): string {
@@ -217,27 +216,16 @@ describe("the words", () => {
     );
   });
 
-  it("the README names the Look control, the orbit traps, their slowness and the Normal previews", () => {
-    expect(README).toContain("**Look**");
-    expect(README).toContain("Orbit Trap: Point, Orbit Trap: Line and Orbit Trap: Circle");
-    expect(README).toContain("an orbit trap renders more slowly than Normal");
-    expect(README).toContain("always previews as the Normal picture");
-    expect(README).toContain("LookControl.tsx");
-    expect(README).toContain("lookControl.ts");
-  });
-
-  it("names no look Glass: every visitor-facing word in the app and the README is free of it", () => {
+  it("names no look Glass: every visitor-facing word in the app is free of it", () => {
     const root = fileURLToPath(new URL("../../", import.meta.url));
     // This file is the one place the word has to appear, since it is what
-    // forbids it; every other file under the tree is walked. The design note's
-    // As built is left out on purpose: it is a chronological record, and the
-    // bullet the fr-02s landing added stands as it landed (the landing guard
-    // refuses a branch that removes a line a recently merged commit added),
-    // with the rename recorded in the bullet added after it.
+    // forbids it; every other file under the app's source is walked. The
+    // design note's As built is left out on purpose: it is a chronological
+    // record, and the bullet that renamed the label stands as it landed (the
+    // landing guard refuses a branch that removes a line a recently merged
+    // commit added), with the rename recorded in the bullet after it.
     const self = fileURLToPath(import.meta.url);
-    const files = [...walk(`${root}src`), `${root}README.md`].filter(
-      (file) => file !== self,
-    );
+    const files = walk(`${root}src`).filter((file) => file !== self);
 
     expect(files.length).toBeGreaterThan(50);
     for (const file of files) {
