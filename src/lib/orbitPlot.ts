@@ -170,12 +170,14 @@ export function orbitMinExtent(fractalId: string): number {
  * 100 rather than 2 (they wander out to about 4 and are squared away from
  * there), so the circle of 2 would sit inside the wandering rather than at the
  * boundary of the picture and it gets none either; its frame is still the
- * escape-time frame, which is the scale its wandering happens at.
+ * escape-time frame, which is the scale its wandering happens at. Nova's orbits
+ * settle on a point of the plane and only leave past a million, so a circle of
+ * 2 would mean nothing there either, and it too keeps the escape-time frame.
  * @param fractalId - The `FRACTAL_TYPES` id on the canvas
  * @returns True when the plot should show the escape circle
  */
 export function hasEscapeCircle(fractalId: string): boolean {
-  return fractalId !== "newton" && fractalId !== "magnet";
+  return fractalId !== "newton" && fractalId !== "magnet" && fractalId !== "nova";
 }
 
 /**
@@ -236,6 +238,21 @@ export function describeOrbit(
     return info.root === undefined
       ? `Orbit of the point, ${steps} steps, never settles`
       : `Orbit of the point, ${info.steps} steps, settles on root ${info.root + 1}`;
+  }
+
+  if (fractalId === "nova") {
+    // Nova's orbits end by settling or, rarely, by leaving. The window is
+    // sixty steps, and a slow one can still be moving at the end of it.
+    if (!info.escaped) {
+      return `Orbit of the point, ${steps} steps, never settles`;
+    }
+    if (info.steps > steps) {
+      return `Orbit of the point, first ${steps} steps, still moving`;
+    }
+
+    return info.settled
+      ? `Orbit of the point, ${info.steps} steps, settles`
+      : `Orbit of the point, ${info.steps} steps, escaped`;
   }
 
   if (info.escaped && info.steps <= steps) {

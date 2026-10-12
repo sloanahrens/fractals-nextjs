@@ -191,6 +191,12 @@ describe("the rule, read aloud", () => {
     }
   });
 
+  it("reads Nova's rule: Newton's step for z cubed minus 1 with c added", () => {
+    expect(rule("nova")).toBe(
+      "z becomes z minus the fraction z cubed minus 1 over 3 times z squared end fraction plus c",
+    );
+  });
+
   it("reads the second magnetic type's rule", () => {
     expect(rule("magnet", "2")).toBe(
       "z becomes the fraction z cubed plus 3 times open bracket c minus 1 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket over 3 times z squared plus 3 times open bracket c minus 2 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket plus 1 end fraction squared",
@@ -222,6 +228,10 @@ describe("where each point starts", () => {
     );
   });
 
+  it("starts Nova at 1, a root of z cubed minus 1, with c the pixel's point", () => {
+    expect(start("nova")).toBe("z sub 0 equals 1, c equals the pixel's point");
+  });
+
   it("starts Julia and Newton at the pixel's point", () => {
     expect(start("julia")).toBe("z sub 0 equals the pixel's point");
     expect(start("newton")).toBe("z sub 0 equals the pixel's point");
@@ -236,6 +246,7 @@ describe("the setting", () => {
       "tricorn",
       "celtic",
       "perpendicular-ship",
+      "nova",
     ]) {
       expect(describeFractalMath(id, "").setting).toBeNull();
     }
@@ -339,6 +350,15 @@ describe("the setting", () => {
     const { blurb, escape } = describeFractalMath("phoenix", "Classic");
 
     expect(blurb).toMatch(/number from the step before/);
+    expect(escape).toMatch(/orbit plot/);
+  });
+
+  it("says in plain words how Nova is judged and what its orbit plot shows", () => {
+    const { title, blurb, escape } = describeFractalMath("nova", "");
+
+    expect(title).toBe("Nova fractal");
+    expect(blurb).toMatch(/Newton's method for z cubed = 1/);
+    expect(escape).toMatch(/less than 0\.000001/);
     expect(escape).toMatch(/orbit plot/);
   });
 

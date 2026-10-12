@@ -542,6 +542,40 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     fractal: "phoenix",
     variant: "Classic",
   },
+  {
+    id: "nova-overview",
+    name: "Nova",
+    description: "The whole Nova set: a C-shaped arc round a bloom of bands, with a string of disks trailing left",
+    // The default frame, centre (-0.55, 0) at zoom 1.5: 8/3 by 2.
+    bounds: {
+      minReal: -0.55 - 4 / 3,
+      maxReal: -0.55 + 4 / 3,
+      minImaginary: -1,
+      maxImaginary: 1,
+    },
+    maxIterations: 130,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "nova",
+  },
+  {
+    id: "nova-bulbs",
+    name: "Nova bulbs",
+    description: "A tree of bulbs under the arc's upper half",
+    // Centre (-0.1, 0.45) at zoom 6: 2/3 by 0.5.
+    bounds: {
+      minReal: -0.1 - 1 / 3,
+      maxReal: -0.1 + 1 / 3,
+      minImaginary: 0.2,
+      maxImaginary: 0.7,
+    },
+    maxIterations: 230,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "nova",
+  },
 ];
 
 /**

@@ -280,7 +280,7 @@ describe("built-in preset framing", () => {
 
 describe("built-in views for the other fractals", () => {
   it("has presets to measure, so the guards below cannot pass vacuously", () => {
-    expect(FRACTAL_OWNED_PRESETS).toHaveLength(22);
+    expect(FRACTAL_OWNED_PRESETS).toHaveLength(24);
   });
 
   it("frames each one at the canvas's 4:3 shape", () => {
@@ -335,8 +335,8 @@ describe("built-in views for the other fractals", () => {
 });
 
 describe("BUILTIN_PRESETS", () => {
-  it("ships twenty-eight presets with unique ids and names", () => {
-    expect(BUILTIN_PRESETS).toHaveLength(28);
+  it("ships thirty presets with unique ids and names", () => {
+    expect(BUILTIN_PRESETS).toHaveLength(30);
 
     const ids = BUILTIN_PRESETS.map((preset) => preset.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -513,6 +513,7 @@ describe("the built-in views each fractal lists", () => {
   it("offers six Mandelbrot views, five Julia, two Burning Ship, two Tricorn, three Multibrot, two Newton, two Celtic and two Perpendicular Ship", () => {
     expect(presetsForFractal(BUILTIN_PRESETS, "newton")).toHaveLength(2);
     expect(presetsForFractal(BUILTIN_PRESETS, "celtic")).toHaveLength(2);
+    expect(presetsForFractal(BUILTIN_PRESETS, "nova")).toHaveLength(2);
     expect(
       presetsForFractal(BUILTIN_PRESETS, "perpendicular-ship"),
     ).toHaveLength(2);

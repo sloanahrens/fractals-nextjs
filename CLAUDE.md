@@ -37,7 +37,7 @@ docker run --rm -p 8080:8080 fractals-nextjs:test
 
 ## Project Architecture
 
-This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set, Julia, Burning Ship, Perpendicular Ship, Tricorn, Multibrot, Newton, Celtic, Magnet and Phoenix fractals using Canvas API. Key architectural decisions:
+This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set, Julia, Burning Ship, Perpendicular Ship, Tricorn, Multibrot, Newton, Celtic, Magnet, Phoenix and Nova fractals using Canvas API. Key architectural decisions:
 
 ### Core Rendering System
 
@@ -59,6 +59,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Multibrot** (`src/lib/multibrot.ts`): The Mandelbrot loop with a higher power, z -> z^d + c for d = 3, 4, 5 — `createMultibrotKind(power)` and `parseMultibrotPower`, the power being the fractal's variant
 - **Magnet** (`src/lib/magnet.ts`): The two rational maps of the magnetic model, z -> ((z^2 + c - 1)/(2z + c - 2))^2 (Type I) and z -> ((z^3 + 3(c-1)z + (c-1)(c-2))/(3z^2 + 3(c-2)z + (c-1)(c-2) + 1))^2 (Type II), both from z0 = 0 — `createMagnetKind(type)`, `parseMagnetType` and `MAGNET_TYPES`/`MAGNET_TYPE_LABELS`, the type being the fractal's variant. z = 1 is a superattracting fixed point for every c, so the set is the c whose orbit settles there and that is nearly the whole plane: the picture's flat black is the settled set, and the colours draw the island of c that runs off to infinity instead. Outside is |z| > 100 (`MAGNET_BAILOUT`), smoothed with the shared degree-2 formula carried to that radius; settled is |z - 1| < 1e-6 (`MAGNET_TOLERANCE`); a vanishing denominator is a pole and is counted as the orbit's last step
 - **Phoenix** (`src/lib/phoenix.ts`): A Julia set with a memory, z(n+1) = z(n)^2 + c + p z(n-1) from the pixel with z(-1) = 0 — `createPhoenixKind(constant)`, `PHOENIX_CONSTANTS` (Classic c = 0.5667 p = -0.5, Spirals 0.3 / 0.5, Hourglass 0.5667 / -0.55; the constant is one point with c in `real` and p in `imaginary`) and `parsePhoenixConstant`, the named constant being the fractal's variant, with no Custom choice. The kind's orbit loop carries z(n-1) itself, so the renderer hands it a point as for any other fractal; `iterations`, `escapeInfo` and `orbit` walk the same two-step rule, and escape is |z|^2 > 4 with the shared smooth count. With p = 0 it is exactly the Julia set of c, and c and p being real makes it mirror about the real axis
+- **Nova** (`src/lib/nova.ts`): Newton's method on z^3 - 1 with the pixel added at every step, z(n+1) = z(n) - (z(n)^3 - 1)/(3 z(n)^2) + c from z = 1 (a critical point of the Newton map) — `novaKind`, no variant. The second kind that is not an escape-time set: an orbit ends when a step is shorter than `NOVA_TOLERANCE` (1e-6, settled), or reaches `|z| > NOVA_BAILOUT` (1e6) or a z of exactly 0 (escaped: the map sends 0 to infinity), and the count is the steps taken, the cap for an orbit that never ends (painted black). The smooth count is `n + ln(d'/tol)/ln(d'/d)` from the last two step lengths, in [n, n+1] and continuous across a change of n; an escape has no fraction. `EscapeInfo.settled` tells the Math card's probe and orbit plot which way an orbit ended, and the plot draws no escape circle for it
 - **Newton** (`src/lib/newton.ts`): Newton's method for one of four polynomials as a fractal kind — `NEWTON_POLYNOMIALS`' z^3 - 1 (the default, and what a link with no `k` names), z^4 - 1, z^5 - 1 and z^3 - 2z + 2, each a `NewtonPolynomial` (its roots and the arithmetic of one step, `z - p(z)/p'(z)`); `createNewtonKind(polynomial)` builds the memoized kind for one, and the orbit's root and its speed are packed into the one number the renderer takes, the n roots in n-ths of 0..maxIterations; the first fractal that is not an escape-time set. z^3 - 2z + 2 has an attracting two-step loop beside the origin (0 -> 1 -> 0), whose orbits never settle and are drawn black
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
@@ -94,7 +95,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
 - **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, `nearestPlace` — the place a view previews as, the whole rule behind `ogImage` — and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and the Julia, Multibrot and Magnet chips land. A place of a fractal that takes a variant names it, so Julia's constants, the Multibrot's powers and the Magnet's magnetic types each have their own whole-set place at the fractal's opening frame; `FEATURED_PLACE_IDS` is judged by the featured guard (at most 60% one colour), which is why the Magnet's button leads with a drift of disks rather than the whole island
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
-- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Perp. Ship / Tricorn / Multibrot / Newton / Celtic / Magnet / Phoenix buttons, and the Julia constant, Multibrot power, Newton polynomial, Magnet type or Phoenix constant chips, drawn over the top left of the canvas and never faded
+- **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Perp. Ship / Tricorn / Multibrot / Newton / Celtic / Magnet / Phoenix / Nova buttons, and the Julia constant, Multibrot power, Newton polynomial, Magnet type or Phoenix constant chips, drawn over the top left of the canvas and never faded
 - **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers, the probe's rows and the orbit plot (`OrbitPlot.tsx`); it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
 - **Math probe** (`src/lib/mathProbe.ts`, `escapeInfo` on `FractalKind` in `src/types/fractal.ts`): The number under the pointer, what its orbit did and the colour the picture paints it, shown in the expanded Math card — `probePoint(kind, point, maxIterations, scheme)` reads the count from the kind (whole steps for the words, the smooth count for the colour) and `describeProbe(fractalId, info, cap)` words it; every kind ships `escapeInfo(point, maxIterations)`, an optional method the probe falls back to the count for; `createFrameThrottle` is the one-point-per-frame rule and `pointerToCanvasPixel` the CSS-to-canvas scaling; `shouldClearProbe` is the rule that holds the probe while the pointer is on the Math card rather than the picture, so the plot and its Play control stay reachable. **A kind's `escapeInfo` must agree with its `iterations`** — `escapeInfo.test.ts` and the pixel parity in `mathProbe.test.ts` hold it to a drawn view
 - **Orbit plot** (`src/lib/orbitPlot.ts`, `src/components/ui/OrbitPlot.tsx`, `orbit` on `FractalKind` in `src/types/fractal.ts`): The path that point took, drawn under the probe's rows in the expanded Math card — `orbit` is the points the kind's own loop visits (optional, as `escapeInfo` is; `orbitFor` answers the point alone for a kind without it), the probe keeps 60 steps of it in `PointProbe.orbit`, `orbitToPlot(orbit, size, minExtent)` places them in a square plot (frame never inside the escape circle nor past twice it, values that are not numbers read as the origin), the escape circle of radius 2 is drawn for the kinds that leave it (`hasEscapeCircle` is false for Newton, which has no radius, and for the Magnet, whose orbits leave at 100 and would have the circle of 2 inside their wandering), `describeOrbit(fractalId, info, steps)` is the `aria-label`, `orbitStepColour` paints a dot through the picture's own mapping, and a Play control walks it a step every 120 ms (off under `prefers-reduced-motion`). **A kind's `orbit` must be the same walk as its `iterations` and `escapeInfo`** — `orbit.test.ts` holds the path to the count for every kind
@@ -110,7 +111,7 @@ The main page (`src/app/FractalExplorer.tsx`, a client component; `src/app/page.
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
-- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Perpendicular Ship, two Tricorn, three Multibrot, two Newton, two Celtic, two Magnet, two Phoenix) and custom fractal configurations
+- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Perpendicular Ship, two Tricorn, three Multibrot, two Newton, two Celtic, two Magnet, two Phoenix, two Nova) and custom fractal configurations
 
 ### Component Structure
 
@@ -205,6 +206,108 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-11_
+
+### Nova: an eleventh fractal, Newton's method with the pixel added (2026-10-11)
+
+- fr-z0o. Nova is the iteration z(n+1) = z(n) - (z(n)^3 - 1)/(3 z(n)^2) + c from
+  z(0) = 1, with c the pixel. z = 1 is a root of z^3 - 1 and so a critical point
+  of the Newton map (its derivative 2(z^3 - 1)/(3 z^3) is 0 there), which is the
+  start that makes the picture a Mandelbrot-like parameter plane. It follows the
+  Tricorn and Celtic line for line elsewhere: no variant row, and no renderer,
+  recolour, link-format, tour or export change.
+- **`src/lib/nova.ts`** exports `novaKind` (id `nova`), `NOVA_TOLERANCE`,
+  `NOVA_BAILOUT` and `NOVA_START`. The step is written (2z + 1/z^2) / 3 + c so a
+  far point does not overflow z^3 into a NaN. An orbit ends the first time (a)
+  the step it just took was shorter than 1e-6, which is settling, (b) it lands
+  past 1e6 or on a non-finite value, or (c) it stands on z = 0 and has no step
+  (the map sends 0 to infinity; this is how c = -1 ends, z1 being 0). (b) and (c)
+  are escapes. `steps` is the number of steps taken when it ended, at most one
+  under the cap (so `escaped` is exactly `steps < cap`, as for every kind), and
+  the cap for an orbit that never ends, which the colour mapping paints black
+  like the inside of any set. A pixel that is not a number is the cap, as Newton's
+  is. This counts steps taken, where the escape-time kinds count the index of the
+  step that escaped; c = 0 is 1 (N(1) = 1, so the first step has length 0) and
+  c = -1.5 is 2 (z1 = -0.5, N(-0.5) = 1, z2 = -0.5).
+- **The smooth count** credits a settled orbit with a fraction of its last step.
+  Steps shrink by a fixed factor near a fixed point, so with d the last step's
+  length (under the tolerance) and d' the one before it (at or over it),
+  `fraction = ln(d'/tol) / ln(d'/d)`, in [0, 1): 0 when d' is only just over the
+  tolerance, tending to 1 as d approaches it, so `n + fraction` is in [n, n+1]
+  and continuous across a change of n (below the boundary n + 1^-, above it
+  n + 1 + 0^+). The first step has no step before it and is credited
+  `ln(tol)/ln(|c|)`, which is the same limit at |c| = tol and 0 for c = 0. The
+  lengths are squared, which leaves the ratio of logs alone. An escape carries no
+  fraction: nothing about a point sent past a million says how far into a step
+  it crossed. `nova.test.ts` finds places where the whole count steps along the
+  real axis by bisection and checks the smooth count a hair either side
+  (differing by under 1e-4, with the fraction near 1 below and near 0 above), and
+  holds [n, n+1] over a 2400-point grid.
+- **`EscapeInfo.settled`** is new and optional (`src/types/fractal.ts`): a kind
+  whose orbits can end two ways says which. `escapeInfo` answers `{ steps,
+  escaped, settled }`, `escaped` meaning the orbit ended within the cap (as for
+  Newton, which also uses it for settling) and `settled` that it ended by
+  settling. `describeProbe` words it "Settles after 22 steps", "Escaped at step
+  1" or "Never settled in 400 steps", and `describeOrbit` "settles", "escaped",
+  "first 60 steps, still moving" (the plot's window is shorter than the orbit,
+  which can run to 40-odd steps and much more near the set) or "never settles".
+  `hasEscapeCircle("nova")` is false, the frame is the escape-time one
+  (`orbitMinExtent` 2, the least the plot shows), and `orbit(point, maxSteps)` is
+  walkNova's loop with the points kept: the start z = 1, then one point per step,
+  ending on the point that ended it (or on 0 for a pole), so an ended path has
+  `steps + 1` points like Newton's.
+- **Facts the tests lean on.** The recurrence has real coefficients and starts on
+  the real axis, so conjugating c conjugates every step: the picture is its own
+  mirror about the real axis, bit for bit (counts and orbit points), and has no
+  other symmetry. c = 0 settles at 1 on the fixed point 1; c = -1.5 settles at 2
+  on -0.5; c = -1 hits the pole at step 1; c = 2e6 escapes at step 1; c = -0.5 and
+  the real axis from -1.45 to -0.4 never settle. Far from the origin the map is
+  z -> 2z/3 + c, so the plane beyond the set settles in about 30 to 40 steps and takes
+  one shade, which is why the rainbow, fire and ocean schemes draw the default
+  frame 60 to 85% one colour and every place but one is in classic.
+  `nova.test.ts` checks the counts against a textbook Newton quotient with c
+  added, over 2400 points, the no-NaN guard over a grid and the pole's
+  neighbourhood, and a non-number pixel.
+- **`defaultViewFor("nova")` is (-0.55, 0) at zoom 1.5.** Measured with a 0.01
+  grid at a cap of 300 (points that never settle or take 60 steps or more), the
+  set spans x -1.49..0.36 by y -0.59..0.59, so -0.55 is the middle of it. Zoom 1.5
+  (x -1.88..0.78, y -1..1) holds it with 0.4 clear above and below, which zoom 1
+  (the widest view) would show a third smaller; a test samples the frame's border
+  and finds every point settling in under 45 steps. This is the first default
+  view that is not at zoom 1.
+- **Two built-in views** (`nova-overview`, the default frame; `nova-bulbs`, the
+  tree of bulbs at zoom 6), under the per-fractal guards (24 fractal-owned views,
+  30 built-ins).
+- **Six places** (`NOVA_PLACES`, the test allows 4 to 6), picked from contact
+  sheets at 400x300 through the real pipeline in the five schemes and measured at
+  64x48 with whole counts: the whole set (17% one colour in classic), the curling
+  tip of the arc (zoom 8), the big disk and its small neighbour (zoom 10, the one
+  place in rainbow, where the greens and magentas separate bulbs classic runs
+  together), a tree of bulbs under the arc (zoom 6), the pinch on the real axis
+  (zoom 15) and bands along the arc (zoom 30). The set is mirrored about the real
+  axis, so only the upper half's places are named. **The featured place is the
+  whole set**, which is also what the Fractal select opens Nova on, so
+  `places.test.ts` exempts it from "a switch goes somewhere"
+  (`FEATURED_IS_OPENING_VIEW`).
+- **Math card**: `FRACTAL_MATH.nova`, title "Nova fractal", the rule
+  z -> z - (z^3 - 1)/(3z^2) + c (the Newton rule's own p and p' trees, with c
+  added), start `z0 = 1, c = the pixel's point`, no setting, a three-sentence
+  blurb and an escape sentence that says a step under 0.000001 means settled,
+  that past 1,000,000 means escaped, that a point which never settles is black,
+  and what the orbit plot shows.
+- **`npm run make-og-previews`** was run and the six `public/og/nova-*.jpg` files
+  committed (45 to 135 KB, all at quality 80; the set is 104 pictures, 7.5 MB).
+  Nothing else in `public/og/` changed.
+- **The button row**: eleven buttons are wider than the ten's, so the row
+  scrolls sideways at 375 and 320 px as it already did. It was not re-measured in
+  a browser; the switcher's classes are unchanged.
+- Tests: the new `src/lib/__tests__/nova.test.ts`, and the Nova cases added to
+  `fractalTypes`, `viewLink`, `viewLinkState`, `viewPreview`, `tourLink`,
+  `escapeInfo`, `orbit`, `mathProbe`, `orbitPlot`, `renderRgba`, `fractalMath`,
+  `places`, `presets` and `tour` tests and the switcher panel test, each extended
+  to the new count rather than loosened.
+- Docs: the README (intro, Fractal Types, Fractal Switcher, Custom Presets, Math
+  card, Project Structure, Mathematics), the Help overlay's switcher row, the
+  design doc's As built, and this note.
 
 ### Phoenix: a tenth fractal, a Julia set with a memory (2026-10-11)
 

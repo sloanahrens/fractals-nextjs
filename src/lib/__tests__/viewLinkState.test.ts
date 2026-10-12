@@ -92,6 +92,29 @@ describe("viewLinkToUpdates", () => {
     });
   });
 
+  it("puts a Nova link's fractal on the page and leaves the constant standing", () => {
+    expect(
+      viewLinkToUpdates(
+        decodeView("#v=1&f=nova&x=0.2&y=0.5&z=8&s=classic&i=auto&w=800&h=600"),
+      ),
+    ).toMatchObject({
+      fractalType: "nova",
+      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
+      centerX: 0.2,
+      centerY: 0.5,
+      zoomLevel: 8,
+    });
+  });
+
+  it("opens a Nova link that names only the fractal on Nova's own frame", () => {
+    expect(viewLinkToUpdates(decodeView("#v=1&f=nova"))).toMatchObject({
+      fractalType: "nova",
+      centerX: -0.55,
+      centerY: 0,
+      zoomLevel: 1.5,
+    });
+  });
+
   it("puts a Perpendicular Ship link's fractal on the page and leaves the variant standing", () => {
     expect(
       viewLinkToUpdates(

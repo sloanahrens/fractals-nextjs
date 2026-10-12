@@ -18,6 +18,7 @@ import {
 import { createMagnetKind } from "../magnet";
 import { createMultibrotKind } from "../multibrot";
 import { createNewtonKind, newtonKind } from "../newton";
+import { novaKind } from "../nova";
 import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
@@ -39,7 +40,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the ten fractals in order, each once", () => {
+  it("offers the eleven fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -53,6 +54,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "perpendicular-ship", label: "Perp. Ship" },
       { id: "magnet", label: "Magnet" },
       { id: "phoenix", label: "Phoenix" },
+      { id: "nova", label: "Nova" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -106,6 +108,12 @@ describe("resolveFractalKind", () => {
   it("draws the Celtic set for its own id, whatever variant is beside it", () => {
     expect(resolveFractalKind("celtic", "Dendrite")).toBe(celticKind);
     expect(resolveFractalKind("celtic", "")).toBe(celticKind);
+  });
+
+  it("draws the Nova fractal for its own id, whatever variant is beside it", () => {
+    expect(resolveFractalKind("nova", "Dendrite")).toBe(novaKind);
+    expect(resolveFractalKind("nova", "4")).toBe(novaKind);
+    expect(resolveFractalKind("nova", "")).toBe(novaKind);
   });
 
   it("draws the Perpendicular Ship for its own id, whatever variant is beside it", () => {
@@ -391,6 +399,17 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("frames Nova about the middle of its set at zoom 1.5, which holds it with room to spare", () => {
+    // Measured with a 0.01 grid at a cap of 300: the points that never settle
+    // or take 60 steps or more span x -1.49..0.36 by y -0.59..0.59; zoom 1.5 is
+    // x -1.88..0.78 by y -1..1 (nova.test.ts checks the frame's border).
+    expect(defaultViewFor("nova")).toEqual({
+      centerX: -0.55,
+      centerY: 0,
+      zoom: 1.5,
+    });
+  });
+
   it("falls back to the Mandelbrot view for an unknown id", () => {
     expect(defaultViewFor("lyapunov")).toEqual({
       centerX: -0.75,
@@ -457,6 +476,7 @@ describe("fractalVariants", () => {
     expect(fractalVariants("perpendicular-ship")).toBeNull();
     expect(fractalVariants("tricorn")).toBeNull();
     expect(fractalVariants("celtic")).toBeNull();
+    expect(fractalVariants("nova")).toBeNull();
     expect(fractalVariants("lyapunov")).toBeNull();
   });
 
@@ -476,6 +496,7 @@ describe("defaultVariant", () => {
     expect(defaultVariant("burning-ship")).toBe("");
     expect(defaultVariant("tricorn")).toBe("");
     expect(defaultVariant("celtic")).toBe("");
+    expect(defaultVariant("nova")).toBe("");
     expect(defaultVariant("perpendicular-ship")).toBe("");
     expect(defaultVariant("lyapunov")).toBe("");
   });
@@ -586,6 +607,8 @@ describe("isVariantValue", () => {
     expect(isVariantValue("burning-ship", "")).toBe(false);
     expect(isVariantValue("tricorn", "Classic")).toBe(false);
     expect(isVariantValue("celtic", "Classic")).toBe(false);
+    expect(isVariantValue("nova", "Classic")).toBe(false);
+    expect(isVariantValue("nova", "3")).toBe(false);
     expect(isVariantValue("perpendicular-ship", "4")).toBe(false);
   });
 });
@@ -602,6 +625,7 @@ describe("isCustomVariant", () => {
     expect(isCustomVariant("burning-ship", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("tricorn", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("celtic", "custom:-0.8,0.156")).toBe(false);
+    expect(isCustomVariant("nova", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("perpendicular-ship", "custom:-0.8,0.156")).toBe(
       false,
     );
@@ -661,6 +685,7 @@ describe("variantOn", () => {
       "perpendicular-ship",
       "tricorn",
       "celtic",
+      "nova",
     ]) {
       expect(variantOn(id, "Dendrite"), id).toBe("Dendrite");
       expect(variantOn(id, "4"), id).toBe("4");

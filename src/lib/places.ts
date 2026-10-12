@@ -1110,6 +1110,70 @@ const PHOENIX_PLACES: readonly Place[] = [
   },
 ];
 
+// Each place was drawn at 400x300 through the real pipeline in the five
+// schemes (contact sheets, smooth counts) and then measured at 64x48 with whole
+// counts, which is how a tile and the guards draw it. The set is mirrored about
+// the real axis, so only the upper half's places are named. Classic reads best
+// nearly everywhere; the one place in rainbow is the big disk and its small
+// neighbour, where the greens and magentas separate the bulbs that classic
+// runs together.
+const NOVA_PLACES: readonly Place[] = [
+  {
+    id: "nova-whole",
+    name: "The whole Nova set",
+    fractal: "nova",
+    centerX: -0.55,
+    centerY: 0,
+    zoom: 1.5,
+    colorScheme: "classic",
+  },
+  {
+    id: "nova-arc-tip",
+    name: "The curling tip of the arc",
+    fractal: "nova",
+    centerX: 0.2,
+    centerY: 0.5,
+    zoom: 8,
+    colorScheme: "classic",
+  },
+  {
+    id: "nova-twin-disks",
+    name: "The big disk and its small neighbour",
+    fractal: "nova",
+    centerX: -0.4,
+    centerY: 0.05,
+    zoom: 10,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "nova-bulb-tree",
+    name: "A tree of bulbs under the arc",
+    fractal: "nova",
+    centerX: -0.1,
+    centerY: 0.45,
+    zoom: 6,
+    colorScheme: "classic",
+  },
+  {
+    id: "nova-pinch",
+    name: "The pinch on the real axis",
+    fractal: "nova",
+    centerX: -0.62,
+    centerY: 0,
+    zoom: 15,
+    colorScheme: "classic",
+  },
+  {
+    id: "nova-arc-bands",
+    name: "Bands along the arc",
+    fractal: "nova",
+    centerX: -0.33,
+    centerY: 0,
+    zoom: 30,
+    colorScheme: "classic",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -1126,6 +1190,7 @@ export const PLACES: readonly Place[] = [
   ...PERPENDICULAR_SHIP_PLACES,
   ...MAGNET_PLACES,
   ...PHOENIX_PLACES,
+  ...NOVA_PLACES,
 ];
 
 /**
@@ -1232,6 +1297,16 @@ export function placesForFractal(fractal: string): Place[] {
  *   Drawn at 400x300 in classic and rainbow (classic reads best: 50% one colour
  *   at 64x48, where the rainbow is a flat red field) and at zoom 2, which only
  *   loses the flames' tips off the frame.
+ * - Nova: the whole set, which is also the view the Fractal select opens it on
+ *   (`FEATURED_IS_OPENING_VIEW` in the test). It is the one picture that says
+ *   what the fractal is: a C-shaped arc with a round bloom of rainbow bands
+ *   inside it, the real axis running left from the arc through a string of
+ *   disks to a filament, and small copies of the arc's tips in a tree of bulbs
+ *   above and below. Drawn at 400x300 in all five schemes: classic reads best
+ *   (17% one colour at 64x48), while rainbow, fire and ocean are 60 to 85% one
+ *   colour, because most of the plane settles in about 35 steps and takes one
+ *   shade. Zoom 1.5 holds the arc's tips and the filament's end with room to
+ *   spare, where zoom 1 shows the same set smaller.
  *
  * The others were redrawn and kept: each is at most 21% one colour (the
  * guard in `places.test.ts` holds every one under 60%).
@@ -1247,6 +1322,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   "perpendicular-ship": "perpendicular-ship-whole",
   magnet: "magnet-1-drift",
   phoenix: "phoenix-classic-whole",
+  nova: "nova-whole",
 };
 
 /**

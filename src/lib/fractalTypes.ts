@@ -30,6 +30,7 @@ import {
   createPhoenixKind,
   parsePhoenixConstant,
 } from "./phoenix";
+import { novaKind } from "./nova";
 import { perpendicularShipKind } from "./perpendicularShip";
 import { tricornKind } from "./tricorn";
 
@@ -65,6 +66,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "perpendicular-ship", label: "Perp. Ship" },
   { id: "magnet", label: "Magnet" },
   { id: "phoenix", label: "Phoenix" },
+  { id: "nova", label: "Nova" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -262,6 +264,7 @@ export function resolveFractalKind(
     );
   }
   if (typeId === "celtic") return celticKind;
+  if (typeId === "nova") return novaKind;
   if (typeId === "magnet") {
     return createMagnetKind(parseMagnetType(variant) ?? MAGNET_TYPES[0]);
   }
@@ -396,6 +399,15 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // 0.2 or more clear above and below and over a unit either side. The sets
   // are taller than they are wide, so the frame's height is what bounds them.
   if (typeId === "phoenix") return { centerX: 0, centerY: 0, zoom: 1 };
+
+  // The Nova set is the c whose orbit does not settle quickly, and the picture
+  // is that set and the bands round it. Measured with a 0.01 grid at a cap of
+  // 300 (points that never settle or take 60 steps or more; the plane beyond
+  // settles in about 35) it spans x -1.49..0.36 by y -0.59..0.59, so its middle
+  // is about -0.55. Zoom 1.5 (x -1.88..0.78, y -1..1) holds all of it with
+  // 0.4 clear above and below and the arc's tips and the filament's end well
+  // inside; zoom 1 would show the same set a third smaller.
+  if (typeId === "nova") return { centerX: -0.55, centerY: 0, zoom: 1.5 };
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }
