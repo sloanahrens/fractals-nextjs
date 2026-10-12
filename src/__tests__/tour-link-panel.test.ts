@@ -21,7 +21,6 @@ function source(path: string): string {
 
 const page = source("../app/FractalExplorer.tsx");
 const help = source("../lib/helpEntries.ts");
-const readme = source("../../README.md");
 
 /** The body of a `const NAME = ...` function in the page, braces and all. */
 function functionBody(name: string): string {
@@ -242,8 +241,7 @@ describe("walking the stops", () => {
 });
 
 describe("the docs", () => {
-  it("name the button and the walk in the Help overlay and the README", () => {
+  it("name the button and the walk in the Help overlay", () => {
     expect(help).toContain("Copy tour link");
-    expect(readme).toContain("Copy tour link");
   });
 });

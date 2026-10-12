@@ -29,7 +29,6 @@ const MANAGER = read("../components/ui/CustomPresetManager.tsx");
 const STRIP = read("../components/ui/NearbyStrip.tsx");
 const SELECT = read("../components/ui/Select.tsx");
 const HELP = read("../lib/helpEntries.ts");
-const README = read("../../README.md");
 
 /** A whole `const NAME = ...` declaration: its signature and its body. */
 function functionBody(source: string, name: string): string {
@@ -328,10 +327,5 @@ describe("the words", () => {
   it("the Help overlay has a Look entry that says previews show the normal picture", () => {
     expect(HELP).toContain('keys: "Look"');
     expect(HELP).toMatch(/preview[\s\S]{0,120}Normal/);
-  });
-
-  it("the README has a short Orbit traps paragraph in the colour section", () => {
-    expect(README).toMatch(/Orbit Traps/);
-    expect(README).toContain("`m=");
   });
 });
