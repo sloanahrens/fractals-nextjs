@@ -18,7 +18,11 @@ import {
   toPlainText,
   type MathExpr,
 } from "../fractalMath";
-import { FRACTAL_TYPES, defaultVariant } from "../fractalTypes";
+import {
+  FRACTAL_TYPES,
+  defaultVariant,
+  fractalVariants,
+} from "../fractalTypes";
 import { JULIA_CONSTANTS } from "../julia";
 import { MULTIBROT_POWERS } from "../multibrot";
 
@@ -179,7 +183,7 @@ describe("the rule, read aloud", () => {
 
   it("reads the first magnetic type's rule", () => {
     expect(rule("magnet", "1")).toBe(
-      "z becomes the fraction z squared plus c minus 1 over 2 times z plus c minus 2 end fraction squared",
+      "z becomes open bracket the fraction z squared plus c minus 1 over 2 times z plus c minus 2 end fraction close bracket squared",
     );
   });
 
@@ -199,8 +203,78 @@ describe("the rule, read aloud", () => {
 
   it("reads the second magnetic type's rule", () => {
     expect(rule("magnet", "2")).toBe(
-      "z becomes the fraction z cubed plus 3 times open bracket c minus 1 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket over 3 times z squared plus 3 times open bracket c minus 2 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket plus 1 end fraction squared",
+      "z becomes open bracket the fraction z cubed plus 3 times open bracket c minus 1 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket over 3 times z squared plus 3 times open bracket c minus 2 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket plus 1 end fraction close bracket squared",
     );
+  });
+});
+
+describe("no power is ambiguous about what it raises", () => {
+  /** Whether a row is wrapped in one pair of brackets from its first item to its last. */
+  function bracketed(expr: MathExpr): boolean {
+    if (expr.kind !== "row" || expr.items.length < 3) return false;
+    const first = expr.items[0];
+    const last = expr.items[expr.items.length - 1];
+
+    return (
+      first.kind === "operator" &&
+      first.symbol === "(" &&
+      last.kind === "operator" &&
+      last.symbol === ")"
+    );
+  }
+
+  // Every fractal with every variant it offers.
+  const cases: [string, string][] = FRACTAL_TYPES.flatMap((type) => {
+    const variants = fractalVariants(type.id)?.options.map(
+      (option) => option.value,
+    ) ?? [""];
+
+    return variants.map((variant): [string, string] => [type.id, variant]);
+  });
+
+  it.each(cases)(
+    "%s %s: a fraction or a sum is bracketed before it is raised",
+    (id, variant) => {
+      const math = describeFractalMath(id, variant);
+      const exprs = [
+        math.rule,
+        math.start,
+        ...(math.setting ? [math.setting.value] : []),
+      ];
+
+      for (const expr of exprs) {
+        for (const node of nodes(expr)) {
+          if (node.kind !== "superscript" && node.kind !== "subscript")
+            continue;
+          const base = node.base;
+
+          expect(base.kind, `${id}: a fraction is a base`).not.toBe("fraction");
+          // A row of several terms must carry its own brackets.
+          if (base.kind === "row" && base.items.length > 1)
+            expect(bracketed(base), `${id}: an unbracketed row is a base`).toBe(
+              true,
+            );
+        }
+      }
+    },
+  );
+
+  it("brackets the whole Magnet fraction and squares outside the bracket", () => {
+    for (const type of ["1", "2"]) {
+      const rule = describeFractalMath("magnet", type).rule;
+
+      if (rule.kind !== "row") throw new Error("the rule is a row");
+      expect(rule.items).toHaveLength(3);
+      const squared = rule.items[2];
+
+      if (squared.kind !== "superscript")
+        throw new Error("the step is a power");
+      expect(bracketed(squared.base)).toBe(true);
+      if (squared.base.kind !== "row") throw new Error("bracketed is a row");
+      expect(squared.base.items).toHaveLength(3);
+      expect(squared.base.items[1].kind).toBe("fraction");
+      expect(squared.exponent).toEqual({ kind: "number", value: "2" });
+    }
   });
 });
 
@@ -262,9 +336,7 @@ describe("the setting", () => {
     expect(polynomial("3")).toBe("z cubed minus 1 equals 0");
     expect(polynomial("4")).toBe("z to the power 4 minus 1 equals 0");
     expect(polynomial("5")).toBe("z to the power 5 minus 1 equals 0");
-    expect(polynomial("cycle")).toBe(
-      "z cubed minus 2 times z plus 2 equals 0",
-    );
+    expect(polynomial("cycle")).toBe("z cubed minus 2 times z plus 2 equals 0");
     // The fallback is the polynomial that is drawn, so the card and the canvas
     // cannot describe different pictures.
     expect(polynomial("garbage")).toBe(polynomial("3"));
