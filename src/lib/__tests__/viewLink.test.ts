@@ -207,6 +207,33 @@ describe("encodeView", () => {
     });
   });
 
+  it("writes the Perpendicular Ship as f=perpendicular-ship, with no k, and reads it back", () => {
+    const view = {
+      fractalType: "perpendicular-ship",
+      // A variant left over from Julia is not written beside a fractal that
+      // takes none.
+      variant: "Dendrite",
+      centerX: -0.55,
+      centerY: 0,
+      zoomLevel: 1,
+      colorScheme: "classic" as const,
+      autoIterationsOn: true,
+      canvasWidth: 800,
+      canvasHeight: 600,
+    };
+    const link = encodeView(view);
+
+    expect(link).toBe(
+      "v=1&f=perpendicular-ship&x=-0.55&y=0&z=1&s=classic&i=auto&w=800&h=600",
+    );
+    expect(decodeView(`#${link}`)).toMatchObject({
+      fractalType: "perpendicular-ship",
+      centerX: -0.55,
+      centerY: 0,
+      zoomLevel: 1,
+    });
+  });
+
   it("writes the Newton fractal as f=newton, with no k, and reads it back", () => {
     const view = {
       fractalType: "newton",

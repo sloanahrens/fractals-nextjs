@@ -207,6 +207,7 @@ describe("the counting and colouring steps", () => {
       resolveFractalKind("burning-ship", ""),
       resolveFractalKind("tricorn", ""),
       resolveFractalKind("celtic", ""),
+      resolveFractalKind("perpendicular-ship", ""),
       resolveFractalKind("multibrot", "4"),
       resolveFractalKind("newton", ""),
     ];

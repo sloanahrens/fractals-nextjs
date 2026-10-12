@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ComplexNumber } from "../../types/fractal";
 import { burningShipKind } from "../burningShip";
 import { celticKind } from "../celtic";
+import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
 import {
   FRACTAL_TYPES,
@@ -36,7 +37,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the seven fractals in order, each once", () => {
+  it("offers the eight fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -47,6 +48,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "multibrot", label: "Multibrot" },
       { id: "newton", label: "Newton" },
       { id: "celtic", label: "Celtic" },
+      { id: "perpendicular-ship", label: "Perp. Ship" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -88,6 +90,17 @@ describe("resolveFractalKind", () => {
   it("draws the Celtic set for its own id, whatever variant is beside it", () => {
     expect(resolveFractalKind("celtic", "Dendrite")).toBe(celticKind);
     expect(resolveFractalKind("celtic", "")).toBe(celticKind);
+  });
+
+  it("draws the Perpendicular Ship for its own id, whatever variant is beside it", () => {
+    // It takes no setting, so a Julia constant or a Multibrot power left over
+    // in the picker state does not reach its formula.
+    expect(resolveFractalKind("perpendicular-ship", "Dendrite")).toBe(
+      perpendicularShipKind,
+    );
+    expect(resolveFractalKind("perpendicular-ship", "")).toBe(
+      perpendicularShipKind,
+    );
   });
 
   it("draws the Tricorn for its own id, whatever constant is beside it", () => {
@@ -248,6 +261,17 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("frames the Perpendicular Ship about the middle of its real extent, spike and nose both inside", () => {
+    // The set spans x -1.78..0.68 by y -1.09..1.09, so -0.55 is the middle of
+    // its real extent and zoom 1 (x -2.55..1.45, y -1.5..1.5) holds the whole
+    // of it with 0.4 or more clear on every side.
+    expect(defaultViewFor("perpendicular-ship")).toEqual({
+      centerX: -0.55,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("frames the Multibrot about the origin at zoom 1, holding all three powers", () => {
     expect(defaultViewFor("multibrot")).toEqual({
       centerX: 0,
@@ -299,9 +323,10 @@ describe("fractalVariants", () => {
     ]);
   });
 
-  it("gives the Mandelbrot set, the Burning Ship, the Tricorn, Newton, the Celtic set and an unknown id no row", () => {
+  it("gives the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn, Newton, the Celtic set and an unknown id no row", () => {
     expect(fractalVariants("mandelbrot")).toBeNull();
     expect(fractalVariants("burning-ship")).toBeNull();
+    expect(fractalVariants("perpendicular-ship")).toBeNull();
     expect(fractalVariants("tricorn")).toBeNull();
     expect(fractalVariants("newton")).toBeNull();
     expect(fractalVariants("celtic")).toBeNull();
@@ -325,6 +350,7 @@ describe("defaultVariant", () => {
     expect(defaultVariant("tricorn")).toBe("");
     expect(defaultVariant("newton")).toBe("");
     expect(defaultVariant("celtic")).toBe("");
+    expect(defaultVariant("perpendicular-ship")).toBe("");
     expect(defaultVariant("lyapunov")).toBe("");
   });
 
@@ -372,6 +398,7 @@ describe("isVariantValue", () => {
     expect(isVariantValue("burning-ship", "")).toBe(false);
     expect(isVariantValue("tricorn", "Classic")).toBe(false);
     expect(isVariantValue("celtic", "Classic")).toBe(false);
+    expect(isVariantValue("perpendicular-ship", "4")).toBe(false);
   });
 });
 
@@ -387,6 +414,9 @@ describe("isCustomVariant", () => {
     expect(isCustomVariant("burning-ship", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("tricorn", "custom:-0.8,0.156")).toBe(false);
     expect(isCustomVariant("celtic", "custom:-0.8,0.156")).toBe(false);
+    expect(isCustomVariant("perpendicular-ship", "custom:-0.8,0.156")).toBe(
+      false,
+    );
     expect(isCustomVariant("multibrot", "custom:-0.8,0.156")).toBe(false);
   });
 });
@@ -410,6 +440,7 @@ describe("variantOn", () => {
     for (const id of [
       "mandelbrot",
       "burning-ship",
+      "perpendicular-ship",
       "tricorn",
       "newton",
       "celtic",

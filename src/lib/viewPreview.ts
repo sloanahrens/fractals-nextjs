@@ -78,6 +78,7 @@ const FRACTAL_NOUNS: Record<string, string> = {
   mandelbrot: "Mandelbrot set",
   julia: "Julia set",
   "burning-ship": "Burning Ship",
+  "perpendicular-ship": "Perpendicular Ship",
   tricorn: "Tricorn",
   multibrot: "Multibrot",
   newton: "Newton fractal",

@@ -137,6 +137,7 @@ describe("orbitMinExtent and hasEscapeCircle", () => {
     expect(hasEscapeCircle("mandelbrot")).toBe(true);
     expect(hasEscapeCircle("tricorn")).toBe(true);
     expect(hasEscapeCircle("celtic")).toBe(true);
+    expect(hasEscapeCircle("perpendicular-ship")).toBe(true);
     expect(hasEscapeCircle("something-new")).toBe(true);
     expect(hasEscapeCircle(NEWTON)).toBe(false);
   });

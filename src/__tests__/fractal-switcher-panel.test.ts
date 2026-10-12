@@ -35,7 +35,7 @@ function handlerBody(name: string): string {
 }
 
 describe("the switcher's buttons", () => {
-  it("are the picker's seven fractals, mapped from FRACTAL_TYPES", () => {
+  it("are the picker's eight fractals, mapped from FRACTAL_TYPES", () => {
     expect(FRACTAL_TYPES.map((type) => type.label)).toEqual([
       "Mandelbrot",
       "Julia",
@@ -44,6 +44,7 @@ describe("the switcher's buttons", () => {
       "Multibrot",
       "Newton",
       "Celtic",
+      "Perp. Ship",
     ]);
     expect(switcher).toContain("FRACTAL_TYPES.map((type)");
     expect(switcher).toContain("{type.label}");
@@ -70,12 +71,12 @@ describe("the switcher's buttons", () => {
   });
 
   it("scroll sideways in a narrow picture instead of wrapping over it", () => {
-    // The six labels are 375 px at text-xs with px-1.5 (measured in headless
-    // Chrome with a DevTools session at 375 and 320: 351 and 296 px of room
-    // inside the gutters), so the row scrolls on both, by about 28 and 83 px.
-    // The group is capped at the picture's width and scrolls, and a button
-    // keeps its label on one line at its own width, so a narrower picture
-    // cannot wrap it.
+    // The eight labels are wider than 375 px at text-xs with px-1.5 (six were
+    // 375 px when measured in headless Chrome with a DevTools session at 375
+    // and 320: 351 and 296 px of room inside the gutters), so the row scrolls
+    // on both. The group is capped at the picture's width and scrolls, and a
+    // button keeps its label on one line at its own width, so a narrower
+    // picture cannot wrap it.
     const group = switcher.slice(
       switcher.indexOf('aria-label="Fractal"') - 40,
       switcher.indexOf("FRACTAL_TYPES.map"),

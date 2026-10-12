@@ -830,6 +830,62 @@ const CELTIC_PLACES: readonly Place[] = [
   },
 ];
 
+// Drawn through the app's own pipeline in the five schemes at 480x360, and
+// then measured the way a tile is drawn (64x48, whole counts) with
+// `nearUniformShare`: every one of these is under 60% one colour and shows
+// something at a thumbnail's size. The set is mirrored about the real axis
+// (conjugating c conjugates the orbit), so only the upper half's places are
+// named -- the lower half is the same pictures the other way up -- and the
+// real axis itself is left alone, since the fold has nothing to do there and
+// counts the Mandelbrot set.
+const PERPENDICULAR_SHIP_PLACES: readonly Place[] = [
+  {
+    id: "perpendicular-ship-whole",
+    name: "The whole Perpendicular Ship",
+    fractal: "perpendicular-ship",
+    centerX: -0.55,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "perpendicular-ship-bow",
+    name: "The bow and its neck",
+    fractal: "perpendicular-ship",
+    centerX: -1.05,
+    centerY: 0,
+    zoom: 6,
+    colorScheme: "classic",
+  },
+  {
+    id: "perpendicular-ship-masts",
+    name: "Masts along the deck",
+    fractal: "perpendicular-ship",
+    centerX: -0.2,
+    centerY: 0.85,
+    zoom: 6,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "perpendicular-ship-tendrils",
+    name: "Tendrils off the hull",
+    fractal: "perpendicular-ship",
+    centerX: -0.36,
+    centerY: 0.85,
+    zoom: 12,
+    colorScheme: "classic",
+  },
+  {
+    id: "perpendicular-ship-shredded-sail",
+    name: "A shredded sail",
+    fractal: "perpendicular-ship",
+    centerX: 0.44,
+    centerY: 0.55,
+    zoom: 40,
+    colorScheme: "rainbow",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -843,6 +899,7 @@ export const PLACES: readonly Place[] = [
   ...MULTIBROT_PLACES,
   ...NEWTON_PLACES,
   ...CELTIC_PLACES,
+  ...PERPENDICULAR_SHIP_PLACES,
 ];
 
 /**
@@ -923,6 +980,14 @@ export function placesForFractal(fractal: string): Place[] {
  *   the whole set is the picture that says what is different: a flat-edged
  *   black body with a pointed nose, arcs of colour under the fold line and a
  *   dust of small copies to its left. 25% one colour in classic at 64x48.
+ * - Perpendicular Ship: the whole ship, which is also the view the Fractal
+ *   select opens it on (`FEATURED_IS_OPENING_VIEW` in the test). One click on
+ *   the button has to say what this fractal is, and what it is is the
+ *   silhouette: a black hull with a bowed sail, a small bow lobe on a thin neck
+ *   and a spike running out to the left, with rows of masts along the deck.
+ *   Drawn at 400x300 in all five schemes, classic reads best (16% one colour
+ *   at 64x48; rainbow is 16% too, fire and ocean are dark fields), and the
+ *   deeper places are all lace and leave the shape out.
  *
  * The others were redrawn and kept: each is at most 21% one colour (the
  * guard in `places.test.ts` holds every one under 60%).
@@ -935,6 +1000,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   multibrot: "multibrot-3-small-copy",
   newton: "newton-junction",
   celtic: "celtic-whole",
+  "perpendicular-ship": "perpendicular-ship-whole",
 };
 
 /**
@@ -942,14 +1008,18 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
  *
  * Conjugating a real z changes nothing, so the Tricorn's orbit of a real c is
  * the Mandelbrot orbit and a view zoomed in on the axis shows what the
- * Mandelbrot button already shows. The Multibrot's powers of 3 and up differ
- * on the axis, so it is not listed. `places.test.ts` keeps the featured place
- * of every fractal listed here from being zoomed in past
- * `REAL_AXIS_GUARD_MIN_ZOOM` on the axis.
+ * Mandelbrot button already shows. The Celtic set and the Perpendicular Ship
+ * fold a part of z by an absolute value (the real part of the square, and the
+ * size of x in the imaginary step), and on the axis there is nothing negative
+ * for either fold to flip, so their real orbits are the Mandelbrot set's as
+ * well. The Multibrot's powers of 3 and up differ on the axis, so it is not
+ * listed. `places.test.ts` keeps the featured place of every fractal listed
+ * here from being zoomed in past `REAL_AXIS_GUARD_MIN_ZOOM` on the axis.
  */
 export const REAL_AXIS_MATCHES_MANDELBROT: Readonly<Record<string, boolean>> = {
   tricorn: true,
   celtic: true,
+  "perpendicular-ship": true,
 };
 
 /**
