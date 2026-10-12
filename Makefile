@@ -67,6 +67,9 @@ docker-build:
 docker-run:
 	docker run --rm -p 8080:8080 fractals-nextjs:latest
 
+# `npm ci`, the production build, lint and typecheck inside a container, with the
+# Vitest suite deliberately left out, so this is not `make gate`: a change that
+# only this passes has not been through the gate. Run `make gate` for that.
 test-docker:
 	docker run --rm -v $(PWD):/app -w /app node:20-alpine sh -c "npm ci && npm run build && npm run lint && npx tsc --noEmit"
 
@@ -111,7 +114,7 @@ integration: check-staging-url ci-install
 # The same message integrationTarget.ts gives for a missing STAGING_URL. It is
 # written out twice on purpose: this one has to answer before node_modules
 # exists, so it cannot come from the TypeScript. `make-targets.test.ts` fails
-# if the two stop naming different commands.
+# if the two stop being identical, so change this one and that one together.
 check-staging-url:
 	@if [ -z "$(STAGING_URL)" ]; then \
 		echo "STAGING_URL is not set."; \

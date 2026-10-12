@@ -1,10 +1,15 @@
 # deploy
 
 The Pulumi program that deploys this app to Cloud Run through the
-`gt.local/devops` library (devops plan, bead B4.5). The program is ten lines:
-it reads a `Spec` from the stack config and hands it to `appdeploy.Run`, which
-validates it, applies the deploy policy and creates the service
-(`pkg/appdeploy` in the devops repo).
+`gt.local/devops` library. It reads a `Spec` from the stack config and hands it
+to `appdeploy.Run`, which validates it, applies the deploy policy and creates
+the service (`pkg/appdeploy` in the devops repo).
+
+`scripts/release/` is a verbatim copy of the devops repo's own directory, pinned
+to the `gt.local/devops` version `go.mod` names. Do not edit it here: its
+cross-references — the design docs it cites, its `make scripts-test` target, its
+bead ids — are the devops repo's and resolve there, not in this repository,
+where nothing builds or runs it (`release_test.go` included).
 
 | File | What it is |
 |---|---|
@@ -32,7 +37,11 @@ it, both tested in `main_test.go`:
 - **Absent means no variable at all.** A stack that holds no `deployedAt` has
   never recorded a deploy — it has not been released, or the release found the
   digest unchanged and recorded nothing — and the app then says nothing about
-  a deploy time rather than showing an empty one.
+  a deploy time rather than showing an empty one. That second case is why an
+  unchanged digest can leave the app with no `DEPLOYED_AT`: `apply_digest` in
+  `scripts/release/lib.sh` applies nothing when the stack already runs the
+  digest the release was given, so no revision is created and the deploy time
+  the live revision carries stays on the app.
 - **A present value has to be an RFC 3339 timestamp in UTC**, such as
   `2026-10-09T00:14:07Z`, which is what `lib.sh`'s `set_deployed_at_config`
   writes and checks before writing. Anything else fails the deploy with a
@@ -78,35 +87,32 @@ health path and memory limit, and that no config file holds a secret.
 
 ## scripts/release
 
-`scripts/release/` is a verbatim copy of the devops repo's directory at
-`v0.1.2`, the version `go.mod` pins — no runner clones that repo
-(docs/design.md, section 5), so this repository carries the scripts it runs,
+`scripts/release/` is a verbatim copy of the devops repo's directory at the
+version `go.mod` pins — no runner clones that repo (the devops repo's
+`docs/design.md`, section 5), so this repository carries the scripts it runs,
 and the scripts and the library the app compiles against are one revision
 (`workflows/README.md`, devops). Bump the pin and re-copy together:
 
 ```sh
-diff -r scripts/release "$(go env GOMODCACHE)/gt.local/devops@v0.1.2/scripts/release"
+VERSION=$(cd deploy && go list -m -f '{{.Version}}' gt.local/devops)
+diff -r scripts/release "$(go env GOMODCACHE)/gt.local/devops@$VERSION/scripts/release"
 ```
 
-## Before the first release
+## The release workflows
 
-Copying `deploy.yml` and `teardown.yml` from the devops repo into
-`.forgejo/workflows/` and the Forgejo settings they assume (protected `v*` and
-`teardown-v*` tags, the workflow-file branch rule, the `deploy` runner label)
-are the human's steps; "What an app repo needs before its first release" and
-"The human must configure in Forgejo" in the devops repo's `workflows/README.md`
-list them.
+`.forgejo/workflows/` holds all three. `deploy.yml` runs at a protected `v*` tag
+and builds the app, previews and rolls staging, then rolls prod once staging
+answers. `staging.yml` follows `main` on every landing: it builds the commit
+`main` is at, rolls staging onto that digest, and runs the integration tier
+(`make integration`) against the service it deployed — a run `main` has already
+moved past is skipped rather than reporting success, so a superseded landing
+deploys nothing. `teardown.yml` runs at a protected `teardown-v*` tag and takes
+the stacks down. All three come from the devops repo's templates and are
+refreshed in the same pass as `scripts/release/` (the devops repo's
+`workflows/README.md`).
 
-Three disagreements on the devops side decide whether a release deploys the
-service this program describes, and none is fixed from this repository:
-`manifests/fractals.yaml` names the app `fractals` where the release path and
-this program use `fractals-nextjs` (bootstrap would create
-`runtime-fractals`, and the service asks for `runtime-fractals-nextjs`);
-`scripts/release/lib.sh` names the stack `<app>-<env>` where the patrol reads
-`<app>/<env>`; and a release whose digest is the one the stack already runs
-records no `deployedAt`, so the apply it goes on to make is not the no-op it
-means to be — this program renders no `DEPLOYED_AT` for it, the container spec
-differs from the live revision, and Cloud Run creates a revision the release
-did not intend (that one is decided here and filed as `dv-iuqp`, since no
-rule this program could follow would fix it). The first two are filed as beads
-in the devops rig.
+What is left for a person is the Forgejo configuration the workflows assume
+(protected `v*` and `teardown-v*` tags, the branch rule covering
+`.forgejo/workflows/`, the `deploy` runner label); "What an app repo needs
+before its first release" and "The human must configure in Forgejo" in the
+devops repo's `workflows/README.md` list them.
