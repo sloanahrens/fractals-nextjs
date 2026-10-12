@@ -37,7 +37,7 @@ docker run --rm -p 8080:8080 fractals-nextjs:test
 
 ## Project Architecture
 
-This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set, Julia, Burning Ship, Perpendicular Ship, Tricorn, Multibrot, Newton and Celtic fractals using Canvas API. Key architectural decisions:
+This is a Next.js 16 (React 19) TypeScript application that renders interactive Mandelbrot set, Julia, Burning Ship, Perpendicular Ship, Tricorn, Multibrot, Newton, Celtic and Magnet fractals using Canvas API. Key architectural decisions:
 
 ### Core Rendering System
 
@@ -57,6 +57,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Tricorn** (`src/lib/tricorn.ts`): The Tricorn (Mandelbar) formula — the Mandelbrot loop with z conjugated before squaring, z -> conj(z)^2 + c — behind its own fractal kind
 - **Celtic** (`src/lib/celtic.ts`): The Celtic Mandelbrot formula — the Mandelbrot loop with the real part of the square folded by an absolute value, z -> (|Re(z^2)| + i Im(z^2)) + c, that is x' = |x^2 - y^2| + cx and y' = 2xy + cy — behind its own fractal kind
 - **Multibrot** (`src/lib/multibrot.ts`): The Mandelbrot loop with a higher power, z -> z^d + c for d = 3, 4, 5 — `createMultibrotKind(power)` and `parseMultibrotPower`, the power being the fractal's variant
+- **Magnet** (`src/lib/magnet.ts`): The two rational maps of the magnetic model, z -> ((z^2 + c - 1)/(2z + c - 2))^2 (Type I) and z -> ((z^3 + 3(c-1)z + (c-1)(c-2))/(3z^2 + 3(c-2)z + (c-1)(c-2) + 1))^2 (Type II), both from z0 = 0 — `createMagnetKind(type)`, `parseMagnetType` and `MAGNET_TYPES`/`MAGNET_TYPE_LABELS`, the type being the fractal's variant. z = 1 is a superattracting fixed point for every c, so the set is the c whose orbit settles there and that is nearly the whole plane: the picture's flat black is the settled set, and the colours draw the island of c that runs off to infinity instead. Outside is |z| > 100 (`MAGNET_BAILOUT`), smoothed with the shared degree-2 formula carried to that radius; settled is |z - 1| < 1e-6 (`MAGNET_TOLERANCE`); a vanishing denominator is a pole and is counted as the orbit's last step
 - **Newton** (`src/lib/newton.ts`): Newton's method for z^3 - 1 as a fractal kind — the orbit's root and its speed packed into the one number the renderer takes, the three roots in thirds of 0..maxIterations; the first fractal that is not an escape-time set
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
@@ -90,12 +91,12 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Settings drawer** (`src/components/ui/SettingsDrawer.tsx`): The modal `<dialog>` that holds every control card, a right-hand panel or a bottom sheet under 768 px
 - **Help overlay** (`src/components/ui/HelpDialog.tsx`): The native `<dialog>` that lists every way to drive the explorer, shown modally so the browser supplies Escape, the inert page behind it and focus returning to the opener
 - **Help entries** (`src/lib/helpEntries.ts`): The sections the overlay renders, and `opensHelpShortcut` — the one rule behind the `?` key
-- **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, `nearestPlace` — the place a view previews as, the whole rule behind `ogImage` — and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and Julia and Multibrot chips land
+- **Places** (`src/lib/places.ts`): The catalogue of named views worth looking at, `suggest` — which of them are near a given view — `placeColorScheme`, the one rule for the scheme a place is drawn in and visited in, `nearestPlace` — the place a view previews as, the whole rule behind `ogImage` — and `featuredPlace`/`wholeSetPlaceFor`, where the fractal switcher's buttons and the Julia, Multibrot and Magnet chips land. A place of a fractal that takes a variant names it, so Julia's constants, the Multibrot's powers and the Magnet's magnetic types each have their own whole-set place at the fractal's opening frame; `FEATURED_PLACE_IDS` is judged by the featured guard (at most 60% one colour), which is why the Magnet's button leads with a drift of disks rather than the whole island
 - **Auto-wander pill** (`src/components/ui/WanderControl.tsx`, `useWanderNudge.ts`) and **pill rules** (`src/lib/wanderControl.ts`): The play/pause pill on the picture's bottom right that shares the Settings checkbox's handler, its words and placement, and the once-per-browser first-run nudge
 - **Fractal switcher** (`src/components/ui/FractalSwitcher.tsx`): The Mandelbrot / Julia / Burning Ship / Perp. Ship / Tricorn / Multibrot / Newton / Celtic buttons, and the Julia constant or Multibrot power chips, drawn over the top left of the canvas and never faded
 - **Fractal math** (`src/lib/fractalMath.ts`), **Math card** (`src/components/ui/MathCard.tsx`, `src/lib/mathCard.ts`) and **MathView** (`src/components/ui/MathView.tsx`): The mathematics of the picture on screen — `describeFractalMath(fractalId, variant)` returns, for every fractal in `FRACTAL_TYPES`, the rule, where each point starts, the one setting with its real value, how a point is judged and a plain blurb, as `MathExpr` trees; `MathView` typesets a tree as native MathML with a plain-text `aria-label` from `toPlainText`; the card shows the rule and setting on one line and, expanded, the view's numbers, the probe's rows and the orbit plot (`OrbitPlot.tsx`); it is up from the first visit, and whether it is shown and expanded is kept in localStorage (`mathCard.ts`, key `fractals.mathCard.v1`). **Every fractal needs a descriptor in `FRACTAL_MATH`**: `fractalMath.test.ts` fails a `FRACTAL_TYPES` id without one or with an empty blurb
 - **Math probe** (`src/lib/mathProbe.ts`, `escapeInfo` on `FractalKind` in `src/types/fractal.ts`): The number under the pointer, what its orbit did and the colour the picture paints it, shown in the expanded Math card — `probePoint(kind, point, maxIterations, scheme)` reads the count from the kind (whole steps for the words, the smooth count for the colour) and `describeProbe(fractalId, info, cap)` words it; every kind ships `escapeInfo(point, maxIterations)`, an optional method the probe falls back to the count for; `createFrameThrottle` is the one-point-per-frame rule and `pointerToCanvasPixel` the CSS-to-canvas scaling; `shouldClearProbe` is the rule that holds the probe while the pointer is on the Math card rather than the picture, so the plot and its Play control stay reachable. **A kind's `escapeInfo` must agree with its `iterations`** — `escapeInfo.test.ts` and the pixel parity in `mathProbe.test.ts` hold it to a drawn view
-- **Orbit plot** (`src/lib/orbitPlot.ts`, `src/components/ui/OrbitPlot.tsx`, `orbit` on `FractalKind` in `src/types/fractal.ts`): The path that point took, drawn under the probe's rows in the expanded Math card — `orbit` is the points the kind's own loop visits (optional, as `escapeInfo` is; `orbitFor` answers the point alone for a kind without it), the probe keeps 60 steps of it in `PointProbe.orbit`, `orbitToPlot(orbit, size, minExtent)` places them in a square plot (frame never inside the escape circle nor past twice it, values that are not numbers read as the origin), `describeOrbit(fractalId, info, steps)` is the `aria-label`, `orbitStepColour` paints a dot through the picture's own mapping, and a Play control walks it a step every 120 ms (off under `prefers-reduced-motion`). **A kind's `orbit` must be the same walk as its `iterations` and `escapeInfo`** — `orbit.test.ts` holds the path to the count for every kind
+- **Orbit plot** (`src/lib/orbitPlot.ts`, `src/components/ui/OrbitPlot.tsx`, `orbit` on `FractalKind` in `src/types/fractal.ts`): The path that point took, drawn under the probe's rows in the expanded Math card — `orbit` is the points the kind's own loop visits (optional, as `escapeInfo` is; `orbitFor` answers the point alone for a kind without it), the probe keeps 60 steps of it in `PointProbe.orbit`, `orbitToPlot(orbit, size, minExtent)` places them in a square plot (frame never inside the escape circle nor past twice it, values that are not numbers read as the origin), the escape circle of radius 2 is drawn for the kinds that leave it (`hasEscapeCircle` is false for Newton, which has no radius, and for the Magnet, whose orbits leave at 100 and would have the circle of 2 inside their wandering), `describeOrbit(fractalId, info, steps)` is the `aria-label`, `orbitStepColour` paints a dot through the picture's own mapping, and a Play control walks it a step every 120 ms (off under `prefers-reduced-motion`). **A kind's `orbit` must be the same walk as its `iterations` and `escapeInfo`** — `orbit.test.ts` holds the path to the count for every kind
 - **Place thumbnails** (`src/lib/placeThumbnails.ts`): The small off-screen pictures of places — an LRU cache, a one-at-a-time queue with cancel and pause, and the canvas render behind it
 - **ColorMapping** (`src/lib/colorMapping.ts`): Dynamic color schemes for visualization
 - **Palette controls** (`src/lib/paletteControls.ts`, `Slider`'s `onGestureStart`/`onKeyDown`): The Settings drawer's Reverse checkbox and Shift slider as the controls read them — the slider's whole percent against the view's fraction of a turn (`shiftToPercent`/`percentToShift`), `normalizeShift` (the mapping's reading, a whole turn being no shift), `isDefaultColorOptions` (judged exactly, so a slider dragged to its far end still has a Reset), `formatShiftPercent` and the keys that move a focused slider. The slider's far end is held rather than read modulo a turn, so a drag to the right does not snap the thumb back; a change of either setting repaints from kept counts and is one history entry per gesture, marked on the slider's pointer-down or on the first key press that moves it (`FractalExplorer.tsx`)
@@ -108,7 +109,7 @@ The main page (`src/app/FractalExplorer.tsx`, a client component; `src/app/page.
 - `bounds`: Current fractal view coordinates (FractalBounds)
 - `isRendering/progress`: Rendering state and progress tracking
 - Parameter controls: iterations, color schemes, canvas resolution
-- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Perpendicular Ship, two Tricorn, three Multibrot, two Newton, two Celtic) and custom fractal configurations
+- Preset system: Built-in views (six Mandelbrot, five Julia, two Burning Ship, two Perpendicular Ship, two Tricorn, three Multibrot, two Newton, two Celtic, two Magnet) and custom fractal configurations
 
 ### Component Structure
 
@@ -203,6 +204,138 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-11_
+
+### Magnet: a ninth fractal, with the magnetic types as its variant (2026-10-11)
+
+- fr-ihs. The Magnet set is the parameter plane of the magnetic model's two
+  rational maps, from the renormalisation transformation for a hierarchical
+  lattice (Yang and Lee's complex temperatures, in Peitgen and Richter's *The
+  Beauty of Fractals*, pp. 129-146). Both start at z = 0 and step by squaring a
+  fraction: Type I is z -> ((z² + c − 1)/(2z + c − 2))², Type II is
+  z -> ((z³ + 3(c−1)z + (c−1)(c−2))/(3z² + 3(c−2)z + (c−1)(c−2) + 1))². It is
+  the second fractal after the Multibrot to use the variant mechanism, and the
+  type is its variant: a Type row of chips, `k=1` or `k=2` in a link, stored as
+  `variant`. It follows the Tricorn and the Celtic line for line everywhere
+  else, with no new machinery in the renderer, the recolour or the link format.
+- **`src/lib/magnet.ts`** exports `MAGNET_TYPES` ([1, 2]), `MAGNET_TYPE_LABELS`
+  ("Type I", "Type II"), `parseMagnetType` and `createMagnetKind(type)`, which
+  throws a `RangeError` for any other type, so a value from outside never
+  reaches it (`resolveFractalKind` parses first and falls back to Type I, as an
+  unknown Julia name falls back to the first constant). `MAGNET_BAILOUT` is 100
+  and `MAGNET_TOLERANCE` is 1e-6, both as the bead names them.
+- **The picture, and what it is worth knowing before framing one.** z = 1 is a
+  fixed point of either map for every c, and a superattracting one — the
+  derivative is 0 there as well, because the two sides of the fraction are
+  equal at z = 1 as functions of c. So the c whose orbit is drawn into that
+  fixed point is *nearly the whole plane*, and the set the picture is named for
+  is most of any frame: the renderer paints it the cap, which is black. What
+  the colours draw is the island of c whose orbit runs off to infinity instead,
+  with the fractal boundary between the two basins through it. This is the
+  first fractal here whose "inside" is the majority of the plane, and it has
+  three consequences below (no overview view, no whole-set featured place, and
+  a mostly black default frame). It is not a bug in the kind: Ultra Fractal's
+  own `Standard_Magnet1Mandelbrot` documents the same two bailouts, 100 and
+  5e-5, and practitioners note the same large convergence zone.
+- **The count.** A point is inside when |z − 1| < 1e-6, tested at the top of
+  each lap, and the count is the cap, which the colour mapping paints black
+  like the inside of any other set. A point is outside when |z| > 100, tested
+  after the step, and the count is the steps completed before the step that
+  took it out. The smoothing is the shared degree-2 formula carried to this
+  kind's radius: `n + 1 − log2(log|z| / log 100)`. The radius has to appear —
+  that expression is the shared `n + 1 − log2(log2|z|)` exactly when R = 2, and
+  a formula that left R out would move every count by log2(log2 100), about
+  2.7 steps. With R = 100 a point that stepped out just past the bailout gets
+  a shade under n + 1 and one that overshot by the whole of the next squaring a
+  shade under n, so the seam where the whole count steps is under 0.5 of a step
+  and the count moves by under 0.01 between samples 1e-5 apart.
+- **The pole guard.** Both denominators have real roots — the points the map
+  sends to infinity. The first type's `2z + c − 2` is zero at the orbit's own
+  start z = 0 when c = 2; the second type's `(c − 1)(c − 2) + 1` is zero at
+  z = 0 where c² − 3c + 3 = 0, that is 1.5 ± (√3/2)i. A step from one answers
+  `null` rather than dividing by zero, and the kind counts the orbit as gone on
+  that step, so no NaN and no infinity reaches the renderer: a grid of 8100
+  points across the plane gives a finite count in 0..cap for every one of them,
+  and a NaN or infinite input point runs the cap like any other kind's does.
+- **The smooth count can come out a little under zero**, because a point just
+  off a pole steps out enormously and log|z| of an enormous step is worth more
+  than a step. The other kinds' can too; the colour mapping reads a negative
+  count as the start of the palette, and the tests state the floor the grid
+  holds to (−8) rather than clamping, which would be new behaviour for a
+  shared convention.
+- **Registered like the Multibrot**: `FRACTAL_TYPES` has `{ id: "magnet",
+  label: "Magnet" }` after Perp. Ship, `fractalVariants("magnet")` is label
+  "Type" with options "1" and "2" labelled "Type I" and "Type II" and
+  `allowsCustom: false`, `defaultVariant` is "1" and `isVariantValue` takes the
+  plain spellings only. `viewLink`, `presetFractal` and the tour link read ids
+  and variants through those, so a link and a saved view of either type
+  round-trip with no change to the codec. `viewPreview` names it "Magnet set"
+  in a link's line.
+- **A cross-fractal consequence of the shared `k` field, and the test that had
+  to move.** The codec reads a `k` by asking every fractal whether it can draw
+  the value, so `f=multibrot&k=2` now decodes with a variant of "2" where
+  before "2" was nothing: `viewLinkToUpdates` drops it for the Multibrot, which
+  cannot draw it. `viewLink.test.ts`'s "drops a power it cannot read" list
+  therefore loses "2" and gains a test stating the new reading; the magnet list
+  loses "3" for the same reason, the other way round.
+- **`defaultViewFor("magnet")` is (1.3, 0) at zoom 1.** Type I's island spans
+  x −0.46..3.07 by y ±2.16 and Type II's x −0.20..2.30 by y ±1.53 (measured on
+  a 0.02 grid at a cap of 150 and a 0.005 one at 400). Zoom 1 is the widest
+  view the explorer has (4 by 3) and MIN_ZOOM is 1, so no shallower frame
+  exists: this one holds either island across with the settled black either
+  side, and crops Type I's top and bottom lobes, which is the most of its
+  height the explorer can show at once. About 21% of the frame is the island
+  and the rest is the settled set.
+- **Two built-in views, both magnified, and no overview.** `presets.test.ts`
+  requires every non-Mandelbrot built-in to be at most 60% "inside" at 96x72,
+  and every frame that holds the Magnet's island is 65% or more; there is
+  therefore no overview preset, and the two shipped are `magnet-drift` (Type I,
+  centre 1.6 at zoom 8) and `magnet-lobe` (Type II, centre 1.6 + 1.05i at zoom
+  8), 41% and 49% inside (on the cell-centred grid the guard measures on), with
+  82 and 31 distinct counts. The preset count went from 24 to 26 and the
+  fractal-owned count from 18 to 20.
+- **Six places** (`MAGNET_PLACES`, the test allows 4 to 6): the whole Type I
+  island and the whole Type II island, both at the default frame (which
+  `wholeSetPlaceFor("1"|"2", "magnet")` must find, one per type); the curtain
+  of disks (Type I at 1.3, zoom 4); a drift of disks (Type I at 1.6, zoom 8);
+  dust over the waist (Type I at 0, 1.2i, zoom 16); and the bright lobe (Type
+  II at 1.6 + 1.05i, zoom 8). All are classic. **The featured place is the
+  drift of disks, not a whole-set view, and that is a deliberate departure from
+  the bead.** The featured guard holds a button's landing under 60% one colour
+  and no Magnet frame that reads as the whole set is under 65%, so the button
+  leads with the structure the picture is made of instead; the drift measures
+  41% of a 96x72 grid inside, 82 distinct counts and 39% one colour at 64x48.
+  `FEATURED_IS_OPENING_VIEW` does not gain magnet, and the
+  reason is written where the other entries' reasons are, in the
+  `FEATURED_PLACE_IDS` comment.
+- **Math card**: `FRACTAL_MATH.magnet` is a function of the variant, with the
+  type's own fraction as the rule (Type I `z → ((z² + c − 1)/(2z + c − 2))²`,
+  Type II the longer one), `z₀ = 0` and c the pixel's point, the setting "Type"
+  with Type I or Type II as its value, a three-sentence blurb that says most of
+  the plane settles and the colours draw the island, and an escape sentence
+  naming the tolerance and the bailout. `fractalMath.test.ts` reads both rules
+  aloud.
+- **The orbit plot draws no escape circle for magnet**: its orbits leave at
+  100 rather than 2, so the circle of 2 would sit inside their wandering rather
+  than at the boundary of the picture. `hasEscapeCircle` is now false for
+  newton and for magnet, and `orbitMinExtent` gives magnet the escape-time
+  frame of 2 (the scale a magnet orbit moves at) with Newton keeping 1.
+- **`npm run make-og-previews`** was run and the six `public/og/magnet-*.jpg`
+  files committed (46 to 170 KB, all at quality 80; the set is 86 pictures,
+  6.1 MB). Nothing else in `public/og/` changed.
+- **The button row**: nine buttons are wider than the eight's, so the row
+  scrolls sideways at 375 and 320 px as it already did. It was not re-measured
+  in a browser; the switcher's classes are unchanged.
+- Tests: the new `src/lib/__tests__/magnet.test.ts`, and the Magnet cases
+  added to `fractalTypes`, `viewLink`, `viewLinkState`, `viewPreview`,
+  `tourLink`, `escapeInfo`, `orbit`, `mathProbe`, `orbitPlot`, `renderRgba`,
+  `fractalMath`, `places`, `presets`, `tour` and the switcher panel test, each
+  extended to the new count rather than loosened. `escapeInfo.test.ts` and
+  `orbit.test.ts` grew an optional grid (the magnet set is not around the
+  origin) and `mathProbe.test.ts` an optional view (the same). `make gate` is
+  green.
+- Docs: the README (intro, Fractal Types, Fractal Switcher, Custom Presets,
+  Mathematics, Project Structure), the Help overlay's switcher row, the design
+  doc's As built, and this note.
 
 ### Perpendicular Ship: an eighth fractal (2026-10-11)
 

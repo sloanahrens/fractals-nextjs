@@ -351,6 +351,9 @@ describe("describeViewLine", () => {
     expect(line({ ...base, fractalType: "multibrot", variant: "4" })).toBe(
       "Multibrot, z^4, 1x",
     );
+    expect(line({ ...base, fractalType: "magnet", variant: "2" })).toBe(
+      "Magnet set, Type II, 1x",
+    );
     expect(
       line({ ...base, fractalType: "julia", variant: "Douady rabbit" }),
     ).toBe("Julia set, Douady rabbit, 1x");

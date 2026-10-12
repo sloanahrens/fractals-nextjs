@@ -171,7 +171,7 @@ describe("nextTourStop", () => {
       walk(PLACES, 400, seeded(5)).map((h) => h.place.fractal),
     );
 
-    expect(fractals.size).toBe(8);
+    expect(fractals.size).toBe(9);
     expect(seen).toEqual(fractals);
   });
 

@@ -464,6 +464,46 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasHeight: 600,
     fractal: "perpendicular-ship",
   },
+  {
+    id: "magnet-drift",
+    name: "Magnet disks (Type I)",
+    description: "The drift of disks where the Type I island meets the settled set",
+    // Centre (1.6, 0) at zoom 8: 0.5 by 0.375. There is no Magnet overview
+    // view: the set the picture's black stands for is nearly the whole plane,
+    // so a frame holding the whole thing is one flat colour over most of it,
+    // which the per-fractal guard in `presets.test.ts` refuses. Both built-ins
+    // are therefore framed on the island, where the picture has detail.
+    bounds: {
+      minReal: 1.35,
+      maxReal: 1.85,
+      minImaginary: -0.1875,
+      maxImaginary: 0.1875,
+    },
+    maxIterations: 250,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "magnet",
+    variant: "1",
+  },
+  {
+    id: "magnet-lobe",
+    name: "Magnet lobe (Type II)",
+    description: "The bright lobe off the Type II island, in its dust",
+    // Centre (1.6, 1.05) at zoom 8: 0.5 by 0.375.
+    bounds: {
+      minReal: 1.35,
+      maxReal: 1.85,
+      minImaginary: 0.8625,
+      maxImaginary: 1.2375,
+    },
+    maxIterations: 250,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "magnet",
+    variant: "2",
+  },
 ];
 
 /**

@@ -18,6 +18,7 @@ import { ORBIT_MAX_STEPS, orbitFor } from "../mathProbe";
 import { MULTIBROT_POWERS, createMultibrotKind } from "../multibrot";
 import { NEWTON_ROOTS, NEWTON_TOLERANCE, newtonKind } from "../newton";
 import { celticKind } from "../celtic";
+import { createMagnetKind } from "../magnet";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
 import type { ComplexNumber, FractalKind } from "../../types/fractal";
@@ -119,6 +120,33 @@ const CASES: KindCase[] = [
     neverEnds: ORIGIN,
     neverEndsLength: (maxSteps) => maxSteps + 1,
     endsAt: { point: { real: 2, imaginary: 0 }, steps: 1 },
+    endedLength: (steps) => steps + 2,
+    escapes: true,
+  },
+  {
+    name: "magnet type 1",
+    kind: createMagnetKind(1),
+    starts: atOrigin,
+    neverEnds: ORIGIN,
+    neverEndsLength: (maxSteps) => maxSteps + 1,
+    // The first step of c = 1.91 is (0.91 / -0.09)^2, about 102.2, past the
+    // bailout of 100, so the walk is the start and the point that left it.
+    endsAt: { point: { real: 1.91, imaginary: 0 }, steps: 0 },
+    endedLength: (steps) => steps + 2,
+    escapes: true,
+  },
+  {
+    name: "magnet type 2",
+    kind: createMagnetKind(2),
+    starts: atOrigin,
+    // Type II's orbit of c = 0 is drawn into the fixed point 1 in about 35
+    // steps, so it does not walk a 60-step window; -0.2 + 0.6i is a point
+    // whose orbit does neither within the window.
+    neverEnds: { real: -0.2, imaginary: 0.6 },
+    neverEndsLength: (maxSteps) => maxSteps + 1,
+    // Type II's bailout is the same 100, and its first step from 1.45 + 0.85i
+    // is about 116.6 across.
+    endsAt: { point: { real: 1.45, imaginary: 0.85 }, steps: 0 },
     endedLength: (steps) => steps + 2,
     escapes: true,
   },
@@ -265,6 +293,27 @@ describe("the escape-time kinds' first step", () => {
         { real: 0, imaginary: 0 },
         { real: 2, imaginary: 0 },
         { real: 10, imaginary: 0 },
+      ],
+    );
+  });
+});
+
+describe("a magnet orbit", () => {
+  it("is the one point it started at when the first step has no value", () => {
+    // c = 2 is Type I's pole at the orbit's own start, where 2z + c - 2 is
+    // zero: the walk stops on the point before the step it cannot take.
+    expect(createMagnetKind(1).orbit!({ real: 2, imaginary: 0 }, 20)).toEqual([
+      ORIGIN,
+    ]);
+  });
+
+  it("ends on the fixed point 1 when the first step lands there", () => {
+    // c = 1.5: the fraction is 0.5 / -0.5 = -1, squared to 1, and 1 is a fixed
+    // point of the map, so the path is those two points and stops.
+    expect(createMagnetKind(1).orbit!({ real: 1.5, imaginary: 0 }, 10)).toEqual(
+      [
+        { real: 0, imaginary: 0 },
+        { real: 1, imaginary: 0 },
       ],
     );
   });

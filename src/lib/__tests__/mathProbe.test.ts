@@ -33,9 +33,14 @@ import { createMultibrotKind } from "../multibrot";
 import { newtonKind } from "../newton";
 import { renderRgba } from "../renderRgba";
 import { celticKind } from "../celtic";
+import { createMagnetKind } from "../magnet";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
-import type { ColorScheme, FractalKind } from "../../types/fractal";
+import type {
+  ColorScheme,
+  FractalBounds,
+  FractalKind,
+} from "../../types/fractal";
 
 const WIDTH = 16;
 const HEIGHT = 12;
@@ -45,7 +50,13 @@ const SCHEME: ColorScheme = "classic";
 /** A view with set, boundary and open plane all in it. */
 const VIEW = calculateZoomBounds(-0.6, 0, 0.7);
 
-const KINDS: { name: string; kind: FractalKind; packsOutcomes?: boolean }[] = [
+const KINDS: {
+  name: string;
+  kind: FractalKind;
+  packsOutcomes?: boolean;
+  /** Where to draw the parity view; the Mandelbrot set's corner unless said. */
+  view?: FractalBounds;
+}[] = [
   { name: "mandelbrot", kind: mandelbrotKind },
   { name: "julia", kind: createJuliaKind({ real: -0.8, imaginary: 0.156 }) },
   { name: "burning-ship", kind: burningShipKind },
@@ -54,19 +65,32 @@ const KINDS: { name: string; kind: FractalKind; packsOutcomes?: boolean }[] = [
   { name: "perpendicular-ship", kind: perpendicularShipKind },
   { name: "multibrot 3", kind: createMultibrotKind(3) },
   { name: "multibrot 5", kind: createMultibrotKind(5) },
+  // The magnet set is not around the origin, so its view is the frame the
+  // fractal opens on: the settled black, the escaping island, and the boundary
+  // between them all in one picture.
+  {
+    name: "magnet type 1",
+    kind: createMagnetKind(1),
+    view: calculateZoomBounds(1.3, 0, 1),
+  },
+  {
+    name: "magnet type 2",
+    kind: createMagnetKind(2),
+    view: calculateZoomBounds(1.3, 0, 1),
+  },
   // Newton's count is its root and its speed packed together rather than a
   // step count, so its steps are held to escapeInfo's alone.
   { name: "newton", kind: newtonKind, packsOutcomes: true },
 ];
 
-describe.each(KINDS)("$name", ({ kind, packsOutcomes = false }) => {
+describe.each(KINDS)("$name", ({ kind, packsOutcomes = false, view = VIEW }) => {
   it("reads every pixel of a drawn view as the picture draws it", () => {
-    const pixels = renderRgba(VIEW, WIDTH, HEIGHT, CAP, SCHEME, kind, true);
+    const pixels = renderRgba(view, WIDTH, HEIGHT, CAP, SCHEME, kind, true);
     let painted = 0;
 
     for (let y = 0; y < HEIGHT; y++) {
       for (let x = 0; x < WIDTH; x++) {
-        const point = pixelToComplex(x, y, WIDTH, HEIGHT, VIEW);
+        const point = pixelToComplex(x, y, WIDTH, HEIGHT, view);
         const probe = probePoint(kind, point, CAP, SCHEME);
 
         expect(probe.point).toEqual(point);
@@ -92,10 +116,10 @@ describe.each(KINDS)("$name", ({ kind, packsOutcomes = false }) => {
   });
 
   it("paints the swatch in the scheme the picture is drawn in", () => {
-    const point = pixelToComplex(3, 2, WIDTH, HEIGHT, VIEW);
+    const point = pixelToComplex(3, 2, WIDTH, HEIGHT, view);
 
     for (const scheme of ["classic", "fire", "ocean", "rainbow"] as const) {
-      const pixels = renderRgba(VIEW, WIDTH, HEIGHT, CAP, scheme, kind, true);
+      const pixels = renderRgba(view, WIDTH, HEIGHT, CAP, scheme, kind, true);
       const probe = probePoint(kind, point, CAP, scheme);
       const at = (2 * WIDTH + 3) * 4;
 

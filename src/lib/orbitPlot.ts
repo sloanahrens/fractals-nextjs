@@ -157,21 +157,25 @@ export function orbitToPlot(
  * @returns The least extent the frame may have, in units of the plane
  */
 export function orbitMinExtent(fractalId: string): number {
-  return hasEscapeCircle(fractalId) ? ORBIT_ESCAPE_RADIUS : NEWTON_PLOT_EXTENT;
+  return fractalId === "newton" ? NEWTON_PLOT_EXTENT : ORBIT_ESCAPE_RADIUS;
 }
 
 /**
- * Whether a fractal is drawn by escape, and so has a radius to leave.
+ * Whether a fractal is drawn by escape at the radius the plot draws.
  *
- * Every kind here counts how long a point survives before it leaves the radius
- * of 2, and the plot draws that circle to show what "gone" means. Newton's
- * method is not an escape-time set — its orbits converge on the cube roots of 1
- * — so it has no circle, and the plot draws no untrue one.
+ * Every kind here but Newton counts how long a point survives before it leaves
+ * a radius, and the plot draws the circle of 2 to show what "gone" means.
+ * Newton's method is not an escape-time set — its orbits converge on the cube
+ * roots of 1 — so it has no circle at all. The Magnet's orbits do leave, but at
+ * 100 rather than 2 (they wander out to about 4 and are squared away from
+ * there), so the circle of 2 would sit inside the wandering rather than at the
+ * boundary of the picture and it gets none either; its frame is still the
+ * escape-time frame, which is the scale its wandering happens at.
  * @param fractalId - The `FRACTAL_TYPES` id on the canvas
  * @returns True when the plot should show the escape circle
  */
 export function hasEscapeCircle(fractalId: string): boolean {
-  return fractalId !== "newton";
+  return fractalId !== "newton" && fractalId !== "magnet";
 }
 
 /**

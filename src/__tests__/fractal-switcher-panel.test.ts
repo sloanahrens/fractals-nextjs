@@ -35,7 +35,7 @@ function handlerBody(name: string): string {
 }
 
 describe("the switcher's buttons", () => {
-  it("are the picker's eight fractals, mapped from FRACTAL_TYPES", () => {
+  it("are the picker's nine fractals, mapped from FRACTAL_TYPES", () => {
     expect(FRACTAL_TYPES.map((type) => type.label)).toEqual([
       "Mandelbrot",
       "Julia",
@@ -45,6 +45,7 @@ describe("the switcher's buttons", () => {
       "Newton",
       "Celtic",
       "Perp. Ship",
+      "Magnet",
     ]);
     expect(switcher).toContain("FRACTAL_TYPES.map((type)");
     expect(switcher).toContain("{type.label}");

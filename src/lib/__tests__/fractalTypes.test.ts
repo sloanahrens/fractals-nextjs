@@ -15,6 +15,7 @@ import {
   resolveFractalKind,
   variantOn,
 } from "../fractalTypes";
+import { createMagnetKind } from "../magnet";
 import { createMultibrotKind } from "../multibrot";
 import { newtonKind } from "../newton";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
@@ -37,7 +38,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the eight fractals in order, each once", () => {
+  it("offers the nine fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -49,6 +50,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "newton", label: "Newton" },
       { id: "celtic", label: "Celtic" },
       { id: "perpendicular-ship", label: "Perp. Ship" },
+      { id: "magnet", label: "Magnet" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -131,6 +133,37 @@ describe("resolveFractalKind", () => {
       const resolved = resolveFractalKind("multibrot", variant);
 
       expect(resolved.id, variant).toBe("multibrot");
+      for (const point of points) {
+        expect(resolved.iterations(point, CAP, true), variant).toBe(
+          expected.iterations(point, CAP, true),
+        );
+      }
+    }
+  });
+
+  it("draws the Magnet of the type beside it", () => {
+    const points = sampledPoints();
+
+    for (const type of [1, 2]) {
+      const resolved = resolveFractalKind("magnet", String(type));
+      const expected = createMagnetKind(type);
+
+      for (const point of points) {
+        expect(resolved.iterations(point, CAP, true), String(type)).toBe(
+          expected.iterations(point, CAP, true),
+        );
+      }
+    }
+  });
+
+  it("falls back to Type I for a magnetic type it cannot read", () => {
+    const expected = createMagnetKind(1);
+    const points = sampledPoints();
+
+    for (const variant of ["", "0", "3", "1.0", "Classic", "custom:0,0"]) {
+      const resolved = resolveFractalKind("magnet", variant);
+
+      expect(resolved.id, variant).toBe("magnet");
       for (const point of points) {
         expect(resolved.iterations(point, CAP, true), variant).toBe(
           expected.iterations(point, CAP, true),
@@ -288,6 +321,18 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("frames the Magnet on the middle of Type I's island, at the widest view there is", () => {
+    // The island the picture is made of spans x -0.46..3.07 by y -2.16..2.16
+    // for Type I and x -0.20..2.30 by y -1.53..1.53 for Type II: zoom 1 (4 by
+    // 3) is the widest view the explorer has, so it is the only frame that can
+    // hold either across, and 1.3 is the middle of Type I's real extent.
+    expect(defaultViewFor("magnet")).toEqual({
+      centerX: 1.3,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("falls back to the Mandelbrot view for an unknown id", () => {
     expect(defaultViewFor("lyapunov")).toEqual({
       centerX: -0.75,
@@ -333,12 +378,12 @@ describe("fractalVariants", () => {
     expect(fractalVariants("lyapunov")).toBeNull();
   });
 
-  it("describes only Julia and the Multibrot among the picker's fractals", () => {
+  it("describes only Julia, the Multibrot and the Magnet among the picker's fractals", () => {
     expect(
       FRACTAL_TYPES.filter((type) => fractalVariants(type.id) !== null).map(
         (type) => type.id,
       ),
-    ).toEqual(["julia", "multibrot"]);
+    ).toEqual(["julia", "multibrot", "magnet"]);
   });
 });
 
@@ -356,6 +401,10 @@ describe("defaultVariant", () => {
 
   it("is power 3 for the Multibrot", () => {
     expect(defaultVariant("multibrot")).toBe("3");
+  });
+
+  it("is Type I for the Magnet", () => {
+    expect(defaultVariant("magnet")).toBe("1");
   });
 
   it("is always one of the fractal's own options", () => {
@@ -390,6 +439,25 @@ describe("isVariantValue", () => {
     expect(isVariantValue("multibrot", "custom:-0.8,0.156")).toBe(false);
   });
 
+  it("accepts exactly the plain spellings of 1 and 2 for the Magnet", () => {
+    for (const type of ["1", "2"]) {
+      expect(isVariantValue("magnet", type), type).toBe(true);
+    }
+    for (const value of ["0", "3", "01", "1.0", " 1", "1 ", "Classic", ""]) {
+      expect(isVariantValue("magnet", value), value).toBe(false);
+    }
+    expect(isVariantValue("magnet", undefined)).toBe(false);
+    expect(isVariantValue("magnet", null)).toBe(false);
+  });
+
+  it("keeps a magnetic type out of the other families and their values out of the Magnet", () => {
+    expect(isVariantValue("julia", "1")).toBe(false);
+    expect(isVariantValue("multibrot", "1")).toBe(false);
+    expect(isVariantValue("magnet", "Classic")).toBe(false);
+    expect(isVariantValue("magnet", "4")).toBe(false);
+    expect(isVariantValue("magnet", "custom:-0.8,0.156")).toBe(false);
+  });
+
   it("refuses an unreadable value, and every value of a fractal with no variant", () => {
     expect(isVariantValue("julia", "Newton")).toBe(false);
     expect(isVariantValue("julia", "custom:9,9")).toBe(false);
@@ -418,6 +486,8 @@ describe("isCustomVariant", () => {
       false,
     );
     expect(isCustomVariant("multibrot", "custom:-0.8,0.156")).toBe(false);
+    expect(isCustomVariant("magnet", "custom:-0.8,0.156")).toBe(false);
+    expect(isCustomVariant("magnet", "1")).toBe(false);
   });
 });
 
@@ -426,6 +496,7 @@ describe("variantOn", () => {
     expect(variantOn("julia", "Dendrite")).toBe("Dendrite");
     expect(variantOn("julia", "custom:-0.8,0.156")).toBe("custom:-0.8,0.156");
     expect(variantOn("multibrot", "5")).toBe("5");
+    expect(variantOn("magnet", "2")).toBe("2");
   });
 
   it("gives a fractal that takes a variant its own default for another fractal's value", () => {
@@ -434,6 +505,12 @@ describe("variantOn", () => {
     expect(variantOn("multibrot", "Dendrite")).toBe("3");
     expect(variantOn("julia", "4")).toBe(JULIA_CONSTANTS[0].name);
     expect(variantOn("multibrot", "")).toBe("3");
+    // And a power is not a magnetic type, so the Magnet falls back to Type I.
+    expect(variantOn("magnet", "4")).toBe("1");
+    expect(variantOn("magnet", "Dendrite")).toBe("1");
+    expect(variantOn("magnet", "")).toBe("1");
+    // A magnetic type is a value neither of the others can use.
+    expect(variantOn("multibrot", "2")).toBe("3");
   });
 
   it("leaves the value alone for a fractal that takes none, so Julia -> Mandelbrot -> Julia keeps the constant", () => {
