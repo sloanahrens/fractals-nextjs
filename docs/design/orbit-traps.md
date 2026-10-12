@@ -300,3 +300,24 @@ The engine landed as items 1 to 4 recommend, with no UI, link key, Help text or 
 - The cycle check stops an orbit that has come back to within 1e-12 (each component) of a point saved at steps 1, 2, 4, 8, ... The tests give the Mandelbrot kind a cap of a billion at c = -1 and at the centre of the period-3 bulb, and every other escape-time kind (Phoenix included) one point that settles, and compare with the walk at a modest cap; a loop that lost the check would run for minutes and fail on the test's timeout, so no test asserts a time.
 - Hand-worked values: c = 0 stays at 0 (point 0.5, line 0, circle 0.5); c = -1 alternates -1 and 0 (point 0.5, line 0, circle 0.5 at any cap from 2; the line is 1 at cap 1); c = 2 leaves on the first step at z = 2 (2.5, 2, 1.5); Newton's -0.5 reaches the root 1 in one step (1.5, 1, 0.5) at any cap from 1; Nova's c = 0 settles on 1 on a step of length 0 (1.5, 1, 0.5).
 - `trapPosition(0)` is `TRAP_POSITION_MIN`, so with Reverse no pixel reaches the end where rainbow paints black; `renderRgbaTrap.test.ts` finds no black pixel in the Mandelbrot set's trap pictures in rainbow with every Reverse and Shift pair.
+
+## As built (fr-3h2, the control and the link key)
+
+The control and the link landed as item 5 and Bead 2 recommend, with the differences below. The code is the truth.
+
+### What is in the tree
+
+- **Link key `m`** (`point`, `line`, `circle`), written after `o` and before `i` and only when a shape is on; `ViewLinkState.trap?`, `ViewLinkUpdates.trap` (`TrapShape | null`, default null). `COLOUR_ONLY_KEYS` is unchanged, so `linkWithoutColour` keeps `m`.
+- **Tour links:** `STOP_KEYS` has `"m"`, giving a `t.m` column that appears only when a stop has a trap; `VIEW_FIELDS` in `tourPlaylist.ts` has `trap`.
+- **Saved views:** optional `trap` on `FractalPreset`, written by `presetColorFields(reverse, shift, trap)` only when set, read by `presetTrap`.
+- **The control:** an "Orbit trap" `Select` (Off, Point, Line, Circle; `TRAP_CONTROL_OPTIONS`, `trapToControl`, `controlToTrap` in `paletteControls.ts`) in the Rendering Parameters card between Reverse and Shift, 44 px through `Select`'s new `selectClassName`. The design note's "Colouring" select with an "Iteration count" entry became "Orbit trap" with "Off", which reads as the state it is.
+- **Page:** `trap` state; `viewLinkFor`, `applyViewLink`, `drawCanvas` (config and `recolour`), the cycling frame loop, `runExport`, the probe, `handlePresetSelect`, `handlePlaceSelect` (`resetColour` drops the trap), `showStop`, `handleResetColours`, `resetToDefault`.
+- **Strip and probe:** `ThumbnailLook` (`ColorOptions & { trap }`) keys the thumbnail store and reaches the renderer, so a tile is the picture a click shows; `probePoint` takes a trailing `trap` and colours `Math.fround(trapDistanceFor(...))`, which is what the picture paints.
+
+### Where it differs from the text above
+
+1. **A trap choice adds no history entry.** The note (item "Page", Bead 2) said one entry per change, like the Reverse checkbox. The bead for this landing says none, so `handleTrapChange` goes through `handleParameterChange` and never `beginJump`. One line (`beginJump()` before it) would restore the entry.
+2. **Reset colours turns the trap off, and Reset View does too.** Decision 3 recommended neither. The bead overrode the first; Reset View already puts the scheme, Reverse and Shift back, so it follows.
+3. **The first choice of a shape is a render, not a repaint.** The bead says "repaints instantly through `recolour()`"; distances cannot be repainted before they exist (section 2, "Why"). Turning a trap on or off is one render, shown with the ordinary progress line; the scheme, Reverse, Shift and cycling then repaint from the kept distances. This follows from `m` not being colour-only, as item 5 says. The overseer's comment on the bead lists a change of shape among the instant repaints; it is a render too, because the renderer holds one shape's distances and `recolour(..., otherShape)` answers false (section 2 left three buffers out). `trapPaths.test.ts` drives both paths. The Help entry says a trap render is slower and the page stays usable.
+4. **Decision 4 as recommended:** a tile, a fractal button, a preset and an Auto-wander hop keep the trap; a tour hop and Surprise me drop it. Thumbnails are drawn in it.
+5. **Decision 5 as recommended:** the Math card's swatch follows the trap (one distance per pointer frame); the orbit plot's dots do not.

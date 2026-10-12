@@ -22,6 +22,7 @@ import {
   getServerCustomPresetsSnapshot,
   presetColorFields,
   presetColorOptions,
+  presetTrap,
   presetFractal,
   presetFractalFields,
   presetVariant,
@@ -625,6 +626,54 @@ describe("the colour fields a view is saved with", () => {
   it("writes a shift the way the mapping reads it", () => {
     expect(presetColorFields(false, 1.25)).toEqual({ shift: 0.25 });
     expect(presetColorFields(false, -0.25)).toEqual({ shift: 0.75 });
+  });
+});
+
+describe("the orbit trap a view is saved with", () => {
+  it("is written only when a shape is on, so every existing view keeps its stored shape", () => {
+    expect(presetColorFields(false, 0)).toEqual({});
+    expect(presetColorFields(false, 0, null)).toEqual({});
+    expect(presetColorFields(false, 0, "line")).toEqual({ trap: "line" });
+    expect(presetColorFields(true, 0.35, "circle")).toEqual({
+      reverse: true,
+      shift: 0.35,
+      trap: "circle",
+    });
+  });
+
+  it("does not write a shape this build does not know", () => {
+    expect(presetColorFields(false, 0, "spiral" as never)).toEqual({});
+  });
+
+  it("reads back what was written, for each shape and for none", () => {
+    for (const trap of [null, "point", "line", "circle"] as const) {
+      const stored = {
+        ...CUSTOM_PRESET,
+        ...presetColorFields(false, 0, trap),
+      };
+
+      expect(presetTrap(stored)).toBe(trap);
+    }
+  });
+
+  it("opens a view that names none on the iteration count, and so does a value it cannot read", () => {
+    expect(presetTrap(CUSTOM_PRESET)).toBeNull();
+
+    for (const bad of ["spiral", "", "Point", 3, true, {}, null]) {
+      expect(presetTrap({ ...CUSTOM_PRESET, trap: bad as never })).toBeNull();
+    }
+  });
+
+  it("survives a round trip through JSON, as a stored view does", () => {
+    const stored = JSON.parse(
+      JSON.stringify({
+        ...CUSTOM_PRESET,
+        ...presetColorFields(true, 0.25, "point"),
+      }),
+    );
+
+    expect(presetTrap(stored)).toBe("point");
+    expect(presetColorOptions(stored)).toEqual({ reverse: true, shift: 0.25 });
   });
 });
 

@@ -1,8 +1,20 @@
-import type { ColorOptions, ColorRGB, ColorScheme } from "../types/fractal";
+import type {
+  ColorOptions,
+  ColorRGB,
+  ColorScheme,
+  TrapShape,
+} from "../types/fractal";
 import { FractalRenderer } from "./fractalRenderer";
 import { resolveFractalKind } from "./fractalTypes";
 import { autoIterations, calculateZoomBounds } from "./mandelbrot";
 import type { Place } from "./places";
+
+/**
+ * What a click on a tile draws the place with beyond its scheme: the scheme's
+ * reversal and shift, and the orbit trap that colours it when one is on. A
+ * tile is drawn with the same, so it is the picture the click shows.
+ */
+export type ThumbnailLook = ColorOptions & { trap?: TrapShape | null };
 
 /** A rendered thumbnail: RGBA pixels, row by row, ready for `putImageData`. */
 export interface ThumbnailImage {
@@ -41,7 +53,7 @@ export interface ThumbnailRenderRequest {
    * tile is drawn with the scheme and the settings a click on it draws the
    * place with, so the two are the same picture.
    */
-  options?: ColorOptions;
+  options?: ThumbnailLook;
   width: number;
   height: number;
   /** Aborted by `cancelAll`; a render that sees it should stop early. */
@@ -87,7 +99,7 @@ export interface ThumbnailStore {
     place: Place,
     scheme: ColorScheme,
     onReady: ThumbnailListener,
-    options?: ColorOptions,
+    options?: ThumbnailLook,
   ): void;
   /**
    * Drop every queued render, abort the one in flight, and never call the
@@ -102,7 +114,7 @@ export interface ThumbnailStore {
   get(
     place: Place,
     scheme: ColorScheme,
-    options?: ColorOptions,
+    options?: ThumbnailLook,
   ): ThumbnailEntry | undefined;
   /**
    * Stop starting renders. A render already running finishes: it is a few
@@ -124,7 +136,7 @@ interface Job {
   key: string;
   place: Place;
   scheme: ColorScheme;
-  options: ColorOptions | undefined;
+  options: ThumbnailLook | undefined;
   listeners: ThumbnailListener[];
   controller: AbortController | undefined;
   cancelled: boolean;
@@ -136,13 +148,18 @@ interface Job {
  * the same place. A request with neither setting keys exactly as it did before
  * they existed.
  */
-function optionsKey(options: ColorOptions | undefined): string {
+function optionsKey(options: ThumbnailLook | undefined): string {
   if (!options) return "";
 
   const reverse = options.reverse ? "r" : "";
   const shift = options.shift ? String(options.shift) : "";
+  const trap = options.trap ?? "";
 
-  return reverse === "" && shift === "" ? "" : `|${reverse}|${shift}`;
+  if (reverse === "" && shift === "" && trap === "") return "";
+
+  // A trap is another picture of the place altogether, and is keyed last so a
+  // key without one is the key it was before traps existed.
+  return trap === "" ? `|${reverse}|${shift}` : `|${reverse}|${shift}|${trap}`;
 }
 
 function requirePositiveInteger(name: string, value: number): number {
@@ -214,7 +231,7 @@ export function createThumbnailStore({
   const keyOf = (
     place: Place,
     scheme: ColorScheme,
-    options: ColorOptions | undefined,
+    options: ThumbnailLook | undefined,
   ) => `${place.id}|${scheme}${optionsKey(options)}`;
 
   function remember(key: string, entry: ThumbnailEntry): void {
@@ -453,6 +470,9 @@ export function createCanvasThumbnailRender(
           // The scheme's own settings, so the tile is drawn in the palette a
           // click draws the place in and not in the scheme's plain one.
           colorOptions: options,
+          // An orbit trap, when the page has one on: the tile is drawn the way
+          // a click draws the place, distances and all.
+          ...(options?.trap ? { trap: options.trap } : {}),
         },
         undefined,
         false,

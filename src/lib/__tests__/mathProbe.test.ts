@@ -493,6 +493,81 @@ describe("createFrameThrottle", () => {
   });
 });
 
+describe("probePoint in an orbit trap", () => {
+  // The swatch is the colour on screen, and in trap mode the picture paints the
+  // stored (Float32) distance: every pixel of a small view is held to the probe.
+  const KINDS = [
+    mandelbrotKind,
+    createJuliaKind({ real: -0.8, imaginary: 0.156 }),
+    tricornKind,
+  ];
+
+  it.each([
+    ["point", { reverse: false, shift: 0 }],
+    ["line", { reverse: true, shift: 0.25 }],
+    ["circle", { reverse: true, shift: 0.5 }],
+  ] as const)("matches every pixel of a %s trap picture", (trap, options) => {
+    for (const kind of KINDS) {
+      const pixels = renderRgba(
+        VIEW,
+        WIDTH,
+        HEIGHT,
+        CAP,
+        SCHEME,
+        kind,
+        true,
+        options,
+        trap,
+      );
+
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          const point = pixelToComplex(x, y, WIDTH, HEIGHT, VIEW);
+          const probe = probePoint(kind, point, CAP, SCHEME, options, trap);
+          const at = (y * WIDTH + x) * 4;
+
+          expect(
+            [probe.colour.r, probe.colour.g, probe.colour.b],
+            `${kind.id} ${trap} (${x}, ${y})`,
+          ).toEqual([pixels[at], pixels[at + 1], pixels[at + 2]]);
+        }
+      }
+    }
+  });
+
+  it("is the count swatch with no trap, or with null", () => {
+    const point = { real: -0.5, imaginary: 0.3 };
+    const plain = probePoint(mandelbrotKind, point, CAP, SCHEME);
+
+    expect(probePoint(mandelbrotKind, point, CAP, SCHEME, undefined, null))
+      .toEqual(plain);
+  });
+
+  it("says the same steps and path, which the trap does not move", () => {
+    const point = { real: -0.5, imaginary: 0.3 };
+    const plain = probePoint(mandelbrotKind, point, CAP, SCHEME);
+    const trapped = probePoint(mandelbrotKind, point, CAP, SCHEME, undefined, "line");
+
+    expect(trapped.info).toEqual(plain.info);
+    expect(trapped.orbit).toEqual(plain.orbit);
+  });
+
+  it("probeAtPointer passes the trap on", () => {
+    const rect = { left: 0, top: 0, width: WIDTH, height: HEIGHT };
+    const a = probeAtPointer(mandelbrotKind, 1, 1, rect, WIDTH, HEIGHT, VIEW, CAP, SCHEME, undefined, "circle");
+    const b = probePoint(
+      mandelbrotKind,
+      pixelToComplex(1, 1, WIDTH, HEIGHT, VIEW),
+      CAP,
+      SCHEME,
+      undefined,
+      "circle",
+    );
+
+    expect(a).toEqual(b);
+  });
+});
+
 describe("probePoint with the scheme's own settings", () => {
   const OPTIONS = [
     { reverse: true },

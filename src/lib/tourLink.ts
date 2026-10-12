@@ -75,7 +75,18 @@ export const MAX_TOUR_LINK_LENGTH = 900;
  * and less `w` and `h`: a stop is a view of the plane, and how big the canvas is
  * is the page's business rather than the tour's.
  */
-const STOP_KEYS = ["f", "k", "x", "y", "z", "s", "r", "o", "i"] as const;
+const STOP_KEYS = [
+  "f",
+  "k",
+  "x",
+  "y",
+  "z",
+  "s",
+  "r",
+  "o",
+  "m",
+  "i",
+] as const;
 
 /** What makes a column a tour's own field rather than a view's. */
 const COLUMN_PREFIX = "t.";
@@ -104,6 +115,7 @@ function stopFields(stop: ViewLinkUpdates): Map<string, string> {
     colorScheme: stop.colorScheme,
     reverse: stop.reverse,
     shift: stop.shift,
+    trap: stop.trap,
     autoIterationsOn: stop.autoIterationsOn,
     maxIterations: stop.maxIterations,
     // Any size the codec reads will do, since the columns are not written; the

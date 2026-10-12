@@ -219,6 +219,7 @@ describe("previewFor with a tour link", () => {
     colorScheme: "classic",
     reverse: false,
     shift: 0,
+    trap: null,
     autoIterationsOn: true,
     maxIterations: DEFAULT_VIEW_LINK_UPDATES.maxIterations,
     canvasWidth: 800,

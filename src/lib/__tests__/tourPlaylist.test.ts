@@ -36,6 +36,16 @@ describe("sameView", () => {
     expect(small.canvasWidth).not.toBe(large.canvasWidth);
   });
 
+  it("tells a trap-on stop from the plain stop at the same place", () => {
+    expect(sameView(stop(MANDEBROT), stop(`${MANDEBROT}&m=line`))).toBe(false);
+    expect(
+      sameView(stop(`${MANDEBROT}&m=line`), stop(`${MANDEBROT}&m=circle`)),
+    ).toBe(false);
+    expect(
+      sameView(stop(`${MANDEBROT}&m=line`), stop(`${MANDEBROT}&m=line`)),
+    ).toBe(true);
+  });
+
   it("tells two places apart, and two pictures of one place", () => {
     expect(sameView(stop(SEAHORSE), stop(JULIA))).toBe(false);
     expect(sameView(stop(JULIA), stop(DENDRITE))).toBe(false);

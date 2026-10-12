@@ -175,6 +175,32 @@ describe("createThumbnailStore", () => {
       expect(store.get(place("a"), "fire", {})?.status).toBe("ready");
     });
 
+    it("keys the cache by the orbit trap, and a request with none is the key it always was", async () => {
+      const { store, calls } = newStore();
+
+      store.request(place("a"), "fire", () => {});
+      await tick();
+      calls[0].resolve();
+      await tick();
+
+      store.request(place("a"), "fire", () => {}, { trap: "line" });
+      await tick();
+      expect(calls).toHaveLength(2);
+      expect(calls[1].request.options).toEqual({ trap: "line" });
+      calls[1].resolve();
+      await tick();
+
+      expect(store.get(place("a"), "fire", { trap: "line" })?.status).toBe(
+        "ready",
+      );
+      // Another shape is another picture, and no trap at all is the plain one.
+      expect(store.get(place("a"), "fire", { trap: "circle" })).toBeUndefined();
+      expect(store.get(place("a"), "fire", { trap: null })?.status).toBe(
+        "ready",
+      );
+      expect(store.get(place("a"), "fire")?.status).toBe("ready");
+    });
+
     it("get is undefined for a place never requested", () => {
       const { store } = newStore();
 
@@ -847,6 +873,73 @@ describe("createCanvasThumbnailRender", () => {
           await mainRenderOf(candidate, current),
         ),
       ).toBeLessThanOrEqual(THUMBNAIL_MAIN_DIFFERENCE_BOUND);
+    },
+    30000,
+  );
+
+  // A tile in trap mode is the picture a click on it shows in trap mode: the
+  // strip is handed the page's trap beside the palette settings, and the click
+  // keeps it (`handlePlaceSelect` resets it only for a tour hop or Surprise me).
+  it.each(
+    (["point", "line", "circle"] as const).flatMap((trap) =>
+      [
+        "mandelbrot-seahorse-valley",
+        "julia-classic-spirals",
+        "burning-ship-armada",
+      ].map((id) => [id, trap] as const),
+    ),
+  )(
+    "%s in the %s trap looks like the picture a click on it draws",
+    async (id, trap) => {
+      const candidate = byId(id);
+      const scheme = placeColorScheme(candidate, "classic");
+      const look = { reverse: true, shift: 0.25, trap } as const;
+      const tile = await createCanvasThumbnailRender(createFakeCanvas)({
+        place: candidate,
+        scheme,
+        options: look,
+        width: 64,
+        height: 48,
+        signal: new AbortController().signal,
+      });
+
+      const canvas = createFakeCanvas(64, 48);
+      await new FractalRenderer(
+        canvas,
+        resolveFractalKind(candidate.fractal, candidate.variant ?? ""),
+      ).renderFractal(
+        {
+          bounds: calculateZoomBounds(
+            candidate.centerX,
+            candidate.centerY,
+            candidate.zoom,
+          ),
+          maxIterations: autoIterations(candidate.zoom),
+          width: 64,
+          height: 48,
+          colorScheme: scheme,
+          colorOptions: { reverse: true, shift: 0.25 },
+          trap,
+        },
+        undefined,
+        false,
+      );
+      const click = canvas.getContext("2d")!.getImageData(0, 0, 64, 48).data;
+
+      expect(meanChannelDifference(tile.data, click)).toBeLessThanOrEqual(
+        THUMBNAIL_MAIN_DIFFERENCE_BOUND,
+      );
+
+      // ...and it is not the plain tile, so the look reached the renderer.
+      const plain = await createCanvasThumbnailRender(createFakeCanvas)({
+        place: candidate,
+        scheme,
+        options: { reverse: true, shift: 0.25 },
+        width: 64,
+        height: 48,
+        signal: new AbortController().signal,
+      });
+      expect(meanChannelDifference(tile.data, plain.data)).toBeGreaterThan(1);
     },
     30000,
   );

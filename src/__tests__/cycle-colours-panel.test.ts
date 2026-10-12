@@ -161,8 +161,8 @@ describe("the animation", () => {
   });
 
   it("repaints kept counts, and never counts the view again", () => {
-    expect(clock).toContain(
-      "renderer.recolour(colorScheme, effectiveMaxIterations, {",
+    expect(clock).toMatch(
+      /renderer\.recolour\(\s*colorScheme,\s*effectiveMaxIterations,\s*\{ reverse, shift: next \},\s*trap \?\? undefined,\s*\)/,
     );
 
     // Every way the page starts a render, and every way it says one has

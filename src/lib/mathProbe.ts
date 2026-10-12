@@ -24,9 +24,11 @@ import type {
   EscapeInfo,
   FractalBounds,
   FractalKind,
+  TrapShape,
 } from "../types/fractal";
-import { mapIterationsToColor } from "./colorMapping";
+import { mapIterationsToColor, mapPositionToColor } from "./colorMapping";
 import { pixelToComplex } from "./mandelbrot";
+import { trapDistanceFor, trapPosition } from "./orbitTrap";
 
 /**
  * How many steps of an orbit the probe keeps for the plot.
@@ -110,13 +112,24 @@ export function probePoint(
   maxIterations: number,
   scheme: ColorScheme,
   options?: ColorOptions,
+  trap?: TrapShape | null,
 ): PointProbe {
-  const colour = mapIterationsToColor(
-    kind.iterations(point, maxIterations, true),
-    maxIterations,
-    scheme,
-    options,
-  );
+  // In trap mode the picture paints the stored distance, which is rounded to a
+  // Float32 once when it is stored, so the swatch rounds it the same way.
+  const colour = trap
+    ? mapPositionToColor(
+        trapPosition(
+          Math.fround(trapDistanceFor(kind, point, maxIterations, trap)),
+        ),
+        scheme,
+        options,
+      )
+    : mapIterationsToColor(
+        kind.iterations(point, maxIterations, true),
+        maxIterations,
+        scheme,
+        options,
+      );
 
   return {
     point,
@@ -287,6 +300,7 @@ export function probeAtPointer(
   maxIterations: number,
   scheme: ColorScheme,
   options?: ColorOptions,
+  trap?: TrapShape | null,
 ): PointProbe | null {
   const pixel = pointerToCanvasPixel(clientX, clientY, rect, width, height);
   if (!pixel) return null;
@@ -297,6 +311,7 @@ export function probeAtPointer(
     maxIterations,
     scheme,
     options,
+    trap,
   );
 }
 

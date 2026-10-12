@@ -33,7 +33,7 @@
  * bar already describes.
  */
 
-import type { ColorScheme } from "../types/fractal";
+import type { ColorScheme, TrapShape } from "../types/fractal";
 import {
   defaultVariant,
   defaultViewFor,
@@ -71,6 +71,8 @@ export interface ViewLinkUpdates {
   reverse: boolean;
   /** How far round the palette the colours start (`ColorOptions.shift`) */
   shift: number;
+  /** The orbit trap that colours the picture, or null for the iteration count */
+  trap: TrapShape | null;
   /** Whether the zoom picks the iteration count */
   autoIterationsOn: boolean;
   /** The count the slider is on, in force when auto is off */
@@ -102,6 +104,7 @@ export const DEFAULT_VIEW_LINK_UPDATES: ViewLinkUpdates = {
   colorScheme: "classic",
   reverse: DEFAULT_REVERSE,
   shift: DEFAULT_SHIFT,
+  trap: null,
   autoIterationsOn: true,
   maxIterations: 100,
   canvasWidth: 800,
@@ -163,6 +166,7 @@ export function viewLinkToUpdates(
     colorScheme: decoded.colorScheme ?? defaults.colorScheme,
     reverse: decoded.reverse ?? defaults.reverse,
     shift: decoded.shift ?? defaults.shift,
+    trap: decoded.trap ?? defaults.trap,
     autoIterationsOn: decoded.autoIterationsOn ?? defaults.autoIterationsOn,
     maxIterations: decoded.maxIterations ?? defaults.maxIterations,
     canvasWidth: decoded.canvasWidth ?? defaults.canvasWidth,

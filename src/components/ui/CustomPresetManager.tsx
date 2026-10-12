@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FractalBounds, ColorScheme } from "../../types/fractal";
+import { FractalBounds, ColorScheme, TrapShape } from "../../types/fractal";
 import {
   FractalPreset,
   saveCustomPreset,
@@ -24,6 +24,8 @@ interface CustomPresetManagerProps {
   currentReverse: boolean;
   /** Fraction of a turn the colours start at; saved with the view. */
   currentShift: number;
+  /** The orbit trap colouring the canvas, or null; saved with the view. */
+  currentTrap: TrapShape | null;
   currentCanvasWidth: number;
   currentCanvasHeight: number;
   /** Id of the fractal on the canvas now, saved with the view. */
@@ -40,6 +42,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
   currentColorScheme,
   currentReverse,
   currentShift,
+  currentTrap,
   currentCanvasWidth,
   currentCanvasHeight,
   currentFractal,
@@ -80,7 +83,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
       canvasWidth: currentCanvasWidth,
       canvasHeight: currentCanvasHeight,
       ...presetFractalFields(currentFractal, currentVariant),
-      ...presetColorFields(currentReverse, currentShift),
+      ...presetColorFields(currentReverse, currentShift, currentTrap),
     };
 
     try {

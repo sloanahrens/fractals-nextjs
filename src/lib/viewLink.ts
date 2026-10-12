@@ -32,6 +32,13 @@
  * of nought — so the link of a view that touches neither is byte for byte what
  * it was before these existed.
  *
+ * `m` names the colouring method when it is not the iteration count: `point`,
+ * `line` or `circle`, an orbit trap (`orbitTrap.ts`), written after `o`. It is
+ * carried like `r` and `o` — no `m` is the iteration count, and a value this
+ * build cannot read is no trap — but it is not a colour-only key
+ * (`linkWithoutColour` keeps it), because a trap picture is made of other
+ * numbers than a count picture and a change of `m` is a new render.
+ *
  * A number is written as plain decimal digits: at most ten significant of them,
  * no trailing zeros, never an exponent. Ten, because the deepest zoom shows
  * 4e-4 of the plane and a coordinate has to survive to about 1e-9 to come back
@@ -55,7 +62,7 @@
  * walk.
  */
 
-import type { ColorScheme } from "../types/fractal";
+import type { ColorScheme, TrapShape } from "../types/fractal";
 import { getAvailableColorSchemes } from "./colorMapping";
 import { FRACTAL_TYPES, isVariantValue } from "./fractalTypes";
 import {
@@ -64,6 +71,7 @@ import {
   MIN_ITERATIONS,
   clampZoom,
 } from "./mandelbrot";
+import { TRAP_SHAPES } from "./orbitTrap";
 
 /**
  * The view the explorer is in, as a link carries it.
@@ -105,6 +113,13 @@ export interface ViewLinkState {
    * (`ColorOptions.shift`). Written as `o`, and only when it is not nought.
    */
   shift?: number;
+  /**
+   * The orbit trap the picture is coloured by, or null for the iteration-count
+   * picture. Written as `m` (the colouring method), and only when it is a
+   * shape: a link that says nothing about it names the picture the app has
+   * always drawn.
+   */
+  trap?: TrapShape | null;
   /** Whether the zoom picks the iteration count instead of the slider */
   autoIterationsOn: boolean;
   /**
@@ -248,6 +263,16 @@ function coordinateOf(value: number | null): number | null {
   return value !== null && Math.abs(value) <= COORDINATE_LIMIT ? value : null;
 }
 
+/**
+ * The trap a link's `m` names, or null when it names none this build reads.
+ *
+ * Only the three spellings are traps, exactly: no case folding, no padding, so
+ * `m=Point`, `m=` and `m=spiral` are no trap and the page keeps its own.
+ */
+function trapFrom(text: string | null): TrapShape | null {
+  return TRAP_SHAPES.find((shape) => shape === text) ?? null;
+}
+
 /** How many decimals of a palette shift a link carries. */
 const SHIFT_DECIMALS = 2;
 
@@ -387,6 +412,8 @@ export function encodeView(state: ViewLinkState): string {
   // they colour the picture without changing what it is made of.
   if (state.reverse) fields.set("r", "1");
   addNumber(fields, "o", shiftForLink(state.shift));
+  const trap = trapFrom(state.trap ?? null);
+  if (trap !== null) fields.set("m", trap);
 
   if (state.autoIterationsOn) {
     fields.set("i", AUTO_ITERATIONS);
@@ -522,6 +549,9 @@ export function decodeView(fragment: string): Partial<ViewLinkState> {
 
   const shift = shiftFrom(fields.get("o"));
   if (shift !== null) state.shift = shift;
+
+  const trap = trapFrom(fields.get("m"));
+  if (trap !== null) state.trap = trap;
 
   if (fields.get("i") === AUTO_ITERATIONS) {
     state.autoIterationsOn = true;
