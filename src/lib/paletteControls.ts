@@ -156,15 +156,19 @@ export function isDefaultColorOptions(
 }
 
 /**
- * The Trap control's choices, in the order the select lists them: off first,
- * so the resting state reads as a choice and not as a missing value.
+ * The Look control's choices, in the order the Settings select and the menu on
+ * the picture list them: Normal first, so the resting state reads as a choice
+ * and not as a missing value. Normal is the trap off (the iteration-count
+ * picture); Glass is the visitor-facing name of the three orbit-trap looks.
+ * The values are the link key's own spellings (`m=point|line|circle`) and
+ * `off`; only the words a visitor reads were renamed.
  */
 export const TRAP_CONTROL_OPTIONS: readonly { value: string; label: string }[] =
   [
-    { value: TRAP_OFF_VALUE, label: "Off" },
+    { value: TRAP_OFF_VALUE, label: "Normal" },
     ...TRAP_SHAPES.map((shape) => ({
       value: shape,
-      label: shape.charAt(0).toUpperCase() + shape.slice(1),
+      label: `Glass: ${shape.charAt(0).toUpperCase()}${shape.slice(1)}`,
     })),
   ];
 

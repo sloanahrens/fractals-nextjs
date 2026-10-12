@@ -225,7 +225,9 @@ import { SettingsDrawer } from "../components/ui/SettingsDrawer";
 import { TopBar } from "../components/ui/TopBar";
 import { BlankHint } from "../components/ui/BlankHint";
 import { NearbyStrip } from "../components/ui/NearbyStrip";
+import { LookControl } from "../components/ui/LookControl";
 import { WanderControl } from "../components/ui/WanderControl";
+import { LOOK_PILL_MAX_WIDTH } from "../lib/lookControl";
 import { useWanderNudge } from "../components/ui/useWanderNudge";
 
 // The four manual coordinate boxes. A field is present only once the user has
@@ -3092,6 +3094,14 @@ export default function Home() {
             onToggle={handleWanderChange}
             nudge={wanderNudge}
             hidden={tourPlaying || tourOverlayOpen}
+            leadingWidth={LOOK_PILL_MAX_WIDTH}
+            leading={
+              <LookControl
+                value={trapToControl(trap)}
+                rendering={isRendering}
+                onChange={handleTrapChange}
+              />
+            }
           />
         </div>
       </main>
@@ -3376,12 +3386,15 @@ export default function Home() {
               checked={reverse}
               onChange={handleReverseChange}
             />
-            {/* Orbit trap: colour each point by how near its orbit comes to a
-                  fixed point, line or circle instead of by how long it took
-                  to escape. Off is the iteration-count picture. Shift, Reverse
-                  and the scheme above and below work on it unchanged. */}
+            {/* Look: Normal colours each point by how long its orbit took to
+                  escape; Glass: Point, Line and Circle (the orbit traps)
+                  colour it by how near the orbit comes to a fixed point, line
+                  or circle. Shift, Reverse and the scheme above and below work
+                  on either unchanged. The Look button on the picture is this
+                  select's other view: both read `trap` and call
+                  handleTrapChange. */}
             <Select
-              label="Orbit trap"
+              label="Look"
               value={trapToControl(trap)}
               options={[...TRAP_CONTROL_OPTIONS]}
               onChange={handleTrapChange}

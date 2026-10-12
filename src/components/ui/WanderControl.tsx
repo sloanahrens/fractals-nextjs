@@ -22,6 +22,13 @@ interface WanderControlProps {
   nudge?: boolean;
   /** True renders nothing: a tour, the drawer or the help has the screen. */
   hidden?: boolean;
+  /**
+   * A control that shares the pill's row, to its left (the Look control). It
+   * is hidden when the pill is and placed by the same measure.
+   */
+  leading?: React.ReactNode;
+  /** The widest `leading` gets in pixels, so the two never overlap. */
+  leadingWidth?: number;
 }
 
 const PILL_CLASSES =
@@ -36,6 +43,15 @@ const RESTING = "bg-gray-900/80 text-white hover:bg-gray-800/90";
 const PLACEMENT_CLASSES: Record<WanderPlacement, string> = {
   beside: "bottom-4 right-3",
   above: "bottom-[7.25rem] right-3",
+  stacked: "bottom-[7.25rem] right-3",
+};
+
+// The pill and its `leading` control in a row, or one over the other when the
+// picture is too narrow for a row.
+const ROW_CLASSES: Record<WanderPlacement, string> = {
+  beside: "flex-row items-center gap-2",
+  above: "flex-row items-center gap-2",
+  stacked: "flex-col items-end gap-1.5",
 };
 
 function Glyph({ kind }: { kind: "play" | "pause" }) {
@@ -66,6 +82,8 @@ function Glyph({ kind }: { kind: "play" | "pause" }) {
  * view of it. It never fades. Beside the Nearby strip's longest row it sits in
  * the corner; on a narrower picture it stacks over the strip's right end, so it
  * is never over a tile (`wanderPlacement`, from the picture's measured width).
+ * The Look control rides in the same row as `leading`, with its width reserved
+ * in that measure, so the two are placed together and cannot overlap.
  * Only the pill takes pointer events, so the canvas around it still pans.
  *
  * `nudge` is the page's once-per-browser first-run offer: a one-line tooltip
@@ -79,6 +97,8 @@ export function WanderControl({
   onToggle,
   nudge = false,
   hidden = false,
+  leading,
+  leadingWidth = 0,
 }: WanderControlProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<WanderPlacement>("above");
@@ -88,12 +108,12 @@ export function WanderControl({
     if (!root || typeof ResizeObserver === "undefined") return;
 
     const observer = new ResizeObserver(() => {
-      setPlacement(wanderPlacement(root.clientWidth));
+      setPlacement(wanderPlacement(root.clientWidth, leadingWidth));
     });
     observer.observe(root);
 
     return () => observer.disconnect();
-  }, []);
+  }, [leadingWidth]);
 
   const label = wanderPillLabel({ on, countdown, rendering });
   const showNudge = nudge && !hidden;
@@ -113,17 +133,20 @@ export function WanderControl({
               {WANDER_NUDGE_TEXT}
             </span>
           )}
-          <button
-            type="button"
-            aria-pressed={label.pressed}
-            aria-label={label.name}
-            aria-describedby={showNudge ? "wander-nudge" : undefined}
-            onClick={() => onToggle(!on)}
-            className={`${PILL_CLASSES} ${on ? PRESSED : RESTING} ${showNudge ? "wander-nudge-pulse" : ""}`}
-          >
-            <Glyph kind={label.glyph} />
-            <span aria-hidden="true">{label.text}</span>
-          </button>
+          <div className={`flex ${ROW_CLASSES[placement]}`}>
+            {leading}
+            <button
+              type="button"
+              aria-pressed={label.pressed}
+              aria-label={label.name}
+              aria-describedby={showNudge ? "wander-nudge" : undefined}
+              onClick={() => onToggle(!on)}
+              className={`${PILL_CLASSES} ${on ? PRESSED : RESTING} ${showNudge ? "wander-nudge-pulse" : ""}`}
+            >
+              <Glyph kind={label.glyph} />
+              <span aria-hidden="true">{label.text}</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

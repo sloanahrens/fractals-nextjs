@@ -71,28 +71,28 @@ function element(source: string, tag: string): string {
   return source.slice(start, source.indexOf("/>", start));
 }
 
-describe("the Orbit trap select", () => {
+describe("the Look select", () => {
   it("is in the Rendering Parameters card, between the scheme and the Shift slider, and nowhere else", () => {
     const card = renderingParametersCard();
     const where = (needle: string) => card.indexOf(needle);
 
     expect(where('label="Color Scheme"')).toBeGreaterThan(-1);
     expect(where('label="Reverse"')).toBeGreaterThan(where('label="Color Scheme"'));
-    expect(where('label="Orbit trap"')).toBeGreaterThan(where('label="Reverse"'));
-    expect(where('label="Orbit trap"')).toBeLessThan(where('label="Shift"'));
-    expect(PAGE.match(/label="Orbit trap"/g)).toHaveLength(1);
+    expect(where('label="Look"')).toBeGreaterThan(where('label="Reverse"'));
+    expect(where('label="Look"')).toBeLessThan(where('label="Shift"'));
+    expect(PAGE.match(/label="Look"/g)).toHaveLength(1);
 
     // Nothing was added to the picture: the control is in the drawer, which
     // opens after the bar, the switcher, the strip and the canvas in the markup.
     for (const surface of ["<TopBar", "<FractalSwitcher", "<NearbyStrip", "<canvas"]) {
       expect(PAGE.indexOf(surface), surface).toBeLessThan(
-        PAGE.indexOf('label="Orbit trap"'),
+        PAGE.indexOf('label="Look"'),
       );
     }
   });
 
   it("offers Off and the three shapes by name, and shows the state the page holds", () => {
-    const select = element(PAGE, '<Select\n              label="Orbit trap"');
+    const select = element(PAGE, '<Select\n              label="Look"');
 
     expect(select).toContain("value={trapToControl(trap)}");
     expect(select).toContain("options={[...TRAP_CONTROL_OPTIONS]}");
@@ -100,7 +100,7 @@ describe("the Orbit trap select", () => {
   });
 
   it("is a touch target of at least 44 px, through the select's own class prop", () => {
-    const select = element(PAGE, '<Select\n              label="Orbit trap"');
+    const select = element(PAGE, '<Select\n              label="Look"');
 
     expect(select).toContain('selectClassName="min-h-11"');
     expect(SELECT).toContain("selectClassName");
@@ -322,13 +322,13 @@ describe("the previews do not change", () => {
 });
 
 describe("the words", () => {
-  it("the Help overlay has an Orbit trap entry that says previews show the normal picture", () => {
-    expect(HELP).toContain("Orbit trap");
-    expect(HELP).toMatch(/preview[\s\S]{0,120}normal/i);
+  it("the Help overlay has a Look entry that says previews show the normal picture", () => {
+    expect(HELP).toContain('keys: "Look"');
+    expect(HELP).toMatch(/preview[\s\S]{0,120}Normal/);
   });
 
   it("the README has a short Orbit traps paragraph in the colour section", () => {
-    expect(README).toMatch(/Orbit trap/);
+    expect(README).toMatch(/Orbit Traps/);
     expect(README).toContain("`m=");
   });
 });

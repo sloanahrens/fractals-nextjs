@@ -62,7 +62,7 @@ describe("the pill", () => {
 
   it("measures the picture and stacks above the strip rather than over a tile", () => {
     expect(pill).toContain("ResizeObserver");
-    expect(pill).toContain("wanderPlacement(root.clientWidth)");
+    expect(pill).toContain("wanderPlacement(root.clientWidth, leadingWidth)");
     expect(pill).toContain('useState<WanderPlacement>("above")');
   });
 });
