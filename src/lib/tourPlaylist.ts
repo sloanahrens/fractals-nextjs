@@ -34,6 +34,7 @@ const VIEW_FIELDS = [
   "colorScheme",
   "reverse",
   "shift",
+  "trap",
   "autoIterationsOn",
   "maxIterations",
 ] as const;

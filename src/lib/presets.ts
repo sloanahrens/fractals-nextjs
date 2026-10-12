@@ -1,4 +1,4 @@
-import { FractalBounds, ColorScheme } from "../types/fractal";
+import { FractalBounds, ColorScheme, TrapShape } from "../types/fractal";
 import {
   FRACTAL_TYPES,
   defaultVariant,
@@ -12,6 +12,7 @@ import {
   DEFAULT_SHIFT,
   normalizeShift,
 } from "./paletteControls";
+import { TRAP_SHAPES } from "./orbitTrap";
 
 export interface FractalPreset {
   id: string;
@@ -54,6 +55,12 @@ export interface FractalPreset {
    * (`ColorOptions.shift`), a fraction of a turn. Absent means not at all.
    */
   shift?: number;
+  /**
+   * The orbit trap the view was coloured by when it was saved, one of
+   * `TRAP_SHAPES`. Absent means the iteration-count picture, which is what a
+   * view saved before traps existed was.
+   */
+  trap?: TrapShape;
 }
 
 /** The fractal a view with no `fractal` field was saved for. */
@@ -725,19 +732,37 @@ export function presetVariant(preset: FractalPreset): string {
  *
  * @param reverse - Whether the palette on the canvas is walked backwards
  * @param shift - Fraction of a turn the colours start at
+ * @param trap - The orbit trap colouring the picture, or null for the
+ *   iteration count; written only when it is a shape, like the other two
  * @returns The fields to merge into the saved preset
  */
 export function presetColorFields(
   reverse: boolean,
   shift: number,
-): { reverse?: boolean; shift?: number } {
-  const fields: { reverse?: boolean; shift?: number } = {};
+  trap: TrapShape | null = null,
+): { reverse?: boolean; shift?: number; trap?: TrapShape } {
+  const fields: { reverse?: boolean; shift?: number; trap?: TrapShape } = {};
 
   if (reverse !== DEFAULT_REVERSE) fields.reverse = reverse;
   const wrapped = normalizeShift(shift);
   if (wrapped !== DEFAULT_SHIFT) fields.shift = wrapped;
+  if (trap !== null && TRAP_SHAPES.includes(trap)) fields.trap = trap;
 
   return fields;
+}
+
+/**
+ * The orbit trap a saved view names, or null for the iteration-count picture.
+ *
+ * Judged on its own like the palette settings: a view saved before traps
+ * existed names none, and a stored value that is not one of the three shapes
+ * (text from a later build, a number) is no trap, so the view still loads and
+ * still draws.
+ *
+ * @param preset - The saved view
+ */
+export function presetTrap(preset: FractalPreset): TrapShape | null {
+  return TRAP_SHAPES.find((shape) => shape === preset.trap) ?? null;
 }
 
 /**

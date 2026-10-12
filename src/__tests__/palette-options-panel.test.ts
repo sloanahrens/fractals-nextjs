@@ -96,12 +96,12 @@ describe("the palette options in the page", () => {
     // ...and the repaint a colour change is, which colours the counts the last
     // render left, is asked for in the same settings: a repaint without them
     // would put the scheme's plain colours over a picture drawn reversed.
-    expect(draw).toContain(
-      "renderer.recolour(colorScheme, effectiveMaxIterations, colorOptions)",
+    expect(draw).toMatch(
+      /renderer\.recolour\(\s*colorScheme,\s*effectiveMaxIterations,\s*colorOptions,\s*trap \?\? undefined,\s*\)/,
     );
     // The draw re-runs when they move, which is what a settings change is.
     expect(PAGE).toContain(
-      "[bounds, effectiveMaxIterations, colorScheme, colorOptions, wander]",
+      "[bounds, effectiveMaxIterations, colorScheme, colorOptions, trap, wander]",
     );
   });
 
@@ -112,7 +112,7 @@ describe("the palette options in the page", () => {
     // The export re-runs when they move, so a picture saved after a settings
     // change is the picture the change made.
     expect(PAGE).toMatch(
-      /\[\s*effectiveMaxIterations,\s*colorScheme,\s*colorOptions,\s*fractalKind,\s*releaseExport,\s*\]/,
+      /\[\s*effectiveMaxIterations,\s*colorScheme,\s*colorOptions,\s*trap,\s*fractalKind,\s*releaseExport,\s*\]/,
     );
   });
 
@@ -132,9 +132,10 @@ describe("the palette options in the page", () => {
       return PAGE.slice(start, PAGE.indexOf("/>", start));
     };
 
-    // The tiles are drawn in the colours a click applies, and the plot's dots
-    // in the picture's own palette.
-    expect(element("<NearbyStrip")).toContain("colorOptions={colorOptions}");
+    // The tiles are drawn in the colours a click applies (the palette's two
+    // settings and the trap, `thumbnailLook`), and the plot's dots in the
+    // picture's own palette.
+    expect(element("<NearbyStrip")).toContain("colorOptions={thumbnailLook}");
     expect(element("<MathCard")).toContain("colorOptions={colorOptions}");
   });
 

@@ -18,7 +18,14 @@
  * the thumb sits ({@link shiftToPercent}, which holds the far end rather than
  * wrapping it) and whether there is anything to put back
  * ({@link isDefaultColorOptions}, judged exactly) — and both say why.
+ *
+ * The Trap select sits beside them (`TRAP_CONTROL_OPTIONS`, `trapToControl`,
+ * `controlToTrap`): an orbit trap is a way of colouring the picture, off by
+ * default, and Reset colours turns it off with the other two.
  */
+
+import type { TrapShape } from "../types/fractal";
+import { TRAP_SHAPES } from "./orbitTrap";
 
 /**
  * Whether the palette starts walked backwards: it does not, and neither does
@@ -31,6 +38,15 @@ export const DEFAULT_REVERSE = false;
  * beginning. The same value the view a fresh visit opens on holds.
  */
 export const DEFAULT_SHIFT = 0;
+
+/**
+ * Whether an orbit trap colours the picture: none does, and neither does the
+ * view a fresh visit opens on. The picture is coloured by its iteration count.
+ */
+export const DEFAULT_TRAP: TrapShape | null = null;
+
+/** The Trap select's value for no trap. */
+export const TRAP_OFF_VALUE = "off";
 
 /** The Shift slider's left end, as the percent the control shows. */
 export const SHIFT_PERCENT_MIN = 0;
@@ -122,13 +138,48 @@ export function formatShiftPercent(percent: number): string {
  *
  * @param reverse - Whether the palette is walked backwards
  * @param shift - Fraction of a turn the walk starts at
- * @returns True when both settings are their defaults
+ * @param trap - The orbit trap colouring the picture, or null for the
+ *   iteration count; Reset colours turns it off, so a trap on is something to
+ *   put back
+ * @returns True when all the settings are their defaults
  */
 export function isDefaultColorOptions(
   reverse: boolean,
   shift: number,
+  trap: TrapShape | null = DEFAULT_TRAP,
 ): boolean {
-  return reverse === DEFAULT_REVERSE && shift === DEFAULT_SHIFT;
+  return (
+    reverse === DEFAULT_REVERSE &&
+    shift === DEFAULT_SHIFT &&
+    trap === DEFAULT_TRAP
+  );
+}
+
+/**
+ * The Trap control's choices, in the order the select lists them: off first,
+ * so the resting state reads as a choice and not as a missing value.
+ */
+export const TRAP_CONTROL_OPTIONS: readonly { value: string; label: string }[] =
+  [
+    { value: TRAP_OFF_VALUE, label: "Off" },
+    ...TRAP_SHAPES.map((shape) => ({
+      value: shape,
+      label: shape.charAt(0).toUpperCase() + shape.slice(1),
+    })),
+  ];
+
+/** The select's value for a trap: the shape's name, or the off choice. */
+export function trapToControl(trap: TrapShape | null): string {
+  return trap ?? TRAP_OFF_VALUE;
+}
+
+/**
+ * The trap a select value names, or null for off. Anything that is not one of
+ * the three shapes is off, so a value from outside can never put a shape the
+ * renderer does not know into the page.
+ */
+export function controlToTrap(value: string): TrapShape | null {
+  return TRAP_SHAPES.find((shape) => shape === value) ?? null;
 }
 
 /**

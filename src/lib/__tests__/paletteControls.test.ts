@@ -1,16 +1,22 @@
 import { describe, expect, it } from "vitest";
 
+import { TRAP_SHAPES } from "../orbitTrap";
 import {
   DEFAULT_REVERSE,
   DEFAULT_SHIFT,
+  DEFAULT_TRAP,
   SHIFT_PERCENT_MAX,
   SHIFT_PERCENT_MIN,
+  TRAP_CONTROL_OPTIONS,
+  TRAP_OFF_VALUE,
+  controlToTrap,
   formatShiftPercent,
   isDefaultColorOptions,
   normalizeShift,
   percentToShift,
   shiftSliderKeyChangesValue,
   shiftToPercent,
+  trapToControl,
 } from "../paletteControls";
 
 describe("the shift the mapping reads", () => {
@@ -119,6 +125,46 @@ describe("is the palette as the scheme has it?", () => {
 
   it("is false for a shift it cannot read, so the button can put one right", () => {
     expect(isDefaultColorOptions(false, NaN)).toBe(false);
+  });
+
+  it("is false while an orbit trap is on, since Reset colours turns it off", () => {
+    for (const trap of TRAP_SHAPES) {
+      expect(isDefaultColorOptions(false, 0, trap)).toBe(false);
+    }
+
+    expect(isDefaultColorOptions(false, 0, null)).toBe(true);
+    expect(isDefaultColorOptions(false, 0)).toBe(true);
+    expect(DEFAULT_TRAP).toBeNull();
+  });
+});
+
+describe("the Trap select", () => {
+  it("lists Off first and then the three shapes, each by name", () => {
+    expect(TRAP_CONTROL_OPTIONS).toEqual([
+      { value: "off", label: "Off" },
+      { value: "point", label: "Point" },
+      { value: "line", label: "Line" },
+      { value: "circle", label: "Circle" },
+    ]);
+  });
+
+  it("reads off as no trap and each shape as itself", () => {
+    expect(controlToTrap(TRAP_OFF_VALUE)).toBeNull();
+    for (const shape of TRAP_SHAPES) expect(controlToTrap(shape)).toBe(shape);
+  });
+
+  it("reads anything else as off, so a value from outside never reaches the renderer", () => {
+    for (const value of ["", "Point", "spiral", "constructor", "__proto__"]) {
+      expect(controlToTrap(value), value).toBeNull();
+    }
+  });
+
+  it("shows the value the page holds", () => {
+    expect(trapToControl(null)).toBe("off");
+    for (const shape of TRAP_SHAPES) {
+      expect(trapToControl(shape)).toBe(shape);
+      expect(controlToTrap(trapToControl(shape))).toBe(shape);
+    }
   });
 });
 

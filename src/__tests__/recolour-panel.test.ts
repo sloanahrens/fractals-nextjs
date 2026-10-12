@@ -84,8 +84,8 @@ describe("the recolour path in the draw", () => {
     // through to the render below rather than leaving the canvas alone: a
     // renderer that has not finished a render, was rebuilt for a new canvas or
     // fractal, or had its run cancelled is drawn exactly as it always was.
-    expect(draw).toContain(
-      "renderer.recolour(colorScheme, effectiveMaxIterations, colorOptions)",
+    expect(draw).toMatch(
+      /renderer\.recolour\(\s*colorScheme,\s*effectiveMaxIterations,\s*colorOptions,\s*trap \?\? undefined,\s*\)/,
     );
     expect(render).toBeGreaterThan(guard);
     expect(guard).toBeLessThan(draw.indexOf("renderer.recolour("));
@@ -120,7 +120,7 @@ describe("the recolour path in the draw", () => {
     expect(page).toContain("const renderedLinkRef = useRef(renderedLink);");
     expect(draw).toContain("renderedLinkRef.current");
     expect(page).toContain(
-      "[bounds, effectiveMaxIterations, colorScheme, colorOptions, wander]",
+      "[bounds, effectiveMaxIterations, colorScheme, colorOptions, trap, wander]",
     );
   });
 

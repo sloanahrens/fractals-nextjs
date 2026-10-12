@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 
-import type { ColorOptions, ColorScheme } from "../../types/fractal";
+import type { ColorScheme } from "../../types/fractal";
 import { placeColorScheme, type Place } from "../../lib/places";
 import {
   DEFAULT_THUMBNAIL_HEIGHT,
@@ -10,6 +10,7 @@ import {
   createCanvasThumbnailRender,
   createThumbnailStore,
   type ThumbnailEntry,
+  type ThumbnailLook,
   type ThumbnailStore,
 } from "../../lib/placeThumbnails";
 
@@ -25,10 +26,11 @@ interface NearbyStripProps {
    */
   colorScheme: ColorScheme;
   /**
-   * That scheme's reversal and shift, which a click applies too: a tile is
-   * drawn with them so it is the picture the click shows.
+   * That scheme's reversal and shift, and the orbit trap when one is on, which
+   * a click applies too: a tile is drawn with them so it is the picture the
+   * click shows.
    */
-  colorOptions?: ColorOptions;
+  colorOptions?: ThumbnailLook;
   /** True while the main render runs, which holds the thumbnails back. */
   paused: boolean;
   /** A tile was chosen: go there. */
@@ -71,7 +73,7 @@ function drawEntry(canvas: HTMLCanvasElement, entry: ThumbnailEntry): void {
 interface TileProps {
   place: Place;
   colorScheme: ColorScheme;
-  colorOptions: ColorOptions | undefined;
+  colorOptions: ThumbnailLook | undefined;
   store: ThumbnailStore;
   onSelect: (place: Place) => void;
 }

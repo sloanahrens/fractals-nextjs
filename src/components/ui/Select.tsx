@@ -13,6 +13,8 @@ interface SelectProps {
   options: SelectOption[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  /** Extra classes for the select element, e.g. a taller touch target. */
+  selectClassName?: string;
 }
 
 export function Select({
@@ -21,6 +23,7 @@ export function Select({
   options,
   onChange,
   disabled = false,
+  selectClassName = "",
 }: SelectProps) {
   // useId gives each instance its own id, so the label points at this select
   // and not at the last one that happened to print the same label text.
@@ -36,7 +39,7 @@ export function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className={`w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${selectClassName}`.trim()}
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

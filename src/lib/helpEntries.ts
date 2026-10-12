@@ -162,6 +162,11 @@ export const HELP_SECTIONS: HelpSection[] = [
           "In Settings, under Color Scheme: Reverse walks the palette backwards and Shift slides it a fraction of a turn round, 0 to 100 percent, with Reset colours to put both back. Either repaints the picture at once from iteration counts already computed, so it is instant however deep the view, and both travel in a link, so Copy link, Back and a saved view carry them. A tour or Surprise me puts both back by itself, so neither is tinted by a setting left over from before",
       },
       {
+        keys: "Orbit trap",
+        action:
+          "In Settings, above the Shift slider: colour each point by how close its orbit comes to a fixed shape — a point, a line or a circle — instead of by how long it took to escape. Choosing a shape draws the view again once to measure those distances; after that Color Scheme, Reverse, Shift and Cycle colours repaint at once, as they do for the usual picture, and Reset colours turns the trap off. The shape travels in a link, Copy tour link and a saved view, but the preview a chat shows for a shared link is the normal picture of that place. A tour or Surprise me goes back to the normal picture by itself",
+      },
+      {
         keys: "Cycle colours",
         action:
           "In Settings, under the Shift slider: the palette flows slowly round a turn and the picture is repainted from iteration counts already computed, so it costs no new work however deep the view. Slow, Medium or Fast sets how long a loop takes; the animation pauses while you drag the picture or the slider, while the Help is up, while a tour plays and while the tab is hidden, and is not offered at all if your system asks for reduced motion. Switching it off leaves the Shift where it stopped",

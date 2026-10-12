@@ -979,6 +979,131 @@ describe("encodeView and decodeView: the scheme's own settings", () => {
   });
 });
 
+describe("encodeView and decodeView: the orbit trap", () => {
+  const SHAPES = ["point", "line", "circle"] as const;
+
+  it("writes m after o and before i, and only when a shape is on", () => {
+    for (const shape of SHAPES) {
+      expect(encodeView({ ...EXAMPLE, trap: shape })).toBe(
+        `v=1&f=julia&k=Classic&x=-0.644&y=-0.094&z=2.56&s=fire&m=${shape}&i=auto&w=800&h=600`,
+      );
+    }
+
+    expect(
+      encodeView({ ...EXAMPLE, reverse: true, shift: 0.25, trap: "line" }),
+    ).toBe(
+      "v=1&f=julia&k=Classic&x=-0.644&y=-0.094&z=2.56&s=fire&r=1&o=0.25&m=line&i=auto&w=800&h=600",
+    );
+  });
+
+  it("writes the link a view with no trap always had, byte for byte", () => {
+    expect(encodeView({ ...EXAMPLE, trap: null })).toBe(EXAMPLE_LINK);
+    expect(encodeView({ ...EXAMPLE, trap: undefined })).toBe(EXAMPLE_LINK);
+    expect(encodeView(EXAMPLE)).toBe(EXAMPLE_LINK);
+  });
+
+  it("does not write a trap this build does not know", () => {
+    const state = { ...EXAMPLE, trap: "spiral" } as unknown as ViewLinkState;
+
+    expect(encodeView(state)).toBe(EXAMPLE_LINK);
+  });
+
+  it("reads m back for each shape", () => {
+    for (const shape of SHAPES) {
+      expect(decodeView(`#${EXAMPLE_LINK}&m=${shape}`).trap).toBe(shape);
+    }
+  });
+
+  it("leaves out an m it cannot read, so the page keeps its own", () => {
+    for (const value of [
+      "spiral",
+      "",
+      "Point",
+      "CIRCLE",
+      " line",
+      "line ",
+      "1",
+      "point,line",
+      "%00",
+    ]) {
+      expect(
+        decodeView(`#${EXAMPLE_LINK}&m=${value}`).trap,
+        value,
+      ).toBeUndefined();
+    }
+  });
+
+  it("reads a repeated m by its first value, as every key here is", () => {
+    expect(decodeView(`#${EXAMPLE_LINK}&m=line&m=circle`).trap).toBe("line");
+    expect(
+      decodeView(`#${EXAMPLE_LINK}&m=spiral&m=circle`).trap,
+    ).toBeUndefined();
+  });
+
+  it("reads m with no scheme beside it, since each field stands alone", () => {
+    expect(decodeView("v=1&x=-0.75&m=circle").trap).toBe("circle");
+  });
+
+  it("round-trips every sample state with a trap, and reads none from a link without one", () => {
+    for (const [index, state] of sampleStates().entries()) {
+      const trap = [null, ...SHAPES][index % 4];
+      const read = decodeView(`#${encodeView({ ...state, trap })}`);
+
+      expect(read.trap ?? null).toBe(trap);
+    }
+
+    expect(decodeView(`#${EXAMPLE_LINK}`).trap).toBeUndefined();
+  });
+
+  it("keeps the longest link well inside the length limit with a trap on", () => {
+    const link = encodeView({
+      fractalType: "multibrot",
+      variant: "4",
+      centerX: -0.7436438870371587,
+      centerY: 0.1318259042053119,
+      zoomLevel: 2.56,
+      colorScheme: "fire",
+      reverse: true,
+      shift: 0.25,
+      trap: "circle",
+      autoIterationsOn: false,
+      maxIterations: 430,
+      canvasWidth: 1200,
+      canvasHeight: 900,
+    });
+
+    expect(link).toContain("&r=1&o=0.25&m=circle&i=430&");
+    expect(link.length).toBeLessThanOrEqual(MAX_FRAGMENT_LENGTH);
+  });
+
+  it("keeps m in linkWithoutColour, so a change of trap is a render and not a repaint", () => {
+    const plain = linkWithoutColour(encodeView(EXAMPLE));
+
+    for (const shape of SHAPES) {
+      const trapped = linkWithoutColour(
+        encodeView({ ...EXAMPLE, trap: shape }),
+      );
+
+      expect(trapped).toContain(`m=${shape}`);
+      expect(trapped).not.toBe(plain);
+    }
+
+    // ...while a scheme, reversal or shift inside one trap still compares equal,
+    // which is what lets them repaint from the kept distances.
+    expect(
+      linkWithoutColour(
+        encodeView({
+          ...EXAMPLE,
+          trap: "line",
+          colorScheme: "ocean",
+          reverse: true,
+          shift: 0.5,
+        }),
+      ),
+    ).toBe(linkWithoutColour(encodeView({ ...EXAMPLE, trap: "line" })));
+  });
+});
+
 describe("decodeTour", () => {
   it("reads #tour, with or without its #, as a request for a tour", () => {
     expect(decodeTour("#tour")).toBe(true);

@@ -27,6 +27,7 @@ const stop = (changes: Partial<ViewLinkUpdates>): ViewLinkUpdates => ({
   colorScheme: "classic",
   reverse: false,
   shift: 0,
+  trap: null,
   autoIterationsOn: true,
   maxIterations: DEFAULT_VIEW_LINK_UPDATES.maxIterations,
   canvasWidth: 800,
@@ -143,6 +144,60 @@ describe("encodeTourLink", () => {
     expect(link).toContain("t.o=0.25~");
     expect(link).toContain("t.i=~400");
     expect(decodeTourLink(link!)).toEqual([SHIP, MULTIBROT]);
+  });
+
+  it("carries a stop's orbit trap in a t.m column that exists only when some stop has one", () => {
+    const trapped = stop({ centerX: -0.5, trap: "circle" });
+
+    expect(encodeTourLink([MANDELBROT, JULIA])).not.toContain("t.m");
+
+    const link = encodeTourLink([MANDELBROT, trapped, JULIA]);
+    expect(link).toContain("t.m=~circle~");
+    // The codec's order: the colour columns, then the trap, then the count.
+    expect(link!.indexOf("t.s=")).toBeLessThan(link!.indexOf("t.m="));
+    expect(decodeTourLink(link!)).toEqual([MANDELBROT, trapped, JULIA]);
+  });
+
+  it("round-trips every shape, and a trap-free stop beside a trapped one stays plain", () => {
+    for (const trap of ["point", "line", "circle"] as const) {
+      const stops = [stop({ trap }), stop({ centerX: -0.5, trap: null })];
+      const read = decodeTourLink(encodeTourLink(stops)!)!;
+
+      expect(read[0].trap).toBe(trap);
+      expect(read[1].trap).toBeNull();
+    }
+  });
+
+  it("ignores a trap column value it cannot read, and keeps the stop", () => {
+    const link = "v=1&t.f=mandelbrot~julia&t.m=spiral~line";
+    const read = decodeTourLink(link)!;
+
+    expect(read).toHaveLength(2);
+    expect(read[0].trap).toBeNull();
+    expect(read[1].trap).toBe("line");
+  });
+
+  it("keeps a full tour of trapped stops inside the link's limit", () => {
+    const stops = Array.from({ length: 8 }, (_, index) =>
+      stop({
+        fractalType: "multibrot",
+        variant: "4",
+        centerX: -0.7436438870371587 + index * 0.01,
+        centerY: 0.1318259042053119,
+        zoomLevel: 123.456789 + index,
+        colorScheme: "fire",
+        reverse: true,
+        shift: 0.25,
+        trap: "circle",
+        autoIterationsOn: false,
+        maxIterations: 430,
+      }),
+    );
+    const link = encodeTourLink(stops);
+
+    expect(link).not.toBeNull();
+    expect(link!.length).toBeLessThanOrEqual(MAX_TOUR_LINK_LENGTH);
+    expect(decodeTourLink(link!)).toHaveLength(8);
   });
 
   it("carries a magnetic type beside the fractal that draws it", () => {

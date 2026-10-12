@@ -155,7 +155,7 @@ describe("the colour controls", () => {
     expect(reset).toContain("Reset colours");
     expect(button).toContain("onClick={handleResetColours}");
     expect(button).toContain(
-      "disabled={isDefaultColorOptions(reverse, shift)}",
+      "disabled={isDefaultColorOptions(reverse, shift, trap)}",
     );
 
     const body = functionBody(PAGE, "handleResetColours");
@@ -281,7 +281,7 @@ describe("a hop that lands on a place", () => {
 
     expect(select).toContain("resetColour = false");
     expect(select).toContain(
-      "? { reverse: DEFAULT_REVERSE, shift: DEFAULT_SHIFT }",
+      "? { reverse: DEFAULT_REVERSE, shift: DEFAULT_SHIFT, trap: DEFAULT_TRAP }",
     );
     // The settings are applied either way, so the tile's picture and the
     // picture a click shows are the one picture.
@@ -331,7 +331,7 @@ describe("a saved view", () => {
     expect(MANAGER).toContain("currentReverse: boolean;");
     expect(MANAGER).toContain("currentShift: number;");
     expect(MANAGER).toContain(
-      "...presetColorFields(currentReverse, currentShift),",
+      "...presetColorFields(currentReverse, currentShift, currentTrap),",
     );
   });
 

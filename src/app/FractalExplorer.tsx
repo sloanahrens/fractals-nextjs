@@ -41,6 +41,7 @@ import {
   ColorOptions,
   ColorScheme,
   ComplexNumber,
+  TrapShape,
   ZoomState,
 } from "../types/fractal";
 import { getAvailableColorSchemes } from "../lib/colorMapping";
@@ -50,8 +51,10 @@ import {
   formatZoom,
   presetColorOptions,
   presetFractal,
+  presetTrap,
   presetVariant,
 } from "../lib/presets";
+import type { ThumbnailLook } from "../lib/placeThumbnails";
 import { downloadFileName } from "../lib/download";
 import {
   EXPORT_FAILED_MESSAGE,
@@ -115,11 +118,15 @@ import { surpriseTarget } from "../lib/surprise";
 import {
   DEFAULT_REVERSE,
   DEFAULT_SHIFT,
+  DEFAULT_TRAP,
   SHIFT_PERCENT_MAX,
   SHIFT_PERCENT_MIN,
+  TRAP_CONTROL_OPTIONS,
+  controlToTrap,
   formatShiftPercent,
   isDefaultColorOptions,
   percentToShift,
+  trapToControl,
   shiftSliderKeyChangesValue,
   shiftToPercent,
 } from "../lib/paletteControls";
@@ -396,6 +403,25 @@ export default function Home() {
   const colorOptions = useMemo<ColorOptions>(
     () => ({ reverse, shift }),
     [reverse, shift],
+  );
+
+  // The orbit trap that colours the picture, or null for the iteration count.
+  // It is a way of colouring like the scheme, but not a repaint on its own:
+  // a trap picture is made of per-pixel distances the count picture never
+  // computed, so choosing, changing or clearing a trap is a render, and the
+  // link keeps its `m` (`linkWithoutColour` leaves it in). Inside trap mode the
+  // scheme, Reverse, Shift and Cycle colours are repaints from the kept
+  // distances, exactly as they are from the kept counts.
+  const [trap, setTrap] = useState<TrapShape | null>(
+    DEFAULT_VIEW_LINK_UPDATES.trap,
+  );
+
+  // What a Nearby tile is drawn with, and what the strip's key includes: the
+  // palette's two settings and the trap, one object so its identity holds while
+  // they do.
+  const thumbnailLook = useMemo<ThumbnailLook>(
+    () => ({ reverse, shift, trap }),
+    [reverse, shift, trap],
   );
 
   // Cycling the palette: the mode that walks the Shift round a turn and
@@ -686,6 +712,7 @@ export default function Home() {
         height: canvas.height,
         colorScheme,
         colorOptions,
+        ...(trap ? { trap } : {}),
       };
 
       if (quality === "preview") {
@@ -728,7 +755,12 @@ export default function Home() {
       if (
         showing !== "" &&
         linkWithoutColour(showing) === linkWithoutColour(link) &&
-        renderer.recolour(colorScheme, effectiveMaxIterations, colorOptions)
+        renderer.recolour(
+          colorScheme,
+          effectiveMaxIterations,
+          colorOptions,
+          trap ?? undefined,
+        )
       ) {
         // The canvas is showing this view in the new colours, so it is the
         // drawn view the address bar may name, exactly as a render would make
@@ -781,7 +813,7 @@ export default function Home() {
           }
         });
     },
-    [bounds, effectiveMaxIterations, colorScheme, colorOptions, wander],
+    [bounds, effectiveMaxIterations, colorScheme, colorOptions, trap, wander],
   );
 
   // Initialize canvas and renderer. The renderer is rebuilt when the canvas is
@@ -917,6 +949,7 @@ export default function Home() {
       setColorScheme(updates.colorScheme);
       setReverse(updates.reverse);
       setShift(updates.shift);
+      setTrap(updates.trap);
       setAutoIterationsOn(updates.autoIterationsOn);
       setMaxIterations(updates.maxIterations);
       // A stop carries no canvas size — how big the picture is is the page's own
@@ -1042,6 +1075,7 @@ export default function Home() {
         colorScheme,
         reverse,
         shift: shiftValue,
+        trap,
         autoIterationsOn,
         maxIterations,
         canvasWidth,
@@ -1055,6 +1089,7 @@ export default function Home() {
       zoomLevel,
       colorScheme,
       reverse,
+      trap,
       autoIterationsOn,
       maxIterations,
       canvasWidth,
@@ -1672,10 +1707,12 @@ export default function Home() {
       if (!shouldPaint(now, lastPaint, CYCLE_MIN_PAINT_GAP_MS)) return;
 
       const next = cycleShift(cycleShiftRef.current, now - at, cycleLoopMs);
-      const repainted = renderer.recolour(colorScheme, effectiveMaxIterations, {
-        reverse,
-        shift: next,
-      });
+      const repainted = renderer.recolour(
+        colorScheme,
+        effectiveMaxIterations,
+        { reverse, shift: next },
+        trap ?? undefined,
+      );
 
       at = now;
       if (!repainted) return;
@@ -1693,6 +1730,7 @@ export default function Home() {
     cycleLoopMs,
     colorScheme,
     reverse,
+    trap,
     effectiveMaxIterations,
   ]);
 
@@ -1850,6 +1888,7 @@ export default function Home() {
     setColorScheme(DEFAULT_VIEW_LINK_UPDATES.colorScheme);
     setReverse(DEFAULT_VIEW_LINK_UPDATES.reverse);
     setShift(DEFAULT_VIEW_LINK_UPDATES.shift);
+    setTrap(DEFAULT_VIEW_LINK_UPDATES.trap);
   }, [applyDefaultView, fractalType]);
 
   // The view keys, read off the window rather than off the canvas, so a
@@ -1999,6 +2038,7 @@ export default function Home() {
         height: job.height,
         colorScheme,
         colorOptions,
+        ...(trap ? { trap } : {}),
       };
 
       const token = ++exportTokenRef.current;
@@ -2064,6 +2104,7 @@ export default function Home() {
       effectiveMaxIterations,
       colorScheme,
       colorOptions,
+      trap,
       fractalKind,
       releaseExport,
     ],
@@ -2186,6 +2227,9 @@ export default function Home() {
     const colors = presetColorOptions(preset);
     setReverse(colors.reverse);
     setShift(colors.shift);
+    // A saved view carries its trap; one saved before traps existed names none
+    // and opens on the iteration count.
+    setTrap(presetTrap(preset));
     setCanvasWidth(preset.canvasWidth);
     setCanvasHeight(preset.canvasHeight);
     setCurrentPreset(preset.id);
@@ -2226,9 +2270,12 @@ export default function Home() {
     // the palette goes back to the scheme's own colours, so a tour is never
     // tinted by a setting left over from before it, and the link it lands on
     // is the place's own.
+    // The orbit trap goes with them: a tile, a fractal button, a preset and an
+    // Auto-wander hop keep the visitor's, and a tour's hop or Surprise me
+    // returns to the iteration count, as the tour is curated pictures.
     const options = resetColour
-      ? { reverse: DEFAULT_REVERSE, shift: DEFAULT_SHIFT }
-      : { reverse, shift };
+      ? { reverse: DEFAULT_REVERSE, shift: DEFAULT_SHIFT, trap: DEFAULT_TRAP }
+      : { reverse, shift, trap };
     // A place of a fractal with a variant names its own; one that names none
     // (a hand-built Julia place) keeps the page's, or the fractal's default
     // when the page holds a variant of another fractal.
@@ -2246,6 +2293,7 @@ export default function Home() {
       colorScheme: scheme,
       reverse: options.reverse,
       shift: options.shift,
+      trap: options.trap,
       autoIterationsOn: true,
       maxIterations,
       canvasWidth,
@@ -2264,6 +2312,7 @@ export default function Home() {
     setColorScheme(scheme);
     setReverse(options.reverse);
     setShift(options.shift);
+    setTrap(options.trap);
     setAutoIterationsOn(true);
     setCurrentPreset("");
     wander.notifyActivity();
@@ -2357,6 +2406,8 @@ export default function Home() {
     setColorScheme(stop.colorScheme);
     setReverse(stop.reverse);
     setShift(stop.shift);
+    // A stop is a whole view, so a stop that names no trap turns it off.
+    setTrap(stop.trap);
     setAutoIterationsOn(stop.autoIterationsOn);
     setMaxIterations(stop.maxIterations);
     setCurrentPreset("");
@@ -2511,6 +2562,7 @@ export default function Home() {
         effectiveMaxIterations,
         colorScheme,
         colorOptions,
+        trap,
       );
       if (next) setProbe(next);
     };
@@ -2576,6 +2628,7 @@ export default function Home() {
     effectiveMaxIterations,
     colorScheme,
     colorOptions,
+    trap,
   ]);
 
   // The Auto-wander pill's one-time offer to a visitor who has not found it.
@@ -2820,7 +2873,22 @@ export default function Home() {
     handleParameterChange(() => {
       setReverse(DEFAULT_REVERSE);
       setShift(DEFAULT_SHIFT);
+      setTrap(DEFAULT_TRAP);
     });
+  };
+
+  // Choosing the orbit trap, or turning it off. A trap picture is made of
+  // per-pixel distances rather than counts, so the first time a shape is chosen
+  // the view is drawn again to measure them (`drawCanvas` finds the links
+  // differ in `m` and renders); from then on Reverse, Shift, the scheme and
+  // cycling repaint from those distances. Like the other parameter controls it
+  // only rewrites the current history entry: it is a way of colouring the view
+  // the visitor is on, not a place they went.
+  const handleTrapChange = (value: string) => {
+    const next = controlToTrap(value);
+    if (next === trap) return;
+
+    handleParameterChange(() => setTrap(next));
   };
 
   // A control that moves the view by hand. It does what a gesture does — the
@@ -3005,7 +3073,7 @@ export default function Home() {
           <NearbyStrip
             places={nearbyWindow(nearby.pool, nearby.offset)}
             colorScheme={colorScheme}
-            colorOptions={colorOptions}
+            colorOptions={thumbnailLook}
             paused={isRendering}
             hidden={tourPlaying}
             onSelect={handlePlaceSelect}
@@ -3308,6 +3376,17 @@ export default function Home() {
               checked={reverse}
               onChange={handleReverseChange}
             />
+            {/* Orbit trap: colour each point by how near its orbit comes to a
+                  fixed point, line or circle instead of by how long it took
+                  to escape. Off is the iteration-count picture. Shift, Reverse
+                  and the scheme above and below work on it unchanged. */}
+            <Select
+              label="Orbit trap"
+              value={trapToControl(trap)}
+              options={[...TRAP_CONTROL_OPTIONS]}
+              onChange={handleTrapChange}
+              selectClassName="min-h-11"
+            />
             <Slider
               label="Shift"
               value={shiftToPercent(shift)}
@@ -3324,7 +3403,7 @@ export default function Home() {
                 onClick={handleResetColours}
                 variant="outline"
                 size="sm"
-                disabled={isDefaultColorOptions(reverse, shift)}
+                disabled={isDefaultColorOptions(reverse, shift, trap)}
               >
                 Reset colours
               </Button>
@@ -3501,6 +3580,7 @@ export default function Home() {
             currentColorScheme={colorScheme}
             currentReverse={reverse}
             currentShift={shift}
+            currentTrap={trap}
             currentCanvasWidth={canvasWidth}
             currentCanvasHeight={canvasHeight}
             currentFractal={fractalType}

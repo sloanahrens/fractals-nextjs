@@ -46,12 +46,44 @@ describe("viewLinkToUpdates", () => {
       // as the page opens.
       reverse: DEFAULT_VIEW_LINK_UPDATES.reverse,
       shift: DEFAULT_VIEW_LINK_UPDATES.shift,
+      // Nor does it name a trap: the picture is the iteration count's.
+      trap: null,
       autoIterationsOn: true,
       // An auto view carries no count, so the slider keeps the page's own.
       maxIterations: DEFAULT_VIEW_LINK_UPDATES.maxIterations,
       canvasWidth: 800,
       canvasHeight: 600,
     });
+  });
+
+  it("applies an orbit trap beside the scheme, and turns it off when the link names none", () => {
+    for (const shape of ["point", "line", "circle"] as const) {
+      expect(
+        viewLinkToUpdates(decodeView(`${EXAMPLE_LINK}&m=${shape}`)).trap,
+      ).toBe(shape);
+    }
+
+    expect(viewLinkToUpdates(decodeView(EXAMPLE_LINK)).trap).toBeNull();
+    expect(DEFAULT_VIEW_LINK_UPDATES.trap).toBeNull();
+  });
+
+  it("ignores a trap it cannot read, so the picture is the iteration count's", () => {
+    for (const bad of [
+      "spiral",
+      "",
+      "Point",
+      "POINT",
+      " point",
+      "point ",
+      "1",
+    ]) {
+      expect(
+        viewLinkToUpdates(
+          decodeView(`${EXAMPLE_LINK}&m=${encodeURIComponent(bad)}`),
+        ).trap,
+        bad,
+      ).toBeNull();
+    }
   });
 
   it("applies a reversed and shifted scheme beside the scheme itself", () => {
@@ -175,6 +207,7 @@ describe("viewLinkToUpdates", () => {
       colorScheme: "rainbow",
       reverse: DEFAULT_VIEW_LINK_UPDATES.reverse,
       shift: DEFAULT_VIEW_LINK_UPDATES.shift,
+      trap: null,
       autoIterationsOn: false,
       maxIterations: 700,
       canvasWidth: 1200,
