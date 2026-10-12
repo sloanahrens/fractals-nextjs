@@ -3,9 +3,26 @@ import {
   ColorScheme,
   FractalConfig,
   FractalKind,
+  TrapShape,
 } from "../types/fractal";
 import { mandelbrotKind } from "./mandelbrot";
-import { BYTES_PER_PIXEL, colourRgbaRows, countRgbaRows } from "./renderRgba";
+import {
+  BYTES_PER_PIXEL,
+  colourRgbaRows,
+  colourTrapRows,
+  countRgbaRows,
+  countTrapRows,
+} from "./renderRgba";
+
+/**
+ * What the last finished render left to repaint from: either its iteration
+ * counts, or, drawn in trap mode, its orbit-trap distances and the shape they
+ * are to. One buffer at a time, never both: trap mode half the memory of count
+ * mode, and a toggle is a render whichever is held.
+ */
+type KeptRender =
+  | { mode: "counts"; data: Float64Array }
+  | { mode: "trap"; shape: TrapShape; data: Float32Array };
 
 /**
  * Fractal renderer class for managing canvas rendering operations
@@ -25,16 +42,21 @@ export class FractalRenderer {
   private runToken = 0;
   private kind: FractalKind;
   /**
-   * The smooth counts of the last render to finish on this canvas, one per
-   * pixel, row by row — what {@link FractalRenderer.recolour} repaints from.
+   * What the last render to finish on this canvas left, one value per pixel,
+   * row by row — what {@link FractalRenderer.recolour} repaints from: the
+   * smooth counts, or, for a render drawn in trap mode, the trap distances and
+   * their shape.
    *
    * Null whenever there are none: before the first render, from the moment a
    * render starts until the run that finishes keeps its own, and from a
-   * `cancelRender`. `Float64Array` because a count is then the very number the
-   * renderer drew with, so a repaint from it is the picture the render drew;
-   * see `CountBuffer` in `renderRgba.ts` for what float32 would cost.
+   * `cancelRender`. Counts are a `Float64Array` because a count is then the
+   * very number the renderer drew with, so a repaint from it is the picture the
+   * render drew; see `CountBuffer` in `renderRgba.ts` for what float32 would
+   * cost. Distances are a `Float32Array`, rounded once when stored and coloured
+   * from the rounded value by the render and the repaint alike
+   * (`TrapBuffer`).
    */
-  private counts: Float64Array | null = null;
+  private kept: KeptRender | null = null;
 
   /**
    * @param canvas - Canvas to paint
@@ -72,11 +94,12 @@ export class FractalRenderer {
 
     this.isRendering = true;
 
-    // The counts this renderer was holding are the view's this render is
-    // replacing, so they go now rather than at the end: a recolour asked for
-    // while this runs has nothing to repaint from and is answered false, which
-    // is how a colour change that arrives mid-render still draws in full.
-    this.counts = null;
+    // The counts (or trap distances) this renderer was holding are the view's
+    // this render is replacing, so they go now rather than at the end: a
+    // recolour asked for while this runs has nothing to repaint from and is
+    // answered false, which is how a colour change that arrives mid-render
+    // still draws in full.
+    this.kept = null;
 
     // Resize canvas if needed
     if (
@@ -88,44 +111,81 @@ export class FractalRenderer {
       this.imageData = this.ctx.createImageData(config.width, config.height);
     }
 
-    const { width, height, bounds, maxIterations, colorScheme, colorOptions } =
-      config;
+    const {
+      width,
+      height,
+      bounds,
+      maxIterations,
+      colorScheme,
+      colorOptions,
+      trap,
+    } = config;
     const totalPixels = width * height;
     let processedPixels = 0;
 
-    // One row at a time: the row's iteration counts, the row's pixels, and —
-    // only for a smooth run — a copy of those counts to keep. The two steps are
-    // `countRgbaRows` and `colourRgbaRows`, the halves of the pipeline the
-    // server draws a link preview with, so nothing reaches the canvas's image
-    // data until the superseded check below has passed.
-    const rowCounts = new Float64Array(width);
+    // One row at a time: the row's iteration counts (or, in trap mode, its trap
+    // distances), the row's pixels, and — only for a smooth run — a copy of
+    // those numbers to keep. The two steps are `countRgbaRows` and
+    // `colourRgbaRows` (`countTrapRows` and `colourTrapRows` in trap mode), the
+    // halves of the pipeline the server draws a link preview with, so nothing
+    // reaches the canvas's image data until the superseded check below has
+    // passed.
+    const rowCounts = trap ? null : new Float64Array(width);
+    const rowDistances = trap ? new Float32Array(width) : null;
     const row = new Uint8ClampedArray(width * BYTES_PER_PIXEL);
-    // Only a smooth run's counts are the picture: a whole-count pass would
-    // repaint a different one, and draws at fewer pixels anyway.
-    const kept = useSmooth ? new Float64Array(totalPixels) : null;
+    // Only a smooth run's numbers are the picture: a whole-count pass (a
+    // preview) would repaint a different one, and draws at fewer pixels anyway.
+    // In trap mode "smooth" means only "not a preview".
+    const keptCounts =
+      useSmooth && !trap ? new Float64Array(totalPixels) : null;
+    const keptDistances =
+      useSmooth && trap ? new Float32Array(totalPixels) : null;
 
     for (let y = 0; y < height && !superseded(); y++) {
-      countRgbaRows(
-        rowCounts,
-        y,
-        y + 1,
-        bounds,
-        width,
-        height,
-        maxIterations,
-        this.kind,
-        useSmooth,
-      );
-      colourRgbaRows(
-        row,
-        rowCounts,
-        y,
-        y + 1,
-        width,
-        maxIterations,
-        colorScheme,
-        colorOptions,
-      );
+      if (trap && rowDistances) {
+        countTrapRows(
+          rowDistances,
+          y,
+          y + 1,
+          bounds,
+          width,
+          height,
+          maxIterations,
+          this.kind,
+          trap,
+        );
+        colourTrapRows(
+          row,
+          rowDistances,
+          y,
+          y + 1,
+          width,
+          colorScheme,
+          colorOptions,
+        );
+      } else if (rowCounts) {
+        countRgbaRows(
+          rowCounts,
+          y,
+          y + 1,
+          bounds,
+          width,
+          height,
+          maxIterations,
+          this.kind,
+          useSmooth,
+        );
+        colourRgbaRows(
+          row,
+          rowCounts,
+          y,
+          y + 1,
+          width,
+          maxIterations,
+          colorScheme,
+          colorOptions,
+        );
+      }
 
       // Give a render started from a promise continuation its turn to claim
       // the canvas before this row is painted.
@@ -137,7 +197,10 @@ export class FractalRenderer {
       // await above suspends it, and nothing here writes before this check.
       if (superseded()) break;
 
-      kept?.set(rowCounts, y * width);
+      if (keptCounts && rowCounts) keptCounts.set(rowCounts, y * width);
+      if (keptDistances && rowDistances) {
+        keptDistances.set(rowDistances, y * width);
+      }
       this.imageData.data.set(row, y * width * BYTES_PER_PIXEL);
 
       processedPixels += width;
@@ -158,10 +221,16 @@ export class FractalRenderer {
     // the last render to finish is the one that clears it.
     if (superseded()) return;
 
-    // The counts are this renderer's to keep only now: the picture they make is
-    // the picture on the canvas, and a colour change can repaint from them
-    // without counting the view again.
-    this.counts = kept;
+    // The counts (or distances) are this renderer's to keep only now: the
+    // picture they make is the picture on the canvas, and a colour change can
+    // repaint from them without counting the view again.
+    if (keptDistances && trap) {
+      this.kept = { mode: "trap", shape: trap, data: keptDistances };
+    } else if (keptCounts) {
+      this.kept = { mode: "counts", data: keptCounts };
+    } else {
+      this.kept = null;
+    }
 
     // Final render
     this.ctx.putImageData(this.imageData, 0, 0);
@@ -181,7 +250,7 @@ export class FractalRenderer {
     this.isRendering = false;
     // Whatever the cancelled run had half counted is not a picture, and the
     // view it is counting is the one the user has left: nothing is kept.
-    this.counts = null;
+    this.kept = null;
   }
 
   /**
@@ -206,32 +275,55 @@ export class FractalRenderer {
    *   one they were counted with
    * @param options - Reverse and shift of the scheme, or nothing for the scheme
    *   as it is
+   * @param trap - The trap shape the caller expects the picture to be drawn
+   *   with, or nothing for the iteration-count picture. The repaint is made only
+   *   when the buffer held is of that mode (and shape); any other pairing is
+   *   answered false, the caller's cue to render, so a stale buffer is harmless
+   *   even if the page is wrong about it, and a caller that knows nothing of
+   *   buffers (the colour-cycling frame loop) cannot paint the wrong picture.
    * @returns Whether the canvas was repainted
    */
   recolour(
     scheme: ColorScheme,
     maxIterations: number,
     options?: ColorOptions,
+    trap?: TrapShape,
   ): boolean {
-    const counts = this.counts;
+    const kept = this.kept;
     const { width, height } = this.canvas;
 
-    // The counts are always the canvas's own size — a render keeps them only
+    // The numbers are always the canvas's own size — a render keeps them only
     // for the canvas it drew on, and the page builds a new renderer for a new
-    // canvas or a new fractal — but a repaint from another size's counts would
-    // be a scrambled picture rather than a wrong shade, so it is refused.
-    if (counts === null || counts.length !== width * height) return false;
+    // canvas or a new fractal — but a repaint from another size's would be a
+    // scrambled picture rather than a wrong shade, so it is refused.
+    if (kept === null || kept.data.length !== width * height) return false;
 
-    colourRgbaRows(
-      this.imageData.data,
-      counts,
-      0,
-      height,
-      width,
-      maxIterations,
-      scheme,
-      options,
-    );
+    if (kept.mode === "trap") {
+      if (trap !== kept.shape) return false;
+
+      colourTrapRows(
+        this.imageData.data,
+        kept.data,
+        0,
+        height,
+        width,
+        scheme,
+        options,
+      );
+    } else {
+      if (trap !== undefined) return false;
+
+      colourRgbaRows(
+        this.imageData.data,
+        kept.data,
+        0,
+        height,
+        width,
+        maxIterations,
+        scheme,
+        options,
+      );
+    }
     this.ctx.putImageData(this.imageData, 0, 0);
 
     return true;

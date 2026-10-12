@@ -1,4 +1,5 @@
-import type { ComplexNumber, FractalKind } from "../types/fractal";
+import type { ComplexNumber, FractalKind, TrapShape } from "../types/fractal";
+import { TRAP_CYCLE_TOLERANCE, trapKey, trapKeyToDistance } from "./orbitTrap";
 
 /**
  * Walk one Burning Ship orbit from z = 0 and count the steps it survives.
@@ -58,6 +59,64 @@ function burningShipIterations(
 }
 
 /**
+ * The closest a Burning Ship orbit from z = 0 comes to a trap shape: the count's
+ * own loop with a running minimum kept in place of the count, allocating
+ * nothing. Counts the points the orbit lands on (the start is not one),
+ * including the one that left the radius, and stops on the escape test, at the
+ * cap, or when the orbit has closed on a cycle (Brent's check; see
+ * `escapeTimeTrap` in mandelbrot.ts). The kind's `orbit` walk is the oracle
+ * that holds it to the other copies of this loop (`trapDistance.test.ts`).
+ * @param c - Point in the complex plane to test
+ * @param maxIterations - Most steps to walk
+ * @param shape - Which trap the distance is to
+ * @returns The least distance reached, or Infinity when no step was measured
+ */
+function burningShipTrap(
+  c: ComplexNumber,
+  maxIterations: number,
+  shape: TrapShape,
+): number {
+  let real = 0;
+  let imaginary = 0;
+  let savedReal = 0;
+  let savedImaginary = 0;
+  let sinceSave = 0;
+  let saveEvery = 1;
+  let least = Infinity;
+
+  for (let steps = 0; steps < maxIterations; steps++) {
+    const magnitudeReal = Math.abs(real);
+    const magnitudeImaginary = Math.abs(imaginary);
+
+    const squaredReal =
+      magnitudeReal * magnitudeReal - magnitudeImaginary * magnitudeImaginary;
+    const squaredImaginary = 2 * magnitudeReal * magnitudeImaginary;
+    real = squaredReal + c.real;
+    imaginary = squaredImaginary + c.imaginary;
+
+    const key = trapKey(shape, real, imaginary);
+    if (key < least) least = key;
+
+    if (real * real + imaginary * imaginary > 4) break;
+
+    if (
+      Math.abs(real - savedReal) < TRAP_CYCLE_TOLERANCE &&
+      Math.abs(imaginary - savedImaginary) < TRAP_CYCLE_TOLERANCE
+    ) {
+      break;
+    }
+    if (++sinceSave === saveEvery) {
+      savedReal = real;
+      savedImaginary = imaginary;
+      saveEvery *= 2;
+      sinceSave = 0;
+    }
+  }
+
+  return trapKeyToDistance(shape, least);
+}
+
+/**
  * The Burning Ship as a {@link FractalKind}: the point the renderer hands over
  * is the constant c the folded orbit is added to.
  *
@@ -73,6 +132,9 @@ export const burningShipKind: FractalKind = {
     const steps = burningShipIterations(point, maxIterations, false);
 
     return { steps, escaped: steps < maxIterations };
+  },
+  trapDistance(point, maxIterations, trap) {
+    return burningShipTrap(point, maxIterations, trap);
   },
   orbit(point, maxSteps) {
     // The count's own loop with the points kept, so the path the plot draws is

@@ -100,7 +100,34 @@ export interface FractalKind {
    * @returns The visited points, the start first
    */
   orbit?(point: ComplexNumber, maxSteps: number): ComplexNumber[];
+  /**
+   * The closest the orbit comes to a trap shape, for the orbit-trap colouring
+   * (`src/lib/orbitTrap.ts`): the least distance from the shape to any point
+   * the orbit lands on, the start excluded, over at most `maxIterations` steps.
+   *
+   * Optional, as `escapeInfo` and `orbit` are: the renderer asks
+   * `trapDistanceFor`, which answers a kind without the method by walking its
+   * `orbit`. The escape-time kinds ship a loop of their own that keeps a
+   * running minimum and allocates nothing, and agree with that walk to 1e-9.
+   * A point with nothing to measure answers Infinity.
+   *
+   * @param point - Point in the complex plane to test
+   * @param maxIterations - Most steps to walk
+   * @param trap - Which shape the distance is to
+   * @returns The least distance reached, or Infinity when none was
+   */
+  trapDistance?(
+    point: ComplexNumber,
+    maxIterations: number,
+    trap: TrapShape,
+  ): number;
 }
+
+/**
+ * The shapes an orbit can be coloured by its closest approach to: a point, a
+ * line and a circle, each fixed in the plane the orbit moves in.
+ */
+export type TrapShape = "point" | "line" | "circle";
 
 /**
  * How a picture is coloured, beyond which scheme it is drawn in.
@@ -134,6 +161,11 @@ export interface FractalConfig {
   colorScheme: ColorScheme;
   /** Reverse and shift of the scheme, or nothing for the scheme as it is. */
   colorOptions?: ColorOptions;
+  /**
+   * Colour by closest approach to this shape rather than by iteration count.
+   * Absent is the picture the app has always drawn.
+   */
+  trap?: TrapShape;
 }
 
 export interface ColorRGB {
