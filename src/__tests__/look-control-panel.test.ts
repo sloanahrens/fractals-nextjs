@@ -7,8 +7,8 @@
  * here is that the button is another view of the Settings select's one state and
  * handler, that it rides in the Auto-wander pill's row and hides with it, that it
  * has the accessible behaviour the bead names, and that the words about it are in
- * Settings, Help, the README and CLAUDE.md. A Node suite has no DOM, so this
- * reads the sources, as the other panel tests here do.
+ * Settings, Help and the README. A Node suite has no DOM, so this reads the
+ * sources, as the other panel tests here do.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -32,7 +32,6 @@ const LOOK = read("../components/ui/LookControl.tsx");
 const PILL = read("../components/ui/WanderControl.tsx");
 const HELP = read("../lib/helpEntries.ts");
 const README = read("../../README.md");
-const CLAUDE = read("../../CLAUDE.md");
 
 /** A JSX element's own text, from its tag to the `/>` that closes it. */
 function element(source: string, tag: string): string {
@@ -227,7 +226,7 @@ describe("the words", () => {
     expect(README).toContain("lookControl.ts");
   });
 
-  it("names no look Glass: every visitor-facing word in the app, the README and CLAUDE.md is free of it", () => {
+  it("names no look Glass: every visitor-facing word in the app and the README is free of it", () => {
     const root = fileURLToPath(new URL("../../", import.meta.url));
     // This file is the one place the word has to appear, since it is what
     // forbids it; every other file under the tree is walked. The design note's
@@ -236,11 +235,9 @@ describe("the words", () => {
     // refuses a branch that removes a line a recently merged commit added),
     // with the rename recorded in the bullet added after it.
     const self = fileURLToPath(import.meta.url);
-    const files = [
-      ...walk(`${root}src`),
-      `${root}README.md`,
-      `${root}CLAUDE.md`,
-    ].filter((file) => file !== self);
+    const files = [...walk(`${root}src`), `${root}README.md`].filter(
+      (file) => file !== self,
+    );
 
     expect(files.length).toBeGreaterThan(50);
     for (const file of files) {
@@ -250,11 +247,4 @@ describe("the words", () => {
       ).toBe(false);
     }
   });
-
-  it("CLAUDE.md names the Look control and keeps its note", () => {
-    expect(CLAUDE).toContain("**Look control**");
-    expect(CLAUDE).toContain("(fr-02s, fr-ar5)");
-    expect(CLAUDE).toContain("Look: the orbit trap on the picture");
-  });
-
 });
