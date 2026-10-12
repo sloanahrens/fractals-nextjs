@@ -16,7 +16,13 @@
 import { formatCoordinate } from "./zoomScale";
 import { JULIA_CONSTANTS, parseJuliaConstant } from "./julia";
 import { MULTIBROT_POWERS, parseMultibrotPower } from "./multibrot";
-import { MAGNET_BAILOUT, MAGNET_TOLERANCE, MAGNET_TYPES, MAGNET_TYPE_LABELS, parseMagnetType } from "./magnet";
+import {
+  MAGNET_BAILOUT,
+  MAGNET_TOLERANCE,
+  MAGNET_TYPES,
+  MAGNET_TYPE_LABELS,
+  parseMagnetType,
+} from "./magnet";
 import { newtonPolynomialFor } from "./newton";
 import { PHOENIX_CONSTANTS } from "./phoenix";
 
@@ -500,10 +506,18 @@ const MAGNET_TWO_FRACTION = fraction(
   ),
 );
 
-/** The rule of each magnetic type: its own fraction, squared, then c's point added. */
+/**
+ * A fraction squared. The fraction goes in brackets so the exponent sits
+ * against the closing bracket: a bare `msup` over an `mfrac` sets the 2 beside
+ * the numerator's last term, which reads as (z² + c − 1)² over 2z + c − 2.
+ */
+const squaredFraction = (inner: MathExpr): MathExpr =>
+  superscript(row(OPEN, inner, CLOSE), number(2));
+
+/** The rule of each magnetic type: its own fraction, in brackets, squared. */
 const MAGNET_RULES: Readonly<Record<number, MathExpr>> = {
-  1: row(z, ARROW, superscript(MAGNET_ONE_FRACTION, number(2))),
-  2: row(z, ARROW, superscript(MAGNET_TWO_FRACTION, number(2))),
+  1: row(z, ARROW, squaredFraction(MAGNET_ONE_FRACTION)),
+  2: row(z, ARROW, squaredFraction(MAGNET_TWO_FRACTION)),
 };
 
 /**
