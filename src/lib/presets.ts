@@ -429,6 +429,41 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasHeight: 600,
     fractal: "celtic",
   },
+  {
+    id: "perpendicular-ship-overview",
+    name: "Perpendicular Ship",
+    description: "The whole Perp. Ship, hull, row of masts and spike",
+    // The Perpendicular Ship's default view (-0.55, 0) at zoom 1: 4 by 3 about
+    // (-0.55, 0).
+    bounds: {
+      minReal: -2.55,
+      maxReal: 1.45,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "perpendicular-ship",
+  },
+  {
+    id: "perpendicular-ship-tendrils",
+    name: "Perpendicular Ship tendrils",
+    description: "Lace tendrils off the top of the hull",
+    // Centre (-0.36, 0.85) at zoom 4: 1 by 0.75.
+    bounds: {
+      minReal: -0.86,
+      maxReal: 0.14,
+      minImaginary: 0.475,
+      maxImaginary: 1.225,
+    },
+    maxIterations: 400,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "perpendicular-ship",
+  },
 ];
 
 /**

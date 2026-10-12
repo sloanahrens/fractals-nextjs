@@ -422,6 +422,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   multibrot: [10, 12],
   newton: [8, 10],
   celtic: [4, 6],
+  "perpendicular-ship": [4, 6],
 };
 
 describe("PLACES", () => {
@@ -903,9 +904,15 @@ function zoomedInOnRealAxis(place: Place): boolean {
  * Fractals whose switcher button may land on the view the Fractal select opens
  * them on. The rule that a switch should go somewhere protects a page opening
  * on a view and a button repeating it; the Tricorn's whole set is the picture
- * that shows it best (fr-hbe), and nothing opens on it but a switch.
+ * that shows it best (fr-hbe), and nothing opens on it but a switch. The
+ * Celtic set and the Perpendicular Ship are the same: their whole sets are the
+ * views that say what each one is, and the Fractal select opens on them too.
  */
-const FEATURED_IS_OPENING_VIEW = new Set(["tricorn", "celtic"]);
+const FEATURED_IS_OPENING_VIEW = new Set([
+  "tricorn",
+  "celtic",
+  "perpendicular-ship",
+]);
 
 /**
  * The smallest stand-in for a 2D canvas that FractalRenderer touches, with the

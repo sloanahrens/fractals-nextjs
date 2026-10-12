@@ -15,6 +15,7 @@ import {
 } from "./multibrot";
 import { newtonKind } from "./newton";
 import { celticKind } from "./celtic";
+import { perpendicularShipKind } from "./perpendicularShip";
 import { tricornKind } from "./tricorn";
 
 /**
@@ -40,6 +41,13 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "multibrot", label: "Multibrot" },
   { id: "newton", label: "Newton" },
   { id: "celtic", label: "Celtic" },
+  // The one label that is shortened, on purpose: "Perpendicular Ship" is the
+  // longest name here and eight full ones are about 435 px at text-xs, where
+  // the switcher's row is capped at the picture's width and scrolls sideways.
+  // "Perp. Ship" keeps the row readable on a phone, and the id and every
+  // other name the app says (the Math card's title, a link's line, the Help
+  // row) are spelled in full.
+  { id: "perpendicular-ship", label: "Perp. Ship" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -164,8 +172,9 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
  * The formula a picker choice draws.
  *
  * The picker names a fractal and the renderer wants a {@link FractalKind}. For
- * the Mandelbrot set, the Burning Ship, the Tricorn and the Newton fractal
- * those are the same thing. Julia is a family rather than a picture, so the choice carries a constant as well — one
+ * the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn,
+ * the Newton fractal and the Celtic set those are the same thing. Julia is a
+ * family rather than a picture, so the choice carries a constant as well — one
  * of the named four, or a custom spelling of any other point — and a name this
  * build cannot read falls back to the first named constant instead of to a
  * blank canvas. The Multibrot is a family of powers, and one it cannot read
@@ -179,6 +188,7 @@ export function resolveFractalKind(
   variant: string,
 ): FractalKind {
   if (typeId === "burning-ship") return burningShipKind;
+  if (typeId === "perpendicular-ship") return perpendicularShipKind;
   if (typeId === "tricorn") return tricornKind;
   if (typeId === "newton") return newtonKind;
   if (typeId === "celtic") return celticKind;
@@ -270,6 +280,18 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // widest view there is. Centring on the middle of the real extent, -0.8,
   // leaves the spike and the nose both inside with 0.8 to spare each side.
   if (typeId === "celtic") return { centerX: -0.8, centerY: 0, zoom: 1 };
+
+  // The Perpendicular Ship is mirrored about the real axis, and its masts
+  // stand above and below the hull, so the frame is centred on that axis.
+  // Measured with a 0.02 grid at a cap of 200 and a 0.004 one at 400 (points
+  // still inside at the cap), the set spans x -1.78..0.68 by y -1.09..1.09 --
+  // 2.46 wide and 2.18 tall, so the middle of its real extent is -0.55. Zoom 1
+  // is the widest view there is (4 by 3): x -2.55..1.45 by y -1.5..1.5, which
+  // holds the spike's tip, the nose and both rows of masts with 0.4 or more
+  // clear above, below and either side.
+  if (typeId === "perpendicular-ship") {
+    return { centerX: -0.55, centerY: 0, zoom: 1 };
+  }
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }

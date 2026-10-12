@@ -92,6 +92,22 @@ describe("viewLinkToUpdates", () => {
     });
   });
 
+  it("puts a Perpendicular Ship link's fractal on the page and leaves the variant standing", () => {
+    expect(
+      viewLinkToUpdates(
+        decodeView(
+          "#v=1&f=perpendicular-ship&x=-0.55&y=0&z=1&s=classic&i=auto&w=800&h=600",
+        ),
+      ),
+    ).toMatchObject({
+      fractalType: "perpendicular-ship",
+      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
+      centerX: -0.55,
+      centerY: 0,
+      zoomLevel: 1,
+    });
+  });
+
   it("puts a Newton link's fractal on the page and leaves the variant standing", () => {
     expect(
       viewLinkToUpdates(

@@ -171,19 +171,21 @@ describe("nextTourStop", () => {
       walk(PLACES, 400, seeded(5)).map((h) => h.place.fractal),
     );
 
-    expect(fractals.size).toBe(7);
+    expect(fractals.size).toBe(8);
     expect(seen).toEqual(fractals);
   });
 
-  it("gives each fractal a plausible share of a 200-hop run", () => {
+  it("gives each fractal a plausible share of a 400-hop run", () => {
     const share = new Map<string, number>();
-    for (const hop of walk(PLACES, 200, seeded(8))) {
+    for (const hop of walk(PLACES, 400, seeded(8))) {
       share.set(hop.place.fractal, (share.get(hop.place.fractal) ?? 0) + 1);
     }
 
-    // Seven fractals share the 200 hops, about 29 each; a walk stays on a
-    // fractal for a few hops at a time, so one seed's share is streaky (seeds
-    // 1 to 12 ranged from 4 to 74), and the floor only rules out a fractal the
+    // Eight fractals share the 400 hops, about 50 each. A walk stays on a
+    // fractal for a few hops at a time, so one seed's share is streaky, and a
+    // short run can leave one fractal with almost nothing (over 200 hops,
+    // twelve seeds ranged from 0 to 62); 400 hops is long enough that twelve
+    // seeds ranged from 8 to 124, so the floor only rules out a fractal the
     // walk has all but forgotten.
     for (const fractal of new Set(PLACES.map((p) => p.fractal))) {
       const visits = share.get(fractal) ?? 0;

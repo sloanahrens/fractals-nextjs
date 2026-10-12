@@ -64,6 +64,12 @@ const CELTIC = stop({
   centerY: 0.7,
   zoomLevel: 4,
 });
+const PERPENDICULAR_SHIP = stop({
+  fractalType: "perpendicular-ship",
+  centerX: -0.55,
+  centerY: 0,
+  zoomLevel: 1,
+});
 const MULTIBROT = stop({
   fractalType: "multibrot",
   variant: "4",
@@ -91,6 +97,7 @@ const EVERY_FRACTAL = [
   MULTIBROT,
   NEWTON,
   CELTIC,
+  PERPENDICULAR_SHIP,
 ];
 
 describe("encodeTourLink", () => {

@@ -307,6 +307,30 @@ const TRICORN: FractalMath = {
   escape: ESCAPE_RADIUS_2,
 };
 
+const PERPENDICULAR_SHIP: FractalMath = {
+  title: "Perpendicular Ship",
+  rule: rule(
+    superscript(
+      row(
+        OPEN,
+        abs(row(identifier("Re", "the real part of"), z)),
+        operator(MINUS),
+        identifier("i"),
+        operator(INVISIBLE_TIMES),
+        identifier("Im", "the imaginary part of"),
+        z,
+        CLOSE,
+      ),
+      number(2),
+    ),
+  ),
+  start: START_AT_ZERO,
+  setting: null,
+  blurb:
+    "The same game as the Mandelbrot set, with one twist: the two halves of the number are not treated alike. The real part squares as it is, while the imaginary part is taken against the size of the real part, so the sign of the real part is thrown away in one half of the step and kept in the other. That fold leaves a flat-backed dark hull with rows of masts along its edge, and the rest is coloured by how fast a point runs away.",
+  escape: `${ESCAPE_RADIUS_2} In the orbit plot the fold shows as a path that does not care which side of the imaginary axis it is on: a step squares the real part and takes the imaginary part against the size of the real part, so a point and its reflection in that axis go to the very same next point.`,
+};
+
 /** z squared in brackets, the thing Celtic's Re and Im are read off. */
 const SQUARE_OF_Z = row(OPEN, superscript(z, number(2)), CLOSE);
 
@@ -400,6 +424,7 @@ export const FRACTAL_MATH: Readonly<
   mandelbrot: () => MANDELBROT,
   julia,
   "burning-ship": () => BURNING_SHIP,
+  "perpendicular-ship": () => PERPENDICULAR_SHIP,
   tricorn: () => TRICORN,
   multibrot,
   newton: () => NEWTON,

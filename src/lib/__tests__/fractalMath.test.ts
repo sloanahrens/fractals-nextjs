@@ -138,6 +138,12 @@ describe("the rule, read aloud", () => {
     expect(rule("tricorn")).toBe("z becomes z bar squared plus c");
   });
 
+  it("reads the Perpendicular Ship rule", () => {
+    expect(rule("perpendicular-ship")).toBe(
+      "z becomes open bracket the absolute value of the real part of z, minus i times the imaginary part of z close bracket squared plus c",
+    );
+  });
+
   it("reads the Celtic rule", () => {
     expect(rule("celtic")).toBe(
       "z becomes open bracket the absolute value of the real part of open bracket z squared close bracket, plus i times the imaginary part of open bracket z squared close bracket close bracket plus c",
@@ -170,6 +176,7 @@ describe("where each point starts", () => {
       "tricorn",
       "multibrot",
       "celtic",
+      "perpendicular-ship",
     ]) {
       expect(start(id)).toBe("z sub 0 equals 0, c equals the pixel's point");
     }
@@ -189,6 +196,7 @@ describe("the setting", () => {
       "tricorn",
       "newton",
       "celtic",
+      "perpendicular-ship",
     ]) {
       expect(describeFractalMath(id, "").setting).toBeNull();
     }
