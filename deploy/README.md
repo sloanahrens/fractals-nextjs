@@ -79,13 +79,13 @@ health path and memory limit, and that no config file holds a secret.
 ## scripts/release
 
 `scripts/release/` is a verbatim copy of the devops repo's directory at
-`v0.1.0`, the version `go.mod` pins — no runner clones that repo
+`v0.1.2`, the version `go.mod` pins — no runner clones that repo
 (docs/design.md, section 5), so this repository carries the scripts it runs,
 and the scripts and the library the app compiles against are one revision
 (`workflows/README.md`, devops). Bump the pin and re-copy together:
 
 ```sh
-diff -r scripts/release "$(go env GOMODCACHE)/gt.local/devops@<version>/scripts/release"
+diff -r scripts/release "$(go env GOMODCACHE)/gt.local/devops@v0.1.2/scripts/release"
 ```
 
 ## Before the first release
