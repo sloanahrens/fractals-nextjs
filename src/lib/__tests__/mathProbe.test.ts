@@ -30,7 +30,7 @@ import {
   shouldClearProbe,
 } from "../mathProbe";
 import { createMultibrotKind } from "../multibrot";
-import { newtonKind } from "../newton";
+import { createNewtonKind, newtonKind } from "../newton";
 import { renderRgba } from "../renderRgba";
 import { celticKind } from "../celtic";
 import { createMagnetKind } from "../magnet";
@@ -81,6 +81,9 @@ const KINDS: {
   // Newton's count is its root and its speed packed together rather than a
   // step count, so its steps are held to escapeInfo's alone.
   { name: "newton", kind: newtonKind, packsOutcomes: true },
+  { name: "newton 4", kind: createNewtonKind("4"), packsOutcomes: true },
+  { name: "newton 5", kind: createNewtonKind("5"), packsOutcomes: true },
+  { name: "newton cycle", kind: createNewtonKind("cycle"), packsOutcomes: true },
 ];
 
 describe.each(KINDS)("$name", ({ kind, packsOutcomes = false, view = VIEW }) => {

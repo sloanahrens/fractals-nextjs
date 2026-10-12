@@ -22,7 +22,7 @@ import {
   calculateZoomBounds,
 } from "../mandelbrot";
 import type { ColorScheme } from "../../types/fractal";
-import { NEWTON_BAND } from "../newton";
+import { newtonPolynomialFor } from "../newton";
 import {
   FEATURED_PLACE_IDS,
   PLACES,
@@ -420,7 +420,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   "burning-ship": [8, 10],
   tricorn: [8, 10],
   multibrot: [10, 12],
-  newton: [8, 10],
+  newton: [14, 16],
   celtic: [4, 6],
   "perpendicular-ship": [4, 6],
   magnet: [4, 6],
@@ -508,6 +508,27 @@ describe("PLACES", () => {
     }
   });
 
+  it("spreads the Newton places over all four polynomials, each with its own whole set", () => {
+    const places = placesForFractal("newton");
+
+    for (const polynomial of ["3", "4", "5", "cycle"]) {
+      const ofPolynomial = places.filter(
+        (entry) => entry.variant === polynomial,
+      );
+
+      // Two for each of the polynomials this landing added, and the nine the
+      // app has always had for z^3 - 1.
+      expect(ofPolynomial.length, polynomial).toBeGreaterThanOrEqual(2);
+      // The chip's destination: the polynomial's whole view at the default
+      // frame, which is the one frame all four of them share. z^3 - 1 is the
+      // view the app has always opened the fractal on, so its whole-set place
+      // is the one that was already there under its own name.
+      expect(wholeSetPlaceFor(polynomial, "newton")?.id, polynomial).toBe(
+        polynomial === "3" ? "newton-whole" : `newton-${polynomial}-whole`,
+      );
+    }
+  });
+
   it("shows at least two Newton basins in every Newton place, since one basin is a flat field", () => {
     const grid = 40;
 
@@ -518,8 +539,13 @@ describe("PLACES", () => {
         entry.centerY,
         entry.zoom,
       );
-      const kind = resolveFractalKind("newton", "");
-      const share = [0, 0, 0];
+      const kind = resolveFractalKind("newton", entry.variant ?? "");
+      // A polynomial's own band: a third of the range for the three-root ones,
+      // a quarter and a fifth for z^4 - 1 and z^5 - 1. The point is that no
+      // place is a single colour family, whatever its polynomial shows.
+      const polynomial = newtonPolynomialFor(entry.variant ?? "");
+      const band = cap / polynomial.roots.length;
+      const share = new Map<number, number>();
 
       for (let row = 0; row < grid; row++) {
         for (let column = 0; column < grid; column++) {
@@ -536,14 +562,18 @@ describe("PLACES", () => {
             cap,
             false,
           );
-          if (value < cap) share[Math.floor(value / (cap * NEWTON_BAND))] += 1;
+          if (value >= cap) continue;
+          const root = Math.floor(value / band);
+          share.set(root, (share.get(root) ?? 0) + 1);
         }
       }
 
-      const shown = share.filter((count) => count / (grid * grid) >= 0.05);
+      const shown = [...share.values()].filter(
+        (count) => count / (grid * grid) >= 0.05,
+      );
       expect(
         shown.length,
-        `${entry.id}: ${share.join(", ")}`,
+        `${entry.id}: ${[...share.entries()].map(([root, count]) => `${root}=${count}`).join(", ")}`,
       ).toBeGreaterThanOrEqual(2);
     }
   });

@@ -19,7 +19,11 @@ import {
   createMultibrotKind,
   parseMultibrotPower,
 } from "./multibrot";
-import { newtonKind } from "./newton";
+import {
+  NEWTON_POLYNOMIALS,
+  createNewtonKind,
+  parseNewtonPolynomial,
+} from "./newton";
 import { celticKind } from "./celtic";
 import { perpendicularShipKind } from "./perpendicularShip";
 import { tricornKind } from "./tricorn";
@@ -112,14 +116,28 @@ const MAGNET_VARIANTS: FractalVariants = {
   allowsCustom: false,
 };
 
+// The polynomial is written as the power's own digit in a link and in storage
+// ("3", "4", "5"), and the one that has no such digit after the shorter name
+// the map is known by ("cycle"); the chip shows the equation, which is what a
+// visitor is choosing between.
+const NEWTON_VARIANTS: FractalVariants = {
+  label: "Polynomial",
+  options: NEWTON_POLYNOMIALS.map((polynomial) => ({
+    value: polynomial.id,
+    label: polynomial.label,
+  })),
+  allowsCustom: false,
+};
+
 /**
  * The setting a fractal takes, or null for a fractal that takes none.
  * @param fractalId - Id of the fractal
- * @returns Its variant descriptor; null for every fractal but Julia, the Multibrot and the Magnet, and for any id this build does not know
+ * @returns Its variant descriptor; null for every fractal but Julia, the Multibrot, the Newton fractal and the Magnet, and for any id this build does not know
  */
 export function fractalVariants(fractalId: string): FractalVariants | null {
   if (fractalId === "julia") return JULIA_VARIANTS;
   if (fractalId === "multibrot") return MULTIBROT_VARIANTS;
+  if (fractalId === "newton") return NEWTON_VARIANTS;
   if (fractalId === "magnet") return MAGNET_VARIANTS;
 
   return null;
@@ -150,6 +168,7 @@ export function isVariantValue(
   if (value == null) return false;
   if (fractalId === "julia") return isJuliaConstantName(value);
   if (fractalId === "multibrot") return parseMultibrotPower(value) !== null;
+  if (fractalId === "newton") return parseNewtonPolynomial(value) !== null;
 
   return fractalId === "magnet" && parseMagnetType(value) !== null;
 }
@@ -193,16 +212,17 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
  * The formula a picker choice draws.
  *
  * The picker names a fractal and the renderer wants a {@link FractalKind}. For
- * the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn,
- * the Newton fractal and the Celtic set those are the same thing. Julia is a
- * family rather than a picture, so the choice carries a constant as well — one
- * of the named four, or a custom spelling of any other point — and a name this
- * build cannot read falls back to the first named constant instead of to a
- * blank canvas. The Multibrot is a family of powers, and one it cannot read
- * falls back to 3 the same way; the Magnet is a family of two magnetic types
- * and an unreadable one falls back to Type I.
+ * the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn and
+ * the Celtic set those are the same thing. Julia is a family rather than a
+ * picture, so the choice carries a constant as well — one of the named four, or
+ * a custom spelling of any other point — and a name this build cannot read
+ * falls back to the first named constant instead of to a blank canvas. The
+ * Multibrot is a family of powers, and one it cannot read falls back to 3 the
+ * same way; the Newton fractal is a family of polynomials and an unreadable
+ * value falls back to z^3 - 1; the Magnet is a family of two magnetic types and
+ * an unreadable one falls back to Type I.
  * @param typeId - Id of the fractal the picker selected
- * @param variant - Name of the Julia constant, the Multibrot power or the Magnet type; ignored for any other fractal
+ * @param variant - Name of the Julia constant, the Multibrot power, the Newton polynomial or the Magnet type; ignored for any other fractal
  * @returns The kind to draw
  */
 export function resolveFractalKind(
@@ -212,7 +232,11 @@ export function resolveFractalKind(
   if (typeId === "burning-ship") return burningShipKind;
   if (typeId === "perpendicular-ship") return perpendicularShipKind;
   if (typeId === "tricorn") return tricornKind;
-  if (typeId === "newton") return newtonKind;
+  if (typeId === "newton") {
+    return createNewtonKind(
+      parseNewtonPolynomial(variant) ?? NEWTON_POLYNOMIALS[0].id,
+    );
+  }
   if (typeId === "celtic") return celticKind;
   if (typeId === "magnet") {
     return createMagnetKind(parseMagnetType(variant) ?? MAGNET_TYPES[0]);

@@ -16,7 +16,12 @@ import { createJuliaKind } from "../julia";
 import { escapeTimeOrbit, mandelbrotKind } from "../mandelbrot";
 import { ORBIT_MAX_STEPS, orbitFor } from "../mathProbe";
 import { MULTIBROT_POWERS, createMultibrotKind } from "../multibrot";
-import { NEWTON_ROOTS, NEWTON_TOLERANCE, newtonKind } from "../newton";
+import {
+  NEWTON_ROOTS,
+  NEWTON_TOLERANCE,
+  createNewtonKind,
+  newtonKind,
+} from "../newton";
 import { celticKind } from "../celtic";
 import { createMagnetKind } from "../magnet";
 import { perpendicularShipKind } from "../perpendicularShip";
@@ -160,6 +165,40 @@ const CASES: KindCase[] = [
     neverEndsLength: () => 1,
     // -0.5 is sent to the root 1 in one step; 1 is already a root.
     endsAt: { point: { real: -0.5, imaginary: 0 }, steps: 1 },
+    endedLength: (steps) => steps + 1,
+    escapes: false,
+  },
+  {
+    name: "newton z^4 - 1",
+    kind: createNewtonKind("4"),
+    starts: atPoint,
+    // The derivative 4z^3 vanishes at the origin, where there is no step.
+    neverEnds: ORIGIN,
+    neverEndsLength: () => 1,
+    endsAt: { point: { real: 2, imaginary: 0 }, steps: 6 },
+    endedLength: (steps) => steps + 1,
+    escapes: false,
+  },
+  {
+    name: "newton z^5 - 1",
+    kind: createNewtonKind("5"),
+    starts: atPoint,
+    neverEnds: ORIGIN,
+    neverEndsLength: () => 1,
+    endsAt: { point: { real: 2, imaginary: 0 }, steps: 7 },
+    endedLength: (steps) => steps + 1,
+    escapes: false,
+  },
+  {
+    name: "newton z^3 - 2z + 2",
+    kind: createNewtonKind("cycle"),
+    starts: atPoint,
+    // The origin is on the map's two-step loop, 0 -> 1 -> 0, so the walk never
+    // ends on its own: it is the one Newton polynomial whose path goes the
+    // whole window, hopping between the two points.
+    neverEnds: ORIGIN,
+    neverEndsLength: (maxSteps) => maxSteps + 1,
+    endsAt: { point: { real: 0.5, imaginary: 0 }, steps: 8 },
     endedLength: (steps) => steps + 1,
     escapes: false,
   },

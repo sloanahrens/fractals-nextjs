@@ -58,7 +58,7 @@ This is a Next.js 16 (React 19) TypeScript application that renders interactive 
 - **Celtic** (`src/lib/celtic.ts`): The Celtic Mandelbrot formula — the Mandelbrot loop with the real part of the square folded by an absolute value, z -> (|Re(z^2)| + i Im(z^2)) + c, that is x' = |x^2 - y^2| + cx and y' = 2xy + cy — behind its own fractal kind
 - **Multibrot** (`src/lib/multibrot.ts`): The Mandelbrot loop with a higher power, z -> z^d + c for d = 3, 4, 5 — `createMultibrotKind(power)` and `parseMultibrotPower`, the power being the fractal's variant
 - **Magnet** (`src/lib/magnet.ts`): The two rational maps of the magnetic model, z -> ((z^2 + c - 1)/(2z + c - 2))^2 (Type I) and z -> ((z^3 + 3(c-1)z + (c-1)(c-2))/(3z^2 + 3(c-2)z + (c-1)(c-2) + 1))^2 (Type II), both from z0 = 0 — `createMagnetKind(type)`, `parseMagnetType` and `MAGNET_TYPES`/`MAGNET_TYPE_LABELS`, the type being the fractal's variant. z = 1 is a superattracting fixed point for every c, so the set is the c whose orbit settles there and that is nearly the whole plane: the picture's flat black is the settled set, and the colours draw the island of c that runs off to infinity instead. Outside is |z| > 100 (`MAGNET_BAILOUT`), smoothed with the shared degree-2 formula carried to that radius; settled is |z - 1| < 1e-6 (`MAGNET_TOLERANCE`); a vanishing denominator is a pole and is counted as the orbit's last step
-- **Newton** (`src/lib/newton.ts`): Newton's method for z^3 - 1 as a fractal kind — the orbit's root and its speed packed into the one number the renderer takes, the three roots in thirds of 0..maxIterations; the first fractal that is not an escape-time set
+- **Newton** (`src/lib/newton.ts`): Newton's method for one of four polynomials as a fractal kind — `NEWTON_POLYNOMIALS`' z^3 - 1 (the default, and what a link with no `k` names), z^4 - 1, z^5 - 1 and z^3 - 2z + 2, each a `NewtonPolynomial` (its roots and the arithmetic of one step, `z - p(z)/p'(z)`); `createNewtonKind(polynomial)` builds the memoized kind for one, and the orbit's root and its speed are packed into the one number the renderer takes, the n roots in n-ths of 0..maxIterations; the first fractal that is not an escape-time set. z^3 - 2z + 2 has an attracting two-step loop beside the origin (0 -> 1 -> 0), whose orbits never settle and are drawn black
 - **Wander step** (`src/lib/wander.ts`): One Auto-wander step — a view near the current one that a coarse sample says is worth looking at, drawn from an injected generator so a walk replays
 - **Surprise target** (`src/lib/surprise.ts`): Where the top bar's Surprise me goes — one of the six `suggest` places, picked by an injected random function, or null when there are none
 - **Tour engine** (`src/lib/tour.ts`): Where an unattended tour goes next — `nextTourStop` over the places catalogue from an injected random function, with the dwell and crossfade times, the fractal-switch odds and the recent window
@@ -204,6 +204,146 @@ the human may push one. See the Gas Town rules at the end of this file.
 ## Version Notes
 
 _Last updated: 2026-10-11_
+
+### Newton is a family: a Polynomial row of four polynomials (2026-10-11)
+
+- fr-ztk. The Newton fractal gains a setting, the polynomial whose roots
+  Newton's method hunts for, using the variant mechanism as the Multibrot does
+  for its power: **z^3 - 1** (today's picture, the default, and what a link with
+  no variant names), **z^4 - 1**, **z^5 - 1** and **z^3 - 2z + 2** (the classic
+  equation whose map has a basin that never settles). Each root keeps its own
+  colour family, shaded by how fast the method reaches it, exactly as the one
+  polynomial did. No picker entry was added and no control was written: the
+  switcher's chip row and the Settings select draw the four from
+  `fractalVariants("newton")`.
+- **`src/lib/newton.ts` generalised, with the arithmetic of z^3 - 1 kept byte
+  for byte.** A polynomial is now a `NewtonPolynomial`: its `id` (the variant
+  value), its `label` (the equation, as a chip shows it), its `roots` in band
+  order, and an `evaluate(real, imaginary, out)` that writes both `|p(z)|` (the
+  convergence test) and one Newton step into a caller-owned
+  `NewtonStepState` — one call rather than two because the residual and the step
+  share the powers of z they need, and computing them twice would roughly double
+  the cost of the app's heaviest fractal. `NEWTON_POLYNOMIALS` is the four;
+  `parseNewtonPolynomial` reads only the app's own spellings ("3", "4", "5",
+  "cycle"); `newtonPolynomialFor` falls back to z^3 - 1 for anything else, and
+  `createNewtonKind(polynomial)` throws a `RangeError` for a value from outside
+  and is **memoized**, so `resolveFractalKind("newton", "Dendrite")` is the very
+  same object as `newtonKind` and the identity assertions the older tests make
+  still hold.
+- **The z^3 - 1 case is unchanged, and that was the point.** `unityEvaluate(power)`
+  builds `w = z^(d-1)` by repeated multiplication, then `z^d = w z` for the
+  residual, then the step `((d-1)z + 1/w)/d` from the same `w` — for d = 3 that
+  is exactly the old `(2z + 1/z^2)/3` with `z^2` computed once and used twice, in
+  the same order, so `newton.test.ts`'s 26 tests passed untouched through the
+  rewrite. The band is now `1 / roots.length` rather than the `NEWTON_BAND`
+  constant, which is the same double (1/3) for the three-root polynomials; all
+  four kinds keep `id: "newton"`, as the Multibrot's powers keep `id:
+  "multibrot"`, so `hasEscapeCircle`, `orbitMinExtent` and `describeProbe` need
+  no change.
+- **The four polynomials and their roots**, written out rather than solved for
+  at load: z^3 - 1 keeps `NEWTON_ROOTS` (1, -0.5 ± 0.8660254037844386i);
+  z^4 - 1 is 1, i, -1, -i; z^5 - 1 is the five fifth roots of 1; z^3 - 2z + 2 is
+  -1.7692923542386314 and 0.8846461771193157 ± 0.5897428050222056i (one real
+  root and a conjugate pair — its discriminant is negative).
+- **z^3 - 2z + 2, and why it is interesting.** p'(z) = 3z^2 - 2 vanishes at
+  ±√(2/3), where there is no step and the orbit gives up like any other
+  Newton's. More importantly the map sends 0 to 1 and 1 straight back to 0 — an
+  attracting two-step loop — so the orbits around them never reach a root: they
+  run the whole cap and are painted black, which is the dark disc the picture is
+  built around. Nothing detects this specially; it falls out of the residual
+  never dropping below the tolerance, and `escapeInfo` reports it as unsettled
+  like any other cap-bound orbit. Measured: 0, 1, 0.01, -0.01 + 0.02i, 0.99 +
+  0.01i and 0.1i all run a cap of 300, and 2000 as well; a point far enough out
+  (0.5, 0.2, 0.95 on the real axis) settles, one as close as 1.02 - 0.01i after
+  173 steps. So the loop's basin is bounded and its edge is what the picture's
+  black region is made of.
+- **The variant row.** `fractalVariants("newton")` is `label: "Polynomial"`,
+  options "3", "4", "5", "cycle" labelled "z^3 - 1", "z^4 - 1", "z^5 - 1" and
+  "z^3 - 2z + 2", `allowsCustom: false`; `isVariantValue` takes those four and
+  nothing else, and `defaultVariant("newton")` is "3". The value for the fourth
+  is the word **"cycle"**, not a digit, because it is the one polynomial with no
+  power to name it by and the loop is what makes it the classic example. It is a
+  value no other fractal draws, so the codec's cross-fractal reading is
+  unchanged: "3", "4" and "5" were already Multibrot powers, and "cycle" is
+  dropped by every other fractal's `viewLinkToUpdates`/`variantOn` the way a
+  power is dropped by Julia. **An old Newton link is the same picture**: `f=newton`
+  with no `k` decodes to no variant, and `viewLinkToUpdates` fills it from
+  `variantOn("newton", …)` — "3", which is z^3 - 1. `presetFractalFields`
+  writes the choice under `variant`, `presetVariant` reads it and falls back to
+  "3", and `presetFractalFields("newton", …)` needing a `variant` is why
+  `fractalVariants("newton")` being non-null matters to saved views too.
+- **Places.** All nine existing Newton places gained `variant: "3"` (without
+  it `sameVariant` would read them as a different picture from every Newton
+  view, which is exactly the bug the Multibrot places avoid by carrying one),
+  and six were added, two per new polynomial: the whole picture of each — which
+  has to sit exactly on `defaultViewFor("newton")` (the origin at zoom 1)
+  because that is what `wholeSetPlaceFor` looks for, and the one frame holds
+  every root of all four — and one detail each. `NEWTON_PLACES` is 15 and
+  `places.test.ts`'s count went from [8, 10] to [14, 16]. Measured at 64x48 with
+  whole counts: `newton-4-whole` 16% one colour, 117 distinct counts;
+  `newton-4-braid` (0.7, 0.7 at zoom 6, ocean) 31% and 165; `newton-5-whole`
+  16% and 202; `newton-5-braid` (0.9, 0.6 at zoom 6, rainbow) 18% and 242;
+  `newton-cycle-whole` 18% and 65; `newton-cycle-loop` (the origin at zoom 6,
+  classic) 12% and 64. The two "whole" views for z^4 - 1 and z^5 - 1 read best
+  in rainbow, like the existing whole-basins place; the z^4 - 1 braid is the one
+  place in ocean, because ocean's four blues separate its four basins where a
+  scheme that repeats a hue does not. **The featured place is unchanged**
+  (`newton-junction`, the pinwheel at the origin), so `FEATURED_PLACE_IDS` and
+  the featured guards are untouched.
+- **The places test's basin guard now reads each place's own band.** "At least
+  two basins show in every Newton place" divided by `NEWTON_BAND` (a third);
+  it now divides `cap` by the place's own root count, via
+  `newtonPolynomialFor(place.variant).roots.length`, so the four- and five-root
+  polynomials are judged by their own bands.
+- **Math card.** `FRACTAL_MATH.newton` is a function of the variant (as the
+  Multibrot's and the Magnet's are). The rule is assembled per polynomial from a
+  `p(z)` and a `p'(z)` tree — z → z − (z³ − 1)/(3z²), …(z⁴ − 1)/(4z³),
+  …(z⁵ − 1)/(5z⁴), and for the cubic z → z − (z³ − 2z + 2)/(3z² − 2) — and the
+  **setting is no longer null**: label "Polynomial, the equation whose solutions
+  it hunts for", value the equation written `= 0`. The blurbs and escape
+  sentences are per polynomial; the cycle's says the method is caught in a loop
+  beside the origin and that the orbit plot draws it circling rather than
+  arriving. `toPlainText` words a fourth and fifth power as "to the power 4" and
+  "to the power 5" (only squared and cubed are special), so that is what the
+  card's reading says and what the tests assert.
+- **`npm run make-og-previews`** was run and the six
+  `public/og/newton-{4,5,cycle}-*.jpg` files committed (41 to 132 KB, all at
+  quality 80; the set is 92 pictures, 6.5 MB). Nothing else in `public/og/`
+  changed.
+- **The button row and the chip row**: the Newton chip row is the widest of the
+  four (its longest label is "z^3 - 2z + 2"), and it scrolls sideways like the
+  others where the picture is narrower than it. The switcher's classes are
+  unchanged and it was not re-measured in a browser.
+- Tests: `newton.test.ts` grew from 26 tests to 60 — the polynomial registry and
+  the parser's refusals, and a `describe.each` over the three new polynomials
+  (every root reached at its band's near edge, a point near each root, disjoint
+  bands over a grid, far/huge/NaN points, longer orbits sitting further along
+  the band, smooth-count continuity across a whole-count jump inside one basin,
+  the turn that moves a band on by one for the two `z^d - 1` powers, the mirror
+  about the real axis, and one colour family per root in every scheme) plus a
+  block for the cyclic cubic (the 0↔1 loop at any cap, points beside it, the two
+  vanishing-derivative points, agreement with a textbook Newton oracle over the
+  plane, and that most of the frame settles). The new polynomials were added to
+  `escapeInfo`, `orbit`, `mathProbe` and `renderRgba`'s per-kind tables, and the
+  new files to `blankView.test.ts` — whose default-view guard now covers
+  Newton's four opening views explicitly, **because two non-Newton variant
+  openings are genuinely blank** (a Julia Dendrite and a z^5 Multibrot at 64x48
+  in one scheme each) and the general claim would be false. `presets.test.ts`
+  gained the Newton `variant` field for both `presetFractalFields` and
+  `presetVariant`; `ogImage.test.ts` that each polynomial's whole view previews
+  as its own picture; `fractalTypes.test.ts` the descriptor, `isVariantValue`,
+  `defaultVariant` and `variantOn` for the new value; `viewLink.test.ts` the
+  `k` round trip and (as before) that a value the fractal cannot draw is not
+  written; `viewLinkState.test.ts` that a Newton link with no `k` opens on
+  z^3 - 1 and one with a `k` applies it; `viewPreview.test.ts` the line, which
+  now reads "Newton fractal, z^3 - 1, 8x"; `fractalMath.test.ts` the three new
+  rules, the four equations and the per-polynomial words; and the `tourLink`
+  stops carry `variant: "3"`, which they must now. `make gate` is green.
+- Docs: the README (Fractal Types, Fractal Switcher, Custom Presets, the Math
+  card, Project Structure, the Mathematics Newton section, and the count in the
+  Mathematics intro, which said "Seven of the eight"), the Help overlay's
+  switcher row, the design doc's As built (a new "Newton's polynomials" entry),
+  and this note.
 
 ### Magnet: a ninth fractal, with the magnetic types as its variant (2026-10-11)
 

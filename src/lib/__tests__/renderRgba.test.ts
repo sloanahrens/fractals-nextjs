@@ -210,6 +210,9 @@ describe("the counting and colouring steps", () => {
       resolveFractalKind("perpendicular-ship", ""),
       resolveFractalKind("multibrot", "4"),
       resolveFractalKind("newton", ""),
+      resolveFractalKind("newton", "4"),
+      resolveFractalKind("newton", "5"),
+      resolveFractalKind("newton", "cycle"),
       resolveFractalKind("magnet", "1"),
       resolveFractalKind("magnet", "2"),
     ];
@@ -257,6 +260,9 @@ describe("the scheme's own settings through the pipeline", () => {
     resolveFractalKind("celtic", ""),
     resolveFractalKind("multibrot", "4"),
     resolveFractalKind("newton", ""),
+    resolveFractalKind("newton", "4"),
+    resolveFractalKind("newton", "5"),
+    resolveFractalKind("newton", "cycle"),
     resolveFractalKind("magnet", "1"),
     resolveFractalKind("magnet", "2"),
   ];

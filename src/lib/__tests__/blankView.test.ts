@@ -8,7 +8,8 @@ import {
   isBlankImage,
   nearUniformShare,
 } from "../blankView";
-import { defaultViewFor, FRACTAL_TYPES } from "../fractalTypes";
+import { FRACTAL_TYPES, defaultViewFor } from "../fractalTypes";
+import { NEWTON_POLYNOMIALS } from "../newton";
 import { createCanvasThumbnailRender } from "../placeThumbnails";
 import { PLACES, type Place } from "../places";
 
@@ -296,6 +297,33 @@ describe("what the detector says of real pictures", () => {
         fractal: id,
         ...(id === "julia" ? { variant: "Classic" } : {}),
         ...defaultViewFor(id),
+      };
+      const picture = await pictureOf(opening, scheme);
+
+      expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(false);
+    },
+    30000,
+  );
+
+  // Newton's polynomials share one opening frame, and a chip goes to the whole
+  // of the one it names, so every one of them is a picture a visitor can land
+  // on rather than only the first. (Every other fractal's opening view is the
+  // one above; the variants of a fractal that takes one are not all promised
+  // to be busy — a Julia Dendrite drawn in ocean at 64x48 is one colour, which
+  // is what the hint is for.)
+  it.each(
+    NEWTON_POLYNOMIALS.flatMap((polynomial) =>
+      schemes.map((scheme) => [polynomial.label, polynomial.id, scheme] as const),
+    ),
+  )(
+    "the Newton fractal's %s view is not blank in %s",
+    async (_label, variant, scheme) => {
+      const opening: Place = {
+        id: `default-newton-${variant}`,
+        name: "newton",
+        fractal: "newton",
+        variant,
+        ...defaultViewFor("newton"),
       };
       const picture = await pictureOf(opening, scheme);
 

@@ -590,6 +590,17 @@ describe("the fractal fields a view is saved with", () => {
       variant: "4",
     });
   });
+
+  it("writes a Newton polynomial the same way, the cycle name included", () => {
+    expect(presetFractalFields("newton", "4")).toEqual({
+      fractal: "newton",
+      variant: "4",
+    });
+    expect(presetFractalFields("newton", "cycle")).toEqual({
+      fractal: "newton",
+      variant: "cycle",
+    });
+  });
 });
 
 describe("the colour fields a view is saved with", () => {
@@ -712,6 +723,20 @@ describe("the Multibrot power a saved view names", () => {
         variant: undefined,
         juliaConstant: "Dendrite",
       }),
+    ).toBe("3");
+  });
+
+  it("reads a Newton view's polynomial, and falls back to z^3 - 1", () => {
+    const newton = { ...CUSTOM_PRESET, fractal: "newton" };
+
+    expect(presetVariant({ ...newton, variant: "cycle" })).toBe("cycle");
+    expect(presetVariant({ ...newton, variant: "4" })).toBe("4");
+    // No field at all is the picture the app has always drawn, and a value the
+    // fractal cannot draw is the same, since the renderer falls back to it.
+    expect(presetVariant({ ...newton, variant: undefined })).toBe("3");
+    expect(presetVariant({ ...newton, variant: "z^3 - 1" })).toBe("3");
+    expect(
+      presetVariant({ ...newton, variant: undefined, juliaConstant: "Dendrite" }),
     ).toBe("3");
   });
 

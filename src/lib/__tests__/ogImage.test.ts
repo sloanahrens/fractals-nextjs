@@ -64,6 +64,29 @@ describe("ogImageFor", () => {
     ).toBe(ogImagePath("multibrot-5-twin-bulbs"));
   });
 
+  it("prefers a place of the Newton polynomial the view names", () => {
+    // The four whole-set places share the frame, so the polynomial is the
+    // whole of what tells them apart: a z^4 - 1 view beside the z^3 - 1 one is
+    // a picture of the fourth roots, not of the third.
+    for (const polynomial of ["3", "4", "5", "cycle"]) {
+      const image = ogImageFor(
+        view({
+          fractal: "newton",
+          variant: polynomial,
+          centerX: 0,
+          centerY: 0,
+          zoom: 1,
+        }),
+      );
+
+      expect(image, polynomial).toBe(
+        ogImagePath(
+          polynomial === "3" ? "newton-whole" : `newton-${polynomial}-whole`,
+        ),
+      );
+    }
+  });
+
   it("shows a Julia constant the catalogue has no place of as a Julia place", () => {
     for (const constant of ["custom:-0.4,0.6", "custom:0,0.9"]) {
       const image = ogImageFor(

@@ -108,14 +108,14 @@ describe("viewLinkToUpdates", () => {
     });
   });
 
-  it("puts a Newton link's fractal on the page and leaves the variant standing", () => {
+  it("opens a Newton link with no polynomial on the one the app has always drawn", () => {
     expect(
       viewLinkToUpdates(
         decodeView("#v=1&f=newton&x=0&y=0&z=8&s=rainbow&i=auto&w=800&h=600"),
       ),
     ).toMatchObject({
       fractalType: "newton",
-      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
+      variant: "3",
       centerX: 0,
       centerY: 0,
       zoomLevel: 8,
@@ -123,13 +123,13 @@ describe("viewLinkToUpdates", () => {
     });
   });
 
-  it("drops a variant a Newton link carries, which the fractal cannot use", () => {
+  it("applies a polynomial a Newton link carries, and its own default for one it cannot use", () => {
     expect(
       viewLinkToUpdates(decodeView("#v=1&f=newton&k=4&x=0&y=0&z=1")),
-    ).toMatchObject({
-      fractalType: "newton",
-      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
-    });
+    ).toMatchObject({ fractalType: "newton", variant: "4" });
+    expect(
+      viewLinkToUpdates(decodeView("#v=1&f=newton&k=garbage&x=0&y=0&z=1")),
+    ).toMatchObject({ fractalType: "newton", variant: "3" });
   });
 
   it("applies a canvas size and an iteration count that are not the defaults", () => {
