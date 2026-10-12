@@ -1,4 +1,5 @@
-import type { ComplexNumber, FractalKind } from "../types/fractal";
+import type { ComplexNumber, FractalKind, TrapShape } from "../types/fractal";
+import { TRAP_CYCLE_TOLERANCE, trapKey, trapKeyToDistance } from "./orbitTrap";
 
 /**
  * The powers the Multibrot offers. With d = 2 the iteration is the Mandelbrot
@@ -94,6 +95,67 @@ function multibrotIterations(
  * @returns The kind that draws it
  * @throws RangeError when the power is not one of {@link MULTIBROT_POWERS}
  */
+/**
+ * The closest a Multibrot orbit from z = 0 comes to a trap shape: the count's
+ * own loop with a running minimum kept in place of the count, allocating
+ * nothing. Counts the points the orbit lands on (the start is not one),
+ * including the one that left the radius, and stops on the escape test, at the
+ * cap, or when the orbit has closed on a cycle (Brent's check; see
+ * `escapeTimeTrap` in mandelbrot.ts). The kind's `orbit` walk is the oracle
+ * that holds it to the other copies of this loop (`trapDistance.test.ts`).
+ * @param c - Point in the complex plane to test
+ * @param power - The exponent d of z^d + c
+ * @param maxIterations - Most steps to walk
+ * @param shape - Which trap the distance is to
+ * @returns The least distance reached, or Infinity when no step was measured
+ */
+function multibrotTrap(
+  c: ComplexNumber,
+  power: number,
+  maxIterations: number,
+  shape: TrapShape,
+): number {
+  let real = 0;
+  let imaginary = 0;
+  let savedReal = 0;
+  let savedImaginary = 0;
+  let sinceSave = 0;
+  let saveEvery = 1;
+  let least = Infinity;
+
+  for (let steps = 0; steps < maxIterations; steps++) {
+    let powerReal = real;
+    let powerImaginary = imaginary;
+    for (let factor = 1; factor < power; factor++) {
+      const nextReal = powerReal * real - powerImaginary * imaginary;
+      powerImaginary = powerReal * imaginary + powerImaginary * real;
+      powerReal = nextReal;
+    }
+    real = powerReal + c.real;
+    imaginary = powerImaginary + c.imaginary;
+
+    const key = trapKey(shape, real, imaginary);
+    if (key < least) least = key;
+
+    if (real * real + imaginary * imaginary > 4) break;
+
+    if (
+      Math.abs(real - savedReal) < TRAP_CYCLE_TOLERANCE &&
+      Math.abs(imaginary - savedImaginary) < TRAP_CYCLE_TOLERANCE
+    ) {
+      break;
+    }
+    if (++sinceSave === saveEvery) {
+      savedReal = real;
+      savedImaginary = imaginary;
+      saveEvery *= 2;
+      sinceSave = 0;
+    }
+  }
+
+  return trapKeyToDistance(shape, least);
+}
+
 export function createMultibrotKind(power: number): FractalKind {
   if (!MULTIBROT_POWERS.includes(power)) {
     throw new RangeError(
@@ -110,6 +172,9 @@ export function createMultibrotKind(power: number): FractalKind {
       const steps = multibrotIterations(point, power, maxIterations, false);
 
       return { steps, escaped: steps < maxIterations };
+    },
+    trapDistance(point, maxIterations, trap) {
+      return multibrotTrap(point, power, maxIterations, trap);
     },
     orbit(point, maxSteps) {
       // The count's own loop with the points kept, so the path the plot draws

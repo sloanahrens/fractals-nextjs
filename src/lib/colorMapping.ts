@@ -23,7 +23,29 @@ export function mapIterationsToColor(
   }
 
   // Normalize iterations to 0-1 range
-  let normalizedIterations = iterations / maxIterations;
+  return mapPositionToColor(iterations / maxIterations, scheme, options);
+}
+
+/**
+ * Map a place on the palette to a colour: the part of the mapping that does not
+ * care what the place stands for, so an iteration count and an orbit trap's
+ * distance go through the same scheme, Reverse and Shift.
+ *
+ * {@link mapIterationsToColor} is the black test and the division by the cap,
+ * then this; `colorMapping.test.ts` holds the pair byte for byte.
+ * @param position - Place on the palette, 0 to 1 (a trap picture holds it
+ *   inside `TRAP_POSITION_MIN`..`TRAP_POSITION_MAX`)
+ * @param scheme - Color scheme to use
+ * @param options - Reverse and shift of the scheme; nothing for the scheme as
+ *   the app has always drawn it
+ * @returns RGB color values
+ */
+export function mapPositionToColor(
+  position: number,
+  scheme: ColorScheme = "classic",
+  options?: ColorOptions,
+): ColorRGB {
+  let normalizedIterations = position;
 
   // The two palette options, in this order: the scheme is reversed and then
   // shifted, so a reversed scheme started a quarter of the way round is the

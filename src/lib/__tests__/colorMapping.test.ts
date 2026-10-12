@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { getAvailableColorSchemes, mapIterationsToColor } from "../colorMapping";
-import type { ColorScheme } from "../../types/fractal";
+import {
+  getAvailableColorSchemes,
+  mapIterationsToColor,
+  mapPositionToColor,
+} from "../colorMapping";
+import type { ColorOptions, ColorScheme } from "../../types/fractal";
 
 const SCHEMES: ColorScheme[] = [
   "classic",
@@ -235,6 +239,57 @@ describe("mapIterationsToColor: the scheme's own settings", () => {
         }
       }
     }
+  });
+});
+
+describe("mapPositionToColor", () => {
+  const OPTION_PAIRS: (ColorOptions | undefined)[] = [
+    undefined,
+    {},
+    { reverse: false, shift: 0 },
+    { reverse: true },
+    { shift: 0.25 },
+    { shift: -0.3 },
+    { shift: 1.4 },
+    { reverse: true, shift: 0.6 },
+    { shift: Number.NaN },
+  ];
+
+  // The split is invisible to a count picture: mapIterationsToColor is the
+  // black test and the division by the cap, then this function, so each count
+  // goes through the very same arithmetic it always did.
+  it("is mapIterationsToColor with the black test and the division taken out, byte for byte", () => {
+    const cap = 240;
+
+    for (const scheme of SCHEMES) {
+      for (const options of OPTION_PAIRS) {
+        for (let n = 0; n < cap; n += 1.7) {
+          expect(mapPositionToColor(n / cap, scheme, options)).toEqual(
+            mapIterationsToColor(n, cap, scheme, options),
+          );
+        }
+      }
+    }
+  });
+
+  it("does not know about the cap's black: a position is always a place on the palette", () => {
+    // mapIterationsToColor paints n >= cap black. A position of 1 is not that;
+    // it is the palette's end, which is why a trap picture holds its positions
+    // short of it (TRAP_POSITION_MAX).
+    expect(mapIterationsToColor(100, 100, "grayscale")).toEqual({
+      r: 0,
+      g: 0,
+      b: 0,
+    });
+    expect(mapPositionToColor(1, "grayscale")).toEqual({
+      r: 255,
+      g: 255,
+      b: 255,
+    });
+  });
+
+  it("defaults to the classic scheme, as the count mapping does", () => {
+    expect(mapPositionToColor(0.4)).toEqual(mapPositionToColor(0.4, "classic"));
   });
 });
 

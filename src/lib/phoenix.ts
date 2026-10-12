@@ -1,4 +1,5 @@
-import type { ComplexNumber, FractalKind } from "../types/fractal";
+import type { ComplexNumber, FractalKind, TrapShape } from "../types/fractal";
+import { TRAP_CYCLE_TOLERANCE, trapKey, trapKeyToDistance } from "./orbitTrap";
 
 /**
  * A Phoenix constant with the label a picker shows for it.
@@ -116,6 +117,75 @@ function phoenixIterations(
  * @param constant - c in `real`, p in `imaginary`
  * @returns The kind for that constant
  */
+/**
+ * The closest a Phoenix orbit comes to a trap shape: the count's own two-step
+ * loop with a running minimum kept in place of the count, allocating nothing.
+ * Counts the points the orbit lands on (the start, the pixel, is not one),
+ * including the one that left the radius, and stops on the escape test, at the
+ * cap, or when the orbit has closed on a cycle. The step remembers the point
+ * before the last, so the cycle check compares the pair (z, z before it):
+ * z alone repeating does not make the next step repeat.
+ * @param start - The pixel's point, z(0)
+ * @param constant - c in `real` and p in `imaginary`
+ * @param maxIterations - Most steps to walk
+ * @param shape - Which trap the distance is to
+ * @returns The least distance reached, or Infinity when no step was measured
+ */
+function phoenixTrap(
+  start: ComplexNumber,
+  constant: ComplexNumber,
+  maxIterations: number,
+  shape: TrapShape,
+): number {
+  const c = constant.real;
+  const p = constant.imaginary;
+  let real = start.real;
+  let imaginary = start.imaginary;
+  let previousReal = 0;
+  let previousImaginary = 0;
+  let savedReal = real;
+  let savedImaginary = imaginary;
+  let savedPreviousReal = 0;
+  let savedPreviousImaginary = 0;
+  let sinceSave = 0;
+  let saveEvery = 1;
+  let least = Infinity;
+
+  for (let steps = 0; steps < maxIterations; steps++) {
+    const nextReal = real * real - imaginary * imaginary + c + p * previousReal;
+    const nextImaginary = 2 * real * imaginary + p * previousImaginary;
+    previousReal = real;
+    previousImaginary = imaginary;
+    real = nextReal;
+    imaginary = nextImaginary;
+
+    const key = trapKey(shape, real, imaginary);
+    if (key < least) least = key;
+
+    if (real * real + imaginary * imaginary > 4) break;
+
+    if (
+      Math.abs(real - savedReal) < TRAP_CYCLE_TOLERANCE &&
+      Math.abs(imaginary - savedImaginary) < TRAP_CYCLE_TOLERANCE &&
+      Math.abs(previousReal - savedPreviousReal) < TRAP_CYCLE_TOLERANCE &&
+      Math.abs(previousImaginary - savedPreviousImaginary) <
+        TRAP_CYCLE_TOLERANCE
+    ) {
+      break;
+    }
+    if (++sinceSave === saveEvery) {
+      savedReal = real;
+      savedImaginary = imaginary;
+      savedPreviousReal = previousReal;
+      savedPreviousImaginary = previousImaginary;
+      saveEvery *= 2;
+      sinceSave = 0;
+    }
+  }
+
+  return trapKeyToDistance(shape, least);
+}
+
 export function createPhoenixKind(constant: ComplexNumber): FractalKind {
   return {
     id: "phoenix",
@@ -126,6 +196,9 @@ export function createPhoenixKind(constant: ComplexNumber): FractalKind {
       const steps = phoenixIterations(point, constant, maxIterations, false);
 
       return { steps, escaped: steps < maxIterations };
+    },
+    trapDistance(point, maxIterations, trap) {
+      return phoenixTrap(point, constant, maxIterations, trap);
     },
     orbit(point, maxSteps) {
       // The count's own loop with the points kept, so the path the plot draws

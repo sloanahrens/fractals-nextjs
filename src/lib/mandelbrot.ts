@@ -2,8 +2,10 @@ import {
   ComplexNumber,
   FractalBounds,
   FractalKind,
+  TrapShape,
   ZoomState,
 } from "../types/fractal";
+import { TRAP_CYCLE_TOLERANCE, trapKey, trapKeyToDistance } from "./orbitTrap";
 
 // Where the Mandelbrot orbit starts: z = 0, the point the set is defined from.
 // A Julia kind swaps the roles around -- it starts at the point the renderer
@@ -97,6 +99,69 @@ export function escapeTimeOrbit(
   }
 
   return points;
+}
+
+/**
+ * Walk one escape-time orbit, z -> z^2 + c, and return the closest it comes to
+ * a trap shape: the same loop as {@link escapeTimeOrbit} with a running minimum
+ * kept in place of the points, so it allocates nothing.
+ *
+ * Counts the points the orbit lands on, the first step's onward; the start is
+ * not one. Stops on the escape test (the point that left the radius is counted,
+ * as the path counts it), at `maxSteps`, or when the orbit has closed on a
+ * cycle or a fixed point: every later step revisits points already measured, so
+ * the minimum cannot change. That check is Brent's: z is saved at steps 1, 2, 4,
+ * 8, ... and the walk stops when z returns to within
+ * {@link TRAP_CYCLE_TOLERANCE} of the saved one, which finds a cycle of any
+ * length for one comparison a step. There is deliberately no cardioid shortcut:
+ * the answer for an interior point is the closest approach over its orbit, not
+ * the cap.
+ * @param start - Point the orbit starts from (z0)
+ * @param constant - Constant added at every step (c)
+ * @param maxSteps - Most steps to walk
+ * @param shape - Which trap the distance is to
+ * @returns The least distance reached, or Infinity when no step was measured
+ */
+export function escapeTimeTrap(
+  start: ComplexNumber,
+  constant: ComplexNumber,
+  maxSteps: number,
+  shape: TrapShape,
+): number {
+  let real = start.real;
+  let imaginary = start.imaginary;
+  let savedReal = real;
+  let savedImaginary = imaginary;
+  let sinceSave = 0;
+  let saveEvery = 1;
+  let least = Infinity;
+
+  for (let steps = 0; steps < maxSteps; steps++) {
+    const squaredReal = real * real - imaginary * imaginary;
+    const squaredImaginary = 2 * real * imaginary;
+    real = squaredReal + constant.real;
+    imaginary = squaredImaginary + constant.imaginary;
+
+    const key = trapKey(shape, real, imaginary);
+    if (key < least) least = key;
+
+    if (real * real + imaginary * imaginary > 4) break;
+
+    if (
+      Math.abs(real - savedReal) < TRAP_CYCLE_TOLERANCE &&
+      Math.abs(imaginary - savedImaginary) < TRAP_CYCLE_TOLERANCE
+    ) {
+      break;
+    }
+    if (++sinceSave === saveEvery) {
+      savedReal = real;
+      savedImaginary = imaginary;
+      saveEvery *= 2;
+      sinceSave = 0;
+    }
+  }
+
+  return trapKeyToDistance(shape, least);
 }
 
 /**
@@ -199,6 +264,10 @@ export const mandelbrotKind: FractalKind = {
     // The shortcut is for the count, not for the path: a point in the cardioid
     // is inside the set and its orbit is a real one, so the plot walks it.
     return escapeTimeOrbit(ORIGIN, point, maxSteps);
+  },
+  trapDistance(point, maxIterations, trap) {
+    // No cardioid shortcut, for the same reason `orbit` has none.
+    return escapeTimeTrap(ORIGIN, point, maxIterations, trap);
   },
 };
 

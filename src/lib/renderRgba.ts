@@ -23,6 +23,12 @@
  * in step. `fractalRenderer.test.ts` holds the two to byte equality for every
  * fractal.
  *
+ * An orbit-trap picture has the same two steps with a different measure: a point
+ * goes to the closest its orbit comes to a trap shape ({@link countTrapRows}),
+ * and the distance goes to a colour through the same scheme, Reverse and Shift
+ * ({@link colourTrapRows}). It is a sibling pair rather than a branch inside the
+ * count pair, so a picture drawn without a trap is the code path it always was.
+ *
  * Nothing here touches the DOM, `window` or any Node module, so it runs in both.
  */
 
@@ -31,9 +37,11 @@ import type {
   ColorScheme,
   FractalBounds,
   FractalKind,
+  TrapShape,
 } from "../types/fractal";
-import { mapIterationsToColor } from "./colorMapping";
+import { mapIterationsToColor, mapPositionToColor } from "./colorMapping";
 import { pixelToComplex } from "./mandelbrot";
+import { trapDistanceFor, trapPosition } from "./orbitTrap";
 
 /** Bytes a pixel takes in the buffer: red, green, blue, alpha. */
 export const BYTES_PER_PIXEL = 4;
@@ -50,6 +58,17 @@ export const BYTES_PER_PIXEL = 4;
  * choose rather than this module's.
  */
 export type CountBuffer = Float32Array | Float64Array;
+
+/**
+ * A row range's orbit-trap distances, one per pixel, stored as `Float32`.
+ *
+ * Float32 is safe here and was not for counts: a trap distance is one smooth
+ * quantity, not a root and a speed packed into one number, and it is rounded
+ * once, when stored. Every caller colours from the stored (rounded) value, the
+ * full render from its row buffer and the repaint from the kept buffer, so they
+ * agree byte for byte. It is half the memory of the counts.
+ */
+export type TrapBuffer = Float32Array;
 
 /**
  * Count some rows of a view: each pixel's point to its iteration count.
@@ -151,6 +170,96 @@ export function colourRgbaRows(
 }
 
 /**
+ * Measure some rows of a view for an orbit trap: each pixel's point to the
+ * closest its orbit comes to the shape ({@link trapDistanceFor}).
+ *
+ * The sibling of {@link countRgbaRows}, over the same rows and the same layout
+ * of buffer, and what a trap render runs in its place. There is no `smooth`
+ * argument: a distance has no whole-step form, so a preview pass draws the same
+ * measure at fewer pixels.
+ *
+ * @param distances - Buffer to write, at least `(endRow - firstRow) * width`
+ * @param firstRow - First row to measure
+ * @param endRow - One past the last row to measure
+ * @param bounds - The region of the plane the picture covers
+ * @param width - Width of the whole picture in pixels
+ * @param height - Height of the whole picture in pixels
+ * @param maxIterations - Most steps an orbit is walked
+ * @param kind - The formula to iterate
+ * @param trap - The shape the distance is to
+ */
+export function countTrapRows(
+  distances: TrapBuffer,
+  firstRow: number,
+  endRow: number,
+  bounds: FractalBounds,
+  width: number,
+  height: number,
+  maxIterations: number,
+  kind: FractalKind,
+  trap: TrapShape,
+): void {
+  let index = 0;
+
+  for (let y = firstRow; y < endRow; y++) {
+    for (let x = 0; x < width; x++) {
+      const point = pixelToComplex(x, y, width, height, bounds);
+      distances[index] = trapDistanceFor(kind, point, maxIterations, trap);
+      index++;
+    }
+  }
+}
+
+/**
+ * Colour some rows of a trap picture: each pixel's stored distance to a place
+ * on the palette ({@link trapPosition}) to a colour.
+ *
+ * The sibling of {@link colourRgbaRows}, not a branch inside it, so that
+ * function's signature and per-pixel work are what they were and a plain
+ * picture pays for nothing. It goes through the same scheme, Reverse and Shift
+ * ({@link mapPositionToColor}), so a colour change in trap mode is this step
+ * alone. No pixel is black for being inside the set: every pixel has a distance.
+ *
+ * @param out - Buffer to write, at least `(endRow - firstRow) * width * 4` bytes
+ * @param distances - The distances, as {@link countTrapRows} left them
+ * @param firstRow - First row to colour
+ * @param endRow - One past the last row to colour
+ * @param width - Width of the whole picture in pixels
+ * @param scheme - Colour scheme to draw in
+ * @param options - Reverse and shift of the scheme, or nothing for the scheme
+ *   as it is
+ */
+export function colourTrapRows(
+  out: Uint8ClampedArray,
+  distances: TrapBuffer,
+  firstRow: number,
+  endRow: number,
+  width: number,
+  scheme: ColorScheme,
+  options?: ColorOptions,
+): void {
+  let pixel = 0;
+  let index = 0;
+
+  for (let y = firstRow; y < endRow; y++) {
+    for (let x = 0; x < width; x++) {
+      const color = mapPositionToColor(
+        trapPosition(distances[pixel]),
+        scheme,
+        options,
+      );
+
+      out[index] = color.r;
+      out[index + 1] = color.g;
+      out[index + 2] = color.b;
+      out[index + 3] = 255;
+      pixel++;
+      index += BYTES_PER_PIXEL;
+    }
+  }
+}
+
+/**
  * Draw some rows of a view into a buffer: count them, then colour them.
  *
  * The two steps above, over one counts buffer of the rows' own size, so a
@@ -170,6 +279,9 @@ export function colourRgbaRows(
  *   preview is not
  * @param options - Reverse and shift of the scheme, or nothing for the scheme
  *   as it is
+ * @param trap - Colour by closest approach to this shape instead of by count:
+ *   the trap pair of steps runs in place of the count pair, and `smooth` has no
+ *   meaning for it. Absent is the picture the app has always drawn.
  */
 export function renderRgbaRows(
   out: Uint8ClampedArray,
@@ -183,8 +295,29 @@ export function renderRgbaRows(
   kind: FractalKind,
   smooth: boolean = true,
   options?: ColorOptions,
+  trap?: TrapShape,
 ): void {
   const rows = Math.max(0, endRow - firstRow);
+
+  if (trap !== undefined) {
+    const distances = new Float32Array(rows * width);
+
+    countTrapRows(
+      distances,
+      firstRow,
+      endRow,
+      bounds,
+      width,
+      height,
+      maxIterations,
+      kind,
+      trap,
+    );
+    colourTrapRows(out, distances, firstRow, endRow, width, scheme, options);
+
+    return;
+  }
+
   const counts = new Float64Array(rows * width);
 
   countRgbaRows(
@@ -222,6 +355,7 @@ export function renderRgbaRows(
  * @param smooth - Whether counts are fractional (the default, as the page draws)
  * @param options - Reverse and shift of the scheme, or nothing for the scheme
  *   as it is
+ * @param trap - Colour by closest approach to this shape instead of by count
  * @returns `width * height * 4` bytes of RGBA, row by row from the top
  */
 export function renderRgba(
@@ -233,6 +367,7 @@ export function renderRgba(
   kind: FractalKind,
   smooth: boolean = true,
   options?: ColorOptions,
+  trap?: TrapShape,
 ): Uint8ClampedArray {
   const pixels = new Uint8ClampedArray(width * height * BYTES_PER_PIXEL);
 
@@ -248,6 +383,7 @@ export function renderRgba(
     kind,
     smooth,
     options,
+    trap,
   );
 
   return pixels;
