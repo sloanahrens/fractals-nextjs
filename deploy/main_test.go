@@ -24,9 +24,10 @@ const (
 	pulumiProject = "fractals"
 	appName       = "fractals-nextjs"
 
-	// The service internal/gcp.ServiceName names for the staging stack:
-	// <app name>-<env>.
+	// The two environments a release deploys to, and the service
+	// internal/gcp.ServiceName names for the staging stack: <app name>-<env>.
 	stagingEnv     = "staging"
+	prodEnv        = "prod"
 	stagingService = "fractals-nextjs-staging"
 
 	region      = "us-central1"
@@ -34,8 +35,15 @@ const (
 	healthPath  = "/api/health"
 	memory      = "512Mi"
 	minScale    = 0
-	maxScale    = 3
 	concurrency = 80
+
+	// The instance ceiling each environment runs under, which the library
+	// decides rather than the spec (devops pkg/appdeploy, envLimits): prod gets
+	// DefaultLimits' MaxScale, and staging is narrowed to stagingMaxScale there
+	// because it redeploys on every landing, so a higher cap multiplies the
+	// cost of each one. Both services still scale to zero.
+	prodMaxScale    = 3
+	stagingMaxScale = 1
 
 	// The resource types a deployment creates, as Pulumi names them.
 	serviceType   = "gcp:cloudrunv2/service:Service"
@@ -79,7 +87,13 @@ const serviceURI = "https://fractals-nextjs-staging.invalid/"
 // stacks are the two environments the reviewed manifest deploys to
 // (devops manifests/fractals.yaml), so a file name and the env value inside it
 // have to agree.
-var stackFiles = map[string]string{"staging": "Pulumi.staging.yaml", "prod": "Pulumi.prod.yaml"}
+var stackFiles = map[string]string{stagingEnv: "Pulumi.staging.yaml", prodEnv: "Pulumi.prod.yaml"}
+
+// stackMaxScale is the instance ceiling each stack's service runs under: prod
+// keeps the library's own default, and staging is capped at one instance by the
+// library, not by this app's config (devops pkg/appdeploy, envLimits). The two
+// environments are otherwise the same service.
+var stackMaxScale = map[string]int{stagingEnv: stagingMaxScale, prodEnv: prodMaxScale}
 
 // specKeys are the config keys the program reads, named as the devops example
 // program names them (devops examples/app/main.go). A key outside this set is
@@ -166,8 +180,8 @@ func TestProgramDeploysTheConfiguredApp(t *testing.T) {
 	if got := numberProp(t, scaling, "minInstanceCount"); got != minScale {
 		t.Errorf("minInstanceCount is %v, want %v: the service scales to zero", got, minScale)
 	}
-	if got := numberProp(t, scaling, "maxInstanceCount"); got != maxScale {
-		t.Errorf("maxInstanceCount is %v, want the library default %v", got, maxScale)
+	if got := numberProp(t, scaling, "maxInstanceCount"); got != stagingMaxScale {
+		t.Errorf("maxInstanceCount is %v, want %v: the library caps a staging service at one instance (appdeploy, envLimits)", got, stagingMaxScale)
 	}
 
 	template := objectProp(t, service, "template")
@@ -189,8 +203,17 @@ func TestProgramDeploysTheConfiguredApp(t *testing.T) {
 	if got := numberProp(t, objectProp(t, container, "ports"), "containerPort"); got != port {
 		t.Errorf("the container port is %v, want %v", got, port)
 	}
-	if got := stringProp(t, objectProp(t, objectProp(t, container, "resources"), "limits"), "memory"); got != memory {
+	resources := objectProp(t, container, "resources")
+	if got := stringProp(t, objectProp(t, resources, "limits"), "memory"); got != memory {
 		t.Errorf("the container memory limit is %q, want %q", got, memory)
+	}
+	// CPU is allocated only while a request is served (CpuIdle true), the
+	// billing mode the library sets on every service: with it false, or with the
+	// field left unset, Cloud Run bills an instance for its whole life, idle
+	// time included, which is what a staging service redeployed on every landing
+	// was paying for (devops internal/gcp, NewCloudRunService).
+	if got := boolProp(t, resources, "cpuIdle"); !got {
+		t.Error("the container resources do not set cpuIdle true, so Cloud Run bills each instance for its whole life rather than per request")
 	}
 	httpGet := objectProp(t, objectProp(t, container, "startupProbe"), "httpGet")
 	if got := stringProp(t, httpGet, "path"); got != healthPath {
@@ -294,6 +317,14 @@ func TestBothStacksConfigureThisApp(t *testing.T) {
 			monitor, _ := deploy(t, env)
 			if got, want := stringProp(t, monitor.service(t), "name"), appName+"-"+env; got != want {
 				t.Errorf("the %s stack deploys a service named %q, want %q", env, got, want)
+			}
+
+			// The instance ceiling is the one thing the two environments do not
+			// share: the library narrows staging and leaves prod at its default,
+			// and no stack config can move either (the spec carries no scale).
+			scaling := objectProp(t, monitor.service(t), "scaling")
+			if got, want := numberProp(t, scaling, "maxInstanceCount"), float64(stackMaxScale[env]); got != want {
+				t.Errorf("the %s stack caps its service at %v instances, want %v", env, got, want)
 			}
 		})
 	}
@@ -535,6 +566,20 @@ func numberProp(t *testing.T, m resource.PropertyMap, key string) float64 {
 		t.Fatalf("%q is %s, want a number", key, render(value))
 	}
 	return value.NumberValue()
+}
+
+// boolProp returns the boolean under key, failing the test when it is absent or
+// is another kind of value.
+func boolProp(t *testing.T, m resource.PropertyMap, key string) bool {
+	t.Helper()
+	value, ok := m[resource.PropertyKey(key)]
+	if !ok {
+		t.Fatalf("no %q in %s", key, render(m))
+	}
+	if !value.IsBool() {
+		t.Fatalf("%q is %s, want a boolean", key, render(value))
+	}
+	return value.BoolValue()
 }
 
 // containerEnvs returns the environment variables a container is started with
