@@ -37,6 +37,12 @@ export interface EscapeInfo {
    * not reach one.
    */
   root?: number;
+  /**
+   * For a kind whose orbits can end two ways, true when this one ended by
+   * settling (Nova's steps fell under the tolerance) and absent or false when
+   * it ended by leaving. A kind that ends only one way leaves it out.
+   */
+  settled?: boolean;
 }
 
 /**

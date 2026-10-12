@@ -425,6 +425,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   "perpendicular-ship": [4, 6],
   magnet: [4, 6],
   phoenix: [4, 6],
+  nova: [4, 6],
 };
 
 describe("PLACES", () => {
@@ -507,6 +508,18 @@ describe("PLACES", () => {
         `magnet-${type}-whole`,
       );
     }
+  });
+
+  it("gives Nova six places, led by its whole set, which is the opening view and what the button flies to", () => {
+    const places = placesForFractal("nova");
+    const { centerX, centerY, zoom } = defaultViewFor("nova");
+
+    expect(places).toHaveLength(6);
+    // The whole set is first and at the frame the Fractal select opens Nova on.
+    expect(places[0]).toMatchObject({ id: "nova-whole", centerX, centerY, zoom });
+    expect(featuredPlace("nova").id).toBe("nova-whole");
+    // Nova takes no variant, so no place names one.
+    for (const entry of places) expect(entry.variant, entry.id).toBeUndefined();
   });
 
   it("spreads the Phoenix places over its three constants, each with its own whole set", () => {
@@ -969,13 +982,15 @@ function zoomedInOnRealAxis(place: Place): boolean {
  * Celtic set and the Perpendicular Ship are the same: their whole sets are the
  * views that say what each one is, and the Fractal select opens on them too.
  * So is the Phoenix set's: the whole Classic set is the silhouette that says
- * what the fractal is.
+ * what the fractal is. So is Nova's: the whole set is the one picture that
+ * shows the arc, the bloom and the string of disks together.
  */
 const FEATURED_IS_OPENING_VIEW = new Set([
   "tricorn",
   "celtic",
   "perpendicular-ship",
   "phoenix",
+  "nova",
 ]);
 
 /**

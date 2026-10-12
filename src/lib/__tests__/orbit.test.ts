@@ -24,6 +24,7 @@ import {
 } from "../newton";
 import { celticKind } from "../celtic";
 import { createMagnetKind } from "../magnet";
+import { novaKind } from "../nova";
 import { createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
@@ -170,6 +171,21 @@ const CASES: KindCase[] = [
     endsAt: { point: { real: 1, imaginary: 0 }, steps: 1 },
     endedLength: (steps) => steps + 2,
     escapes: true,
+  },
+  {
+    name: "nova",
+    kind: novaKind,
+    // Every Nova orbit starts at z = 1, whatever the pixel is.
+    starts: () => ({ real: 1, imaginary: 0 }),
+    // c = -0.5 is inside the set: the orbit never settles.
+    neverEnds: { real: -0.5, imaginary: 0 },
+    neverEndsLength: (maxSteps) => maxSteps + 1,
+    // c = -1.5 settles on -0.5 on the second step (z1 = -0.5, and N(-0.5) = 1
+    // takes z2 back to -0.5). The path is the start and one point per step, as
+    // Newton's is, and ends on the point that settled.
+    endsAt: { point: { real: -1.5, imaginary: 0 }, steps: 2 },
+    endedLength: (steps) => steps + 1,
+    escapes: false,
   },
   {
     name: "newton",

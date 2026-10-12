@@ -139,6 +139,10 @@ describe("orbitMinExtent and hasEscapeCircle", () => {
     expect(hasEscapeCircle("celtic")).toBe(true);
     expect(hasEscapeCircle("perpendicular-ship")).toBe(true);
     expect(hasEscapeCircle("phoenix")).toBe(true);
+    // Nova's orbits settle on a point and leave only past a million, so a
+    // circle of 2 would mark nothing; it keeps the escape-time frame.
+    expect(hasEscapeCircle("nova")).toBe(false);
+    expect(orbitMinExtent("nova")).toBe(ORBIT_ESCAPE_RADIUS);
     expect(hasEscapeCircle("something-new")).toBe(true);
     expect(hasEscapeCircle(NEWTON)).toBe(false);
     // The Magnet's orbits leave at 100 rather than 2, so the circle of 2 would
@@ -233,6 +237,24 @@ describe("describeOrbit", () => {
       describeOrbit(NEWTON, { steps: 6, escaped: true, root: 2 }, 6),
     ).toBe("Orbit of the point, 6 steps, settles on root 3");
     expect(describeOrbit(NEWTON, { steps: 200, escaped: false }, 60)).toBe(
+      "Orbit of the point, 60 steps, never settles",
+    );
+  });
+});
+
+describe("describeOrbit for Nova", () => {
+  it("says a settling orbit settles, an escaping one escaped, and one the plot cut off is still moving", () => {
+    expect(
+      describeOrbit("nova", { steps: 22, escaped: true, settled: true }, 22),
+    ).toBe("Orbit of the point, 22 steps, settles");
+    expect(
+      describeOrbit("nova", { steps: 1, escaped: true, settled: false }, 1),
+    ).toBe("Orbit of the point, 1 steps, escaped");
+    // The window is sixty steps and a slow orbit takes more.
+    expect(
+      describeOrbit("nova", { steps: 140, escaped: true, settled: true }, 60),
+    ).toBe("Orbit of the point, first 60 steps, still moving");
+    expect(describeOrbit("nova", { steps: 200, escaped: false }, 60)).toBe(
       "Orbit of the point, 60 steps, never settles",
     );
   });

@@ -34,6 +34,7 @@ import { createNewtonKind, newtonKind } from "../newton";
 import { renderRgba } from "../renderRgba";
 import { celticKind } from "../celtic";
 import { createMagnetKind } from "../magnet";
+import { novaKind } from "../nova";
 import { createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
@@ -63,6 +64,9 @@ const KINDS: {
   { name: "burning-ship", kind: burningShipKind },
   { name: "tricorn", kind: tricornKind },
   { name: "celtic", kind: celticKind },
+  // Nova's picture is around -0.55, so its view is the frame the fractal opens
+  // on: the arc, the disks, the bands and the flat field beyond them.
+  { name: "nova", kind: novaKind, view: calculateZoomBounds(-0.55, 0, 1.5) },
   { name: "perpendicular-ship", kind: perpendicularShipKind },
   { name: "multibrot 3", kind: createMultibrotKind(3) },
   { name: "multibrot 5", kind: createMultibrotKind(5) },
@@ -198,6 +202,18 @@ describe("describeProbe", () => {
 
   it("has no set for Newton to be inside of, so says what happened", () => {
     expect(describeProbe("newton", { steps: CAP, escaped: false }, CAP)).toBe(
+      `Never settled in ${CAP} steps`,
+    );
+  });
+
+  it("says Nova's orbits settle, escape or never settle, and is not 'inside the set' for the last", () => {
+    expect(
+      describeProbe("nova", { steps: 22, escaped: true, settled: true }, CAP),
+    ).toBe("Settles after 22 steps");
+    expect(
+      describeProbe("nova", { steps: 1, escaped: true, settled: false }, CAP),
+    ).toBe("Escaped at step 1");
+    expect(describeProbe("nova", { steps: CAP, escaped: false }, CAP)).toBe(
       `Never settled in ${CAP} steps`,
     );
   });

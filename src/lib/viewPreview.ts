@@ -85,6 +85,7 @@ const FRACTAL_NOUNS: Record<string, string> = {
   celtic: "Celtic Mandelbrot",
   magnet: "Magnet set",
   phoenix: "Phoenix set",
+  nova: "Nova fractal",
 };
 
 /**

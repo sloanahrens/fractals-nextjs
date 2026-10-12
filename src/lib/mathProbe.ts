@@ -168,6 +168,16 @@ export function describeProbe(
       : `Settles on root ${info.root + 1} after ${info.steps} steps`;
   }
 
+  if (fractalId === "nova") {
+    // Nova's orbits mostly settle rather than leave, and an orbit that never
+    // does is a cycle or chaos, not a set the point is inside of.
+    if (info.settled) return `Settles after ${info.steps} steps`;
+
+    return info.escaped
+      ? `Escaped at step ${info.steps}`
+      : `Never settled in ${maxIterations} steps`;
+  }
+
   return info.escaped ? `Escaped at step ${info.steps}` : "Inside the set";
 }
 

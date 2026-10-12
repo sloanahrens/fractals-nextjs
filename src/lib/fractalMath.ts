@@ -600,6 +600,37 @@ function phoenix(variant: string): FractalMath {
   };
 }
 
+/** z₀ = 1, c = the pixel's point: Nova starts at a root of z³ − 1 and adds the pixel at every step. */
+const START_AT_ONE = row(
+  subscript(z, number(0)),
+  EQUALS,
+  number(1),
+  operator(","),
+  c,
+  EQUALS,
+  PIXELS_POINT,
+);
+
+/** Nova's step: Newton's step for z³ − 1, with c added after it. */
+const NOVA: FractalMath = {
+  title: "Nova fractal",
+  rule: row(
+    z,
+    ARROW,
+    z,
+    operator(MINUS),
+    fraction(NEWTON_POLYNOMIALS["3"], NEWTON_DERIVATIVES["3"]),
+    PLUS,
+    c,
+  ),
+  start: START_AT_ONE,
+  setting: null,
+  blurb:
+    "Nova is Newton's method for z cubed = 1 with a constant added after every step. Pick a point on the plane and call it c, start at 1 and keep improving the guess and adding c. Instead of three tidy basins the picture is a Mandelbrot-like set with spirals and bulbs in it, where the Newton basins are folded into the shapes.",
+  escape:
+    "A point is done when a step moves it by less than 0.000001, which means it has settled; the colour is the number of steps that took. A point whose numbers pass 1,000,000 has escaped and is coloured by its step the same way, and a point that has not settled within the iteration cap, circling or wandering for good, is painted black. In the orbit plot a settling point is a path that closes in on one spot, and a point that circles is a path that keeps going round.",
+};
+
 function julia(variant: string): FractalMath {
   // The renderer falls back to the first named constant for a name it cannot
   // read, so the card says the constant that is actually drawn.
@@ -656,6 +687,7 @@ export const FRACTAL_MATH: Readonly<
   newton,
   celtic: () => CELTIC,
   phoenix,
+  nova: () => NOVA,
 };
 
 /**

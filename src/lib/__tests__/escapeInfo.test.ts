@@ -18,6 +18,7 @@ import { MULTIBROT_POWERS, createMultibrotKind } from "../multibrot";
 import { NEWTON_ROOTS, createNewtonKind, newtonKind } from "../newton";
 import { celticKind } from "../celtic";
 import { MAGNET_TYPES, createMagnetKind } from "../magnet";
+import { novaKind } from "../nova";
 import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
@@ -149,6 +150,19 @@ const CASES: KindCase[] = [
     // The Hourglass set is around the origin, and this grid holds points of it
     // and points that leave.
     grid: { real: -1.2, imaginary: -1.2, span: 2.4 },
+  },
+  {
+    name: "nova",
+    kind: novaKind,
+    // c = -0.5 is on the real axis inside the set: the orbit never settles.
+    neverEnds: { real: -0.5, imaginary: 0 },
+    // z1 = N(1) + c = -0.5 and N(-0.5) = 1, so z2 = -0.5 again: c = -1.5 settles
+    // on the second step.
+    endsAt: { point: { real: -1.5, imaginary: 0 }, steps: 2 },
+    packsOutcomes: false,
+    // The set sits around -0.55; this grid holds points that never settle and
+    // points that do.
+    grid: { real: -1.5, imaginary: -0.6, span: 1.6 },
   },
   {
     name: "newton",
@@ -310,6 +324,7 @@ describe("every kind this app ships", () => {
       ...MULTIBROT_POWERS.map(createMultibrotKind),
       ...MAGNET_TYPES.map(createMagnetKind),
       ...PHOENIX_CONSTANTS.map((entry) => createPhoenixKind(entry.constant)),
+      novaKind,
       newtonKind,
     ];
 

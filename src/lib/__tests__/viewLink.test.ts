@@ -207,6 +207,33 @@ describe("encodeView", () => {
     });
   });
 
+  it("writes Nova as f=nova, with no k, and reads it back", () => {
+    const view = {
+      fractalType: "nova",
+      centerX: -0.55,
+      centerY: 0,
+      zoomLevel: 1.5,
+      colorScheme: "classic" as const,
+      autoIterationsOn: true,
+      canvasWidth: 800,
+      canvasHeight: 600,
+      // A variant left over from Julia is not written beside a fractal that
+      // takes none.
+      variant: "Dendrite",
+    };
+    const link = encodeView(view);
+
+    expect(link).toBe(
+      "v=1&f=nova&x=-0.55&y=0&z=1.5&s=classic&i=auto&w=800&h=600",
+    );
+    expect(decodeView(`#${link}`)).toMatchObject({
+      fractalType: "nova",
+      centerX: -0.55,
+      centerY: 0,
+      zoomLevel: 1.5,
+    });
+  });
+
   it("writes the Perpendicular Ship as f=perpendicular-ship, with no k, and reads it back", () => {
     const view = {
       fractalType: "perpendicular-ship",
