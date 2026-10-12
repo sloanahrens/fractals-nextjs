@@ -240,6 +240,33 @@ describe("the typeset formula", () => {
   });
 });
 
+describe("the card with an orbit trap on", () => {
+  it("is told the trap the page holds, beside the colours it paints through", () => {
+    const start = page.indexOf("<MathCard");
+    const props = page.slice(start, page.indexOf("/>", start));
+
+    expect(props).toContain("colorOptions={colorOptions}");
+    expect(props).toContain("trap={trap}");
+  });
+
+  it("names the look in a Look row, only when a trap is on", () => {
+    // Guarded on the trap, so Normal adds no row at all.
+    expect(card).toContain("{trap && (");
+    expect(card).toContain(">Look</dt>");
+    expect(card).toContain("lookChoiceLabel(trapToControl(trap))");
+    // And inside the expanded block, with the other rows of the reading.
+    expect(card.indexOf(">Look</dt>")).toBeGreaterThan(
+      card.indexOf("{expanded && ("),
+    );
+  });
+
+  it("explains the colouring in the trap's own terms, and the count's without one", () => {
+    expect(card).toContain(
+      "{trap ? describeTrapColouring(fractalType, trap) : math.escape}",
+    );
+  });
+});
+
 describe("the help entry", () => {
   it("describes the Math button", () => {
     const entries = HELP_SECTIONS.flatMap((section) => section.entries);

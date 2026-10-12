@@ -65,7 +65,7 @@ const key = (visit: { fractal: string; look: Look }) =>
   `${visit.fractal}|${visit.look}`;
 
 describe("the Looks", () => {
-  it("are Normal and the three Glass traps", () => {
+  it("are Normal and the three orbit traps", () => {
     expect(WANDER_LOOKS).toEqual([null, "point", "line", "circle"]);
   });
 

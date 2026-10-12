@@ -10,8 +10,14 @@ import React, {
   useSyncExternalStore,
 } from "react";
 
-import type { ColorOptions } from "../../types/fractal";
-import { describeFractalMath, formatComplex } from "../../lib/fractalMath";
+import type { ColorOptions, TrapShape } from "../../types/fractal";
+import {
+  describeFractalMath,
+  describeTrapColouring,
+  formatComplex,
+} from "../../lib/fractalMath";
+import { lookChoiceLabel } from "../../lib/lookControl";
+import { trapToControl } from "../../lib/paletteControls";
 import {
   type MathCardView,
   formatViewNumbers,
@@ -43,6 +49,12 @@ interface MathCardProps {
    * colours rather than the scheme's plain ones.
    */
   colorOptions?: ColorOptions;
+  /**
+   * The orbit trap the picture is coloured in, or null for the iteration
+   * count. With a trap on the card names it and explains the colouring in its
+   * terms instead of in the count's.
+   */
+  trap?: TrapShape | null;
   /** Whether the switcher shows its second row, which pushes the card down. */
   belowChips: boolean;
   /**
@@ -111,6 +123,12 @@ const ROW_LABEL = "text-xs font-medium uppercase tracking-wide text-white/60";
  * moved onto the plot's Play control without the plot vanishing on the way —
  * which is why the panel element is published to the page through `panelRef`.
  *
+ * With an orbit trap on, it says so: a Look row names the trap and the colour
+ * explanation is the trap's own, in plain words built from the shape's real
+ * numbers (`describeTrapColouring`), so the card describes the picture being
+ * drawn rather than the count it is not. With Normal (no trap) nothing here
+ * changes.
+ *
  * The numbers follow the live view, throttled to the link writer's cadence.
  * It starts shown and collapsed, and both choices are kept in the browser
  * (`src/lib/mathCard.ts`). Escape closes the card only while focus is in it or
@@ -128,6 +146,7 @@ export function MathCard({
   variant,
   view,
   colorOptions,
+  trap = null,
   belowChips,
   probe = null,
   stepAside = false,
@@ -295,6 +314,16 @@ export function MathCard({
               <dt className={ROW_LABEL}>Colours</dt>
               <dd>{numbers.scheme}</dd>
 
+              {/* The look the picture is drawn in, named only when it is not
+                  the usual one: with a trap on, the row below and the colour
+                  the probe shows are the trap's, not the count's. */}
+              {trap && (
+                <>
+                  <dt className={ROW_LABEL}>Look</dt>
+                  <dd>{lookChoiceLabel(trapToControl(trap))}</dd>
+                </>
+              )}
+
               {/* The probe: the number under the pointer, what its orbit did
                   and the colour the picture paints it. Without one the row
                   says where to point, so the reading is discoverable. */}
@@ -346,7 +375,9 @@ export function MathCard({
               )}
 
               <dt className={ROW_LABEL}>Each point</dt>
-              <dd>{math.escape}</dd>
+              <dd>
+                {trap ? describeTrapColouring(fractalType, trap) : math.escape}
+              </dd>
             </dl>
             <p className="mt-2 text-white/80">{math.blurb}</p>
           </div>
