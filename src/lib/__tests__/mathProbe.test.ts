@@ -34,6 +34,7 @@ import { createNewtonKind, newtonKind } from "../newton";
 import { renderRgba } from "../renderRgba";
 import { celticKind } from "../celtic";
 import { createMagnetKind } from "../magnet";
+import { createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
 import type {
@@ -77,6 +78,13 @@ const KINDS: {
     name: "magnet type 2",
     kind: createMagnetKind(2),
     view: calculateZoomBounds(1.3, 0, 1),
+  },
+  // A Phoenix set is a Julia set around the origin, so its view is the frame
+  // the fractal opens on: the set, its boundary and the open plane together.
+  {
+    name: "phoenix hourglass",
+    kind: createPhoenixKind({ real: 0.5667, imaginary: -0.55 }),
+    view: calculateZoomBounds(0, 0, 1),
   },
   // Newton's count is its root and its speed packed together rather than a
   // step count, so its steps are held to escapeInfo's alone.

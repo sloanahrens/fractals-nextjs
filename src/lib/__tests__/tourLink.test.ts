@@ -98,9 +98,10 @@ const MAGNET = stop({
   zoomLevel: 8,
 });
 
-// One stop per fractal, as many as a tour link can hold. The picker offers nine
+// One stop per fractal, as many as a tour link can hold. The picker offers ten
 // fractals and `MAX_TOUR_STOPS` is eight, so one link cannot name them all;
-// MAGNET is the one left out here and is round-tripped in its own test below.
+// MAGNET and the Phoenix are left out here and are round-tripped in their own
+// tests below.
 const EVERY_FRACTAL = [
   MANDELBROT,
   JULIA,
@@ -152,6 +153,21 @@ describe("encodeTourLink", () => {
     expect(link).toContain("t.f=magnet~mandelbrot");
     expect(link).toContain("t.k=2~");
     expect(decodeTourLink(link!)).toEqual([MAGNET, MANDELBROT]);
+  });
+
+  it("carries a Phoenix constant beside the fractal that draws it", () => {
+    const phoenix = stop({
+      fractalType: "phoenix",
+      variant: "Spirals",
+      centerX: 0.4,
+      centerY: 0.55,
+      zoomLevel: 5,
+    });
+    const link = encodeTourLink([phoenix, MANDELBROT]);
+
+    expect(link).toContain("t.f=phoenix~mandelbrot");
+    expect(link).toContain("t.k=Spirals~");
+    expect(decodeTourLink(link!)).toEqual([phoenix, MANDELBROT]);
   });
 
   it("drops a magnetic type the Magnet cannot draw, as it drops a bad power", () => {

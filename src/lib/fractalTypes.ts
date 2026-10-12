@@ -25,6 +25,11 @@ import {
   parseNewtonPolynomial,
 } from "./newton";
 import { celticKind } from "./celtic";
+import {
+  PHOENIX_CONSTANTS,
+  createPhoenixKind,
+  parsePhoenixConstant,
+} from "./phoenix";
 import { perpendicularShipKind } from "./perpendicularShip";
 import { tricornKind } from "./tricorn";
 
@@ -59,6 +64,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   // row) are spelled in full.
   { id: "perpendicular-ship", label: "Perp. Ship" },
   { id: "magnet", label: "Magnet" },
+  { id: "phoenix", label: "Phoenix" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -129,16 +135,31 @@ const NEWTON_VARIANTS: FractalVariants = {
   allowsCustom: false,
 };
 
+// The Phoenix constant is written as its name in a link and in storage, as a
+// Julia constant is, and the chip shows the same name. There is no Custom
+// choice: the constant is two numbers of different kinds (c, which is added,
+// and p, which weighs the point before the last), so there is no map to pick
+// them from the way the Julia map picks a point.
+const PHOENIX_VARIANTS: FractalVariants = {
+  label: "Phoenix constant",
+  options: PHOENIX_CONSTANTS.map((entry) => ({
+    value: entry.name,
+    label: entry.name,
+  })),
+  allowsCustom: false,
+};
+
 /**
  * The setting a fractal takes, or null for a fractal that takes none.
  * @param fractalId - Id of the fractal
- * @returns Its variant descriptor; null for every fractal but Julia, the Multibrot, the Newton fractal and the Magnet, and for any id this build does not know
+ * @returns Its variant descriptor; null for every fractal but Julia, the Multibrot, the Newton fractal, the Magnet and the Phoenix, and for any id this build does not know
  */
 export function fractalVariants(fractalId: string): FractalVariants | null {
   if (fractalId === "julia") return JULIA_VARIANTS;
   if (fractalId === "multibrot") return MULTIBROT_VARIANTS;
   if (fractalId === "newton") return NEWTON_VARIANTS;
   if (fractalId === "magnet") return MAGNET_VARIANTS;
+  if (fractalId === "phoenix") return PHOENIX_VARIANTS;
 
   return null;
 }
@@ -170,7 +191,9 @@ export function isVariantValue(
   if (fractalId === "multibrot") return parseMultibrotPower(value) !== null;
   if (fractalId === "newton") return parseNewtonPolynomial(value) !== null;
 
-  return fractalId === "magnet" && parseMagnetType(value) !== null;
+  if (fractalId === "magnet") return parseMagnetType(value) !== null;
+
+  return fractalId === "phoenix" && parsePhoenixConstant(value) !== null;
 }
 
 /**
@@ -220,9 +243,10 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
  * Multibrot is a family of powers, and one it cannot read falls back to 3 the
  * same way; the Newton fractal is a family of polynomials and an unreadable
  * value falls back to z^3 - 1; the Magnet is a family of two magnetic types and
- * an unreadable one falls back to Type I.
+ * an unreadable one falls back to Type I; the Phoenix is a family of named
+ * constants and an unreadable name falls back to the first.
  * @param typeId - Id of the fractal the picker selected
- * @param variant - Name of the Julia constant, the Multibrot power, the Newton polynomial or the Magnet type; ignored for any other fractal
+ * @param variant - Name of the Julia constant, the Multibrot power, the Newton polynomial, the Magnet type or the Phoenix constant; ignored for any other fractal
  * @returns The kind to draw
  */
 export function resolveFractalKind(
@@ -240,6 +264,11 @@ export function resolveFractalKind(
   if (typeId === "celtic") return celticKind;
   if (typeId === "magnet") {
     return createMagnetKind(parseMagnetType(variant) ?? MAGNET_TYPES[0]);
+  }
+  if (typeId === "phoenix") {
+    return createPhoenixKind(
+      parsePhoenixConstant(variant) ?? PHOENIX_CONSTANTS[0].constant,
+    );
   }
   if (typeId === "multibrot") {
     return createMultibrotKind(
@@ -355,6 +384,18 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // crops Type I's top and bottom lobes, which is the most of its height the
   // explorer can show at once. The corner is the flat black of the settled set.
   if (typeId === "magnet") return { centerX: 1.3, centerY: 0, zoom: 1 };
+
+  // A Phoenix set is a Julia set of the two-term step, so like Julia's it is
+  // framed on the origin and every constant draws about it. Measured with a
+  // 0.01 grid at a cap of 300 (points that run 30 steps or more, which is the
+  // set and the structure around it), the three named constants span
+  //   Classic   x -0.67..0.75, y -1.27..1.27
+  //   Spirals   x -0.88..0.72, y -1.13..1.13  (dust: no point runs the cap)
+  //   Hourglass x -0.65..0.75, y -1.28..1.28
+  // and zoom 1 (x -2..2, y -1.5..1.5, the widest view there is) holds each with
+  // 0.2 or more clear above and below and over a unit either side. The sets
+  // are taller than they are wide, so the frame's height is what bounds them.
+  if (typeId === "phoenix") return { centerX: 0, centerY: 0, zoom: 1 };
 
   return { centerX: -0.75, centerY: 0, zoom: 1 };
 }

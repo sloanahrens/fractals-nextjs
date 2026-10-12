@@ -22,7 +22,8 @@ export interface Place {
    * The fractal's variant: for Julia the constant, as a name or a
    * `custom:<re>,<im>` spelling (`julia.ts`); for the Multibrot its power, "3",
    * "4" or "5"; for the Newton fractal the polynomial it solves, "3", "4", "5"
-   * or "cycle"; for the Magnet a magnetic type, "1" or "2". Present for a place
+   * or "cycle"; for the Magnet a magnetic type, "1" or "2"; for the Phoenix a named
+   * constant, "Classic", "Spirals" or "Hourglass". Present for a place
    * of a fractal that takes one and for no other.
    */
   variant?: string;
@@ -1042,6 +1043,73 @@ const MAGNET_PLACES: readonly Place[] = [
   },
 ];
 
+// Each place was drawn at 300x225 through the real pipeline in several schemes
+// (contact sheets, smooth counts) and then measured at 64x48 with whole counts,
+// which is how a tile and the guards draw it. The three whole sets are the
+// default frame, which `wholeSetPlaceFor` looks for, one per named constant.
+const PHOENIX_PLACES: readonly Place[] = [
+  {
+    id: "phoenix-classic-whole",
+    name: "The whole Classic Phoenix set",
+    fractal: "phoenix",
+    variant: "Classic",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "phoenix-classic-feathers",
+    name: "Feathers on the upper flame",
+    fractal: "phoenix",
+    variant: "Classic",
+    centerX: -0.1,
+    centerY: 0.55,
+    zoom: 4,
+    colorScheme: "classic",
+  },
+  {
+    id: "phoenix-classic-curls",
+    name: "Curls on the flame's tail",
+    fractal: "phoenix",
+    variant: "Classic",
+    centerX: 0.3,
+    centerY: 0.6,
+    zoom: 10,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "phoenix-spirals-whole",
+    name: "The whole Phoenix Spirals set",
+    fractal: "phoenix",
+    variant: "Spirals",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "phoenix-spirals-arm",
+    name: "A spiral arm",
+    fractal: "phoenix",
+    variant: "Spirals",
+    centerX: 0.4,
+    centerY: 0.55,
+    zoom: 5,
+    colorScheme: "classic",
+  },
+  {
+    id: "phoenix-hourglass-whole",
+    name: "The whole Phoenix Hourglass",
+    fractal: "phoenix",
+    variant: "Hourglass",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -1057,6 +1125,7 @@ export const PLACES: readonly Place[] = [
   ...CELTIC_PLACES,
   ...PERPENDICULAR_SHIP_PLACES,
   ...MAGNET_PLACES,
+  ...PHOENIX_PLACES,
 ];
 
 /**
@@ -1155,6 +1224,14 @@ export function placesForFractal(fractal: string): Place[] {
  *   black. Measured at the count Auto draws it at, it is 39% one colour at
  *   64x48 and 41% of a 96x72 grid inside the settled set, and that grid holds
  *   82 different counts, so it is a picture rather than a flat field.
+ * - Phoenix: the whole Classic set, which is also the view the Fractal select
+ *   opens it on (`FEATURED_IS_OPENING_VIEW` in the test). Unlike the Mandelbrot
+ *   set a Phoenix Julia set is one picture at one frame, and what says what
+ *   this fractal is is the silhouette: two feathered flames, one above the
+ *   other, in a ring of green and magenta fringe with blue curls in the black.
+ *   Drawn at 400x300 in classic and rainbow (classic reads best: 50% one colour
+ *   at 64x48, where the rainbow is a flat red field) and at zoom 2, which only
+ *   loses the flames' tips off the frame.
  *
  * The others were redrawn and kept: each is at most 21% one colour (the
  * guard in `places.test.ts` holds every one under 60%).
@@ -1169,6 +1246,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   celtic: "celtic-whole",
   "perpendicular-ship": "perpendicular-ship-whole",
   magnet: "magnet-1-drift",
+  phoenix: "phoenix-classic-whole",
 };
 
 /**

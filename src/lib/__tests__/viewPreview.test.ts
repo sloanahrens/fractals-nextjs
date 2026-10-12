@@ -358,6 +358,9 @@ describe("describeViewLine", () => {
       "Magnet set, Type II, 1x",
     );
     expect(
+      line({ ...base, fractalType: "phoenix", variant: "Spirals", zoomLevel: 5 }),
+    ).toBe("Phoenix set, Spirals, 5x");
+    expect(
       line({ ...base, fractalType: "julia", variant: "Douady rabbit" }),
     ).toBe("Julia set, Douady rabbit, 1x");
   });

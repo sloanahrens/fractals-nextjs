@@ -24,6 +24,7 @@ import {
 } from "../newton";
 import { celticKind } from "../celtic";
 import { createMagnetKind } from "../magnet";
+import { createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
 import type { ComplexNumber, FractalKind } from "../../types/fractal";
@@ -152,6 +153,21 @@ const CASES: KindCase[] = [
     // Type II's bailout is the same 100, and its first step from 1.45 + 0.85i
     // is about 116.6 across.
     endsAt: { point: { real: 1.45, imaginary: 0.85 }, steps: 0 },
+    endedLength: (steps) => steps + 2,
+    escapes: true,
+  },
+  {
+    name: "phoenix hourglass",
+    kind: createPhoenixKind({ real: 0.5667, imaginary: -0.55 }),
+    // A Phoenix orbit starts at the pixel, as Julia's does; z(-1) = 0 is the
+    // memory's start and is not a point of the path.
+    starts: atPoint,
+    // 0.5i is inside the Hourglass set, so its orbit never leaves the radius.
+    neverEnds: { real: 0, imaginary: 0.5 },
+    neverEndsLength: (maxSteps) => maxSteps + 1,
+    // From 1 the first step is 1.5667 and the second 2.5212 (the memory term
+    // takes 0.55 off), which is outside the radius.
+    endsAt: { point: { real: 1, imaginary: 0 }, steps: 1 },
     endedLength: (steps) => steps + 2,
     escapes: true,
   },

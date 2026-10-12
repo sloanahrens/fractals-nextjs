@@ -506,6 +506,42 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     fractal: "magnet",
     variant: "2",
   },
+  {
+    id: "phoenix-overview",
+    name: "Phoenix (Classic)",
+    description: "The whole Classic Phoenix set: two feathered flames, one above the other",
+    // The default frame, centre (0, 0) at zoom 1: 4 by 3, the widest view there is.
+    bounds: {
+      minReal: -2,
+      maxReal: 2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "phoenix",
+    variant: "Classic",
+  },
+  {
+    id: "phoenix-feathers",
+    name: "Phoenix feathers",
+    description: "The feathered edge of the upper Classic flame",
+    // Centre (-0.1, 0.55) at zoom 4: 1 by 0.75.
+    bounds: {
+      minReal: -0.6,
+      maxReal: 0.4,
+      minImaginary: 0.175,
+      maxImaginary: 0.925,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "phoenix",
+    variant: "Classic",
+  },
 ];
 
 /**

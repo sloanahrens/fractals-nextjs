@@ -424,6 +424,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   celtic: [4, 6],
   "perpendicular-ship": [4, 6],
   magnet: [4, 6],
+  phoenix: [4, 6],
 };
 
 describe("PLACES", () => {
@@ -506,6 +507,21 @@ describe("PLACES", () => {
         `magnet-${type}-whole`,
       );
     }
+  });
+
+  it("spreads the Phoenix places over its three constants, each with its own whole set", () => {
+    const places = placesForFractal("phoenix");
+
+    for (const name of ["Classic", "Spirals", "Hourglass"]) {
+      const ofConstant = places.filter((entry) => entry.variant === name);
+
+      expect(ofConstant.length, name).toBeGreaterThanOrEqual(1);
+      // The chip's destination: the constant's whole set at the default view.
+      expect(wholeSetPlaceFor(name, "phoenix")?.id, name).toBe(
+        `phoenix-${name.toLowerCase()}-whole`,
+      );
+    }
+    expect(featuredPlace("phoenix").id).toBe("phoenix-classic-whole");
   });
 
   it("spreads the Newton places over all four polynomials, each with its own whole set", () => {
@@ -952,11 +968,14 @@ function zoomedInOnRealAxis(place: Place): boolean {
  * that shows it best (fr-hbe), and nothing opens on it but a switch. The
  * Celtic set and the Perpendicular Ship are the same: their whole sets are the
  * views that say what each one is, and the Fractal select opens on them too.
+ * So is the Phoenix set's: the whole Classic set is the silhouette that says
+ * what the fractal is.
  */
 const FEATURED_IS_OPENING_VIEW = new Set([
   "tricorn",
   "celtic",
   "perpendicular-ship",
+  "phoenix",
 ]);
 
 /**

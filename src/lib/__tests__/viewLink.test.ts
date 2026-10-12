@@ -499,6 +499,28 @@ describe("decodeView", () => {
     }
   });
 
+  it("reads a Phoenix constant out of a link", () => {
+    for (const name of ["Classic", "Spirals", "Hourglass"]) {
+      expect(decodeView(`v=1&f=phoenix&k=${name}`), name).toEqual({
+        fractalType: "phoenix",
+        variant: name,
+      });
+    }
+  });
+
+  it("drops a Phoenix constant it cannot read and keeps the rest of the view", () => {
+    // Judged by the one rule in `phoenix.ts`: only the offered names are read,
+    // in their own case, so another case, padding or text is dropped and the
+    // page keeps its own constant. A name some other fractal reads ("Dendrite",
+    // "4") is read here too and left to `viewLinkToUpdates` to place.
+    for (const name of ["classic", "Classic%20", "%20Classic", "x", "Hour"]) {
+      expect(decodeView(`v=1&f=phoenix&k=${name}&z=2.5`), name).toEqual({
+        fractalType: "phoenix",
+        zoomLevel: 2.5,
+      });
+    }
+  });
+
   it("drops a custom constant it cannot read and keeps the rest of the view", () => {
     // A name is judged as suspiciously as any other field, and by the one rule
     // in `julia.ts`: out of range, misspelled, in the wrong case or longer

@@ -138,6 +138,7 @@ describe("orbitMinExtent and hasEscapeCircle", () => {
     expect(hasEscapeCircle("tricorn")).toBe(true);
     expect(hasEscapeCircle("celtic")).toBe(true);
     expect(hasEscapeCircle("perpendicular-ship")).toBe(true);
+    expect(hasEscapeCircle("phoenix")).toBe(true);
     expect(hasEscapeCircle("something-new")).toBe(true);
     expect(hasEscapeCircle(NEWTON)).toBe(false);
     // The Magnet's orbits leave at 100 rather than 2, so the circle of 2 would
