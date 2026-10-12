@@ -11,7 +11,7 @@ go 1.27
 require (
 	github.com/pulumi/pulumi/sdk/v3 v3.268.0
 	gopkg.in/yaml.v3 v3.0.1
-	gt.local/devops v0.1.0
+	gt.local/devops v0.1.2
 )
 
 require (
