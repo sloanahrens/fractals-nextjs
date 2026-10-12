@@ -234,7 +234,10 @@ describe("a hop that lands on a place", () => {
     expect(select).toContain(
       "? { reverse: DEFAULT_REVERSE, shift: DEFAULT_SHIFT, trap: DEFAULT_TRAP }",
     );
-    expect(select).toContain(": { reverse, shift, trap };");
+    // An Auto-wander hop names its Look; any other caller leaves it as it was.
+    expect(select).toContain(
+      "trap: lookOverride === undefined ? trap : lookOverride,",
+    );
     expect(select).toContain("setTrap(options.trap);");
     // The crossfade aims at the picture the setters will leave, trap and all.
     expect(select).toContain("trap: options.trap,");

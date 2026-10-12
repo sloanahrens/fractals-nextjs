@@ -14,6 +14,7 @@ import {
   TOUR_RECENT_LIMIT,
   TOUR_SWITCH_LOCKOUT_HOPS,
   initialTourState,
+  nextStopOnFractal,
   nextTourStop,
   type TourState,
 } from "../tour";
@@ -275,5 +276,77 @@ describe("nextTourStop on a degenerate catalogue", () => {
     const step = nextTourStop(initialTourState(broken), PLACES, seeded(1));
 
     expect(PLACES).toContain(step.place);
+  });
+});
+
+describe("nextStopOnFractal", () => {
+  const a1 = place("a1", "mandelbrot", 0, 1);
+  const a2 = place("a2", "mandelbrot", 1, 4);
+  const a3 = place("a3", "mandelbrot", 2, 8);
+  const b1 = place("b1", "julia", 0, 1);
+  const b2 = place("b2", "julia", 1, 4);
+  const catalogue = [a1, a2, a3, b1, b2];
+
+  it("stays on the view's fractal by the tour's within-fractal rule", () => {
+    const state = initialTourState(viewOf(a1));
+    const step = nextStopOnFractal(state, catalogue, "mandelbrot", seeded(4));
+
+    expect(step).not.toBeNull();
+    expect([a2, a3]).toContain(step!.place);
+    expect(step!.state.hopsSinceSwitch).toBe(state.hopsSinceSwitch + 1);
+  });
+
+  it("picks the place nextTourStop picks when it stays", () => {
+    // A state that cannot switch, so the tour makes its roll and then the pick.
+    const state = { ...initialTourState(viewOf(a1)), hopsSinceSwitch: 0 };
+    const viaTour = nextTourStop(state, catalogue, seeded(9));
+    const rng = seeded(9);
+    rng(); // the tour's switch roll, which the helper does not make
+    const viaHelper = nextStopOnFractal(state, catalogue, "mandelbrot", rng);
+
+    expect(viaHelper!.place).toBe(viaTour.place);
+  });
+
+  it("goes to a place of another fractal, preferring one not visited lately", () => {
+    const state: TourState = {
+      ...initialTourState(viewOf(a1)),
+      recent: ["b1"],
+    };
+
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const step = nextStopOnFractal(state, catalogue, "julia", seeded(seed));
+
+      expect(step!.place).toBe(b2);
+      expect(step!.state.hopsSinceSwitch).toBe(0);
+    }
+  });
+
+  it("takes a visited place of the other fractal when all have been visited", () => {
+    const state: TourState = {
+      ...initialTourState(viewOf(a1)),
+      recent: ["b1", "b2"],
+    };
+    const step = nextStopOnFractal(state, catalogue, "julia", seeded(1));
+
+    expect([b1, b2]).toContain(step!.place);
+  });
+
+  it("answers null when the fractal has no place to go to", () => {
+    const state = initialTourState(viewOf(a1));
+
+    expect(
+      nextStopOnFractal(state, [a1, b1], "mandelbrot", seeded(1)),
+    ).toBeNull();
+    expect(nextStopOnFractal(state, catalogue, "newton", seeded(1))).toBeNull();
+  });
+
+  it("does not change the state it is handed", () => {
+    const state = initialTourState(viewOf(a1));
+    const frozen = JSON.stringify(state);
+
+    nextStopOnFractal(state, catalogue, "julia", seeded(1));
+    nextStopOnFractal(state, catalogue, "mandelbrot", seeded(1));
+
+    expect(JSON.stringify(state)).toBe(frozen);
   });
 });

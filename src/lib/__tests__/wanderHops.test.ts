@@ -32,8 +32,11 @@ function stepOnce(wander: WanderController) {
 }
 
 /**
- * A walk wired the way the page wires it: a hop asks the tour engine, from a
- * state of its own, with the walk's generator; a drift leaves the place alone.
+ * The controller wired straight to the tour engine's own hop: a hop asks it,
+ * from a state of its own, with the walk's generator; a drift leaves the place
+ * alone. The page's hops now go through the variety walk
+ * (`wanderVarietyHops.test.ts`); this holds the engine's rules under the
+ * controller's cadence.
  */
 function wiredWalk(seed: number, isBlank: () => boolean = () => false) {
   const rng = createRng(seed);

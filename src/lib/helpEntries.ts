@@ -139,7 +139,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Auto-wander",
         action:
-          "Press the Auto-wander pill at the bottom right of the picture, or tick Auto-wander in the Settings drawer, and the view moves every few seconds: three small steps nearby, then a hop to a place from the catalogue, which may be on another fractal, and a step that lands on an empty picture hops at once. While it is on the pill says Wandering and counts the seconds to the next step; press it again to stop",
+          "Press the Auto-wander pill at the bottom right of the picture, or tick Auto-wander in the Settings drawer, and the view moves every few seconds: three small steps nearby, then a hop to a place from the catalogue. The hops take turns through every fractal in every Look (Normal and the three Glass looks): each fractal is shown in each Look once before any pair comes round again, and a hop dissolves into the next place and Look rather than cutting. The small steps keep the fractal and the Look they are on. A Glass look takes longer to draw, and the walk waits for the picture before it counts down. A step that lands on an empty picture hops at once. While it is on the pill says Wandering and counts the seconds to the next step; press it again to stop",
       },
       {
         keys: "Seconds between steps",
