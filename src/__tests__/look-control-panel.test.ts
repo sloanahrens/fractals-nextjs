@@ -10,13 +10,22 @@
  * Settings, Help, the README and CLAUDE.md. A Node suite has no DOM, so this
  * reads the sources, as the other panel tests here do.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+
+/** Every file under a directory, itself included, for the word walk. */
+function walk(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+
+    return entry.isDirectory() ? walk(path) : [path];
+  });
+}
 
 const PAGE = read("../app/FractalExplorer.tsx");
 const LOOK = read("../components/ui/LookControl.tsx");
@@ -110,13 +119,18 @@ describe("where it sits", () => {
 });
 
 describe("its accessible behaviour", () => {
-  it("is a button with a popup, an expanded state and a name made of its visible words", () => {
+  it("is a button with a popup, an expanded state, and the chosen look beside a hidden name", () => {
     expect(LOOK).toContain('type="button"');
     expect(LOOK).toContain('aria-haspopup="menu"');
     expect(LOOK).toContain("aria-expanded={open}");
     expect(LOOK).toContain("aria-controls={open ? menuId : undefined}");
-    expect(LOOK).toContain("{lookButtonText(value)}");
-    expect(LOOK).not.toMatch(/aria-label=\{LOOK_CONTROL_NAME\}\s*\n\s*aria-haspopup/);
+    // The visible words are the choice alone, so the control's name rides in
+    // a visually hidden prefix and the accessible name still says "Look: ...".
+    expect(LOOK).toContain("{lookChoiceLabel(value)}");
+    expect(LOOK).toContain(
+      '<span className="sr-only">{LOOK_CONTROL_NAME}: </span>',
+    );
+    expect(LOOK).not.toContain("lookButtonText");
   });
 
   it("is a 44 px touch target with a visible focus ring", () => {
@@ -188,30 +202,56 @@ describe("the words", () => {
     const link = read("../lib/viewLink.ts");
 
     expect(palette).toContain("value: TRAP_OFF_VALUE, label: \"Normal\"");
-    expect(palette).toContain("label: `Glass: ");
+    expect(palette).toContain("label: `Orbit Trap: ");
     expect(link).toContain('"m"');
   });
 
-  it("Help names the Look control, what Glass does, that it is slower, and that previews are Normal", () => {
+  it("Help names the Look control, what an orbit trap does, that it is slower, and that previews are Normal", () => {
     expect(HELP).toContain('keys: "Look"');
-    expect(HELP).toMatch(/Glass colours each point by how close its orbit comes/);
-    expect(HELP).toMatch(/Glass renders more slowly than Normal/);
+    expect(HELP).toMatch(
+      /An orbit trap colours each point by how close its orbit comes/,
+    );
+    expect(HELP).toMatch(/An orbit trap renders more slowly than Normal/);
     expect(HELP).toMatch(/preview[\s\S]{0,160}always the Normal picture/);
-    expect(HELP).toMatch(/bottom right of the picture, beside the Auto-wander pill/);
+    expect(HELP).toMatch(
+      /bottom right of the picture, beside the Auto-wander pill/,
+    );
   });
 
-  it("the README names the Look control, Glass, its slowness and the Normal previews", () => {
+  it("the README names the Look control, the orbit traps, their slowness and the Normal previews", () => {
     expect(README).toContain("**Look**");
-    expect(README).toContain("Glass: Point, Glass: Line and Glass: Circle");
-    expect(README).toContain("Glass renders more slowly than Normal");
+    expect(README).toContain("Orbit Trap: Point, Orbit Trap: Line and Orbit Trap: Circle");
+    expect(README).toContain("an orbit trap renders more slowly than Normal");
     expect(README).toContain("always previews as the Normal picture");
     expect(README).toContain("LookControl.tsx");
     expect(README).toContain("lookControl.ts");
   });
 
+  it("names no look Glass: the app's own sources, the README, CLAUDE.md and the design note are free of it", () => {
+    const root = fileURLToPath(new URL("../../", import.meta.url));
+    // This file is the one place the word has to appear, since it is what
+    // forbids it; every other file under the tree is walked.
+    const self = fileURLToPath(import.meta.url);
+    const files = [
+      ...walk(`${root}src`),
+      `${root}README.md`,
+      `${root}CLAUDE.md`,
+      `${root}docs/design/orbit-traps.md`,
+    ].filter((file) => file !== self);
+
+    expect(files.length).toBeGreaterThan(50);
+    for (const file of files) {
+      expect(
+        readFileSync(file, "utf8").includes("Glass"),
+        file.slice(root.length),
+      ).toBe(false);
+    }
+  });
+
   it("CLAUDE.md names the Look control and keeps its note", () => {
     expect(CLAUDE).toContain("**Look control**");
-    expect(CLAUDE).toContain("(fr-02s)");
+    expect(CLAUDE).toContain("(fr-02s, fr-ar5)");
     expect(CLAUDE).toContain("Look: the orbit trap on the picture");
   });
+
 });

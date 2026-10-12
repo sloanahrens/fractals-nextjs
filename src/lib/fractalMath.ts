@@ -13,7 +13,14 @@
  * `fractalMath.test.ts` fails a fractal that has none or an empty blurb.
  */
 
+import type { TrapShape } from "../types/fractal";
 import { formatCoordinate } from "./zoomScale";
+import {
+  TRAP_CIRCLE_CENTRE,
+  TRAP_CIRCLE_RADIUS,
+  TRAP_LINE_REAL,
+  TRAP_POINT,
+} from "./orbitTrap";
 import { JULIA_CONSTANTS, parseJuliaConstant } from "./julia";
 import { MULTIBROT_POWERS, parseMultibrotPower } from "./multibrot";
 import {
@@ -722,4 +729,91 @@ export function describeFractalMath(
     : FRACTAL_MATH.mandelbrot;
 
   return describe(variant);
+}
+
+/**
+ * What the Normal picture's colour was made of, said as the thing a trap
+ * picture shows instead: {@link describeTrapColouring} reads "...rather than"
+ * one of these.
+ *
+ * An escape-time set colours a point by how fast it runs away, so that is the
+ * fallback. The three kinds whose orbits end by settling on something rather
+ * than leaving — Newton, Nova and the Magnet — say what their own colour was
+ * instead, because "how quickly the orbit escapes" would be false of them.
+ * Phoenix is escape-time like the Mandelbrot set and takes the fallback.
+ */
+const TRAP_COMPARISONS: Readonly<Record<string, string>> = {
+  newton: "which root the orbit settles on, and how quickly",
+  nova: "how many steps the orbit took to settle or to run away",
+  magnet:
+    "whether the orbit settles on the fixed point or runs off to infinity",
+};
+
+const TRAP_ESCAPE_COMPARISON = "how quickly the orbit escapes";
+
+/**
+ * Where a trap sits, in the plane the orbit moves in, with its own numbers:
+ * "a point at -0.5", "the imaginary axis, the line whose real part is 0" or
+ * "the circle of radius 0.5 about the origin".
+ *
+ * Every number is read off the constants in `orbitTrap.ts` rather than written
+ * out again, so the sentence cannot describe a shape the renderer is not
+ * using.
+ * @param trap - Which trap is on
+ * @returns The shape and its place, as a clause
+ */
+export function describeTrapShape(trap: TrapShape): string {
+  switch (trap) {
+    case "point":
+      return `a point at ${formatComplex(TRAP_POINT.real, TRAP_POINT.imaginary)}`;
+    case "line":
+      return `the imaginary axis, the line whose real part is ${formatCoordinate(TRAP_LINE_REAL)}`;
+    case "circle": {
+      const atOrigin =
+        TRAP_CIRCLE_CENTRE.real === 0 && TRAP_CIRCLE_CENTRE.imaginary === 0;
+      const centre = atOrigin
+        ? "the origin"
+        : formatComplex(TRAP_CIRCLE_CENTRE.real, TRAP_CIRCLE_CENTRE.imaginary);
+
+      return `the circle of radius ${formatCoordinate(TRAP_CIRCLE_RADIUS)} about ${centre}`;
+    }
+  }
+}
+
+/**
+ * What the colours mean with an orbit trap on, in plain words and in this
+ * order: the fixed shape and where it is, the path each point's orbit takes,
+ * how close that path comes to the shape and which end of the palette is
+ * which, what the picture therefore shows instead of the Normal colouring, and
+ * that Shift, Reverse and the scheme still choose the colours. It ends on what
+ * the orbit plot draws, which is the path and not the trap.
+ *
+ * The comparison the fourth sentence draws is the fractal's own: a kind whose
+ * orbits settle rather than escape would make "rather than how fast it
+ * escapes" false, so it names its own colouring instead
+ * ({@link TRAP_COMPARISONS}).
+ * @param fractalId - The `FRACTAL_TYPES` id on the canvas
+ * @param trap - The orbit trap the picture is drawn in
+ * @returns The expanded card's colour explanation, in the trap's terms
+ */
+export function describeTrapColouring(
+  fractalId: string,
+  trap: TrapShape,
+): string {
+  const comparison = Object.prototype.hasOwnProperty.call(
+    TRAP_COMPARISONS,
+    fractalId,
+  )
+    ? TRAP_COMPARISONS[fractalId]
+    : TRAP_ESCAPE_COMPARISON;
+
+  return (
+    `An orbit trap is a fixed shape in the plane the orbit moves in — ${describeTrapShape(trap)} — ` +
+    `and it stays where it is when the picture pans or zooms. Each point's orbit is the path it ` +
+    `follows, and the colour is how close that path ever comes to the shape: the closest is one ` +
+    `end of the palette and the farthest the other. So the picture shows where orbits pass near ` +
+    `the shape rather than ${comparison}, which is why the colours flow in bands. Shift, Reverse ` +
+    `and the colour scheme still choose the colours. The orbit plot draws the path the point took ` +
+    `and not the trap.`
+  );
 }

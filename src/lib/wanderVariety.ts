@@ -6,7 +6,8 @@ import type { Rng } from "./wander";
 
 /**
  * A Look: how the picture is coloured. Normal is the iteration count (no trap);
- * the others are the three orbit traps, which the page calls Glass.
+ * the others are the three orbit traps, which the Look control names for what
+ * they are.
  */
 export type Look = TrapShape | null;
 

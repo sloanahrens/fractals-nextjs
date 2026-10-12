@@ -159,16 +159,20 @@ export function isDefaultColorOptions(
  * The Look control's choices, in the order the Settings select and the menu on
  * the picture list them: Normal first, so the resting state reads as a choice
  * and not as a missing value. Normal is the trap off (the iteration-count
- * picture); Glass is the visitor-facing name of the three orbit-trap looks.
- * The values are the link key's own spellings (`m=point|line|circle`) and
- * `off`; only the words a visitor reads were renamed.
+ * picture); each of the other three names an orbit trap for what it is and
+ * says which shape it is (the owner's spelling, "Orbit Trap", capital T). The
+ * values are the link key's own spellings (`m=point|line|circle`) and `off`;
+ * only the words a visitor reads are named here, so a link written by any
+ * build reads the same picture. The Look button on the picture shows this
+ * label alone, its control's name riding in a `sr-only` prefix, so the menu
+ * reads as four choices and the button as the one that is on.
  */
 export const TRAP_CONTROL_OPTIONS: readonly { value: string; label: string }[] =
   [
     { value: TRAP_OFF_VALUE, label: "Normal" },
     ...TRAP_SHAPES.map((shape) => ({
       value: shape,
-      label: `Glass: ${shape.charAt(0).toUpperCase()}${shape.slice(1)}`,
+      label: `Orbit Trap: ${shape.charAt(0).toUpperCase()}${shape.slice(1)}`,
     })),
   ];
 

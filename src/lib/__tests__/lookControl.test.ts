@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 import {
   LOOK_CONTROL_NAME,
   LOOK_PILL_MAX_WIDTH,
-  lookButtonText,
   lookChoiceLabel,
   lookMenuTarget,
 } from "../lookControl";
@@ -26,55 +25,51 @@ import {
 import { TRAP_SHAPES } from "../orbitTrap";
 
 describe("the Look words", () => {
-  it("offers Normal and the three Glass looks, Normal being the trap off", () => {
+  it("offers Normal and the three orbit traps, Normal being the trap off", () => {
     expect(TRAP_CONTROL_OPTIONS.map((choice) => choice.label)).toEqual([
       "Normal",
-      "Glass: Point",
-      "Glass: Line",
-      "Glass: Circle",
+      "Orbit Trap: Point",
+      "Orbit Trap: Line",
+      "Orbit Trap: Circle",
     ]);
     expect(controlToTrap(TRAP_CONTROL_OPTIONS[0].value)).toBeNull();
   });
 
-  it("reads the button as the name and the look that is on", () => {
+  it("names the chosen look alone: the button's words are the choice, not the control", () => {
     expect(LOOK_CONTROL_NAME).toBe("Look");
-    expect(lookButtonText(trapToControl(null))).toBe("Look: Normal");
+    expect(lookChoiceLabel(trapToControl(null))).toBe("Normal");
+    expect(lookChoiceLabel(trapToControl(null))).not.toContain("Look");
 
     for (const shape of TRAP_SHAPES) {
-      const label = lookChoiceLabel(trapToControl(shape));
-
-      expect(label).toMatch(/^Glass: /);
-      expect(lookButtonText(trapToControl(shape))).toBe(`Look: ${label}`);
+      expect(lookChoiceLabel(trapToControl(shape))).toMatch(/^Orbit Trap: /);
     }
   });
 
   it("says Normal for a value it does not offer", () => {
     for (const value of ["", "Point", "spiral", "__proto__"]) {
-      expect(lookButtonText(value), value).toBe("Look: Normal");
+      expect(lookChoiceLabel(value), value).toBe("Normal");
     }
   });
 
   it("follows the state: a trap changed from outside changes the words", () => {
     const words = [null, ...TRAP_SHAPES].map((trap) =>
-      lookButtonText(trapToControl(trap)),
+      lookChoiceLabel(trapToControl(trap)),
     );
 
     expect(new Set(words).size).toBe(4);
-    expect(words[1]).toBe("Look: Glass: Point");
-    expect(words[2]).toBe("Look: Glass: Line");
-    expect(words[3]).toBe("Look: Glass: Circle");
+    expect(words[1]).toBe("Orbit Trap: Point");
+    expect(words[2]).toBe("Orbit Trap: Line");
+    expect(words[3]).toBe("Orbit Trap: Circle");
   });
 
   it("never outgrows the width the placement reserves for it", () => {
     // 12 px sans-serif text averages about 6.2 px a character; 6.5 is a
     // margin, and the button has 20 px of padding.
     const widest = Math.max(
-      ...TRAP_CONTROL_OPTIONS.map(
-        (choice) => lookButtonText(choice.value).length,
-      ),
+      ...TRAP_CONTROL_OPTIONS.map((choice) => choice.label.length),
     );
 
-    expect(widest).toBe("Look: Glass: Circle".length);
+    expect(widest).toBe("Orbit Trap: Circle".length);
     expect(widest * 6.5 + 20).toBeLessThanOrEqual(LOOK_PILL_MAX_WIDTH);
   });
 });
@@ -111,11 +106,11 @@ describe("placing the Look control beside the Auto-wander pill", () => {
 
   it("stacks one over the other on the narrowest phones", () => {
     expect(place(320)).toBe("stacked");
-    expect(place(359)).toBe("stacked");
+    expect(place(351)).toBe("stacked");
   });
 
-  it("puts them in a row over the strip on a phone and a tablet", () => {
-    expect(place(360)).toBe("above");
+  it("puts them in a row over the strip on a wider phone and a tablet", () => {
+    expect(place(352)).toBe("above");
     expect(place(375)).toBe("above");
     expect(place(768)).toBe("above");
   });

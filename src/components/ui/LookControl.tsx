@@ -10,7 +10,7 @@ import React, {
 
 import {
   LOOK_CONTROL_NAME,
-  lookButtonText,
+  lookChoiceLabel,
   lookMenuTarget,
 } from "../../lib/lookControl";
 import { TRAP_CONTROL_OPTIONS } from "../../lib/paletteControls";
@@ -137,22 +137,23 @@ function LookMenu({
 }
 
 /**
- * The Look switch on the picture: a button reading "Look: Normal" (or the
- * Glass look that is on) that opens a short menu of the four looks. It is the
+ * The Look switch on the picture: a button showing the look that is on — the
+ * selected menu item's words alone, "Normal" or "Orbit Trap: Circle", with the
+ * control's own name in a `sr-only` prefix so the accessible name still says
+ * "Look: Normal" and a screen reader hears both which setting this is and
+ * which choice it holds. It opens a short menu of the four looks. It is the
  * Settings drawer's Look select seen from the picture — the page hands both the
  * same value and the same change handler — so the two always agree, and a look
  * changed from anywhere else (Settings, a link, a saved view, a tour stop)
  * shows here at once.
  *
- * The button is `aria-haspopup="menu"` with `aria-expanded`, 44 px tall, and
- * its accessible name is its visible words, "Look: Normal" and so on, so a
- * screen reader hears the look that is on. The menu is a group of `menuitemradio` buttons: Up, Down, Home and
- * End walk them, Enter or Space picks, Escape closes, and so does a press
- * anywhere outside or Tab moving on; focus goes back to the button when the menu
- * closes by Escape or a pick. A render in flight does not disable anything —
- * the visitor can keep choosing, as with every other control — and marks the
- * button `aria-busy` and pulsing, the page's own cue that the picture is being
- * drawn.
+ * The button is `aria-haspopup="menu"` with `aria-expanded` and 44 px tall.
+ * The menu is a group of `menuitemradio` buttons: Up, Down, Home and End walk
+ * them, Enter or Space picks, Escape closes, and so does a press anywhere
+ * outside or Tab moving on; focus goes back to the button when the menu closes
+ * by Escape or a pick. A render in flight does not disable anything — the
+ * visitor can keep choosing, as with every other control — and marks the button
+ * `aria-busy` and pulsing, the page's own cue that the picture is being drawn.
  *
  * It holds only whether its menu is open. It sits in the Auto-wander pill's
  * row (`WanderControl`'s `leading` slot), so it is hidden whenever the pill is
@@ -197,7 +198,11 @@ export function LookControl({ value, rendering, onChange }: LookControlProps) {
         onClick={() => setOpen((wasOpen) => !wasOpen)}
         className={`${BUTTON_CLASSES} ${open ? OPEN : RESTING} ${rendering ? "motion-safe:animate-pulse" : ""}`}
       >
-        {lookButtonText(value)}
+        {/* The control's own name, heard but not seen: the words on the
+            button are the look that is on, and this is what says which
+            setting they belong to. */}
+        <span className="sr-only">{LOOK_CONTROL_NAME}: </span>
+        {lookChoiceLabel(value)}
       </button>
 
       {open && (

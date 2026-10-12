@@ -14,6 +14,8 @@ import {
   FRACTAL_MATH,
   complexExpr,
   describeFractalMath,
+  describeTrapColouring,
+  describeTrapShape,
   formatComplex,
   toPlainText,
   type MathExpr,
@@ -25,6 +27,14 @@ import {
 } from "../fractalTypes";
 import { JULIA_CONSTANTS } from "../julia";
 import { MULTIBROT_POWERS } from "../multibrot";
+import {
+  TRAP_CIRCLE_CENTRE,
+  TRAP_CIRCLE_RADIUS,
+  TRAP_LINE_REAL,
+  TRAP_POINT,
+  TRAP_SHAPES,
+} from "../orbitTrap";
+import { formatCoordinate } from "../zoomScale";
 
 const KINDS = new Set([
   "number",
@@ -452,6 +462,108 @@ describe("the setting", () => {
       const setting = describeFractalMath("magnet", variant).setting;
 
       expect(toPlainText(setting!.value), variant).toBe("Type I");
+    }
+  });
+});
+
+describe("what the card says with an orbit trap on", () => {
+  const ids = FRACTAL_TYPES.map((type) => type.id);
+
+  it("says which shape the trap is and where, from orbitTrap's own numbers", () => {
+    expect(describeTrapShape("point")).toBe(
+      `a point at ${formatComplex(TRAP_POINT.real, TRAP_POINT.imaginary)}`,
+    );
+    expect(describeTrapShape("line")).toContain("imaginary axis");
+    expect(describeTrapShape("line")).toContain(
+      formatCoordinate(TRAP_LINE_REAL),
+    );
+    expect(describeTrapShape("circle")).toBe(
+      `the circle of radius ${formatCoordinate(TRAP_CIRCLE_RADIUS)} about the origin`,
+    );
+    expect(
+      TRAP_CIRCLE_CENTRE.real === 0 && TRAP_CIRCLE_CENTRE.imaginary === 0,
+    ).toBe(true);
+  });
+
+  it.each(TRAP_SHAPES)(
+    "describes the %s trap in the same words for every fractal",
+    (trap) => {
+      for (const id of ids) {
+        const text = describeTrapColouring(id, trap);
+
+        expect(text, id).toContain("An orbit trap is a fixed shape");
+        expect(text, id).toContain(describeTrapShape(trap));
+        expect(text, id).toContain("Each point's orbit is the path it follows");
+        expect(text, id).toContain(
+          "the closest is one end of the palette and the farthest the other",
+        );
+        expect(text, id).toContain(
+          "Shift, Reverse and the colour scheme still choose the colours",
+        );
+        expect(text, id).toContain(
+          "The orbit plot draws the path the point took and not the trap",
+        );
+        // The trap colours by a distance, so the count's sentence would be
+        // false here and must not have been kept.
+        expect(text, id).not.toContain("step on which");
+      }
+    },
+  );
+
+  it("says what the trap shows instead, in the fractal's own terms", () => {
+    for (const id of ids) {
+      const text = describeTrapColouring(id, "point");
+
+      // A kind whose orbits settle never "escapes", so it names its own
+      // colouring; every escape-time kind, Phoenix included, keeps the
+      // escape wording because escaping is what its colour was made of.
+      if (["newton", "nova", "magnet"].includes(id)) {
+        expect(text, id).not.toContain("how quickly the orbit escapes");
+      } else {
+        expect(text, id).toContain(
+          "rather than how quickly the orbit escapes",
+        );
+      }
+    }
+
+    expect(describeTrapColouring("newton", "point")).toContain(
+      "rather than which root the orbit settles on, and how quickly",
+    );
+    expect(describeTrapColouring("nova", "point")).toContain(
+      "rather than how many steps the orbit took to settle or to run away",
+    );
+    expect(describeTrapColouring("magnet", "point")).toContain(
+      "rather than whether the orbit settles on the fixed point or runs off to infinity",
+    );
+    expect(describeTrapColouring("phoenix", "circle")).toContain(
+      "rather than how quickly the orbit escapes",
+    );
+  });
+
+  it("gives an id this build does not know the escape wording", () => {
+    for (const id of ["lyapunov", "constructor", ""]) {
+      expect(describeTrapColouring(id, "line"), id).toContain(
+        "how quickly the orbit escapes",
+      );
+    }
+  });
+
+  it("changes with the trap and with the fractal", () => {
+    const texts = TRAP_SHAPES.map((trap) =>
+      describeTrapColouring("mandelbrot", trap),
+    );
+
+    expect(new Set(texts).size).toBe(3);
+    expect(describeTrapColouring("mandelbrot", "point")).not.toBe(
+      describeTrapColouring("newton", "point"),
+    );
+  });
+
+  it("carries no markup", () => {
+    for (const id of ids) {
+      for (const trap of TRAP_SHAPES) {
+        expect(describeTrapColouring(id, trap), id).not.toMatch(/[<>]|&\w+;/);
+      }
     }
   });
 });

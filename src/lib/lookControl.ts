@@ -1,14 +1,17 @@
 /**
- * The Look control on the picture: what its button says and how its menu is
- * walked by keyboard.
+ * The Look control on the picture: what its menu is walked by keyboard with,
+ * and the width it reserves beside the Auto-wander pill.
  *
  * Look is the visitor-facing name of the orbit-trap colouring. Normal is the
- * trap off (colour by escape count) and Glass: Point, Line and Circle are the
- * three traps. The control is another view of the page's one `trap` state, the
- * Settings select being the first, so nothing here holds a value: the choices
- * and their words are `TRAP_CONTROL_OPTIONS`, and the button reads whatever the
- * page hands it. `LookControl.tsx` draws it, `wanderControl.ts` places it beside
- * the Auto-wander pill, and everything here is pure so the Node suite drives it.
+ * trap off (colour by escape count) and Orbit Trap: Point, Line and Circle are
+ * the three traps. The control is another view of the page's one `trap` state,
+ * the Settings select being the first, so nothing here holds a value: the
+ * choices and their words are `TRAP_CONTROL_OPTIONS`, and the button reads
+ * whatever the page hands it. The button shows the chosen look alone — its
+ * control's name rides in a visually hidden prefix, so the accessible name
+ * still says "Look: ..." while the visible words are just the choice.
+ * `LookControl.tsx` draws it, `wanderControl.ts` places it beside the
+ * Auto-wander pill, and everything here is pure so the Node suite drives it.
  */
 import { TRAP_CONTROL_OPTIONS } from "./paletteControls";
 
@@ -16,11 +19,14 @@ import { TRAP_CONTROL_OPTIONS } from "./paletteControls";
 export const LOOK_CONTROL_NAME = "Look";
 
 /**
- * The widest the button gets ("Look: Glass: Circle" in 12 px text with 10 px of
- * padding either side, with room to spare). `wanderPlacement` reserves this
- * much beside the Auto-wander pill, so the two never overlap.
+ * The widest the button gets ("Orbit Trap: Circle" in 12 px text with 10 px of
+ * padding either side, with room to spare). That button renders 119 px in a
+ * browser; the reserve is the 6.5 px a character the placement arithmetic
+ * already assumes, which leaves room for a machine whose system font is wider.
+ * `wanderPlacement` reserves this much beside the Auto-wander pill, so the two
+ * never overlap.
  */
-export const LOOK_PILL_MAX_WIDTH = 152;
+export const LOOK_PILL_MAX_WIDTH = 144;
 
 /** The words of a choice: its option's label, Normal for a value not offered. */
 export function lookChoiceLabel(value: string): string {
@@ -29,11 +35,6 @@ export function lookChoiceLabel(value: string): string {
     TRAP_CONTROL_OPTIONS[0];
 
   return option.label;
-}
-
-/** The button's visible words: the control's name and the current choice. */
-export function lookButtonText(value: string): string {
-  return `${LOOK_CONTROL_NAME}: ${lookChoiceLabel(value)}`;
 }
 
 /**

@@ -3083,6 +3083,7 @@ export default function Home() {
                 colorScheme,
               }}
               colorOptions={colorOptions}
+              trap={trap}
               belowChips={variants !== null}
               // Held only while the probe runs, so a card that has just been
               // expanded again never shows the point from before it was
@@ -3413,12 +3414,12 @@ export default function Home() {
               onChange={handleReverseChange}
             />
             {/* Look: Normal colours each point by how long its orbit took to
-                  escape; Glass: Point, Line and Circle (the orbit traps)
-                  colour it by how near the orbit comes to a fixed point, line
-                  or circle. Shift, Reverse and the scheme above and below work
-                  on either unchanged. The Look button on the picture is this
-                  select's other view: both read `trap` and call
-                  handleTrapChange. */}
+                  escape; the three Orbit Trap looks colour it by how near the
+                  orbit comes to a fixed point, line or circle. Shift, Reverse
+                  and the scheme above and below work on either unchanged. The
+                  Look button on the picture is this select's other view: both
+                  read `trap` and call handleTrapChange, and the button shows
+                  the chosen look under the same four names. */}
             <Select
               label="Look"
               value={trapToControl(trap)}

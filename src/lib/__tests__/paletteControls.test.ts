@@ -139,12 +139,12 @@ describe("is the palette as the scheme has it?", () => {
 });
 
 describe("the Look select", () => {
-  it("lists Normal first and then the three Glass looks, with the link key's own values", () => {
+  it("lists Normal first and then the three orbit traps, with the link key's own values", () => {
     expect(TRAP_CONTROL_OPTIONS).toEqual([
       { value: "off", label: "Normal" },
-      { value: "point", label: "Glass: Point" },
-      { value: "line", label: "Glass: Line" },
-      { value: "circle", label: "Glass: Circle" },
+      { value: "point", label: "Orbit Trap: Point" },
+      { value: "line", label: "Orbit Trap: Line" },
+      { value: "circle", label: "Orbit Trap: Circle" },
     ]);
   });
 
