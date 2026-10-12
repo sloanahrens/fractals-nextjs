@@ -162,9 +162,9 @@ export const HELP_SECTIONS: HelpSection[] = [
           "In Settings, under Color Scheme: Reverse walks the palette backwards and Shift slides it a fraction of a turn round, 0 to 100 percent, with Reset colours to put both back. Either repaints the picture at once from iteration counts already computed, so it is instant however deep the view, and both travel in a link, so Copy link, Back and a saved view carry them. A tour or Surprise me puts both back by itself, so neither is tinted by a setting left over from before",
       },
       {
-        keys: "Orbit trap",
+        keys: "Look",
         action:
-          "In Settings, above the Shift slider: colour each point by how close its orbit comes to a fixed shape — a point, a line or a circle — instead of by how long it took to escape. Turning a trap on, off or to another shape draws the view again to measure those distances, which is slower than the usual picture, and the page stays usable while it draws; after that Color Scheme, Reverse, Shift and Cycle colours repaint at once, as they do for the usual picture, and Reset colours turns the trap off. The shape travels in a link, Copy tour link and a saved view, but the preview a chat shows for a shared link is the normal picture of that place. A tour or Surprise me goes back to the normal picture by itself",
+          "The Look button at the bottom right of the picture, beside the Auto-wander pill (and the Look select in Settings, above the Shift slider, which is the same setting), switches between Normal and three Glass looks: Glass colours each point by how close its orbit comes to a point, a line or a circle instead of by how long it took to escape. Glass renders more slowly than Normal. Switching between Normal and Glass draws the view again to measure those distances, and the page stays usable while it draws; after that moving between Glass: Point, Line and Circle, and Color Scheme, Reverse, Shift and Cycle colours, repaint at once and add no history entry. Reset colours puts the look back to Normal. The look travels in a link, Copy tour link and a saved view, but the preview a chat shows for a shared link is always the Normal picture of that place. A tour or Surprise me goes back to Normal by itself, and the button hides while a tour plays",
       },
       {
         keys: "Cycle colours",

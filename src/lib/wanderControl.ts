@@ -80,7 +80,15 @@ export const NEARBY_STRIP_MAX_WIDTH = 7 * 96 + 6 * 8 + 2 * 12;
 export const WANDER_PILL_MAX_WIDTH = 176;
 export const WANDER_PILL_GAP = 8;
 
-export type WanderPlacement = "beside" | "above";
+/**
+ * `beside` — in the corner, level with the tiles. `above` — over the strip's
+ * right end. `stacked` — over the strip too, but one control over the other,
+ * for a picture too narrow to hold two side by side.
+ */
+export type WanderPlacement = "beside" | "above" | "stacked";
+
+/** The gap between the picture's edge and a control sitting over the strip. */
+export const PICTURE_EDGE_GAP = 12;
 
 /**
  * Where the pill goes for a picture this many pixels wide. A picture wide
@@ -88,13 +96,30 @@ export type WanderPlacement = "beside" | "above";
  * pill in the bottom right corner, level with the tiles; a narrower one stacks
  * it above the strip's right end, so it is never over a tile. An unmeasured
  * width stacks, which is the placement that is clear whatever the width is.
+ *
+ * `companionWidth` is the widest a control sharing the pill's row can be (the
+ * Look control, `LOOK_PILL_MAX_WIDTH`), 0 for none. With one, the pair sits in
+ * the corner when strip, pill, companion and their gaps all fit, in a row over
+ * the strip when the pair fits across the picture, and one over the other when
+ * not even that fits.
  */
-export function wanderPlacement(canvasWidth: number): WanderPlacement {
-  if (!Number.isFinite(canvasWidth)) return "above";
+export function wanderPlacement(
+  canvasWidth: number,
+  companionWidth = 0,
+): WanderPlacement {
+  const companion = companionWidth > 0 ? companionWidth + WANDER_PILL_GAP : 0;
+  const narrowest: WanderPlacement = companion > 0 ? "stacked" : "above";
+  if (!Number.isFinite(canvasWidth)) return narrowest;
 
-  const needed =
-    NEARBY_STRIP_MAX_WIDTH + WANDER_PILL_GAP + WANDER_PILL_MAX_WIDTH;
-  return canvasWidth >= needed ? "beside" : "above";
+  const beside =
+    NEARBY_STRIP_MAX_WIDTH +
+    WANDER_PILL_GAP +
+    WANDER_PILL_MAX_WIDTH +
+    companion;
+  if (canvasWidth >= beside) return "beside";
+
+  const across = 2 * PICTURE_EDGE_GAP + WANDER_PILL_MAX_WIDTH + companion;
+  return canvasWidth >= across ? "above" : narrowest;
 }
 
 /** localStorage key of the once-per-browser nudge. */

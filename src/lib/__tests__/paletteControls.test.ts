@@ -138,13 +138,13 @@ describe("is the palette as the scheme has it?", () => {
   });
 });
 
-describe("the Trap select", () => {
-  it("lists Off first and then the three shapes, each by name", () => {
+describe("the Look select", () => {
+  it("lists Normal first and then the three Glass looks, with the link key's own values", () => {
     expect(TRAP_CONTROL_OPTIONS).toEqual([
-      { value: "off", label: "Off" },
-      { value: "point", label: "Point" },
-      { value: "line", label: "Line" },
-      { value: "circle", label: "Circle" },
+      { value: "off", label: "Normal" },
+      { value: "point", label: "Glass: Point" },
+      { value: "line", label: "Glass: Line" },
+      { value: "circle", label: "Glass: Circle" },
     ]);
   });
 
