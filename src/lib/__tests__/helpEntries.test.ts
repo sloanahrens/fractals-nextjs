@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { FRACTAL_TYPES } from "../fractalTypes";
 import {
   HELP_DIALOG_TITLE,
   HELP_SECTIONS,
@@ -57,6 +58,25 @@ describe("the help sections", () => {
       const keys = section.entries.map((entry) => entry.keys);
       expect(new Set(keys).size, section.title).toBe(keys.length);
     }
+  });
+
+  it("names the fractal buttons in the row's own order, and no more", () => {
+    const entry = HELP_SECTIONS.flatMap((section) => section.entries).find(
+      (candidate) => candidate.keys === "Fractal buttons",
+    )!;
+    // Each label is named after the one before it, so a button moved in the
+    // row, or a fractal added to it, cannot leave the help behind.
+    let previous = -1;
+
+    for (const type of FRACTAL_TYPES) {
+      const at = entry.action.indexOf(type.label, previous + 1);
+
+      expect(at, type.label).toBeGreaterThan(previous);
+      previous = at;
+    }
+    // A line about the control, not a manual: each fractal's own rule is the
+    // Math card's to explain, and what is left here is a sentence.
+    expect(entry.action.length).toBeLessThan(400);
   });
 
   it("lists both touch gestures, and says pinch zooms", () => {
