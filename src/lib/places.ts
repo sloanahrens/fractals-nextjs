@@ -1206,110 +1206,43 @@ export function placesForFractal(fractal: string): Place[] {
 /**
  * The one place each fractal's switcher button lands on, by catalogue id.
  *
- * Picked from a contact sheet of the whole catalogue, every place drawn at
- * 200x150 in its own scheme: the place a visitor should see after one click on
- * a fractal's name, so it has to read as that fractal at a glance and be full
- * of detail. A fractal's "whole" place is left out on purpose, since that is
- * the view the page opens on and a switch should go somewhere.
+ * Picked from a contact sheet of the whole catalogue, every place drawn small
+ * and in its own scheme: the place a visitor should see after one click on a
+ * fractal's name, so it has to read as that fractal at a glance and be full of
+ * detail. Normally a fractal's "whole" place is left out, since that is the
+ * view the page opens on and a switch should go somewhere; the fractals whose
+ * whole set is the picture are the exception, and `FEATURED_IS_OPENING_VIEW`
+ * in `places.test.ts` names them.
  *
- * - Mandelbrot: Seahorse Valley. The set's best-known place, deep blue
- *   filigree with the seahorse spirals filling the frame. Elephant Valley and
- *   the top bulb are washes of one colour and the seahorse tail is too dense
- *   to read.
- * - Julia: Classic spirals. The Classic constant at zoom 3 shows two spirals
- *   and the set's lobes in full colour; the "whole set" views are a small shape
- *   in a field of one colour, which is what the constant chips are for.
- * - Burning Ship: the Armada. Masts standing on the hull's silhouette, the one
- *   view that reads as a ship; the closer views are textures.
- * - Tricorn: the whole Tricorn (fr-hbe). Along the left arm, the pick of
- *   fr-6oi, is zoomed in on the real axis, where the Tricorn is exactly the
- *   Mandelbrot set (conjugating a real z changes nothing): at 800x600 it is a
- *   needle with bulbs on a red field, the same picture as
- *   `mandelbrot-needle-bulbs`. The star on an antenna (fr-gxr's pick) is off
- *   the axis, but at 800x600 in classic it is a flat green field with one
- *   black arm: the picture fr-6oi was filed against. The whole set sits on
- *   the axis too, and that is fine: the axis only shows the Mandelbrot set
- *   once the view is zoomed in until the axis fills it, and at whole-set zoom
- *   the three-fold form is the picture. Drawn at 800x600 beside the Mandelbrot
- *   set's whole view, the whole set in classic, rainbow, fire and ocean, and
- *   the same frame at zooms 1.1, 1.25, 1.5, 2 and 2.5: classic reads best, a
- *   black three-armed body with a green-to-magenta band round its edge and the
- *   arm tips running off the frame; rainbow is a flat red field and fire and
- *   ocean are dark fields with a thin edge. Zooming in only loses the arms
- *   (1.1 already clips more of the upper and lower tips; 1.5 and up is a black
- *   wedge between two green fields). The place is also the view the Fractal
- *   select opens the Tricorn on, so nothing but a switch from another fractal
- *   shows it, and the test that a featured place is not the opening view
- *   exempts it (`FEATURED_IS_OPENING_VIEW`). The guard keeps a fractal whose
- *   real axis is the Mandelbrot set's (`REAL_AXIS_MATCHES_MANDELBROT`) from
- *   featuring a place zoomed in past `REAL_AXIS_GUARD_MIN_ZOOM` on the axis,
- *   and `places.test.ts` names the place and its zoom when one does.
- * - Multibrot: the small copy of the z^3 set. A two-lobed set, one disc above
- *   the other, riding on the big set's edge among filaments in full colour; it
- *   reads as the Multibrot rather than the Mandelbrot set, which the
- *   one-lobed bulbs of the other places do not, and it lands on power 3, the
- *   chip row's first. First picked in the rainbow scheme from contact sheets
- *   drawn with smooth counts, but the guard (and a tile) draw whole counts, and
- *   there rainbow is a red field, 74% one colour; classic is 36%, so the place
- *   names classic. The Multibrot's other places were measured the same way and
- *   given the scheme with the least flat field of their own (the whole sets and
- *   the notch 46-57% in classic, the rest 31-40% except the junction, 73%: two
- *   big black bulbs, which is not the featured place).
- * - Newton: where all three basins meet. The origin drawn at zoom 8 is a
- *   pinwheel of six sectors in the three colour families of the roots with
- *   bulbs strung along the boundaries, which reads as nothing but this
- *   fractal and has no flat field (22% one colour in rainbow, 32 to 35% in
- *   fire, grayscale and ocean, 8% in classic). The whole-basins place is the
- *   opening view, so a switch should not repeat it; the rest of the Newton
- *   places were compared on the same sheet and are a basin pinched into a lens
- *   (a dark dot at its centre), two chains of junctions, a chain of bulbs
- *   and the root at 1 beside the boundary, each a variation on what the
- *   pinwheel already shows.
- * - Celtic: the whole set, which is also the view the Fractal select opens it
- *   on (`FEATURED_IS_OPENING_VIEW` in the test). The set's real axis is the
- *   Mandelbrot set's, so a deep view on the axis would repeat that button, and
- *   the whole set is the picture that says what is different: a flat-edged
- *   black body with a pointed nose, arcs of colour under the fold line and a
- *   dust of small copies to its left. 25% one colour in classic at 64x48.
- * - Perpendicular Ship: the whole ship, which is also the view the Fractal
- *   select opens it on (`FEATURED_IS_OPENING_VIEW` in the test). One click on
- *   the button has to say what this fractal is, and what it is is the
- *   silhouette: a black hull with a bowed sail, a small bow lobe on a thin neck
- *   and a spike running out to the left, with rows of masts along the deck.
- *   Drawn at 400x300 in all five schemes, classic reads best (16% one colour
- *   at 64x48; rainbow is 16% too, fire and ocean are dark fields), and the
- *   deeper places are all lace and leave the shape out.
- * - Magnet: a drifted field of disks, NOT a whole-set view, and the deviation
- *   is deliberate. The Magnet set is the c whose orbit settles on the fixed
- *   point z = 1, and that is nearly the whole plane: at the frame the fractal
- *   opens on, which is the widest view there is, the picture is 70% one colour,
- *   and no frame that reads as the whole set is under 65%, which the featured
- *   guard below forbids. So the button leads with the structure the picture is
- *   made of instead -- the drift where the escaping island meets the settled
- *   black. Measured at the count Auto draws it at, it is 39% one colour at
- *   64x48 and 41% of a 96x72 grid inside the settled set, and that grid holds
- *   82 different counts, so it is a picture rather than a flat field.
- * - Phoenix: the whole Classic set, which is also the view the Fractal select
- *   opens it on (`FEATURED_IS_OPENING_VIEW` in the test). Unlike the Mandelbrot
- *   set a Phoenix Julia set is one picture at one frame, and what says what
- *   this fractal is is the silhouette: two feathered flames, one above the
- *   other, in a ring of green and magenta fringe with blue curls in the black.
- *   Drawn at 400x300 in classic and rainbow (classic reads best: 50% one colour
- *   at 64x48, where the rainbow is a flat red field) and at zoom 2, which only
- *   loses the flames' tips off the frame.
- * - Nova: the whole set, which is also the view the Fractal select opens it on
- *   (`FEATURED_IS_OPENING_VIEW` in the test). It is the one picture that says
- *   what the fractal is: a C-shaped arc with a round bloom of rainbow bands
- *   inside it, the real axis running left from the arc through a string of
- *   disks to a filament, and small copies of the arc's tips in a tree of bulbs
- *   above and below. Drawn at 400x300 in all five schemes: classic reads best
- *   (17% one colour at 64x48), while rainbow, fire and ocean are 60 to 85% one
- *   colour, because most of the plane settles in about 35 steps and takes one
- *   shade. Zoom 1.5 holds the arc's tips and the filament's end with room to
- *   spare, where zoom 1 shows the same set smaller.
+ * - Mandelbrot: Seahorse Valley, the set's best-known place.
+ * - Julia: Classic spirals, the Classic constant at zoom 3; a whole-set view
+ *   is a small shape in a field of one colour, which is what the chips are for.
+ * - Burning Ship: the Armada, masts standing on the hull's silhouette.
+ * - Tricorn: the whole Tricorn (an exception above). The picks along the left
+ *   arm and on an antenna sit on the real axis, where the Tricorn is exactly
+ *   the Mandelbrot set, or read as a flat field; `REAL_AXIS_MATCHES_MANDELBROT`
+ *   and its guard keep the featured place off a deep view of the axis.
+ * - Multibrot: the small copy of the z^3 set, which reads as the Multibrot
+ *   where the one-lobed bulbs do not, and lands on the chip row's first power.
+ * - Newton: the junction where all three basins meet, which reads as nothing
+ *   but this fractal. The whole-basins place is the opening view.
+ * - Celtic: the whole set (an exception above), the picture that says what is
+ *   different about it: a flat-edged black body with a pointed nose.
+ * - Perpendicular Ship: the whole ship (an exception above). One click has to
+ *   say what the fractal is, and that is the silhouette; the deeper places are
+ *   all lace.
+ * - Magnet: a drifted field of disks rather than a whole-set view. Nearly the
+ *   whole plane settles on the fixed point the set is built on, so the frame
+ *   the fractal opens on is a flat field and no frame that reads as the whole
+ *   set passes the guard; the button leads with the drift where the escaping
+ *   island meets the settled black.
+ * - Phoenix: the whole Classic set (an exception above): a Phoenix set is one
+ *   picture at one frame, and the silhouette is what says what it is.
+ * - Nova: the whole set (an exception above), the one picture that says what
+ *   the fractal is.
  *
- * The others were redrawn and kept: each is at most 21% one colour (the
- * guard in `places.test.ts` holds every one under 60%).
+ * The rest of the catalogue was redrawn and kept: each is a picture rather
+ * than a flat field, which the guard in `places.test.ts` holds.
  */
 export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   mandelbrot: "mandelbrot-seahorse-valley",
@@ -1375,10 +1308,12 @@ export function featuredPlace(fractal: string): Place {
  * set is the Julia default view, and a place counts as one when it is that view
  * of that constant. Constants are compared as points, so a custom spelling of a
  * named constant finds the same place. A Multibrot's whole set is likewise the
- * Multibrot default view, one frame for the three powers, and a Newton
- * polynomial's is the one frame for all four, as a magnetic type's is for both.
+ * Multibrot default view, one frame for every power; a Newton polynomial's is
+ * the one frame for every polynomial; a magnetic type's is one frame for
+ * either type; and a Phoenix constant's is the frame for every named constant,
+ * since a Phoenix set is framed on the origin whatever the constant.
  *
- * @param variant - A named Julia constant or a `custom:<re>,<im>` name, a Multibrot power, a Newton polynomial or a magnetic type
+ * @param variant - A named Julia constant or a `custom:<re>,<im>` name, a Multibrot power, a Newton polynomial, a Magnet type or a Phoenix constant
  * @param fractal - The fractal the chip belongs to; Julia unless said
  * @returns The catalogue's whole-set place for it, or null when it has none
  */
@@ -1434,8 +1369,8 @@ function sameConstant(
 
 /**
  * Whether two variants of one fractal are the same picture: Julia constants as
- * points, any other variant (a Multibrot power, a Newton polynomial, a magnetic
- * type) as text.
+ * points, any other variant (a Multibrot power, a Newton polynomial, a Magnet
+ * type, a Phoenix constant) as text.
  */
 function sameVariant(
   fractal: string,

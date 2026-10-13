@@ -54,7 +54,8 @@ export interface ViewLinkUpdates {
   fractalType: string;
   /**
    * The fractal's variant: for Julia a constant, named or a custom spelling of
-   * a point; for the Multibrot its power. One string for every fractal, kept
+   * a point; for the Multibrot, Newton, the Magnet and the Phoenix the setting
+   * `fractalVariants` describes for them. One string for every fractal, kept
    * across a change to a fractal that takes none, so it opens on Julia's
    * default whatever fractal the page opens on.
    */

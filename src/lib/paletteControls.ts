@@ -19,7 +19,7 @@
  * wrapping it) and whether there is anything to put back
  * ({@link isDefaultColorOptions}, judged exactly) — and both say why.
  *
- * The Trap select sits beside them (`TRAP_CONTROL_OPTIONS`, `trapToControl`,
+ * The Look control sits beside them (`TRAP_CONTROL_OPTIONS`, `trapToControl`,
  * `controlToTrap`): an orbit trap is a way of colouring the picture, off by
  * default, and Reset colours turns it off with the other two.
  */

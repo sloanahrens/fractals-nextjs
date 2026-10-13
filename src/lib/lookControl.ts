@@ -21,10 +21,9 @@ export const LOOK_CONTROL_NAME = "Look";
 /**
  * The widest the button gets ("Orbit Trap: Circle" in 12 px text with 10 px of
  * padding either side, with room to spare). That button renders 119 px in a
- * browser; the reserve is the 6.5 px a character the placement arithmetic
- * already assumes, which leaves room for a machine whose system font is wider.
- * `wanderPlacement` reserves this much beside the Auto-wander pill, so the two
- * never overlap.
+ * browser, so 144 is about a fifth more than it needs -- headroom for a system
+ * font wider than the one measured with. `wanderPlacement` reserves this much
+ * beside the Auto-wander pill, so the two never overlap.
  */
 export const LOOK_PILL_MAX_WIDTH = 144;
 

@@ -52,7 +52,7 @@ export const MAGNET_BAILOUT = 100;
  */
 export const MAGNET_TOLERANCE = 1e-6;
 
-/** z^2, z^3 and 1/z^2 all built by hand, so a step is real arithmetic. */
+/** Complex helpers written out, so a step is plain real arithmetic. */
 function multiply(a: ComplexNumber, b: ComplexNumber): ComplexNumber {
   return {
     real: a.real * b.real - a.imaginary * b.imaginary,
@@ -193,8 +193,8 @@ function magnetIterations(
     if (magnitudeSquared > MAGNET_BAILOUT * MAGNET_BAILOUT) {
       if (!smooth) return iterations;
 
-      // An infinite magnitude (a pole reached in an earlier step, or a value
-      // that overflowed) has no size to smooth with, so the count is whole.
+      // An infinite magnitude (an overflow; a pole ends the orbit above
+      // instead) has no size to smooth with, so the count is whole.
       const logModulus = Math.log(magnitudeSquared) / 2;
       const fraction =
         Math.log(logModulus / Math.log(MAGNET_BAILOUT)) / Math.LN2;

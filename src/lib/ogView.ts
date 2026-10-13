@@ -11,12 +11,11 @@
  * The page's own head uses the same reader (`viewPreview.ts`), so an old
  * `/api/og` URL and the page it was shared from agree about what it names.
  *
- * The route no longer draws anything (fr-5om): it answers with the pre-built
- * picture the view previews as, so all this has to decide is *whether* a query
- * is a view — the picture itself comes from `ogImage.ts`. That is why nothing
- * here resolves a kind or works out an iteration count any more; `cardBounds`
- * is the one piece of geometry that remains, because the preview generator
- * (`scripts/make-og-previews.mjs`) frames every place with it.
+ * All this decides is *whether* a query is a view: the route answers with the
+ * pre-built picture the view previews as (`ogImage.ts`), so nothing here draws
+ * or resolves a kind. `cardBounds` is the one piece of geometry that remains,
+ * because the preview generator (`scripts/make-og-previews.mjs`) frames every
+ * place with it.
  */
 
 import type { FractalBounds } from "../types/fractal";
@@ -119,7 +118,7 @@ export function parseOgQuery(search: string): OgParse {
  * the card's shape, keeping its centre and height.
  *
  * The pre-built previews are framed with this (`scripts/make-og-previews.mjs`),
- * which is the frame the on-demand card drew in, so a picture cannot drift from
+ * the frame each place's picture is drawn in, so a picture cannot drift from
  * the app's own view of the place.
  *
  * @param centerX - Real part of the centre

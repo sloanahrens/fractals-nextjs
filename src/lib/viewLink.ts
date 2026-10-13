@@ -15,15 +15,15 @@
  *
  * `v` is the version, so a link from a build that means something else by these
  * keys is refused rather than half-read. `f` names the fractal and `k`, written
- * only beside a fractal that takes a variant, names it: for Julia its constant
- * — one of the four the picker offers, or a custom name that is a point of the
- * plane written out (see `julia.ts`) — and for the Multibrot its power, `3`,
- * `4` or `5` (`f=multibrot&k=4`). `x` and `y` are the centre,
- * `z` the zoom, `s` the colour scheme — colour is part of the picture, so all
- * five travel — `i` the iteration setting, `auto` or the count when the slider
- * is in charge, and `w`/`h` the canvas size as a pair. Short keys, because a
- * link is meant to be pasted into a chat; a fixed order, so one view is always
- * one string.
+ * only beside a fractal that takes a variant, names it: for Julia a named
+ * constant or a custom name that is a point of the plane written out (see
+ * `julia.ts`), for the Multibrot its power (`f=multibrot&k=4`), and for the
+ * other families their setting -- `fractalVariants` in `fractalTypes.ts` is
+ * the list. `x` and `y` are the centre, `z` the zoom, `s` the colour scheme —
+ * colour is part of the picture, so `r` and `o` below travel with it — `i` the
+ * iteration setting, `auto` or the count when the slider is in charge, and
+ * `w`/`h` the canvas size as a pair. Short keys, because a link is meant to be
+ * pasted into a chat; a fixed order, so one view is always one string.
  *
  * The scheme has two settings of its own, written between `s` and `i` because
  * they are colour, not shape: `r=1` when the scheme is reversed, and `o` how
@@ -83,10 +83,12 @@ export interface ViewLinkState {
   /** Id of the fractal drawn, from {@link FRACTAL_TYPES} */
   fractalType: string;
   /**
-   * The fractal's variant (`fractalVariants`), written as `k`. Julia and the
-   * Multibrot have one: for Julia one of the named four constants, or a custom
-   * name that spells out a point (`julia.ts` has both spellings); for the
-   * Multibrot its power, "3", "4" or "5".
+   * The fractal's variant (`fractalVariants`), written as `k`: the setting the
+   * fractal takes beside its view. Julia, the Multibrot, Newton, the Magnet and
+   * the Phoenix have one -- for Julia a named constant or a custom name that
+   * spells out a point (`julia.ts` has both spellings), for the Multibrot its
+   * power, for Newton its polynomial, for the Magnet its type and for the
+   * Phoenix its constant.
    *
    * Written only beside a fractal that takes it and can draw the value,
    * because the fractal and its variant are one choice; a state that names a
@@ -167,8 +169,9 @@ const SIGNIFICANT_DIGITS = 10;
 /**
  * The longest fragment worth reading.
  *
- * A link for even the busiest state is about 90 characters, so a longer paste
- * is not one, and there is no reason to walk it.
+ * A link for even the busiest state is well under 150 characters, so this cap
+ * is a generous bound rather than a real one, and there is no reason to walk a
+ * longer paste.
  */
 export const MAX_FRAGMENT_LENGTH = 500;
 

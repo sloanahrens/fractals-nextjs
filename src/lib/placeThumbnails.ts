@@ -191,9 +191,10 @@ function isImageOfSize(
  * Renders run one at a time, in the order requested, and each starts on its own
  * macrotask: the browser gets a turn between two pictures, and a `pause()`
  * made in the same turn as a request lands before anything is drawn. Results
- * are cached by place id and colour scheme. A failed render is remembered for
- * the life of the store, outside the LRU, so a place that cannot be drawn is
- * not retried every time the strip scrolls past it.
+ * are cached by place id, colour scheme and the scheme's reverse, shift and
+ * trap. A failed render is remembered for the life of the store, outside the
+ * LRU, so a place that cannot be drawn is not retried every time the strip
+ * scrolls past it.
  *
  * The store owns no canvas and reads no clock: `render` is injected, which is
  * what lets the tests drive it with a fake. `createCanvasThumbnailRender` is

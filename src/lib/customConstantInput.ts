@@ -87,8 +87,8 @@ export function parseCustomConstantInput(
     Number(imaginaryText.trim()),
   );
 
-  // Both parts passed the range check above, so a name exists; the check is the
-  // type's, not a case.
+  // Both parts passed problemWith above, so a name exists: this branch is
+  // unreachable, kept only to narrow the type.
   if (name === null) return { error: "Enter two numbers from -2 to 2." };
 
   return { constant: name };

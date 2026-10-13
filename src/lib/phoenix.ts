@@ -92,14 +92,12 @@ function phoenixIterations(
     real = nextReal;
     imaginary = nextImaginary;
 
-    // Check if point has escaped (magnitude > 2)
     const magnitudeSquared = real * real + imaginary * imaginary;
     if (magnitudeSquared > 4) {
       if (!smooth) {
         return iterations;
       }
 
-      // Smooth iteration calculation for better color gradients
       return iterations + 1 - Math.log2(Math.log2(Math.sqrt(magnitudeSquared)));
     }
   }
@@ -107,16 +105,6 @@ function phoenixIterations(
   return maxIterations;
 }
 
-/**
- * The Phoenix set for one constant, as a {@link FractalKind}.
- *
- * A kind keeps its own state, so the point before the last lives inside the
- * orbit loop and the renderer hands over a point as for any other fractal. A
- * family rather than a picture, like Julia, so the picker carries the constant
- * as the fractal's variant and `resolveFractalKind` builds the kind from it.
- * @param constant - c in `real`, p in `imaginary`
- * @returns The kind for that constant
- */
 /**
  * The closest a Phoenix orbit comes to a trap shape: the count's own two-step
  * loop with a running minimum kept in place of the count, allocating nothing.
@@ -186,6 +174,16 @@ function phoenixTrap(
   return trapKeyToDistance(shape, least);
 }
 
+/**
+ * The Phoenix set for one constant, as a {@link FractalKind}.
+ *
+ * A kind keeps its own state, so the point before the last lives inside the
+ * orbit loop and the renderer hands over a point as for any other fractal. A
+ * family rather than a picture, like Julia, so the picker carries the constant
+ * as the fractal's variant and `resolveFractalKind` builds the kind from it.
+ * @param constant - c in `real`, p in `imaginary`
+ * @returns The kind for that constant
+ */
 export function createPhoenixKind(constant: ComplexNumber): FractalKind {
   return {
     id: "phoenix",

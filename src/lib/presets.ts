@@ -37,11 +37,12 @@ export interface FractalPreset {
    */
   juliaConstant?: string;
   /**
-   * The variant (see `fractalVariants`) of any other fractal that takes one:
-   * for the Multibrot its power, "3", "4" or "5". A new field rather than
-   * `juliaConstant` reused, because a power is not a constant, and an older
-   * build then sees a Multibrot view as a view of a fractal it does not know
-   * and leaves it unlisted instead of reading a power as a Julia name.
+   * The variant (see `fractalVariants`) of a fractal that takes one, other
+   * than Julia, whose constant has its own field above: the Multibrot's power,
+   * the Newton polynomial, the Magnet type or the Phoenix constant. A new field
+   * rather than `juliaConstant` reused, because a power is not a constant, and
+   * an older build then sees such a view as a view of a fractal it does not
+   * know and leaves it unlisted instead of reading a power as a Julia name.
    */
   variant?: string;
   /**
@@ -599,10 +600,10 @@ export function calculateZoomLevel(bounds: FractalBounds): number {
 /**
  * Format a zoom for a readout.
  *
- * The zoom is exact, and exact is not printable: a notch of the wheel moves
- * the view by a hair over 10%, and the bounds a zoom is read from carry float
- * error in their last digits. So show enough to see the view move (1.1x,
- * 1.21x), drop the noise, and use the K/M shorthand once the digits get long.
+ * The zoom is exact, and exact is not printable: the wheel zooms continuously
+ * and compounding floats drift, so the bounds a zoom is read from carry error
+ * in their last digits. So show a few significant figures (1.17x), drop the
+ * noise, and use the K/M shorthand once the digits get long.
  * @param zoom - Zoom to format
  * @returns The zoom as a short string, without a unit
  */
@@ -614,7 +615,6 @@ export function formatZoom(zoom: number): string {
   return Number(zoom.toFixed(2)).toString();
 }
 
-// Calculate center point from bounds
 export function calculateCenter(bounds: FractalBounds): {
   x: number;
   y: number;
@@ -625,7 +625,6 @@ export function calculateCenter(bounds: FractalBounds): {
   };
 }
 
-// Get preset by ID
 export function getPresetById(id: string): FractalPreset | undefined {
   return BUILTIN_PRESETS.find((preset) => preset.id === id);
 }
@@ -668,10 +667,11 @@ export function presetsForFractal(
  * A view belongs to the fractal on the canvas when it is saved, and its
  * variant goes with it only for a fractal that takes one. A Julia view keeps
  * the stored name it has always had, `juliaConstant`, so views saved before
- * variants still load and a view saved now still reads in an older build; the
- * Multibrot's power is written as `variant`. A Mandelbrot, Burning Ship or
- * Tricorn entry gets neither key at all, so its stored JSON stays the shape it
- * had before these fields existed.
+ * variants still load and a view saved now still reads in an older build; any
+ * other family's setting is written as `variant`. A fractal with no variant --
+ * the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn,
+ * the Celtic set or Nova -- gets neither key at all, so its stored JSON stays
+ * the shape it had before these fields existed.
  * @param fractalId - Id of the fractal on the canvas
  * @param variant - Variant on the canvas; written only for a fractal that takes one
  * @returns The fields to merge into the saved preset
@@ -691,7 +691,8 @@ export function presetFractalFields(
 }
 
 /**
- * The variant a view names: its Julia constant or its Multibrot power.
+ * The variant a view names: its Julia constant, or the setting of any other
+ * family that takes one (see `fractalVariants`).
  *
  * Both stored fields are read, the fractal's own first: a Julia view's
  * `juliaConstant` (then `variant`), any other fractal's `variant` (then

@@ -34,7 +34,7 @@ import { newtonPolynomialFor } from "./newton";
 import { PHOENIX_CONSTANTS } from "./phoenix";
 
 /**
- * A formula, as a small tree. Nine kinds of node, enough for every rule here:
+ * A formula, as a small tree. Enough kinds of node for every rule here:
  * the leaves are numbers, identifiers (`z`, `c`, `Re`) and operators (`+`, `→`,
  * brackets); the rest build a bigger expression out of smaller ones. `text` is
  * for the few words a formula carries ("the pixel's point").
@@ -460,7 +460,7 @@ const C_MINUS_2 = row(OPEN, c, operator(MINUS), number(2), CLOSE);
 /**
  * The fraction the first magnetic type squares: (z² + c − 1) / (2z + c − 2).
  *
- * The Top and bottom are both 1 at z = 1 whatever c is, which is why 1 is a
+ * The top and bottom are both 1 at z = 1 whatever c is, which is why 1 is a
  * fixed point of the map for every c -- the fact the set is built on.
  */
 const MAGNET_ONE_FRACTION = fraction(

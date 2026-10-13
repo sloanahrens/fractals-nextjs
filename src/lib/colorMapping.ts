@@ -15,14 +15,13 @@ export function mapIterationsToColor(
   scheme: ColorScheme = "classic",
   options?: ColorOptions,
 ): ColorRGB {
-  // Points in the set are black. This is decided before the palette options,
-  // and is not a place on the palette they move along: a point that never
-  // escaped is the same black reversed or shifted as it is as it is.
+  // Points in the set are black whatever Reverse and Shift say: this is
+  // decided before the palette options, because black is not a place on the
+  // palette they move along.
   if (iterations >= maxIterations) {
     return { r: 0, g: 0, b: 0 };
   }
 
-  // Normalize iterations to 0-1 range
   return mapPositionToColor(iterations / maxIterations, scheme, options);
 }
 
@@ -80,7 +79,6 @@ export function mapPositionToColor(
 }
 
 function classicColorScheme(t: number): ColorRGB {
-  // Classic blue to red gradient with yellow highlights
   const r = Math.floor(255 * Math.sin(Math.PI * t * 3) ** 2);
   const g = Math.floor(255 * Math.sin(Math.PI * t * 5 + Math.PI / 3) ** 2);
   const b = Math.floor(
@@ -91,7 +89,6 @@ function classicColorScheme(t: number): ColorRGB {
 }
 
 function fireColorScheme(t: number): ColorRGB {
-  // Fire-like colors: black -> red -> orange -> yellow -> white
   if (t < 0.25) {
     const intensity = t * 4;
     return {
@@ -118,13 +115,12 @@ function fireColorScheme(t: number): ColorRGB {
     return {
       r: 255,
       g: 255,
-      b: Math.floor(255 + intensity * 0), // Cap at 255
+      b: Math.floor(255 + intensity * 0),
     };
   }
 }
 
 function oceanColorScheme(t: number): ColorRGB {
-  // Ocean-like colors: dark blue -> cyan -> light blue -> white
   const r = Math.floor(255 * Math.pow(t, 3));
   const g = Math.floor(255 * Math.pow(t, 1.5));
   const b = Math.floor(255 * (0.3 + 0.7 * t));
@@ -193,9 +189,6 @@ function hsvToRgb(h: number, s: number, v: number): ColorRGB {
   };
 }
 
-/**
- * Get all available color schemes
- */
 export function getAvailableColorSchemes(): {
   value: ColorScheme;
   label: string;

@@ -180,13 +180,14 @@ export function attachCanvasNavigation(
 export const KEYBOARD_PAN_FRACTION = 0.1;
 
 /**
- * The factor one `+` or `-` keypress zooms by, so the keys and the Zoom In and
- * Zoom Out buttons move the view by the same step.
+ * The factor one `+` or `-` keypress zooms by: the same 2x the Zoom In and
+ * Zoom Out buttons hard-code, so a key and a button move the view alike.
  */
 export const KEYBOARD_ZOOM_FACTOR = 2;
 
 /**
- * The bounds one key on a focused canvas moves the view to
+ * The bounds one view key (an arrow, `+` or `-`) moves the view to, wherever
+ * the page has the keypress from
  *
  * An arrow moves the visible region a tenth of its own width or height in the
  * direction the arrow points *on screen*: the renderer fills rows from the top

@@ -16,8 +16,9 @@
  * returned it, colouring those counts draws the picture the two-step pipeline
  * draws, byte for byte.
  *
- * `FractalRenderer` calls {@link renderRgbaRows} a row at a time and copies each
- * row into its canvas, and `scripts/make-og-previews.mjs` calls
+ * `FractalRenderer` calls the two steps itself, row by row, and copies each
+ * finished row into its canvas -- the counts it draws with are the ones it
+ * keeps for a recolour -- and `scripts/make-og-previews.mjs` calls
  * {@link renderRgba} for a whole picture, so a place is the same pixels in the
  * browser and in a link preview, by construction rather than by two loops kept
  * in step. `fractalRenderer.test.ts` holds the two to byte equality for every
@@ -52,7 +53,7 @@ export const BYTES_PER_PIXEL = 4;
  * `Float64Array` — what every caller here uses — holds a count exactly as the
  * kind returned it, so colouring counts draws the picture the one-pass pipeline
  * draws, byte for byte. A `Float32Array` halves the memory and rounds each
- * count to about seven significant digits, which for the five escape-time
+ * count to about seven significant digits, which for the escape-time
  * fractals moves no pixel and for Newton's packed root-and-speed count moves
  * about one pixel in 150 by one step of a ramp, so the type is the caller's to
  * choose rather than this module's.

@@ -17,7 +17,7 @@
  *
  * The picture has square pixels: the frame's aspect is the published size's
  * own, so nothing is stretched. The shapes are rounded descriptions — a
- * 1170 x 2532 phone is 9:19.52, not 9:19.5 — so the size's own pixels decide
+ * 1170 x 2532 phone is 9:19.48, not 9:19.5 — so the size's own pixels decide
  * the frame and the shape's nominal aspect is what the shape is called.
  */
 
@@ -160,8 +160,9 @@ export function exportFrame(
     // Wider than the screen: the view's full height is kept and the sides are
     // filled in, so nothing the visitor was looking at is cut off. The social
     // card's `cardBounds` (`ogView.ts`) applies this same rule to its 1.91:1
-    // shape; it is not shared because that module is the image route's, and
-    // this one is drawn in the browser.
+    // shape; it is not shared because that module serves the preview
+    // generator (`scripts/make-og-previews.mjs`), and this one is drawn in the
+    // browser.
     const halfWidth = ((BASE_HEIGHT / scale) * shape) / 2;
 
     return {

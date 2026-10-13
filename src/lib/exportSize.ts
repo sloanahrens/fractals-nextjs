@@ -62,10 +62,8 @@ export function exportSizes(
   );
 
   if (basePixels > 0 && offered.length < CANDIDATE_SCALES.length) {
-    // The largest whole multiple the budget allows. A candidate is only
-    // dropped when it is over the cap and a larger one would be too, so this
-    // lands below the dropped candidate and never above the screen size
-    // unless that multiple is real.
+    // The largest whole multiple the budget allows, if it is bigger than 1
+    // and not already offered.
     const largest = Math.floor(Math.sqrt(maxPixels / basePixels));
     if (largest > 1 && !offered.includes(largest)) offered.push(largest);
   }

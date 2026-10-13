@@ -35,20 +35,17 @@ export function escapeTimeIterations(
   let imaginary = start.imaginary;
 
   for (let iterations = 0; iterations < maxIterations; iterations++) {
-    // Calculate z^2 + c
     const squaredReal = real * real - imaginary * imaginary;
     const squaredImaginary = 2 * real * imaginary;
     real = squaredReal + constant.real;
     imaginary = squaredImaginary + constant.imaginary;
 
-    // Check if point has escaped (magnitude > 2)
     const magnitudeSquared = real * real + imaginary * imaginary;
     if (magnitudeSquared > 4) {
       if (!smooth) {
         return iterations;
       }
 
-      // Smooth iteration calculation for better color gradients
       const smoothIterations =
         iterations + 1 - Math.log2(Math.log2(Math.sqrt(magnitudeSquared)));
       return smoothIterations;
@@ -170,9 +167,9 @@ export function escapeTimeTrap(
  *
  * A point in either is in the set, so its orbit never escapes and the loop
  * would run the entire cap only to report `maxIterations`. Interior pixels are
- * the whole cost of a view framed on the set — the live example is a deep zoom
- * into the cardioid taking minutes — and this is the answer those pixels were
- * already getting, reached without the orbit.
+ * the whole cost of a view framed on the set — a deep zoom into the cardioid
+ * fills the view with them, each of which would run the whole cap — and this is
+ * the answer those pixels were already getting, reached without the orbit.
  *
  * The inequalities are strict on purpose: a point on a boundary is not claimed
  * here, so it goes to the loop and gets whatever count it always got.
@@ -383,10 +380,9 @@ export function autoIterations(zoom: number): number {
 }
 
 /**
- * Get default fractal bounds (classic Mandelbrot view)
- *
- * The view the explorer opens on: the whole set at zoom 1, which is what the
- * base constants describe.
+ * Bounds of the classic Mandelbrot frame: centred on -0.75, zoom 1. The
+ * explorer's own opening view is `defaultViewFor`'s; this is the fixture the
+ * unit tests build a view from.
  */
 export function getDefaultBounds(): FractalBounds {
   return calculateZoomBounds(-0.75, 0, 1);

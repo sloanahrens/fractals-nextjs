@@ -58,9 +58,9 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "newton", label: "Newton" },
   { id: "celtic", label: "Celtic" },
   // The one label that is shortened, on purpose: "Perpendicular Ship" is the
-  // longest name here and eight full ones are about 435 px at text-xs, where
-  // the switcher's row is capped at the picture's width and scrolls sideways.
-  // "Perp. Ship" keeps the row readable on a phone, and the id and every
+  // longest name here, and the full names overflow the switcher's row on a
+  // phone, where the row is capped at the picture's width and scrolls
+  // sideways. "Perp. Ship" keeps the row readable there, and the id and every
   // other name the app says (the Math card's title, a link's line, the Help
   // row) are spelled in full.
   { id: "perpendicular-ship", label: "Perp. Ship" },
@@ -78,10 +78,10 @@ export interface FractalVariantOption {
 }
 
 /**
- * The one setting a fractal takes beyond its view: the Julia constant for
- * Julia, the power for the Multibrot. The switcher's second row and the Settings select are both drawn from
- * this, so a fractal that takes a setting needs a descriptor and no new
- * controls.
+ * The one setting a fractal takes beyond its view -- a constant, power,
+ * polynomial or type. The switcher's second row and the Settings select are
+ * both drawn from this, so a fractal that takes a setting needs a descriptor
+ * and no new controls.
  */
 export interface FractalVariants {
   /** What the setting is called, as the row's caption and the select's label */
@@ -124,10 +124,9 @@ const MAGNET_VARIANTS: FractalVariants = {
   allowsCustom: false,
 };
 
-// The polynomial is written as the power's own digit in a link and in storage
-// ("3", "4", "5"), and the one that has no such digit after the shorter name
-// the map is known by ("cycle"); the chip shows the equation, which is what a
-// visitor is choosing between.
+// The id is the power's own digit in a link and in storage ("3", "4", "5"), or
+// "cycle" for the polynomial with no such digit; the chip shows the equation,
+// which is what a visitor is choosing between.
 const NEWTON_VARIANTS: FractalVariants = {
   label: "Polynomial",
   options: NEWTON_POLYNOMIALS.map((polynomial) => ({
@@ -236,17 +235,13 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
 /**
  * The formula a picker choice draws.
  *
- * The picker names a fractal and the renderer wants a {@link FractalKind}. For
- * the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn and
- * the Celtic set those are the same thing. Julia is a family rather than a
- * picture, so the choice carries a constant as well — one of the named four, or
- * a custom spelling of any other point — and a name this build cannot read
- * falls back to the first named constant instead of to a blank canvas. The
- * Multibrot is a family of powers, and one it cannot read falls back to 3 the
- * same way; the Newton fractal is a family of polynomials and an unreadable
- * value falls back to z^3 - 1; the Magnet is a family of two magnetic types and
- * an unreadable one falls back to Type I; the Phoenix is a family of named
- * constants and an unreadable name falls back to the first.
+ * The picker names a fractal and the renderer wants a {@link FractalKind}. A
+ * plain kind -- the Mandelbrot set, the Burning Ship, the Perpendicular Ship,
+ * the Tricorn, the Celtic set or Nova -- is the same thing. Julia is a family
+ * rather than a picture, so the choice carries a constant as well -- one of the
+ * named ones, or a custom spelling of any other point -- and the Multibrot,
+ * Newton, the Magnet and the Phoenix are families of their own setting. A value
+ * a family cannot read falls back to its first option, never to a blank canvas.
  * @param typeId - Id of the fractal the picker selected
  * @param variant - Name of the Julia constant, the Multibrot power, the Newton polynomial, the Magnet type or the Phoenix constant; ignored for any other fractal
  * @returns The kind to draw
@@ -293,14 +288,7 @@ export interface FractalDefaultView {
 }
 
 /**
- * The view a fractal opens on.
- *
- * The fractals are pictures of different points, so none can inherit another's
- * view: the Mandelbrot set is framed around -0.75, a Julia set is symmetric
- * about the origin whatever its constant, and the ship sits below and left of
- * the origin, around -0.45 by -0.5, at the size that holds the whole of it,
- * the Tricorn is turned onto itself by 120 degrees about the origin, and the
- * Multibrot sets are turned onto themselves about it too.
+ * The view a fractal opens on; why each frame was chosen is beside its branch.
  * @param typeId - Id of the fractal to frame
  * @returns The centre and zoom that fractal opens on
  */

@@ -84,7 +84,7 @@ export function mathCardDelayMs(nowMs: number, lastShownMs: number): number {
 /** The localStorage key for the card's remembered choices; the suffix is the format's version. */
 export const MATH_CARD_STORAGE_KEY = "fractals.mathCard.v1";
 
-/** fr-1tk kept only "expanded", in sessionStorage, under this key. Read once, never written. */
+/** An earlier version kept only "expanded", in sessionStorage, under this key. Read once, never written. */
 export const LEGACY_EXPANDED_KEY = "fractals.mathCard.expanded";
 
 /** The part of `Storage` the card uses, so a test can hand in a fake. */
@@ -142,7 +142,7 @@ export function parseMathCardState(raw: string | null): MathCardState | null {
 /**
  * What the card was left as.
  *
- * The versioned key wins. Without one, fr-1tk's session value ("1" or "0",
+ * The versioned key wins. Without one, the earlier session value ("1" or "0",
  * only for expanded) is read so a choice made before this landed is not lost;
  * everything else is the default. A storage that is missing or throws (private
  * windows, blocked site data) is the default too.
