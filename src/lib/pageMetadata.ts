@@ -2,12 +2,12 @@
  * The page's head: title, description, and the picture a link previews with,
  * on the origin that served the request.
  *
- * Without a view in the request this is the static card `public/og-card-2.png`
- * (fr-nd5, re-cut in fr-3y2). A request whose query names a view the codec can
+ * Without a view in the request this is the static card `public/og-card-2.png`.
+ * A request whose query names a view the codec can
  * read gets the pre-built picture of the nearest place of that view's fractal
  * as og:image and twitter:image — a static file under `/og`, drawn ahead of
  * time by `scripts/make-og-previews.mjs`, so no request makes the server draw
- * anything (fr-xnl) — and one short line about the view in the title and
+ * anything — and one short line about the view in the title and
  * descriptions (`viewPreview.ts`). The title, the description and the card's
  * alt text are `siteText.ts`'s, the one place they are written down.
  * Everything that reaches the head is built from the decoded view, never from
@@ -33,7 +33,7 @@ import { previewFor, type SearchParams } from "./viewPreview";
  * whatever `metadataBase` or `trailingSlash` say; only `trailingSlash` makes it
  * keep the slash, and that config would redirect `/api/health` and `/api/og` to
  * their slashed forms. So the page renders this one tag itself, from this
- * function, and `pageMetadata` leaves og:url out (fr-3y2).
+ * function, and `pageMetadata` leaves og:url out.
  *
  * @param origin - The origin the request was served from, no trailing slash
  * @param searchParams - The request's query; omitted for the static page
