@@ -119,9 +119,9 @@ the scripts a release runs are in `scripts/release/`.
   under `public/og/` (`npm run make-og-previews`).
 
 Each file's own header comment says what it is, so the tree is not repeated
-here; `AGENTS.md` and `CLAUDE.md` carry the guidance for working here.
+here; `CLAUDE.md` carries the guidance for working here.
 
 ## Contributing
 
-No licence is granted: the repository carries no `LICENSE` file. Changes land
-through the landing gate on a `land/**` branch, not through a pull request.
+Changes land through the landing gate on a `land/**` branch, not through a pull
+request.

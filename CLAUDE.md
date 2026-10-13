@@ -52,8 +52,7 @@ changes.
   previews) and `make-og-card.mjs` (the social card and the icons).
 - `deploy/` — the Pulumi program a release runs; see `deploy/README.md`.
 
-Stack: Next.js (App Router), React, strict TypeScript, Tailwind, Vitest. Read
-`AGENTS.md` first: this Next.js is newer than most training data.
+Stack: Next.js (App Router), React, strict TypeScript, Tailwind, Vitest.
 
 ## Invariants
 
@@ -124,8 +123,6 @@ because the integration tier has a config of its own.
   `src/lib/integrationTarget.ts` gives.
 - `src/__tests__/og-previews.test.ts` holds the committed `public/og` set to
   the catalogue: a place with no picture, or a picture no place names, fails.
-- A few tests pin visitor-facing prose (`look-control-panel.test.ts` reads
-  `README.md`), so changing the words a test names means changing the test.
 
 ## Deployment
 
