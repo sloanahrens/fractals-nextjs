@@ -1,6 +1,6 @@
 /**
- * The two paths the page takes when the Orbit trap control or a colour control
- * moves, driven through the real renderer and the real link codec.
+ * The two paths the page takes when the Look control or a colour control moves,
+ * driven through the real renderer and the real link codec.
  *
  * The page decides in `drawCanvas`: when the link it is drawing and the link on
  * the canvas agree once the colour-only keys are taken out

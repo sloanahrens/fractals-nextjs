@@ -5,10 +5,11 @@
  * business; what a trap is and which changes render or repaint are
  * `trapPaths.test.ts`'s and `trap-controls-panel.test.ts`'s. What is decided
  * here is that the button is another view of the Settings select's one state and
- * handler, that it rides in the Auto-wander pill's row and hides with it, that it
- * has the accessible behaviour the bead names, and that the words about it are in
- * Settings and Help. A Node suite has no DOM, so this reads the sources, as the
- * other panel tests here do.
+ * handler, that it rides in the Auto-wander pill's row and hides with it, that
+ * the button carries the accessible shape a menu button needs (a popup, an
+ * expanded state and the chosen look beside a hidden name), and that the words
+ * about it are in Settings and Help. A Node suite has no DOM, so this reads the
+ * sources, as the other panel tests here do.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -218,12 +219,9 @@ describe("the words", () => {
 
   it("names no look Glass: every visitor-facing word in the app is free of it", () => {
     const root = fileURLToPath(new URL("../../", import.meta.url));
-    // This file is the one place the word has to appear, since it is what
-    // forbids it; every other file under the app's source is walked. The
-    // design note's As built is left out on purpose: it is a chronological
-    // record, and the bullet that renamed the label stands as it landed (the
-    // landing guard refuses a branch that removes a line a recently merged
-    // commit added), with the rename recorded in the bullet after it.
+    // This file names the word to forbid it; every other file under the app's
+    // source is walked. The design note's As built is left out on purpose: it
+    // is a chronological record of the rename, not the app's wording.
     const self = fileURLToPath(import.meta.url);
     const files = walk(`${root}src`).filter((file) => file !== self);
 

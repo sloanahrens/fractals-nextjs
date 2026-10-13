@@ -33,7 +33,7 @@ const bytesOf = (name: string) => statSync(join(PREVIEW_DIR, name)).size;
  * whatever changed the catalogue, so this holds the two together: a place with
  * no picture, a picture no place names, or a picture that is not a JPEG of a
  * sane weight fails here rather than at a crawler, which is where it would
- * otherwise show up (fr-xnl).
+ * otherwise show up.
  */
 describe("the committed preview pictures", () => {
   const files = previewFiles();
@@ -60,7 +60,8 @@ describe("the committed preview pictures", () => {
       total += size;
     }
 
-    // The whole set is what a checkout carries; the landing budgets 15 MB.
+    // The whole set is what a checkout carries, so it is bounded here as well
+    // as per picture above.
     expect(total).toBeLessThan(15 * 1024 * 1024);
   });
 

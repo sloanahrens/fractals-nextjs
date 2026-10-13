@@ -511,7 +511,7 @@ describe("the fractal a saved view belongs to", () => {
 });
 
 describe("the built-in views each fractal lists", () => {
-  it("offers six Mandelbrot views, five Julia, two Burning Ship, two Tricorn, three Multibrot, two Newton, two Celtic and two Perpendicular Ship", () => {
+  it("offers each fractal the number of built-in views the assertions below count", () => {
     expect(presetsForFractal(BUILTIN_PRESETS, "newton")).toHaveLength(2);
     expect(presetsForFractal(BUILTIN_PRESETS, "celtic")).toHaveLength(2);
     expect(presetsForFractal(BUILTIN_PRESETS, "nova")).toHaveLength(2);

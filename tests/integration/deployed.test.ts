@@ -7,7 +7,7 @@ import { linkHref, metaContent } from "./html";
 import { get } from "./http";
 
 // Read once, while the suite is collected: a missing STAGING_URL fails the file
-// with the command to type, instead of four checks that each cannot run.
+// with the command to type, instead of every check failing to run.
 const target = resolveIntegrationTarget();
 
 const HEALTH = "/api/health";
@@ -15,14 +15,14 @@ const HOME = "/";
 const VERSION = "/api/version";
 // The social card src/app/layout.tsx points its metadata at, which the
 // Dockerfile serves out of public/. The name carries a 2 so a chat app that
-// cached the old card fetches this one (fr-3y2).
+// cached the old card fetches this one.
 const CARD = "/og-card-2.png";
 // The image route: GET /api/og?<view link> now redirects to the pre-built
 // picture the view previews as, so an old cached preview URL still works
-// without the server drawing anything (fr-5om).
+// without the server drawing anything.
 const OG = "/api/og";
 // The pre-built previews: one picture per catalogue place, served as a static
-// file out of public/og (fr-xnl). A view previews as the nearest place's.
+// file out of public/og. A view previews as the nearest place's.
 const PREVIEW = "/og/julia-dendrite-whole.jpg";
 
 const url = (path: string) => requestUrl(target.baseUrl, path);
@@ -69,7 +69,7 @@ describe(`the deployment at ${target.baseUrl}`, () => {
 
     // The page's own url, under its own slash. Next's metadata API collapses
     // the root down to the bare origin, so the page writes this tag itself
-    // from `ogUrl` (fr-3y2).
+    // from `ogUrl`.
     expect(metaContent(html, "og:url")).toBe(`${origin}/`);
     expect(metaContent(html, "og:image")).toBe(`${origin}${CARD}`);
     expect(metaContent(html, "twitter:image")).toBe(`${origin}${CARD}`);

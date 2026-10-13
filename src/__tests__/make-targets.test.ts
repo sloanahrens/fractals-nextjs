@@ -1,18 +1,10 @@
 /**
  * `make integration` installs what it needs, and the gate still does not run it
  *
- * The staging workflow checks the repository out fresh and runs `make
- * integration` as its one command. `make gate` installs first (`ci-install`),
- * but the integration target did not, so that first real run died on `sh: 1:
- * vitest: not found` and never reached the deployment it exists to check. The
- * two facts that keep it working are in the Makefile and nowhere else, so this
- * reads the Makefile: `integration` takes `ci-install` as a prerequisite, and
- * no path through `gate` reaches the integration tier.
- *
- * The suite runs in Node with no shell of its own, so this parses the Makefile
- * rather than shelling out to `make -n`. Prerequisites are what `make` runs
- * before a target's recipe, in the order written, which is what makes the dry
- * run print `npm ci` ahead of `npm run test:integration`.
+ * The staging workflow runs `make integration` in a fresh checkout, so the
+ * target takes `ci-install` as a prerequisite, and no path through `gate`
+ * reaches the integration tier. Both facts live in the Makefile and nowhere
+ * else, so this parses it rather than shelling out to `make -n`.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

@@ -2,13 +2,13 @@
  * With trap mode off, nothing changes: the pictures the app draws for counts are
  * the bytes they were before orbit traps existed.
  *
- * The checksums below were taken from the tree at the commit before the trap
- * engine landed (fr-adc), by running `renderRgba` for each fractal's opening
+ * The checksums below were taken from the tree at 2866a45, the commit before
+ * the trap engine landed, by running `renderRgba` for each fractal's opening
  * view, so they pin the whole count pipeline (the kinds, `mapIterationsToColor`
  * now split into `mapPositionToColor`, `colourRgbaRows`) to its old output. They
  * are FNV-1a over every byte. If one of them changes the count picture changed,
- * which the engine bead's constraints rule out; a change that is wanted
- * regenerates them from a tree that is known to be right, not from this one.
+ * which the trap engine must not do; a change that is wanted regenerates them
+ * from a tree that is known to be right, not from this one.
  */
 import { describe, expect, it } from "vitest";
 
