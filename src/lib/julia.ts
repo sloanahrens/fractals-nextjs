@@ -19,8 +19,7 @@ export interface JuliaConstant {
  * Julia constants whose pictures have names: the classics a picker can offer
  * without asking the user to type a number.
  *
- * These are the colours of the fractal world, not a ranking: every one of them
- * draws a connected Julia set with recognisable structure.
+ * Each draws a connected Julia set with recognisable structure.
  */
 export const JULIA_CONSTANTS: readonly JuliaConstant[] = [
   { name: "Classic", constant: { real: -0.8, imaginary: 0.156 } },

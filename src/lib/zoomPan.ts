@@ -47,7 +47,6 @@ export class ZoomPanManager {
       lastY: 0,
     };
 
-    // Initialize zoom state from bounds
     this.zoomState = boundsToView(initialBounds);
   }
 
@@ -66,7 +65,6 @@ export class ZoomPanManager {
     zoomFactor: number,
     currentBounds: FractalBounds,
   ): FractalBounds {
-    // Convert pixel coordinates to complex plane
     const zoomCenter = pixelToComplex(
       pixelX,
       pixelY,
@@ -185,7 +183,6 @@ export class ZoomPanManager {
     const deltaX = pixelX - this.panState.lastX;
     const deltaY = pixelY - this.panState.lastY;
 
-    // Convert pixel deltas to complex plane deltas
     const realRange = currentBounds.maxReal - currentBounds.minReal;
     const imaginaryRange =
       currentBounds.maxImaginary - currentBounds.minImaginary;
@@ -193,7 +190,6 @@ export class ZoomPanManager {
     const realDelta = -(deltaX / this.canvasWidth) * realRange;
     const imaginaryDelta = -(deltaY / this.canvasHeight) * imaginaryRange;
 
-    // Update pan state
     this.panState.lastX = pixelX;
     this.panState.lastY = pixelY;
 
@@ -209,29 +205,16 @@ export class ZoomPanManager {
     return bounds;
   }
 
-  /**
-   * End panning operation
-   */
   endPan(): void {
     this.panState.isDragging = false;
   }
 
-  /**
-   * Handle mouse down event
-   * @param event - Mouse event
-   */
   handleMouseDown(event: MouseEvent): void {
     const pixel = this.pixelFrom(event.clientX, event.clientY, event.target);
 
     this.startPan(pixel.x, pixel.y);
   }
 
-  /**
-   * Handle mouse move event
-   * @param event - Mouse event
-   * @param currentBounds - Current fractal bounds
-   * @returns New fractal bounds or null if no change
-   */
   handleMouseMove(
     event: MouseEvent,
     currentBounds: FractalBounds,
@@ -241,9 +224,6 @@ export class ZoomPanManager {
     return this.updatePan(pixel.x, pixel.y, currentBounds);
   }
 
-  /**
-   * Handle mouse up event
-   */
   handleMouseUp(): void {
     this.endPan();
   }
@@ -359,23 +339,14 @@ export class ZoomPanManager {
     this.endPan();
   }
 
-  /**
-   * Check if currently pinching
-   */
   isPinching(): boolean {
     return this.pinchState !== null;
   }
 
-  /**
-   * Get current zoom state
-   */
   getZoomState(): ZoomState {
     return { ...this.zoomState };
   }
 
-  /**
-   * Check if currently panning
-   */
   isPanning(): boolean {
     return this.panState.isDragging;
   }
@@ -390,9 +361,6 @@ export class ZoomPanManager {
     this.endPan();
   }
 
-  /**
-   * Update canvas dimensions
-   */
   updateCanvasSize(width: number, height: number): void {
     this.canvasWidth = width;
     this.canvasHeight = height;

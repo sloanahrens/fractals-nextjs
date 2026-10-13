@@ -1,12 +1,11 @@
 /**
  * The one line that says where the view is: "Zoom 400x at -0.7453, 0.1127".
  *
- * It sits above the coordinate boxes in the Settings drawer and is the only
- * place the drawer prints the centre and zoom as text, now that the Center
- * sliders and the View Info card are gone. The numbers are rounded the way the
- * boxes below it round them (`formatCoordinate`, six significant digits) so
- * the line and the boxes never disagree about the same view, and the zoom is
- * `formatZoom`, which the Zoom Level slider's label already uses.
+ * It sits above the coordinate boxes in the Settings drawer. The numbers are
+ * rounded the way the boxes below it round them (`formatCoordinate`, six
+ * significant digits) so the line and the boxes never disagree about the same
+ * view, and the zoom is `formatZoom`, which the Zoom Level slider's label
+ * already uses.
  */
 
 import { FractalBounds } from "../types/fractal";

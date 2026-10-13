@@ -46,7 +46,7 @@ export interface EscapeInfo {
 }
 
 /**
- * One escape-time formula, as the renderer sees it: the whole of what a fractal
+ * One fractal formula, as the renderer sees it: the whole of what a fractal
  * asks of the rendering loop, which is the iteration count for a point.
  *
  * Which point the formula iterates from, what it does with it, and any

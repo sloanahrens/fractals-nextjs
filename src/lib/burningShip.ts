@@ -41,14 +41,12 @@ function burningShipIterations(
     real = squaredReal + c.real;
     imaginary = squaredImaginary + c.imaginary;
 
-    // Check if point has escaped (magnitude > 2)
     const magnitudeSquared = real * real + imaginary * imaginary;
     if (magnitudeSquared > 4) {
       if (!smooth) {
         return iterations;
       }
 
-      // Smooth iteration calculation for better color gradients
       const smoothIterations =
         iterations + 1 - Math.log2(Math.log2(Math.sqrt(magnitudeSquared)));
       return smoothIterations;

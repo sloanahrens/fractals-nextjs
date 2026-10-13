@@ -17,16 +17,13 @@ import {
 /**
  * What the last finished render left to repaint from: either its iteration
  * counts, or, drawn in trap mode, its orbit-trap distances and the shape they
- * are to. One buffer at a time, never both: trap mode half the memory of count
- * mode, and a toggle is a render whichever is held.
+ * are to. One buffer at a time, never both: trap mode holds half the memory of
+ * count mode, and a toggle is a render whichever is held.
  */
 type KeptRender =
   | { mode: "counts"; data: Float64Array }
   | { mode: "trap"; shape: TrapShape; data: Float32Array };
 
-/**
- * Fractal renderer class for managing canvas rendering operations
- */
 export class FractalRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -101,7 +98,6 @@ export class FractalRenderer {
     // still draws in full.
     this.kept = null;
 
-    // Resize canvas if needed
     if (
       this.canvas.width !== config.width ||
       this.canvas.height !== config.height
@@ -127,9 +123,9 @@ export class FractalRenderer {
     // distances), the row's pixels, and — only for a smooth run — a copy of
     // those numbers to keep. The two steps are `countRgbaRows` and
     // `colourRgbaRows` (`countTrapRows` and `colourTrapRows` in trap mode), the
-    // halves of the pipeline the server draws a link preview with, so nothing
-    // reaches the canvas's image data until the superseded check below has
-    // passed.
+    // halves of the pipeline `scripts/make-og-previews.mjs` draws the pre-built
+    // link previews with, so nothing reaches the canvas's image data until the
+    // superseded check below has passed.
     const rowCounts = trap ? null : new Float64Array(width);
     const rowDistances = trap ? new Float32Array(width) : null;
     const row = new Uint8ClampedArray(width * BYTES_PER_PIXEL);
@@ -205,12 +201,10 @@ export class FractalRenderer {
 
       processedPixels += width;
 
-      // Update progress and render every few rows
       if (y % 10 === 0 || y === height - 1) {
         this.ctx.putImageData(this.imageData, 0, 0);
         onProgress?.(processedPixels / totalPixels);
 
-        // Yield control to allow UI updates
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
     }
@@ -232,7 +226,6 @@ export class FractalRenderer {
       this.kept = null;
     }
 
-    // Final render
     this.ctx.putImageData(this.imageData, 0, 0);
     onProgress?.(1);
 
@@ -329,15 +322,13 @@ export class FractalRenderer {
     return true;
   }
 
-  /**
-   * Check if currently rendering
-   */
   isCurrentlyRendering(): boolean {
     return this.isRendering;
   }
 
   /**
-   * Render a low-resolution preview for faster feedback
+   * Draw the same fractal at fewer pixels for faster feedback.
+   * @param scale - Fraction of the canvas's size to draw at
    */
   async renderPreview(
     config: FractalConfig,
@@ -378,9 +369,6 @@ export class FractalRenderer {
     this.ctx.imageSmoothingEnabled = true;
   }
 
-  /**
-   * Clear the canvas
-   */
   clear(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }

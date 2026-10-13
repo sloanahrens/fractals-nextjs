@@ -3,7 +3,7 @@
  *
  * A picture's colours are its iteration counts put through a colour scheme,
  * and a count does not change when the palette moves — which is the whole of
- * what `recolour` is for (`fractalRenderer.ts`, fr-di8). Cycling is that one
+ * what `recolour` is for (`fractalRenderer.ts`). Cycling is that one
  * step asked for over and over: the palette's Shift walks round a turn, a
  * little further every frame, and the picture is repainted from the counts the
  * last full render left. No orbit is computed, so the animation costs the same

@@ -30,8 +30,7 @@ export const OG_IMAGE_HEIGHT = 630;
  * quality 80 and steps the quality down only as far as it must to fit this, so
  * it is a budget every picture is made to meet rather than a guard it is hoped
  * to stay under (`scripts/make-og-previews.mjs`); `ogPreviews.test.ts` holds
- * the committed set to it. The whole 69-picture set comes to about 4.5 MB,
- * inside the 15 MB this landing budgets for it.
+ * the committed set to it.
  */
 export const OG_IMAGE_MAX_BYTES = 200 * 1024;
 

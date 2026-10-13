@@ -86,16 +86,6 @@ function multibrotIterations(
 }
 
 /**
- * The Multibrot set of one power as a {@link FractalKind}: the point the
- * renderer hands over is the constant c the orbit z -> z^d + c is added to.
- *
- * A family rather than a picture, like Julia, so the picker carries the power
- * as the fractal's variant; `resolveFractalKind` builds the kind from it.
- * @param power - The power d, an integer from 3 to 5
- * @returns The kind that draws it
- * @throws RangeError when the power is not one of {@link MULTIBROT_POWERS}
- */
-/**
  * The closest a Multibrot orbit from z = 0 comes to a trap shape: the count's
  * own loop with a running minimum kept in place of the count, allocating
  * nothing. Counts the points the orbit lands on (the start is not one),
@@ -156,6 +146,16 @@ function multibrotTrap(
   return trapKeyToDistance(shape, least);
 }
 
+/**
+ * The Multibrot set of one power as a {@link FractalKind}: the point the
+ * renderer hands over is the constant c the orbit z -> z^d + c is added to.
+ *
+ * A family rather than a picture, like Julia, so the picker carries the power
+ * as the fractal's variant; `resolveFractalKind` builds the kind from it.
+ * @param power - The power d, an integer from 3 to 5
+ * @returns The kind that draws it
+ * @throws RangeError when the power is not one of {@link MULTIBROT_POWERS}
+ */
 export function createMultibrotKind(power: number): FractalKind {
   if (!MULTIBROT_POWERS.includes(power)) {
     throw new RangeError(

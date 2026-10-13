@@ -3,7 +3,7 @@
  *
  * `viewLink.ts` is the one description of what a single view is; this module is
  * what a *sequence* of them is. A tour link is what a visitor would send
- * somebody to say "look at these five places" — up to {@link MAX_TOUR_STOPS}
+ * somebody to say "look at these places" — up to {@link MAX_TOUR_STOPS}
  * views, in the order they were seen — and it is built out of the view codec
  * rather than beside it: every stop is encoded by `encodeView` and read back by
  * `decodeView`, under the codec's own keys, so a stop is judged exactly as a
@@ -28,20 +28,17 @@
  * stop with no count is drawn at the count its zoom asks for, so writing `auto`
  * would be writing the default. Everything else travels: the fractal and its
  * variant, the centre, the zoom, the colour scheme and the scheme's two own
- * settings.
+ * settings, the orbit trap, and a manual iteration count.
  *
- * A column is written whichever way is shortest, and every value in it is
- * percent-encoded on its own with `encodeURIComponent` rather than by the
- * serializer, because the serializer would escape the `~` that holds the column
- * together and there would be nothing left to split on. The codec's own writer
- * escapes `~` too, so a value the codec produced can never contain one. The
- * eight longest stops this build can name — every field present, the longest
- * custom Julia constant in each, ten-significant-digit negative centres, the
- * deepest zoom, the largest count — come to 397 characters, so a tour link is
- * well under a single view's 500 most of the time and
- * {@link MAX_TOUR_LINK_LENGTH} (900) is where reading stops: above the busiest
- * tour and clear of a single view's limit, so the two readers cannot be confused
- * about which half of a paste they are holding.
+ * Every value in a column is percent-encoded on its own with
+ * `encodeURIComponent` rather than by the serializer, because the serializer
+ * would escape the `~` that holds the column together and there would be
+ * nothing left to split on. The codec's own writer escapes `~` too, so a value
+ * the codec produced can never contain one. A full tour of long stops -- every
+ * field present, a custom Julia constant in each, ten-significant-digit
+ * negative centres, the deepest zoom, the largest count -- runs well past the
+ * 500 a single view is read up to, which is why a tour owns a ceiling of its
+ * own rather than borrowing `MAX_FRAGMENT_LENGTH`.
  */
 
 import { VIEW_LINK_VERSION, decodeView, encodeView } from "./viewLink";
@@ -62,9 +59,10 @@ export const MIN_TOUR_STOPS = 2;
  *
  * A tour owns its own limit rather than borrowing the view codec's, so the two
  * readers cannot be confused about a paste: a single view is read up to
- * `MAX_FRAGMENT_LENGTH` (500) and nothing longer, and a tour up to this. The
- * eight longest stops this build can name come to 397 characters, so the ceiling
- * is where reading stops rather than where a tour stops fitting.
+ * `MAX_FRAGMENT_LENGTH` (500) and nothing longer, and a tour up to this. It
+ * sits above a full tour of long stops -- a few hundred characters -- and clear
+ * of a single view's limit, so the ceiling is where reading stops rather than
+ * where a tour stops fitting.
  */
 export const MAX_TOUR_LINK_LENGTH = 900;
 

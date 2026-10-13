@@ -2,10 +2,9 @@
  * The browser's own share sheet, for the view on screen.
  *
  * A phone can send a link straight to the app the visitor wants it in, which is
- * one tap instead of copy, switch app, paste. Only some browsers have the API —
- * Safari and Chrome on Android do, desktop Firefox does not — so a Share button
- * is offered only where there is a sheet to open and Copy link stands alone
- * everywhere else.
+ * one tap instead of copy, switch app, paste. Only some browsers have the API,
+ * so a Share button is offered only where there is a sheet to open and Copy
+ * link stands alone everywhere else.
  *
  * The three decisions are here rather than in the page, so a Node suite can
  * drive them: whether there is a sheet at all, what to hand it, and what a

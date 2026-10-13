@@ -372,8 +372,9 @@ export function isTextEntry(
  * Whether a `pointermove` is the pointer going somewhere.
  *
  * A browser fires a move event when the page under a resting pointer changes
- * (hiding the bar does that), at the position the pointer already had. That is
- * the page moving, not someone, and it would end a tour the moment it began.
+ * (the top bar fading out after a moment of no input does that), at the
+ * position the pointer already had. That is the page moving, not someone, and
+ * it would end a tour the moment it began.
  *
  * @param previous - Where the last move was seen, or null for none yet
  * @param x - The event's `clientX`
