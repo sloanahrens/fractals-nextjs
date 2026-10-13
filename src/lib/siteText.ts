@@ -4,7 +4,7 @@
  * alt text of its picture.
  *
  * One module, so the head, the card's picture and the script that draws it
- * cannot drift apart (fr-3y2). The description names every fractal the picker
+ * cannot drift apart. The description names every fractal the picker
  * offers, taken from `FRACTAL_TYPES`, so a fractal added there is described
  * here with no second edit; `siteText.test.ts` fails if a label is missing.
  */

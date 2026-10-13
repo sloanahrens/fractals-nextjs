@@ -4,7 +4,7 @@
  * A preview used to be drawn on demand by `/api/og`, an unauthenticated route
  * that renders a PNG per request; that is work any stranger can ask for, so
  * every picture a preview can name is now built ahead of time and served as a
- * static file (fr-xnl). `scripts/make-og-previews.mjs` draws one 1200x630
+ * static file. `scripts/make-og-previews.mjs` draws one 1200x630
  * picture per catalogue place into `public/og/<place-id>.jpg`, and
  * {@link ogImageFor} names the one a view previews as: the picture of the
  * nearest place of the view's own fractal ({@link nearestPlace}), or the
