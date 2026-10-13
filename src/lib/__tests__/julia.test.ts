@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import type { ComplexNumber } from "../../types/fractal";
-import { FRACTAL_KINDS, getFractalKind } from "../fractalKinds";
 import {
   CUSTOM_CONSTANT_PREFIX,
   JULIA_CONSTANTS,
@@ -320,15 +319,5 @@ describe("parseJuliaConstant", () => {
     expect(parseJuliaConstant(null)).toBeNull();
     expect(isJuliaConstantName(undefined)).toBe(false);
     expect(isJuliaConstantName(null)).toBe(false);
-  });
-});
-
-describe("the kind registry", () => {
-  it("still holds Mandelbrot alone, and falls back to it for julia", () => {
-    // Julia needs a constant, so how a parameterised kind is registered is the
-    // picker bead's decision; until it makes one, the id is not in the
-    // registry and the fallback draws the familiar set rather than nothing.
-    expect(FRACTAL_KINDS).toEqual([mandelbrotKind]);
-    expect(getFractalKind("julia")).toBe(mandelbrotKind);
   });
 });
