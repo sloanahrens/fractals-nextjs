@@ -34,16 +34,13 @@ const PRESSED = "bg-white text-gray-900";
 const RESTING = "bg-white/10 text-white hover:bg-white/20";
 
 /**
- * The one-click way to change fractal: Mandelbrot, Julia, Burning Ship,
- * Tricorn, Multibrot, Newton and Celtic as a row of buttons over the top left of the
- * canvas, the current one pressed, and while the current fractal takes a
- * setting (`fractalVariants`; Julia's constant, the Multibrot's power) a second
- * row of chips for it, with the setting's name as a quiet caption before them.
- * A fractal with none gets no second row. The first six buttons were 375 px
- * wide (measured in headless Chrome), already more than the 351 px a 375 px
- * screen leaves inside the gutters, and Celtic makes the row wider still, so it
- * scrolls sideways there and on a 320 px screen, as the chip row does, with the
- * lit button kept in view.
+ * The one-click way to change fractal: one button per `FRACTAL_TYPES` entry, in
+ * a row over the top left of the canvas, the current one pressed, and while the
+ * current fractal takes a setting (`fractalVariants`; Julia's constant, the
+ * Multibrot's power) a second row of chips for it, with the setting's name as a
+ * quiet caption before them. A fractal with none gets no second row. The row is
+ * wider than a phone's picture, so it scrolls sideways there, as the chip row
+ * does, with the lit button kept in view.
  *
  * It is drawn inside the canvas's own wrapper, so it sits under the top bar and
  * clear of the progress line, and below the blank-picture hint's row, which the
@@ -66,10 +63,9 @@ export function FractalSwitcher({
   onSelectCustom,
   hidden = false,
 }: FractalSwitcherProps) {
-  // The row scrolls sideways when the picture is narrower than it is, which
-  // five buttons are on a 320 px screen, so the lit one can be out of view:
-  // bring it into view when the fractal changes and when the switcher comes
-  // back from being hidden.
+  // The row scrolls sideways when the picture is narrower than it is, so the
+  // lit one can be out of view: bring it into view when the fractal changes and
+  // when the switcher comes back from being hidden.
   const currentButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     currentButton.current?.scrollIntoView({

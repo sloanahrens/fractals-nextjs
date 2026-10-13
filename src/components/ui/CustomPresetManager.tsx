@@ -62,7 +62,7 @@ export const CustomPresetManager: React.FC<CustomPresetManagerProps> = ({
   );
 
   // The list shows the views saved for the fractal on the canvas, which is the
-  // one the dropdown and the buttons offer. A view for another fractal — or for
+  // one the dropdown offers. A view for another fractal — or for
   // one this build does not know — is left in storage, so switching the Fractal
   // select brings it back rather than it being lost or deleted here.
   const savedForFractal = presetsForFractal(customPresets, currentFractal);

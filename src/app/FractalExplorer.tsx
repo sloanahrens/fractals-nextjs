@@ -396,15 +396,10 @@ export default function Home() {
     DEFAULT_VIEW_LINK_UPDATES.colorScheme,
   );
 
-  // The scheme's two own settings: whether it is walked backwards, and how far
-  // round the palette it starts. They colour the picture without changing what
-  // it is made of, so a change of either is a repaint from the counts the last
-  // render left rather than a new render, and they travel in a link beside the
-  // scheme. One object, because that is how they are carried and passed on:
-  // the renderer, the link, and every surface that shows a picture of this
-  // view. Memoized on the two values so its identity holds while they do, which
-  // is what lets the strip's tiles and the Math card's plot list it as a
-  // dependency without asking for a picture on every render.
+  // Reverse and Shift recolour without changing the counts, so a change is a
+  // repaint, not a render. One memoized object, so its identity holds while the
+  // two values do, which is what lets the Nearby tiles and the Math plot name
+  // it as a dependency without asking for a picture on every render.
   const [reverse, setReverse] = useState(DEFAULT_VIEW_LINK_UPDATES.reverse);
   const [shift, setShift] = useState(DEFAULT_VIEW_LINK_UPDATES.shift);
   const colorOptions = useMemo<ColorOptions>(
@@ -638,17 +633,13 @@ export default function Home() {
    */
   const renderedLinkRef = useRef(renderedLink);
 
-  // Where the palette has got to, as the picture is painted. It is the view's
-  // own Shift except while the palette is cycling, which moves this and leaves
-  // the view alone; a Shift the visitor moves for themselves — the slider, a
-  // link, Reset colours, a saved view — is taken as where the animation
-  // carries on from, since they have obviously just put the palette where they
-  // want it. Read by the frame of the animation below rather than passed in, so
-  // a frame paints the palette of this moment and not of the render that
+  // Where the palette has got to as the picture is painted: the view's own
+  // Shift except while the palette is cycling, which moves this and leaves the
+  // view alone. A Shift the visitor moves for themselves — the slider, a link,
+  // Reset colours, a saved view — is taken as where the animation carries on
+  // from. Read by the frame of the animation below rather than passed in, so a
+  // frame paints the palette of this moment and not of the render that
   // scheduled it.
-  //
-  // It lives here, beside the other refs the page keeps for the same reason,
-  // because the handlers that move the Shift and make a link both use it.
   const cycleShiftRef = useRef(shift);
   useEffect(() => {
     cycleShiftRef.current = shift;
@@ -757,8 +748,7 @@ export default function Home() {
       // the new colours is the whole of the change, and draws no orbit. It
       // answers false when it has kept nothing, which is the case for a
       // renderer that has not finished a render yet, was rebuilt for a new
-      // canvas or fractal, or had its run cancelled; then the view is counted
-      // as it always was.
+      // canvas or fractal, or had its run cancelled; then the view is counted.
       const showing = renderedLinkRef.current;
       if (
         showing !== "" &&
@@ -1412,7 +1402,7 @@ export default function Home() {
   }, [copy]);
 
   /**
-   * Hand a URL to the clipboard, with the fallbacks Copy link has always had.
+   * Hand a URL to the clipboard, falling back to a field to copy from.
    *
    * Both copy buttons go through here. Nothing selected by hand is needed when
    * the clipboard takes the URL; a browser without the API, or one that refuses
@@ -2131,8 +2121,8 @@ export default function Home() {
   // Save what is on the canvas, or draw and save a version of it elsewhere: a
   // larger multiple of the canvas, or a shape of its own. The canvas holds the
   // render at its full pixel size, so a screen-size save is the image the user
-  // is looking at rather than a screenshot of the page around it, named
-  // exactly as this button has always named it.
+  // is looking at rather than a screenshot of the page around it, named by
+  // `downloadFileName`.
   const handleDownload = useCallback(() => {
     if (exportState.kind === "running") return;
 
@@ -2284,11 +2274,12 @@ export default function Home() {
     // the palette goes back to the scheme's own colours, so a tour is never
     // tinted by a setting left over from before it, and the link it lands on
     // is the place's own.
-    // The orbit trap goes with them: a tile, a fractal button, a preset and an
-    // Auto-wander hop keep the visitor's, and a tour's hop or Surprise me
-    // returns to the iteration count, as the tour is curated pictures.
-    // An Auto-wander hop names the Look it lands in (`trap`, null being
-    // Normal), whatever the visitor had.
+    //
+    // The orbit trap follows the same rule: a tile, a fractal button and a
+    // variant chip keep the visitor's, and a tour's hop or Surprise me returns
+    // to the iteration count, as the tour is curated pictures. An Auto-wander
+    // hop is the other exception, naming the Look it lands in (`trap`, null
+    // being Normal) whatever the visitor had.
     const options = resetColour
       ? { reverse: DEFAULT_REVERSE, shift: DEFAULT_SHIFT, trap: DEFAULT_TRAP }
       : {
@@ -2814,18 +2805,17 @@ export default function Home() {
   };
 
   // The slider is dragged: every step repaints, but a drag is one move, not
-  // fifty. The entry is marked on the first step of a gesture and on no other,
-  // and from then on the drag's own steps rewrite the entry that jump made
-  // rather than leaving one each — the rule the Julia map's drag follows.
+  // fifty. The entry is marked on the first change of a gesture and on no
+  // other, so the drag's own steps rewrite the entry that jump made rather than
+  // leaving one each — the rule the Julia map's drag follows.
   //
-  // The mark is made on the *change* and not on the pointer going down, which
-  // is where a gesture begins. A jump is taken by the render that first sees
-  // the count go up, and only takes one if the view has moved by then: at
-  // pointer-down nothing has, so the jump would be spent on the view already on
+  // The mark is made on the *change* and not on pointer-down, where nothing has
+  // moved yet: a jump is only taken by the render that first sees the view
+  // moved, so a mark at pointer-down would spend it on the view already on
   // screen and the drag would leave no entry at all. `beginShiftGesture` puts
-  // the mark back at the start of each gesture, so the next drag marks its own
-  // entry, and a keyboard change marks one per press — a held key repeats its
-  // `keydown`, and the repeats are the one gesture's steps.
+  // the mark back at the start of each gesture, and a key press marks one per
+  // press — a held key repeats its `keydown`, and the repeats are the one
+  // gesture's steps.
   const shiftEntryMarkedRef = useRef(false);
 
   const beginShiftGesture = () => {
@@ -2833,8 +2823,8 @@ export default function Home() {
   };
 
   // A pointer going down on the slider is the visitor taking the palette in
-  // hand: it marks the drag for the history as it always has, and it holds the
-  // cycling animation for as long as the drag lasts, so the two are never
+  // hand: it marks the drag for the history, and it holds the cycling animation
+  // for as long as the drag lasts, so the two are never
   // moving the palette against each other. A key press is a refinement of the
   // palette rather than a drag of it — it marks its own entry through
   // `beginShiftGesture` — so it holds nothing.
@@ -3612,7 +3602,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Phase 5: Custom Preset Manager */}
+        {/* Saved views */}
         <div className="bg-white p-6 rounded-lg shadow-lg">
           <CustomPresetManager
             currentBounds={bounds}

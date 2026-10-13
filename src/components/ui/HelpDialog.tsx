@@ -11,7 +11,7 @@ const TITLE_ID = "help-dialog-title";
 interface HelpDialogProps {
   /** Whether the dialog is up. The element stays mounted either way. */
   open: boolean;
-  /** Called when the user closes it, by any of the four ways. */
+  /** Called when the user closes it, by any of the three ways. */
   onClose: () => void;
 }
 

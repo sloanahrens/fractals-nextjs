@@ -3,11 +3,10 @@
  * Generator for the pre-built link previews: public/og/<place-id>.jpg, one
  * 1200x630 JPEG for every place in the catalogue (`src/lib/places.ts`).
  *
- * A shared view link used to preview as a picture `/api/og` drew on demand, an
- * unauthenticated route that renders a PNG per request — work any stranger can
- * ask for. So a view now previews as the pre-built picture of the nearest
- * catalogue place of its fractal (`src/lib/ogImage.ts`), and this script draws
- * those pictures. Nothing at request time draws anything (fr-xnl).
+ * A view previews as the pre-built picture of the nearest catalogue place of
+ * its fractal (`src/lib/ogImage.ts`), so `/api/og` never renders: it answers a
+ * redirect, and nothing a request can send it makes it draw. This script draws
+ * those pictures.
  *
  * It is not part of `make gate`, the Docker build or CI: the images are
  * committed, and the script is run by a developer when the catalogue or the
@@ -16,8 +15,8 @@
  *   npm run make-og-previews
  *
  * It draws every place through the application's own pixel pipeline —
- * `renderRgba`, the same function `FractalRenderer` and the image route use —
- * at `cardBounds`, the 1.91:1 frame the route drew a card in, with the place's
+ * `renderRgba`, the two steps `FractalRenderer` runs a row at a time
+ * (`renderRgbaRows`) — at `cardBounds`, the 1.91:1 card frame, with the place's
  * own colour scheme (`placeColorScheme`), the iteration count Auto picks for
  * its zoom, and smooth counts, which is exactly the picture the page draws when
  * a visitor lands on that place. So a card cannot drift from the app.
@@ -34,16 +33,14 @@
  * bundle. There is no browser and no network involved.
  *
  * On the size of the files. A busy fractal is the worst case for a JPEG, and
- * `OG_IMAGE_MAX_BYTES` (200 KB) is the landing's budget for one card: the
- * encoder asks for `MAX_QUALITY` and steps down a quality at a time for a
- * picture that will not fit it, so 67 of the 69 places are drawn at 80 and only
- * two — `julia-classic-spirals` and `mandelbrot-seahorse-tail`, both a whole
- * frame of filigree — give any of it up (70 and 67, when this was written).
- * Every file is logged with the quality it took, and the whole set comes to
- * about 4.6 MB, inside the 15 MB the landing also budgets for the directory.
- * The quality is not raised past 80 for the places that could afford it: one
- * quality is easier to reason about than 69, and 80 is what the landing asked
- * for.
+ * `OG_IMAGE_MAX_BYTES` is the landing's budget for one card: the encoder asks
+ * for `MAX_QUALITY` and steps down a quality at a time for a picture that will
+ * not fit it, so the answer is the best quality that fits, and a picture gives
+ * up anything only when a whole frame of filigree will not fit. Every file is
+ * logged with the quality it took, and with the running total. The quality is
+ * not raised past `MAX_QUALITY` for the places that could afford it: one
+ * quality is easier to reason about than a per-place one, and `MAX_QUALITY` is
+ * what the landing asked for.
  */
 
 import { build } from "esbuild";

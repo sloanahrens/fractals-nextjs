@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * This route used to draw the view as a 1200x630 PNG. That made it an
  * unauthenticated endpoint any stranger could ask to spend CPU, so every
  * picture a preview can name is now built ahead of time and served as a static
- * file (`ogImage.ts`, fr-xnl), and this route only says which file (fr-5om).
+ * file (`ogImage.ts`), and this route only says which file.
  * Crawlers and chat apps that cached a `/api/og?<view>` URL from before that
  * change still ask for it, and a redirect keeps those previews working without
  * any render happening.

@@ -7,12 +7,12 @@
  * the repository root when the card should change, and commit the three PNGs:
  *
  *   node scripts/make-og-card.mjs                      # write the three assets
- *   node scripts/make-og-card.mjs --sheet out.png      # contact sheet of candidates
- *   node scripts/make-og-card.mjs --place <id> --scheme <name> --icon-crop x,y,size
+ *   node scripts/make-og-card.mjs --sheet out.png --places <id>[:<scheme>],...
+ *   node scripts/make-og-card.mjs --place <id> --scheme <name> --shift x,y --icon-crop x,y,size
  *
  * The text on the card — the title lines and the tagline — is `src/lib/siteText.ts`'s,
  * the same module the page's description and alt text come from, so the card
- * and the head cannot say different things (fr-3y2). A new card means a new
+ * and the head cannot say different things. A new card means a new
  * file name here and in `pageMetadata.ts`, so a chat app that cached the old
  * one fetches this one.
  *
@@ -22,7 +22,7 @@
  *   - the system Chrome (override with CHROME=/path/to/chrome) runs that bundle
  *     headless, composes the card on a canvas and hands the PNG back in the DOM;
  *   - sharp (installed by Next.js) cuts the icons and squeezes the card under
- *     the 300 KB the bead asks for, with a 256-colour palette.
+ *     `CARD_MAX_BYTES` (300 KB), with a 256-colour palette.
  * It adds nothing to package.json. Inter, the app's own font (`layout.tsx`), is
  * fetched once from Google Fonts into the temporary directory.
  *
@@ -61,9 +61,10 @@ const DEFAULT_SCHEME = undefined; // the place's own
 // bright and the title has the dark half to itself.
 const DEFAULT_SHIFT = { x: -0.35, y: 0 };
 // Square crop of the raw render the icons are cut from: left, top, side. Tuned
-// for the fr-nd5 card, the julia spiral, which is the crop the icons in the
-// tree are; fr-3y2 re-cut the card and left the icons alone, so a run with
-// another place rewrites them and the crop wants checking by eye then.
+// for the original card (the julia spiral), which is the crop the icons in the
+// tree are; the shipped card is now `DEFAULT_PLACE` and the icons were left as
+// they were, so a run with another place rewrites them and the crop wants
+// checking by eye then.
 const DEFAULT_ICON_CROP = "700,195,240";
 
 function argument(name) {
