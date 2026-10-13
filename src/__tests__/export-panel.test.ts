@@ -79,8 +79,8 @@ describe("the export size panel", () => {
   });
 
   it("adds nothing to the canvas or the top bar", () => {
-    // The bead draws the line at the drawer: an export control on the picture
-    // or in the bar is the change it rules out.
+    // The design keeps export in the drawer: an export control on the picture
+    // or in the bar is what this rules out.
     for (const component of ["<TopBar", "<FractalSwitcher", "<WanderControl"]) {
       const start = page.indexOf(component);
       expect(start).toBeGreaterThan(-1);

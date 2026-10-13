@@ -115,8 +115,8 @@ describe("GET /api/og", () => {
 
   it("imports no renderer, no encoder and no cache", () => {
     // The property this route exists for: nothing a request can give it makes
-    // it draw. These are the modules that used to draw, encode or bound a
-    // render; none may be reachable from here.
+    // it draw. Every module that ever drew, encoded or bounded a render is
+    // named below, the removed ones included, so that none can come back.
     for (const forbidden of [
       "ogRoute",
       "ogLimits",

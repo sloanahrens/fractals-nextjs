@@ -4,9 +4,10 @@
  * Where a button lands is `places.test.ts`'s business (`featuredPlace`,
  * `wholeSetPlaceFor`). What a Node suite with no DOM cannot render is the
  * component and the page, so this reads the sources the way the Nearby strip
- * and Tour tests here do: five buttons that say which is pressed, the chips
- * for a fractal that takes a variant, a switch that goes through the tile's
- * handler, the Custom chip's trip to the Real box, and the places it hides.
+ * and Tour tests here do: a button per fractal saying which is pressed, the
+ * chips for a fractal that takes a variant, a switch that goes through the
+ * tile's handler, the Custom chip's trip to the Real box, and the places it
+ * hides.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

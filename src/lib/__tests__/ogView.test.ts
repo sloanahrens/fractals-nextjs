@@ -51,7 +51,7 @@ describe("parseOgQuery", () => {
   });
 
   it("opens a link that names a fractal and no centre on that fractal's own frame", () => {
-    // The reported link (fr-99q): the Dendrite at 400x, whole. The missing
+    // The reported link: the Dendrite at 400x, whole. The missing
     // centre is that fractal's default view, not the Mandelbrot set's, which is
     // what keeps the picture the route sends a crawler to from being empty
     // plane.

@@ -199,7 +199,7 @@ describe("what the card remembers", () => {
     expect(loadMathCardState(storage)).toEqual(DEFAULT_MATH_CARD_STATE);
   });
 
-  it("reads fr-1tk's session value once, when there is no versioned one", () => {
+  it("reads the old sessionStorage value once, when there is no versioned one", () => {
     const session = (value: string) =>
       fakeStorage({ [LEGACY_EXPANDED_KEY]: value }).storage;
 
@@ -284,7 +284,7 @@ describe("the store the card and the page subscribe to", () => {
     expect(getMathCardSnapshot()).toEqual({ open: true, expanded: false });
   });
 
-  it("carries fr-1tk's session choice over", () => {
+  it("carries the old session choice over", () => {
     vi.stubGlobal("window", {
       localStorage: fakeStorage().storage,
       sessionStorage: fakeStorage({ [LEGACY_EXPANDED_KEY]: "1" }).storage,

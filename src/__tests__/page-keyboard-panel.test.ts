@@ -180,7 +180,8 @@ describe("the keys, in the help", () => {
     expect(section).toContain("R");
     // When they apply: anywhere on the page, without focusing the image first.
     expect(section).toContain("anywhere on the page");
-    // The stale row it replaces: the keys no longer need the canvas focused.
+    // The old "focus the image first" row must be gone: the keys no longer
+    // need the canvas focused.
     expect(help).not.toContain("Focus the image, so the keys below reach it");
   });
 });

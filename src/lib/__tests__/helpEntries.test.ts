@@ -6,7 +6,7 @@
  * nothing, and two entries with one key in a section describe the same control
  * twice. The shortcut's one rule is checked here too, because whether a `?`
  * opens the overlay or belongs to the box it was typed in is a decision with
- * five inputs and no reason to need a DOM.
+ * several inputs and no reason to need a DOM.
  *
  * What the help says about the canvas is checked against
  * `src/lib/canvasNavigation.ts` in `src/__tests__/help-overlay-panel.test.ts`,
@@ -69,7 +69,7 @@ describe("the help sections", () => {
     expect(byKeys.get("Two-finger pinch")).toMatch(/zoom/i);
   });
 
-  it("no longer says pinch is missing", () => {
+  it("says no gesture is unsupported", () => {
     const text = JSON.stringify(HELP_SECTIONS);
 
     expect(text).not.toMatch(/no pinch|not supported|unsupported/i);

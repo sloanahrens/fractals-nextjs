@@ -1,16 +1,7 @@
 /**
- * "Save Current" names exactly one control, and that control saves
- *
- * `PresetSelector` used to render a second "Save Current" button. Its handler
- * only dispatched a `save-preset` CustomEvent, and nothing listened for that
- * event, so clicking it opened no dialog and wrote nothing to localStorage. The
- * control that saves is `CustomPresetManager`'s, which opens its own inline
- * dialog. The suite runs in Node with no DOM to render into, so this reads the
- * sources instead: a dead event name or a second copy of the label fails here
- * rather than in a browser.
- *
- * The same walk guards the hint that disabled the control on a Julia or Burning
- * Ship view, which is gone now that a saved view remembers its fractal.
+ * "Save Current" names one control, and that control saves: no dead event, no
+ * second copy of the label, no hint that a view is unsaveable. The suite has no
+ * DOM to render into, so it reads the sources instead.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -26,9 +17,8 @@ const THIS_FILE = fileURLToPath(import.meta.url);
 const DEAD_EVENT = "save-preset";
 
 /**
- * The hint that used to sit under a disabled Save Current, before the saved
- * format could describe anything but a Mandelbrot view. Saving is offered for
- * every fractal now, so the text and the prop that carried it are gone.
+ * The hint that used to sit under a disabled Save Current. Saving is offered
+ * for every fractal now, so the text and the prop that carried it are gone.
  */
 const DISABLED_SAVE_HINT = "Saving is available for Mandelbrot views";
 

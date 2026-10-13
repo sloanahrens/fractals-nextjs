@@ -6,7 +6,7 @@
  * a saved view make of `m` are the pure modules' own tests' business
  * (`orbitTrap`, `trapDistance`, `fractalRendererTrap`, `viewLink`, `tourLink`,
  * `presets`). What is decided here, in `FractalExplorer.tsx`, is that the
- * Settings drawer gives a visitor an Orbit trap select beside the colour
+ * Settings drawer gives a visitor a Look select beside the colour
  * controls, that choosing one is a render and leaves no history entry of its
  * own, that Reverse, Shift, the scheme and cycling keep repainting while a trap
  * is on, that Reset colours turns it off, that a hop nobody aimed at a place
