@@ -2,16 +2,19 @@
  * The Math card's descriptors
  *
  * A descriptor is data, so what can go wrong is data: a fractal in the picker
- * with no maths, a blurb left empty, a formula whose spoken reading says
- * something other than what is drawn. The guard walks `FRACTAL_TYPES` so a
- * fractal added later cannot skip its descriptor, and each descriptor's rule is
- * read back through `toPlainText` and compared with the words a listener should
- * hear.
+ * with no maths, a blurb left empty, a paragraph that describes the Normal
+ * colours while an orbit trap is drawing the picture, a formula whose spoken
+ * reading says something other than what is drawn. The guard walks
+ * `FRACTAL_TYPES` so a fractal added later cannot skip its descriptor, and each
+ * descriptor's rule is read back through `toPlainText` and compared with the
+ * words a listener should hear.
  */
 import { describe, expect, it } from "vitest";
 
 import {
   FRACTAL_MATH,
+  TRAP_BLURB_SENTENCE,
+  blurbFor,
   complexExpr,
   describeFractalMath,
   describeTrapColouring,
@@ -72,6 +75,27 @@ function sentences(blurb: string): string[] {
   return blurb.split(/(?<=[.!?])\s+/).filter((s) => s.trim() !== "");
 }
 
+/**
+ * Every way the eleven descriptions say the colours come from the orbit's own
+ * end — how fast it ran away, which root it reached, how many steps that took —
+ * or name a black a trap picture has not got (a trap holds every pixel inside
+ * `TRAP_POSITION_MIN`..`TRAP_POSITION_MAX` of the palette, so none is black; see
+ * `orbitTrap.ts`). Each phrase is quoted from the description named beside it,
+ * and the sentence carrying it is the one its descriptor marks `colouring`.
+ */
+const COUNT_ONLY_PHRASES: readonly string[] = [
+  "how quickly it runs away sets its colour", // Mandelbrot
+  "the black body", // Mandelbrot, Tricorn, Celtic, Phoenix, Multibrot
+  "the black ship", // Burning Ship
+  "dark hull", // Perpendicular Ship
+  "coloured by how fast", // Burning Ship and the other escape-time kinds
+  "colours each starting point", // Newton
+  "shaded by how few steps", // Newton
+  "caught in the loop black", // Newton, the cycle polynomial
+  "the flat black of the picture", // Magnet
+  "the colours draw", // Magnet
+];
+
 describe("every fractal the picker offers has its maths", () => {
   it("has a descriptor for each FRACTAL_TYPES id, and for nothing else", () => {
     const ids = FRACTAL_TYPES.map((type) => type.id).sort();
@@ -86,12 +110,15 @@ describe("every fractal the picker offers has its maths", () => {
       it("names itself, its escape rule and its blurb", () => {
         expect(math.title.trim()).not.toBe("");
         expect(math.escape.trim()).not.toBe("");
-        expect(math.blurb.trim()).not.toBe("");
+        expect(blurbFor(math.blurb, null).trim()).not.toBe("");
       });
 
       it("has a blurb of two or three sentences", () => {
-        expect(sentences(math.blurb).length).toBeGreaterThanOrEqual(2);
-        expect(sentences(math.blurb).length).toBeLessThanOrEqual(3);
+        expect(math.blurb.length).toBeGreaterThanOrEqual(2);
+        expect(math.blurb.length).toBeLessThanOrEqual(3);
+        expect(sentences(blurbFor(math.blurb, null)).length).toBe(
+          math.blurb.length,
+        );
       });
 
       it("builds its formulas from the nine kinds of node and a rule that reads aloud", () => {
@@ -107,7 +134,12 @@ describe("every fractal the picker offers has its maths", () => {
       });
 
       it("carries no markup in any of its text", () => {
-        const words = [math.title, math.blurb, math.escape];
+        const words = [
+          math.title,
+          blurbFor(math.blurb, null),
+          ...TRAP_SHAPES.map((trap) => blurbFor(math.blurb, trap)),
+          math.escape,
+        ];
         if (math.setting) words.push(math.setting.label);
         for (const expr of [math.rule, math.start]) {
           for (const node of nodes(expr)) {
@@ -431,7 +463,7 @@ describe("the setting", () => {
   it("says in a sentence what the extra term does", () => {
     const { blurb, escape } = describeFractalMath("phoenix", "Classic");
 
-    expect(blurb).toMatch(/number from the step before/);
+    expect(blurbFor(blurb, null)).toMatch(/number from the step before/);
     expect(escape).toMatch(/orbit plot/);
   });
 
@@ -439,7 +471,7 @@ describe("the setting", () => {
     const { title, blurb, escape } = describeFractalMath("nova", "");
 
     expect(title).toBe("Nova fractal");
-    expect(blurb).toMatch(/Newton's method for z cubed = 1/);
+    expect(blurbFor(blurb, null)).toMatch(/Newton's method for z cubed = 1/);
     expect(escape).toMatch(/less than 0\.000001/);
     expect(escape).toMatch(/orbit plot/);
   });
@@ -564,6 +596,100 @@ describe("what the card says with an orbit trap on", () => {
       for (const trap of TRAP_SHAPES) {
         expect(describeTrapColouring(id, trap), id).not.toMatch(/[<>]|&\w+;/);
       }
+    }
+  });
+});
+
+describe("the paragraph under the rows", () => {
+  const ids = FRACTAL_TYPES.map((type) => type.id);
+
+  /** Every value the picker can put on the page for a fractal. */
+  function drawnVariants(id: string): string[] {
+    return fractalVariants(id)?.options.map((option) => option.value) ?? [""];
+  }
+
+  const blurbOf = (id: string, variant = defaultVariant(id)) =>
+    describeFractalMath(id, variant).blurb;
+
+  it("reads exactly as it read before a Look could change it", () => {
+    // The eleven default paragraphs, word for word as they stood before this
+    // bead. Nothing here may drift: a trap changes the paragraph by leaving
+    // sentences out, never by rewording one.
+    const expected: Record<string, string> = {
+      mandelbrot:
+        "Pick a point on the plane and call it c. Start at zero and keep squaring the number and adding c. If the numbers stay small forever the point is in the set, the black body of the picture; if they run away, it is outside, and how quickly it runs away sets its colour.",
+      julia:
+        "Every point of the picture is a starting value, and the same fixed number c is added at every step. Points whose numbers stay small forever form the Julia set, and the rest run away, coloured by how fast. Each choice of c gives a different picture, and the Mandelbrot set is the map of which choices give a connected one.",
+      "burning-ship":
+        "The same game as the Mandelbrot set, with one twist: before squaring, each step flips both parts of the number to be positive. That fold breaks the set's mirror symmetry and gives it a jagged, ship-like outline. Numbers that stay small are the black ship; the rest are coloured by how fast they run away.",
+      tricorn:
+        "The same game as the Mandelbrot set, with one twist: before squaring, each number is flipped to its mirror image across the real axis, its conjugate. That turns the one-lobed set into a three-armed one that a turn of 120 degrees maps onto itself. Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+      "perpendicular-ship":
+        "The same game as the Mandelbrot set, with one twist: the two halves of the number are not treated alike. The real part squares as it is, while the imaginary part is taken against the size of the real part, so the sign of the real part is thrown away in one half of the step and kept in the other. That fold leaves a flat-backed dark hull with rows of masts along its edge, and the rest is coloured by how fast a point runs away.",
+      celtic:
+        "The same game as the Mandelbrot set, with one twist: after squaring, the real part of the result is flipped to be positive. That fold gives the set a flat left edge and lacy, knotted loops. Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+      multibrot:
+        "The same game as the Mandelbrot set, but each step raises the number to a higher power d instead of squaring it. A higher power gives the set more lobes, d - 1 of them, so d = 3 has two, d = 4 has three and d = 5 has four. Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+      newton:
+        "Newton's method hunts for a solution of z cubed = 1 by improving a guess again and again. The equation has three solutions, the cube roots of 1, and every pixel is a first guess. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took; the borders between the three colours are endlessly tangled.",
+      magnet:
+        "Each step forms a fraction out of z and c, squares it, and starts again from there. Almost every c has an orbit that settles on the fixed point z = 1, and that settled set is the flat black of the picture; the colours draw the small island of c whose orbit runs off to infinity instead. The two magnetic types are the same question asked of two different fractions.",
+      phoenix:
+        "This is a Julia set with a memory: every step squares the number and adds c, and also adds p times the number from the step before. That extra term feeds the past back into each new point, which feathers the picture into flame-like shapes that a plain Julia set never makes. Points whose numbers stay small are the black body and the rest are coloured by how fast they run away.",
+      nova: "Nova is Newton's method for z cubed = 1 with a constant added after every step. Pick a point on the plane and call it c, start at 1 and keep improving the guess and adding c. Instead of three tidy basins the picture is a Mandelbrot-like set with spirals and bulbs in it, where the Newton basins are folded into the shapes.",
+    };
+
+    expect(Object.keys(expected).sort()).toEqual([...ids].sort());
+    for (const id of ids) {
+      expect(blurbFor(blurbOf(id), null), id).toBe(expected[id]);
+    }
+  });
+
+  it("keeps the sentences about the set and says where the colours come from instead", () => {
+    for (const id of ids) {
+      const blurb = blurbOf(id);
+      const dropped = blurb.filter((sentence) => sentence.colouring === true);
+
+      for (const trap of TRAP_SHAPES) {
+        const text = blurbFor(blurb, trap);
+        const kept = sentences(text);
+
+        // The set's own sentences survive, so the paragraph never becomes a
+        // stub; the trap's pointer goes last, where the reader meets it after
+        // the maths.
+        expect(kept.length, id).toBe(blurb.length - dropped.length + 1);
+        expect(text, id).toContain(blurb[0].text);
+        expect(text.endsWith(TRAP_BLURB_SENTENCE), id).toBe(true);
+        for (const sentence of dropped) {
+          expect(text, `${id}: ${sentence.text}`).not.toContain(sentence.text);
+        }
+      }
+    }
+  });
+
+  it("says nothing only a count picture could show, for every setting and trap", () => {
+    for (const id of ids) {
+      for (const variant of drawnVariants(id)) {
+        const blurb = blurbOf(id, variant);
+
+        for (const trap of TRAP_SHAPES) {
+          const text = blurbFor(blurb, trap);
+
+          for (const phrase of COUNT_ONLY_PHRASES) {
+            expect(text, `${id} ${variant} / ${trap}`).not.toContain(phrase);
+          }
+        }
+      }
+    }
+  });
+
+  it("names the Look only when one is on", () => {
+    for (const id of ids) {
+      const blurb = blurbOf(id);
+
+      expect(blurbFor(blurb, null), id).not.toContain(TRAP_BLURB_SENTENCE);
+      expect(blurbFor(blurb, null), id).not.toBe(blurbFor(blurb, "point"));
+      expect(blurbFor(blurb, "point"), id).toContain("Each point");
     }
   });
 });

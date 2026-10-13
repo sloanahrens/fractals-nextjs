@@ -265,6 +265,13 @@ describe("the card with an orbit trap on", () => {
       "{trap ? describeTrapColouring(fractalType, trap) : math.escape}",
     );
   });
+
+  it("prints the paragraph the look calls for, not the descriptor's own words", () => {
+    // The paragraph is the other place the card describes the colours, so it
+    // is asked for the Look too rather than printed as written.
+    expect(card).toContain("{blurbFor(math.blurb, trap)}");
+    expect(card).not.toContain("{math.blurb}");
+  });
 });
 
 describe("the help entry", () => {

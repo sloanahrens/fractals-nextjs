@@ -12,6 +12,7 @@ import React, {
 
 import type { ColorOptions, TrapShape } from "../../types/fractal";
 import {
+  blurbFor,
   describeFractalMath,
   describeTrapColouring,
   formatComplex,
@@ -123,11 +124,13 @@ const ROW_LABEL = "text-xs font-medium uppercase tracking-wide text-white/60";
  * moved onto the plot's Play control without the plot vanishing on the way —
  * which is why the panel element is published to the page through `panelRef`.
  *
- * With an orbit trap on, it says so: a Look row names the trap and the colour
+ * With an orbit trap on, it says so: a Look row names the trap, the colour
  * explanation is the trap's own, in plain words built from the shape's real
- * numbers (`describeTrapColouring`), so the card describes the picture being
- * drawn rather than the count it is not. With Normal (no trap) nothing here
- * changes.
+ * numbers (`describeTrapColouring`), and the paragraph below loses the
+ * sentences that describe the Normal colours and gains one pointing at that row
+ * (`blurbFor`). So the card describes the picture being drawn rather than the
+ * count it is not, and says nothing false about a colouring that is not on
+ * screen. With Normal (no trap) nothing here changes.
  *
  * The numbers follow the live view, throttled to the link writer's cadence.
  * It starts shown and collapsed, and both choices are kept in the browser
@@ -379,7 +382,7 @@ export function MathCard({
                 {trap ? describeTrapColouring(fractalType, trap) : math.escape}
               </dd>
             </dl>
-            <p className="mt-2 text-white/80">{math.blurb}</p>
+            <p className="mt-2 text-white/80">{blurbFor(math.blurb, trap)}</p>
           </div>
         )}
       </section>

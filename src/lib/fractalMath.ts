@@ -56,6 +56,25 @@ export type MathExpr =
   | { kind: "conjugate"; of: MathExpr }
   | { kind: "abs"; of: MathExpr };
 
+/**
+ * One sentence of a fractal's paragraph, and whether a look on the picture
+ * leaves it true.
+ *
+ * A trap colours every pixel by how close its orbit comes to the shape, so the
+ * count the orbit ended at, the root it reached, the settled black and the
+ * colour families are not on screen while one is on: a sentence that names them
+ * is false then. `colouring` marks those, and {@link blurbFor} leaves them out.
+ */
+export interface BlurbSentence {
+  /** The sentence, as the card prints it. */
+  text: string;
+  /** True for a sentence about the colours Normal paints, and only Normal. */
+  colouring?: boolean;
+}
+
+/** A fractal's paragraph: two or three sentences, the idea before any jargon. */
+export type Blurb = readonly BlurbSentence[];
+
 /** What the Math card shows about one fractal. */
 export interface FractalMath {
   /** The fractal's name as the card's heading says it ("Mandelbrot set"). */
@@ -69,8 +88,11 @@ export interface FractalMath {
    * takes none. `label` says what the setting means, in a phrase.
    */
   setting: { label: string; value: MathExpr } | null;
-  /** Two or three plain sentences, the idea before any jargon. */
-  blurb: string;
+  /**
+   * Two or three plain sentences, the idea before any jargon
+   * ({@link blurbFor} prints them, and drops the ones a trap makes false).
+   */
+  blurb: Blurb;
   /** How a point is judged and coloured, in the fractal's own words. */
   escape: string;
 }
@@ -285,8 +307,14 @@ const MANDELBROT: FractalMath = {
   rule: rule(superscript(z, number(2))),
   start: START_AT_ZERO,
   setting: null,
-  blurb:
-    "Pick a point on the plane and call it c. Start at zero and keep squaring the number and adding c. If the numbers stay small forever the point is in the set, the black body of the picture; if they run away, it is outside, and how quickly it runs away sets its colour.",
+  blurb: [
+    { text: "Pick a point on the plane and call it c." },
+    { text: "Start at zero and keep squaring the number and adding c." },
+    {
+      text: "If the numbers stay small forever the point is in the set, the black body of the picture; if they run away, it is outside, and how quickly it runs away sets its colour.",
+      colouring: true,
+    },
+  ],
   escape: ESCAPE_RADIUS_2,
 };
 
@@ -308,8 +336,18 @@ const BURNING_SHIP: FractalMath = {
   ),
   start: START_AT_ZERO,
   setting: null,
-  blurb:
-    "The same game as the Mandelbrot set, with one twist: before squaring, each step flips both parts of the number to be positive. That fold breaks the set's mirror symmetry and gives it a jagged, ship-like outline. Numbers that stay small are the black ship; the rest are coloured by how fast they run away.",
+  blurb: [
+    {
+      text: "The same game as the Mandelbrot set, with one twist: before squaring, each step flips both parts of the number to be positive.",
+    },
+    {
+      text: "That fold breaks the set's mirror symmetry and gives it a jagged, ship-like outline.",
+    },
+    {
+      text: "Numbers that stay small are the black ship; the rest are coloured by how fast they run away.",
+      colouring: true,
+    },
+  ],
   escape: ESCAPE_RADIUS_2,
 };
 
@@ -318,8 +356,18 @@ const TRICORN: FractalMath = {
   rule: rule(superscript(conjugate(z), number(2))),
   start: START_AT_ZERO,
   setting: null,
-  blurb:
-    "The same game as the Mandelbrot set, with one twist: before squaring, each number is flipped to its mirror image across the real axis, its conjugate. That turns the one-lobed set into a three-armed one that a turn of 120 degrees maps onto itself. Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+  blurb: [
+    {
+      text: "The same game as the Mandelbrot set, with one twist: before squaring, each number is flipped to its mirror image across the real axis, its conjugate.",
+    },
+    {
+      text: "That turns the one-lobed set into a three-armed one that a turn of 120 degrees maps onto itself.",
+    },
+    {
+      text: "Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+      colouring: true,
+    },
+  ],
   escape: ESCAPE_RADIUS_2,
 };
 
@@ -342,8 +390,18 @@ const PERPENDICULAR_SHIP: FractalMath = {
   ),
   start: START_AT_ZERO,
   setting: null,
-  blurb:
-    "The same game as the Mandelbrot set, with one twist: the two halves of the number are not treated alike. The real part squares as it is, while the imaginary part is taken against the size of the real part, so the sign of the real part is thrown away in one half of the step and kept in the other. That fold leaves a flat-backed dark hull with rows of masts along its edge, and the rest is coloured by how fast a point runs away.",
+  blurb: [
+    {
+      text: "The same game as the Mandelbrot set, with one twist: the two halves of the number are not treated alike.",
+    },
+    {
+      text: "The real part squares as it is, while the imaginary part is taken against the size of the real part, so the sign of the real part is thrown away in one half of the step and kept in the other.",
+    },
+    {
+      text: "That fold leaves a flat-backed dark hull with rows of masts along its edge, and the rest is coloured by how fast a point runs away.",
+      colouring: true,
+    },
+  ],
   escape: `${ESCAPE_RADIUS_2} In the orbit plot the fold shows as a path that does not care which side of the imaginary axis it is on: a step squares the real part and takes the imaginary part against the size of the real part, so a point and its reflection in that axis go to the very same next point.`,
 };
 
@@ -366,8 +424,18 @@ const CELTIC: FractalMath = {
   ),
   start: START_AT_ZERO,
   setting: null,
-  blurb:
-    "The same game as the Mandelbrot set, with one twist: after squaring, the real part of the result is flipped to be positive. That fold gives the set a flat left edge and lacy, knotted loops. Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+  blurb: [
+    {
+      text: "The same game as the Mandelbrot set, with one twist: after squaring, the real part of the result is flipped to be positive.",
+    },
+    {
+      text: "That fold gives the set a flat left edge and lacy, knotted loops.",
+    },
+    {
+      text: "Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+      colouring: true,
+    },
+  ],
   escape: `${ESCAPE_RADIUS_2} In the orbit plot the fold shows as a path that never lands left of c: each step's real part is at least c's, so only c itself pulls the path to the left.`,
 };
 
@@ -405,12 +473,55 @@ const NEWTON_DERIVATIVES: Readonly<Record<string, MathExpr>> = {
 };
 
 /** The plain sentences the card says about each polynomial. */
-const NEWTON_BLURBS: Readonly<Record<string, string>> = {
-  "3": "Newton's method hunts for a solution of z cubed = 1 by improving a guess again and again. The equation has three solutions, the cube roots of 1, and every pixel is a first guess. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took; the borders between the three colours are endlessly tangled.",
-  "4": "Newton's method hunts for a solution of z to the fourth = 1 by improving a guess again and again. The equation has four solutions, the fourth roots of 1, and every pixel is a first guess. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, so four colour families meet along the same endlessly tangled borders.",
-  "5": "Newton's method hunts for a solution of z to the fifth = 1 by improving a guess again and again. The equation has five solutions, the fifth roots of 1, and every pixel is a first guess. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, and five colour families meet along the borders between them.",
-  cycle:
-    "Newton's method hunts for a solution of z cubed minus 2z plus 2 by improving a guess again and again. The equation has three solutions, but beside the origin the method is caught in a loop instead: nought is sent to 1 and 1 straight back to nought, so those points never settle. The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, and paints the ones caught in the loop black.",
+const NEWTON_BLURBS: Readonly<Record<string, Blurb>> = {
+  "3": [
+    {
+      text: "Newton's method hunts for a solution of z cubed = 1 by improving a guess again and again.",
+    },
+    {
+      text: "The equation has three solutions, the cube roots of 1, and every pixel is a first guess.",
+    },
+    {
+      text: "The picture colours each starting point by the solution it ends up at, shaded by how few steps that took; the borders between the three colours are endlessly tangled.",
+      colouring: true,
+    },
+  ],
+  "4": [
+    {
+      text: "Newton's method hunts for a solution of z to the fourth = 1 by improving a guess again and again.",
+    },
+    {
+      text: "The equation has four solutions, the fourth roots of 1, and every pixel is a first guess.",
+    },
+    {
+      text: "The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, so four colour families meet along the same endlessly tangled borders.",
+      colouring: true,
+    },
+  ],
+  "5": [
+    {
+      text: "Newton's method hunts for a solution of z to the fifth = 1 by improving a guess again and again.",
+    },
+    {
+      text: "The equation has five solutions, the fifth roots of 1, and every pixel is a first guess.",
+    },
+    {
+      text: "The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, and five colour families meet along the borders between them.",
+      colouring: true,
+    },
+  ],
+  cycle: [
+    {
+      text: "Newton's method hunts for a solution of z cubed minus 2z plus 2 by improving a guess again and again.",
+    },
+    {
+      text: "The equation has three solutions, but beside the origin the method is caught in a loop instead: nought is sent to 1 and 1 straight back to nought, so those points never settle.",
+    },
+    {
+      text: "The picture colours each starting point by the solution it ends up at, shaded by how few steps that took, and paints the ones caught in the loop black.",
+      colouring: true,
+    },
+  ],
 };
 
 /** How the card says a point is judged, per polynomial. */
@@ -547,8 +658,18 @@ function magnet(variant: string): FractalMath {
       label: "Magnetic type, which of the model's two maps is drawn",
       value: text(MAGNET_TYPE_LABELS[type]),
     },
-    blurb:
-      "Each step forms a fraction out of z and c, squares it, and starts again from there. Almost every c has an orbit that settles on the fixed point z = 1, and that settled set is the flat black of the picture; the colours draw the small island of c whose orbit runs off to infinity instead. The two magnetic types are the same question asked of two different fractions.",
+    blurb: [
+      {
+        text: "Each step forms a fraction out of z and c, squares it, and starts again from there.",
+      },
+      {
+        text: "Almost every c has an orbit that settles on the fixed point z = 1, and that settled set is the flat black of the picture; the colours draw the small island of c whose orbit runs off to infinity instead.",
+        colouring: true,
+      },
+      {
+        text: "The two magnetic types are the same question asked of two different fractions.",
+      },
+    ],
     escape: `A point is inside when its orbit comes within ${MAGNET_TOLERANCE} of 1, the number the map settles on, and it is painted black like the inside of any other set. A point is outside when |z| passes ${MAGNET_BAILOUT}, which these maps only reach on their way out; the colour is the step on which that happens.`,
   };
 }
@@ -615,8 +736,18 @@ function phoenix(variant: string): FractalMath {
         number(formatCoordinate(Math.abs(imaginary))),
       ),
     },
-    blurb:
-      "This is a Julia set with a memory: every step squares the number and adds c, and also adds p times the number from the step before. That extra term feeds the past back into each new point, which feathers the picture into flame-like shapes that a plain Julia set never makes. Points whose numbers stay small are the black body and the rest are coloured by how fast they run away.",
+    blurb: [
+      {
+        text: "This is a Julia set with a memory: every step squares the number and adds c, and also adds p times the number from the step before.",
+      },
+      {
+        text: "That extra term feeds the past back into each new point, which feathers the picture into flame-like shapes that a plain Julia set never makes.",
+      },
+      {
+        text: "Points whose numbers stay small are the black body and the rest are coloured by how fast they run away.",
+        colouring: true,
+      },
+    ],
     escape: `${ESCAPE_RADIUS_2} In the orbit plot the memory shows: the path starts at the pixel, and each new dot is pulled by the dot before the last, so the path spirals less smoothly than a Julia orbit does.`,
   };
 }
@@ -646,8 +777,17 @@ const NOVA: FractalMath = {
   ),
   start: START_AT_ONE,
   setting: null,
-  blurb:
-    "Nova is Newton's method for z cubed = 1 with a constant added after every step. Pick a point on the plane and call it c, start at 1 and keep improving the guess and adding c. Instead of three tidy basins the picture is a Mandelbrot-like set with spirals and bulbs in it, where the Newton basins are folded into the shapes.",
+  blurb: [
+    {
+      text: "Nova is Newton's method for z cubed = 1 with a constant added after every step.",
+    },
+    {
+      text: "Pick a point on the plane and call it c, start at 1 and keep improving the guess and adding c.",
+    },
+    {
+      text: "Instead of three tidy basins the picture is a Mandelbrot-like set with spirals and bulbs in it, where the Newton basins are folded into the shapes.",
+    },
+  ],
   escape:
     "A point is done when a step moves it by less than 0.000001, which means it has settled; the colour is the number of steps that took. A point whose numbers pass 1,000,000 has escaped and is coloured by its step the same way, and a point that has not settled within the iteration cap, circling or wandering for good, is painted black. In the orbit plot a settling point is a path that closes in on one spot, and a point that circles is a path that keeps going round.",
 };
@@ -666,8 +806,18 @@ function julia(variant: string): FractalMath {
       label: `${named ? `Julia constant "${named.name}"` : "Julia constant"}, added at every step`,
       value: row(c, EQUALS, complexExpr(point.real, point.imaginary)),
     },
-    blurb:
-      "Every point of the picture is a starting value, and the same fixed number c is added at every step. Points whose numbers stay small forever form the Julia set, and the rest run away, coloured by how fast. Each choice of c gives a different picture, and the Mandelbrot set is the map of which choices give a connected one.",
+    blurb: [
+      {
+        text: "Every point of the picture is a starting value, and the same fixed number c is added at every step.",
+      },
+      {
+        text: "Points whose numbers stay small forever form the Julia set, and the rest run away, coloured by how fast.",
+        colouring: true,
+      },
+      {
+        text: "Each choice of c gives a different picture, and the Mandelbrot set is the map of which choices give a connected one.",
+      },
+    ],
     escape: ESCAPE_RADIUS_2,
   };
 }
@@ -683,8 +833,18 @@ function multibrot(variant: string): FractalMath {
       label: "Power, how many times z multiplies itself",
       value: row(identifier("d"), EQUALS, number(power)),
     },
-    blurb:
-      "The same game as the Mandelbrot set, but each step raises the number to a higher power d instead of squaring it. A higher power gives the set more lobes, d - 1 of them, so d = 3 has two, d = 4 has three and d = 5 has four. Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+    blurb: [
+      {
+        text: "The same game as the Mandelbrot set, but each step raises the number to a higher power d instead of squaring it.",
+      },
+      {
+        text: "A higher power gives the set more lobes, d - 1 of them, so d = 3 has two, d = 4 has three and d = 5 has four.",
+      },
+      {
+        text: "Numbers that stay small are the black body; the rest are coloured by how fast they run away.",
+        colouring: true,
+      },
+    ],
     escape: ESCAPE_RADIUS_2,
   };
 }
@@ -750,6 +910,39 @@ const TRAP_COMPARISONS: Readonly<Record<string, string>> = {
 };
 
 const TRAP_ESCAPE_COMPARISON = "how quickly the orbit escapes";
+
+/**
+ * The sentence a paragraph gains when a trap draws the picture. It is the same
+ * for every fractal and every shape: the trap itself is named by the shape's
+ * own numbers in the row above, so a second copy here would be one more place
+ * for the card to disagree with the renderer.
+ *
+ * It stands in for the sentences {@link blurbFor} drops, which is why it says
+ * where the colours come from rather than only what they are made of.
+ */
+export const TRAP_BLURB_SENTENCE =
+  'With an orbit trap on, the colour of every point is how close its orbit comes to the trap; the "Each point" row above says which shape that is.';
+
+/**
+ * The paragraph the card prints under its rows.
+ *
+ * With Normal it is every sentence of the descriptor, in order, which is the
+ * paragraph a reader has always seen. With a trap on it is only the sentences a
+ * trap leaves true — see {@link BlurbSentence} for which ones those are — and
+ * then {@link TRAP_BLURB_SENTENCE}, so a reader is never told what a colouring
+ * they are not looking at is made of.
+ *
+ * @param blurb - The fractal's paragraph
+ * @param trap - The trap the picture is drawn in, or null for Normal
+ * @returns The sentences, joined with single spaces
+ */
+export function blurbFor(blurb: Blurb, trap: TrapShape | null): string {
+  return blurb
+    .filter((sentence) => trap === null || sentence.colouring !== true)
+    .map((sentence) => sentence.text)
+    .concat(trap === null ? [] : [TRAP_BLURB_SENTENCE])
+    .join(" ");
+}
 
 /**
  * Where a trap sits, in the plane the orbit moves in, with its own numbers:
