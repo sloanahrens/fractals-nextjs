@@ -6,7 +6,11 @@
  * `src/__tests__/help-overlay-panel.test.ts` checks the key names it gives for
  * the canvas against the keys `src/lib/canvasNavigation.ts` really handles.
  * A section here that names a key the canvas does not read is stale help.
+ *
+ * The fractal row's help names the buttons off `FRACTAL_TYPES` itself, so the
+ * order the help gives is the order the picker draws.
  */
+import { FRACTAL_TYPES } from "./fractalTypes";
 
 /** The dialog's heading, which the dialog element points `aria-labelledby` at. */
 export const HELP_DIALOG_TITLE = "How to use the explorer";
@@ -23,6 +27,19 @@ export interface HelpEntry {
 export interface HelpSection {
   title: string;
   entries: HelpEntry[];
+}
+
+/**
+ * The fractals the buttons name, in the row's own order, as one phrase.
+ *
+ * Read off `FRACTAL_TYPES` rather than written down again, so a fractal added
+ * to the picker arrives in the help with it, and the help and the row cannot
+ * disagree about the order of the buttons.
+ */
+function fractalButtonNames(): string {
+  const names = FRACTAL_TYPES.map((type) => type.label);
+
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 /**
@@ -80,7 +97,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         keys: "Fractal buttons",
         action:
-          "Mandelbrot, Julia, Burning Ship, Perp. Ship, Tricorn, Multibrot, Newton, Celtic, Magnet, Phoenix and Nova, top left of the picture (the row scrolls sideways on a narrow screen), the current one lit: one click flies to that fractal's showpiece place, and Back returns to where you were. With Julia on, a row of chips picks its constant (Classic, Dendrite, Douady rabbit, Siegel disk) and goes to the whole of that set; Custom opens Settings at the Real box to type your own. With Multibrot on, a Power row picks z^3, z^4 or z^5 and goes to the whole set of that power, and with Newton on a Polynomial row picks z^3 - 1, z^4 - 1, z^5 - 1 or z^3 - 2z + 2: each root of the polynomial has its own colour family, shaded by how fast Newton's method reaches it, and for z^3 - 2z + 2 the points beside the origin that the method loops between 0 and 1 on never settle and are painted black. With Magnet on a Type row picks Type I or Type II, the two fractions of the magnetic model, and goes to the whole island of that type. With Phoenix on a Phoenix constant row picks Classic, Spirals or Hourglass, each a pair of numbers for a Julia set with a memory (every step also adds a share of the point before the last), and goes to the whole of that set. Nova, Newton's method for z^3 - 1 with the pixel added after every step and every orbit started at 1, has no setting and lands on its whole set, a C-shaped arc round a bloom of bands: the colour is how many steps a point took to stop moving, and a point that never stops is painted black. Celtic, the Mandelbrot loop with the real part of the square folded positive, and the Perpendicular Ship, its cousin with only the imaginary part of the step folded, have no setting and land on their whole sets",
+          `${fractalButtonNames()}, top left of the picture (it scrolls sideways on a narrow screen), the current one lit: a click flies to that fractal's showpiece place. A fractal with a setting gets chips under the buttons, and Custom opens Settings at the Real box`,
       },
       {
         keys: "Julia map",
