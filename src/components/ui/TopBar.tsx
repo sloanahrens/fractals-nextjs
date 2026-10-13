@@ -40,14 +40,14 @@ const BUTTON_CLASSES =
   "rounded-lg bg-white/10 px-1.5 py-1.5 text-xs font-medium sm:px-3 sm:text-sm text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10";
 
 // Drawn from `sm` up; below it the title is for a screen reader only, which
-// leaves the width to the five buttons.
+// leaves the width to the buttons.
 const TITLE_CLASSES = "sr-only text-lg font-semibold sm:not-sr-only";
 
 /**
  * The floating bar over the canvas: the title on the left, Surprise me and Tour
- * in the middle, then Back, Forward, Help and Settings on the right. Under `sm`
- * the title stays in the page for a screen reader but is not drawn, so the six
- * buttons fit a phone's width.
+ * in the middle, then Back, Forward, Math, Help and Settings on the right.
+ * Under `sm` the title stays in the page for a screen reader but is not drawn,
+ * so the buttons fit a phone's width.
  *
  * Back and Forward retrace the journey — the views the user jumped to — through
  * the browser's own history; the page says whether there is anywhere to go, and

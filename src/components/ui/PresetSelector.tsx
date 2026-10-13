@@ -26,8 +26,7 @@ interface PresetSelectorProps {
 /**
  * The preset dropdown: the built-in views of the selected fractal, then the
  * user's saved ones. The Nearby strip over the canvas is how a visitor finds
- * places at a glance, so the dropdown is the only way in here and the row of
- * buttons that used to sit under it is gone.
+ * places at a glance, so the dropdown is the only way in here.
  */
 export const PresetSelector: React.FC<PresetSelectorProps> = ({
   currentPreset,
