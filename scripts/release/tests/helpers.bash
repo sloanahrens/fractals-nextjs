@@ -113,6 +113,14 @@ setup_release_env() {
   DIGEST="$IMAGE@sha256:$DIGEST_HEX"
   export APP PROJECT IMAGE DIGEST
 
+  # FAKE_AR_DIGEST_HEX is the digest body the fake gcloud answers an Artifact
+  # Registry read with (bead dv-35th), so a tag resolved by digest_for_tag.sh
+  # prints the same digest a build of this app pushes. The registry holds
+  # several tags, and the tag's name has nothing to do with which image it
+  # names -- the point of resolving one.
+  FAKE_AR_DIGEST_HEX="$DIGEST_HEX"
+  export FAKE_AR_DIGEST_HEX
+
   # PREVIOUS_DIGEST is a second well-formed digest: the image a stack was
   # running before the release a test is about. The pulumi fake's export fixture
   # records $DIGEST -- the image that builds -- so a test that wants the release

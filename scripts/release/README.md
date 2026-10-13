@@ -17,6 +17,7 @@ a Forgejo job running as `gt-cloud` (bead B5.4) and are wired together by
 | `wait_version.sh` | integration | Polls the app's version endpoint until it reports the commit that was just deployed; exits 1 on another commit, 2 on no usable answer |
 | `promote.sh` | 6 | Deploys the staging digest to prod and records the deploy time, or applies nothing when prod already runs it; refuses anything that is not a digest |
 | `staged_digest.sh` | 6 | Reads the image a stack is running out of `pulumi stack export`, which is what prod checks its promotion against |
+| `digest_for_tag.sh` | up | Resolves a released tag to the digest it names in Artifact Registry, for the `up` flow (`workflows/up.yml`) |
 | `init_stack.sh` | — | Creates an app's stack for one environment, with the project's `gcpkms` secrets provider; idempotent |
 | `lib.sh` | — | The names and rules every script shares; sourced, never run |
 
@@ -91,6 +92,20 @@ service, more than one, or an image that is a tag: an empty or tag-shaped read
 would leave `promote.sh` with nothing to compare against. It never reads the
 export with `--show-secrets`.
 
+`digest_for_tag.sh` is the read the `up` flow makes of the registry (bead
+dv-35th). A release's identity is a digest, and after a teardown the only thing
+still naming the image a release pushed is the registry tag `vX.Y.Z`, so the
+`up` workflow has to turn that name back into a digest — and it has to do it
+once, at the start, because a tag is a name that can be moved: what reaches
+`up.sh` and `promote.sh` is the immutable `<registry>@sha256:<64hex>` this
+script prints, never the tag. It reads with the credential the rest of the flow
+uses, the one-hour token `mint_token.sh` wrote, handed to
+`gcloud artifacts docker images describe` as a *file* (`--access-token-file`),
+so the token is on no command line and in no log. A tag the repository does not
+hold, or one that resolves to no digest at all, is a refusal that names the tag
+and leaves stdout empty — an empty value is one `promote.sh` would skip its
+comparison for. It deploys nothing and changes nothing.
+
 ## The commit an image carries
 
 Both builds hand the commit they built to `docker build` as `--build-arg
@@ -154,6 +169,7 @@ workflow can pass whatever is convenient. `--help` prints the full list.
 | the `settings-begin`/`settings-end` block | `init_stack.sh` | the operator, who commits it into `Pulumi.<env>.yaml` |
 | `url=` | `up.sh`, `promote.sh` | `health.sh` |
 | `digest=` (the image the stack is running) | `staged_digest.sh` | the prod job's `--staging-digest` check |
+| `digest=` (the image a released tag names) | `digest_for_tag.sh` | `workflows/up.yml`'s `up.sh` and `promote.sh` steps |
 | `observed=`, `attempts=` | `wait_version.sh` | the integration job's own result, and the run record |
 
 Names are derived from `--app`, `--env`, `--project` and `--region` in one place
@@ -377,6 +393,16 @@ Bead dv-yf4, the digest the prod job reads back, is the last:
   to `$GITHUB_OUTPUT`: no service, two services, an image that is a tag, a
   service that records no image, a failed export, and a stack whose committed
   settings lack this project's provider.
+
+Bead dv-35th, the tag the `up` flow resolves:
+
+- `digest_for_tag.bats`: a known tag prints one
+  `<registry>@sha256:<64hex>` line, built from the digest the fake registry
+  answered with and not from the tag; a tag the registry does not hold, a tag
+  that resolves to no digest, and an answer that is not a digest each exit
+  non-zero with a message naming the tag and an empty stdout; a tag that is not
+  a release tag and a missing token file are refused before any read; and a dry
+  run reads no registry and prints no digest.
 
 Bead dv-5jrh, the commit the integration job checks for:
 
