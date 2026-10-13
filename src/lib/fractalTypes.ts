@@ -336,9 +336,9 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // -0.5 - 0.866i (the frame is wider than it is tall, so the root on the axis
   // gets the larger share), none left unsettled, and each root and its dark
   // centre is inside it with a margin of at least 0.6 to the nearest edge.
-  // Drawn at 400x300 in all five schemes (see the 2026-10-10 Newton note in
-  // CLAUDE.md), the origin junction reads as a pinwheel of three colours with
-  // bulbs strung along the three boundaries.
+  // Drawn at 400x300 in all five schemes, the origin junction reads as a
+  // pinwheel of three colours with bulbs strung along the three boundaries
+  // (newton.test.ts holds the three colour families for every scheme).
   if (typeId === "newton") return { centerX: 0, centerY: 0, zoom: 1 };
 
   // The Celtic set is the Mandelbrot set's on the real axis, so it runs from

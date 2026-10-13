@@ -671,8 +671,8 @@ const MULTIBROT_PLACES: readonly Place[] = [
 // white; dark, mid, light); classic is busy over a wide view and works on the
 // pinwheels and chains, where the colours repeat between roots; ocean is three
 // blues and the weakest. Each place has the scheme it read best in, then
-// re-measured at 64x48 for the largest share one colour holds (the numbers are
-// in the Newton note of CLAUDE.md): a place that has a wide empty basin on one side
+// re-measured at 64x48, with `nearUniformShare`, for the largest share one
+// colour holds: a place that has a wide empty basin on one side
 // (the bulb chain, the root at 1) names the scheme that leaves the least of it,
 // since fire and grayscale put 56 to 67% of those two in one colour. The
 // picture is three basins and the boundary where they all meet, so the places
