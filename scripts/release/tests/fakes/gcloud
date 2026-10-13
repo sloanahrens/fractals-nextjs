@@ -6,14 +6,24 @@
 # health.bats show that a failed health check leaves the previous revision
 # serving — and that the fake would record a shift if one were attempted.
 #
+# It also answers the Artifact Registry read digest_for_tag.sh makes (bead
+# dv-35th), so the `up` flow's tag-to-digest resolution is tested against a
+# registry that can be wrong in the two ways that matter: a tag that is not
+# there at all, and one that resolves to no digest.
+#
 # The base key is never read: the fake records only *where* the credential came
-# from (the environment, or a command line), never any part of its contents.
+# from (the environment, or a command line), never any part of its contents. It
+# treats the token file the same way, recording its path and never its
+# contents.
 #
 # Fake-specific environment:
 #   FAKE_LOG           where invocations are recorded (default /dev/null)
 #   FAKE_STATE         fake cloud state file (serving_revision, latest_revision)
 #   FAKE_ACCESS_TOKEN  the token `auth print-access-token` prints
 #   FAKE_SERVICE_URL   the URL `run services describe` answers with
+#   FAKE_AR_DIGEST_HEX the digest body `artifacts docker images describe` prints
+#   FAKE_AR_MISSING    a tag `artifacts docker images describe` reports as absent
+#   FAKE_AR_NO_DIGEST  set, and that call succeeds while printing no digest
 
 set -euo pipefail
 # shellcheck source=scripts/release/tests/fakes/_fake.sh
@@ -53,6 +63,37 @@ auth)
     ;;
   *)
     fake_log "gcloud $*"
+    ;;
+  esac
+  ;;
+artifacts)
+  case "${2:-} ${3:-} ${4:-}" in
+  'docker images describe')
+    shift 4
+    image=${1:-}
+    # The token file's *path* is recorded, as auth records the key's: the fake
+    # proves where the credential came from and never what it holds. The token
+    # itself is read by gcloud from that file, so the real call has it on no
+    # command line either.
+    token_env=no
+    for word in "$@"; do
+      [[ $word == --access-token-file=* ]] && token_env=yes
+    done
+    fake_log "gcloud artifacts docker images describe $image token_file=$token_env"
+    tag=${image##*:}
+    # A tag the test says is not there: gcloud fails, as it does for an image
+    # the repository does not hold.
+    if [[ -n ${FAKE_AR_MISSING:-} && $tag == "${FAKE_AR_MISSING}" ]]; then
+      printf 'ERROR: (gcloud.artifacts.docker.images.describe) NOT_FOUND: %s\n' "$image" >&2
+      exit 1
+    fi
+    # The other shape of a tag that maps to no digest: the call succeeds and
+    # answers with nothing.
+    [[ -z ${FAKE_AR_NO_DIGEST:-} ]] || exit 0
+    printf 'sha256:%s\n' "${FAKE_AR_DIGEST_HEX:-$(printf 'ab%.0s' {1..32})}"
+    ;;
+  *)
+    record "$@"
     ;;
   esac
   ;;

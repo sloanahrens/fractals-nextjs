@@ -78,7 +78,7 @@ setup() {
   done < <(release_scripts)
 }
 
-@test "the directory holds the flow's scripts, the landing build, the reads the jobs make of the service and the stack, and init_stack.sh" {
+@test "the directory holds the flow's scripts, the landing build, the reads the jobs make of the service, the stack and the registry, and init_stack.sh" {
   local got
   # Sorted under LC_ALL=C because the order is a character-set question, not a
   # human one. A glob expands in the shell's collation order, and build_push.sh
@@ -90,5 +90,5 @@ setup() {
   # dv-pj9; the landing gate rejected the locale-dependent spelling).
   got=$(while read -r script; do printf '%s\n' "${script##*/}"; done < <(release_scripts) | LC_ALL=C sort | tr '\n' ' ')
 
-  [ "$got" = 'build_push.sh build_push_staging.sh health.sh init_stack.sh mint_token.sh preview.sh promote.sh staged_digest.sh up.sh wait_version.sh ' ]
+  [ "$got" = 'build_push.sh build_push_staging.sh digest_for_tag.sh health.sh init_stack.sh mint_token.sh preview.sh promote.sh staged_digest.sh up.sh wait_version.sh ' ]
 }

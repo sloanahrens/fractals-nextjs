@@ -47,6 +47,8 @@ setup() {
     --app "$APP" --token-file "$TOKEN_FILE"
   assert_clean "staged_digest.sh" "$RELEASE_DIR/staged_digest.sh" \
     --app "$APP" --env staging --token-file "$TOKEN_FILE"
+  assert_clean "digest_for_tag.sh" "$RELEASE_DIR/digest_for_tag.sh" \
+    --app "$APP" --tag v1.0.0 --token-file "$TOKEN_FILE"
   assert_clean "health.sh" "$RELEASE_DIR/health.sh" \
     --url "$FAKE_SERVICE_URL" --health-path /api/health --timeout 5 --interval 1
   assert_clean "wait_version.sh" "$RELEASE_DIR/wait_version.sh" \
@@ -70,6 +72,8 @@ setup() {
     --app "$APP" --token-file "$TOKEN_FILE" --dry-run
   assert_clean "staged_digest.sh" "$RELEASE_DIR/staged_digest.sh" \
     --app "$APP" --env staging --token-file "$TOKEN_FILE" --dry-run
+  assert_clean "digest_for_tag.sh" "$RELEASE_DIR/digest_for_tag.sh" \
+    --app "$APP" --tag v1.0.0 --token-file "$TOKEN_FILE" --dry-run
   assert_clean "health.sh" "$RELEASE_DIR/health.sh" \
     --url "$FAKE_SERVICE_URL" --health-path /api/health --dry-run
   assert_clean "wait_version.sh" "$RELEASE_DIR/wait_version.sh" \

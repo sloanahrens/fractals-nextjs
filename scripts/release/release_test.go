@@ -44,6 +44,11 @@ var forbidden = []string{"/Users/" + "sloan", "claude-" + "501"}
 // dv-pj9). It is on this list because everything here is about being a command
 // in this directory -- present, executable, parsing and clean under shellcheck
 // -- and it is a command.
+//
+// digest_for_tag.sh is not a step of the flow either: it is the read the `up`
+// flow makes of the registry, turning a released tag back into the digest a
+// teardown left nothing else naming (bead dv-35th), and it is on this list for
+// the same reason build_push_staging.sh is.
 var commands = []string{
 	"init_stack.sh",
 	"build_push.sh",
@@ -52,6 +57,7 @@ var commands = []string{
 	"preview.sh",
 	"up.sh",
 	"promote.sh",
+	"digest_for_tag.sh",
 	"staged_digest.sh",
 	"health.sh",
 	"wait_version.sh",
