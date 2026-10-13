@@ -26,11 +26,11 @@ export const OG_IMAGE_WIDTH = 1200;
 export const OG_IMAGE_HEIGHT = 630;
 
 /**
- * The most one pre-built picture may weigh. The generator draws each one at
- * quality 80 and steps the quality down only as far as it must to fit this, so
- * it is a budget every picture is made to meet rather than a guard it is hoped
- * to stay under (`scripts/make-og-previews.mjs`); `ogPreviews.test.ts` holds
- * the committed set to it.
+ * The most one pre-built picture may weigh. `scripts/make-og-previews.mjs`
+ * draws each one at its `MAX_QUALITY` and steps the quality down only as far as
+ * it must to fit this, so it is a budget every picture is made to meet rather
+ * than a guard it is hoped to stay under; the committed pictures under
+ * `public/og/` are held to it by `src/__tests__/og-previews.test.ts`.
  */
 export const OG_IMAGE_MAX_BYTES = 200 * 1024;
 
