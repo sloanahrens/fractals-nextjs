@@ -1,0 +1,382 @@
+# Bring-back workflow template for an app repo (bead dv-35th; the design is
+# docs/specs/2026-10-12-fractals-down-up-design.md, "`up`").
+#
+# Copy this file into an app repo as .forgejo/workflows/up.yml, next to
+# deploy.yml, staging.yml and teardown.yml. It brings an app back from an image
+# a release already built: it resolves the digest the registry tag `vX.Y.Z`
+# names, applies that digest to staging, health checks it, runs the app's
+# integration tier against the service it just brought up, promotes the same
+# digest to prod, and health checks that. It builds nothing, and it has no
+# preview job, because there is nothing new to preview: the image is one the
+# release flow already built, previewed, health checked and promoted, and the
+# only thing that changed since is that a teardown deleted the service.
+#
+# It exists because a teardown leaves an app's images in the registry and no
+# service running them. Before this file the only way back was a new release --
+# a `v*` tag push, a rebuild, and a digest that is not the one the app ran
+# before -- and the design's answer is cheaper and more exact: redeploy what is
+# already there. Nothing here rebuilds, so the digest prod receives is the one
+# staging proved, and the app comes back as the version it went down as.
+#
+# What authorizes a run is the ref it is at, the same answer teardown.yml gives
+# (docs/design.md, section 6.1): a protected `up-vX.Y.Z` tag, which only the
+# human may push. The first job's first step refuses every other ref, before it
+# checks out anything and before any call that touches the cloud, and every job
+# that changes a running service needs that job. As in the other three
+# templates that refusal is a control only with its other half -- no push may put
+# another copy of this file on a branch, which is the branch protection rule
+# over `.forgejo/workflows/` (workflows/README.md, item 2) -- because Forgejo
+# runs the copy of the workflow at the ref the run is at, a dispatch at a branch
+# included (bead dv-csz).
+#
+# The tag names the release to bring back: `up-v1.2.3` is the image the release
+# `v1.2.3` pushed, and the run reads the registry tag `v1.2.3` to find it.
+# Nothing about the tag's own commit decides that, which is why the version is
+# read out of the tag's name and the digest out of the registry, and why the
+# commit the integration job waits for is read from the `v1.2.3` tag rather than
+# from `GITHUB_SHA` (the run's own commit is wherever this tag was pushed).
+#
+# The jobs that build, apply and promote run on `runs-on: deploy` for the reason
+# the other templates give: that label is the only runner with the base key, and
+# Forgejo restricts it to the app repos (bead B5.4). The integration job runs on
+# `ci-base` and holds nothing -- it reads the deployed service over HTTP, which
+# is what lets it be the job whose result says the app works again. No file here
+# holds a credential, and each checkout sets persist-credentials: false so the
+# runner's own repository token is not left in .git/config for a later step to
+# pick up (deploy.yml explains it).
+
+name: up
+
+# The push of a protected `up-v*` tag, and nothing else. As in teardown.yml the
+# pattern is the app's own and does not overlap the other two: a release tag
+# starts deploy.yml and only that, a teardown tag teardown.yml, and an up tag
+# this file. Forgejo will also dispatch this file at any ref the dispatcher
+# names, running the copy at that ref, which is what the first job's ref check
+# and the workflow-file protection are for.
+on:
+  push:
+    tags: ["up-v*"]
+
+# The group deploy.yml, teardown.yml and staging.yml declare, and deliberately
+# the same one: on this Forgejo a concurrency group is shared across every
+# workflow in the repository, so one group is one queue for all four flows. An
+# up waits behind a release, a teardown and a landing, and no run cancels
+# another: `cancel-in-progress: true` here would let an arriving up cancel a
+# running teardown half-way through a stack. workflows_test.go asserts the four
+# templates name the same group with the same setting.
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  # The app's name, which is its repository's name, as in the other templates;
+  # set GT_APP explicitly if the repository is not named after it.
+  GT_APP: ${{ github.event.repository.name }}
+  # The app's GCP project, stated rather than derived: the ID is fixed when
+  # bootstrap creates it and is not gt-<GT_APP> (deploy.yml explains it).
+  GT_PROJECT: gt-fractals-m4xq
+  GT_STACK_DIR: deploy
+  # The health path declared in the app's Spec, which both health checks below
+  # poll and the integration tier's wait follows.
+  GT_HEALTH_PATH: /api/health
+
+jobs:
+  # What to bring back: the digest the registry tag names, and the commit the
+  # image was built from. Its first step is the ref guard, so a run that is not
+  # at a protected up tag stops here, before the checkout, before the token and
+  # before any cloud call, and every job that changes a running service needs
+  # this one.
+  #
+  # It resolves both values once rather than in each job that uses them: the
+  # digest is what staging applies and prod promotes, and the commit is what the
+  # integration job waits for, so one read per value is one thing to check.
+  resolve:
+    runs-on: deploy
+    # The base key, as a path the deploy runner mounts mode 600 inside a home
+    # only gt-cloud can read (deploy.yml states why it is a path and never a
+    # Forgejo secret). It is a job variable here rather than a workflow one so
+    # that the integration job -- which runs on the runner that mounts nothing
+    # -- does not inherit a key path.
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+      # The tag the run is at (`up-v1.2.3`). Every step below takes the version
+      # out of it; none of them reads GITHUB_SHA for it, because the release to
+      # bring back is named by the tag and not by the commit this run is at.
+      UP_TAG: ${{ github.ref_name }}
+    outputs:
+      # The immutable image reference, from digest_for_tag.sh.
+      digest: ${{ steps.digest.outputs.digest }}
+      # The commit the released image carries, which is what the service has to
+      # report before the integration tier can say anything about it.
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      # First, before the checkout and before any call that would touch the
+      # cloud: a run that is not at a protected `up-v*` tag is refused here, and
+      # every job that applies or promotes needs this job. The whole ref is
+      # checked rather than the tag name, because a branch is exactly the ref a
+      # worker can push and a branch named `up-v1.2.3` is a branch (teardown.yml
+      # makes the same check the same way).
+      - name: Refuse anything but a protected up tag
+        run: |
+          set -euo pipefail
+          if [[ ! $GITHUB_REF =~ ^refs/tags/up-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            printf 'refusing an up outside a protected up tag: %s\n' "$GITHUB_REF" >&2
+            exit 1
+          fi
+          printf 'bringing %s back as %s, at %s\n' "$GT_APP" "${GITHUB_REF#refs/tags/}" "$GITHUB_SHA"
+
+      - uses: actions/checkout@v4
+        with:
+          # The release's own tag, `vX.Y.Z`, is what the step below reads the
+          # commit out of, and a shallow clone carries no tags beyond the ref
+          # the run is at. persist-credentials is off as in every other job here.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Each job mints its own token: a token is good for an hour and one job,
+      # and jobs do not share a filesystem. The scripts print notes and a final
+      # block of key=value lines on stdout, so the machine lines are taken by
+      # matching their shape rather than by reprinting every line into
+      # $GITHUB_OUTPUT.
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      # The commit the image was built from, read out of the release tag in this
+      # repository. The integration job needs it because the app's version
+      # endpoint reports the commit its image was built with, and "the app works
+      # again" has to be a fact about this release rather than about whatever
+      # revision happens to be serving. It is deliberately not GITHUB_SHA: the
+      # up tag is pushed wherever the release is being brought back from, and
+      # only the release tag names the image's commit.
+      - name: Read the commit the released tag names
+        id: release
+        run: |
+          set -euo pipefail
+          version=${UP_TAG#up-}
+          sha=$(git rev-parse -q --verify "refs/tags/$version^{commit}" || true)
+          if [[ -z $sha ]]; then
+            printf '::error::this repository has no tag %s, so the commit the image was built from cannot\n' "$version"
+            printf 'be read and the integration tier below could not say which revision is serving:\n'
+            printf 'make sure the tag %s is pushed, or cut a release with a v* tag and bring that back.\n' "$version"
+            exit 1
+          fi
+          printf 'the released image is the one %s built, at %s\n' "$version" "$sha"
+          printf 'sha=%s\n' "$sha" >>"$GITHUB_OUTPUT"
+
+      # The tag to digest read. What comes back is the immutable reference the
+      # rest of the flow takes, and it is the only thing that reaches up.sh and
+      # promote.sh below: the tag itself never does, because a tag is a name and
+      # a name can be moved to another image between this read and the deploy.
+      # An image that is not there at all fails here, with a message naming the
+      # tag, rather than deploying nothing.
+      - name: Resolve the digest the released tag names in the registry
+        id: digest
+        env:
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/digest_for_tag.sh --tag "${UP_TAG#up-}" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+  # Apply the resolved digest to staging and check that it answers. This job
+  # changes something, and what it changes is staging and only staging.
+  #
+  # There is no preview and no approval in front of it, for the reason
+  # staging.yml gives about its own apply: the digest applied is one the release
+  # flow already previewed, health checked and ran in prod, and the run that
+  # brings it back is authorized by the tag it is at. up.sh applies with
+  # --skip-preview, and it applies a digest and never a name.
+  #
+  # A stack a teardown emptied is the case this exists for: `pulumi destroy`
+  # leaves the stack and its config, so the apply here needs no stack creation
+  # -- it writes the digest into the stack's config and applies it, and the
+  # stack is populated again.
+  staging:
+    runs-on: deploy
+    needs: resolve
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+    outputs:
+      # The URL of the service this run brought up, for the integration job
+      # below, which tests that service rather than looking one up.
+      url: ${{ steps.up.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Apply the released digest to staging
+        id: up
+        env:
+          DIGEST: ${{ needs.resolve.outputs.digest }}
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Check the staging service answers on its health path
+        env:
+          URL: ${{ steps.up.outputs.url }}
+        run: scripts/release/health.sh --url "$URL" --health-path "$GT_HEALTH_PATH"
+
+  # The integration tier, as staging.yml's last job runs it: wait for the
+  # service this run brought up to report the release's commit, then run the
+  # app's own `make integration` against it. This is the job that says the app
+  # works again rather than merely answers, and it is why prod below waits for
+  # it -- an app that comes back broken is not brought back.
+  #
+  # It runs on the CI runner and holds nothing: no key path, no token, no cloud
+  # call. Everything it does is a read of the deployed service over HTTP, so the
+  # runner that mounts no credential is the runner that runs it, and a result it
+  # produces cannot be one a job gave after changing something.
+  integration:
+    runs-on: ci-base
+    # `staging` is the service this job tests, and `resolve` carries the commit
+    # the service has to report before the tests can mean anything.
+    needs: [resolve, staging]
+    # The version wait polls for up to 300s by default and the app's suite is
+    # the app's own; the job names a bound so a service that never settles
+    # cannot hold a runner past it.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # A health check is not this fact: a revision that answers on its health
+      # path can still be the one before it. wait_version.sh exits 1 when the
+      # service reports another commit and 2 when it never answers, and both
+      # fail the job; the commit is what ties the tests below to this release.
+      - name: Wait for the service to report the release's commit
+        env:
+          STAGING_URL: ${{ needs.staging.outputs.url }}
+          EXPECT_SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          scripts/release/wait_version.sh --url "$STAGING_URL" --sha "$EXPECT_SHA"
+
+      # The app's own tests against the service this run brought up, told which
+      # commit to expect through both the environment and make's own variables:
+      # a suite that does not check which revision is serving cannot say this
+      # release is green. An app with no integration tier fails here with a
+      # message naming the contract rather than make's "No rule to make target",
+      # because an app with no tests and an app whose tests failed are different
+      # findings (staging.yml makes the same check).
+      - name: Run the app's integration tests against the service
+        env:
+          STAGING_URL: ${{ needs.staging.outputs.url }}
+          EXPECT_SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          if ! target_err=$(make --dry-run integration 2>&1 >/dev/null); then
+            printf '::error::%s has no `make integration` target, so this run cannot say whether\n' "$GT_APP"
+            printf 'the release it brought back works. Define one: `make integration\n'
+            printf 'STAGING_URL=<url> EXPECT_SHA=<commit>` must test the service at %s and exit\n' "$STAGING_URL"
+            printf 'non-zero unless it reports commit %s\n' "$EXPECT_SHA"
+            printf '%s\n' "$target_err"
+            exit 1
+          fi
+
+          make integration STAGING_URL="$STAGING_URL" EXPECT_SHA="$EXPECT_SHA"
+
+  # The same digest in prod, and only after staging proved it. This job carries
+  # no environment and no preview of its own: prod gets the plan the release
+  # already ran under the up tag's authorization, and promote.sh refuses a
+  # digest that is not the one the staging stack holds, so "prod runs what
+  # staging proved" is checked rather than assumed -- the same check deploy.yml's
+  # prod job makes, and it is the reason this job reads the staging stack's own
+  # state instead of trusting a value both jobs happen to hold.
+  prod:
+    runs-on: deploy
+    # integration is named because an app that comes back broken must not reach
+    # prod; staging, because this job reads the URL the staging job recorded;
+    # resolve, because the digest comes from there.
+    needs: [integration, resolve, staging]
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Mint a one-hour token for the app's deployer service account
+        id: token
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/mint_token.sh)"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      # The digest staging is actually running, read out of what Pulumi recorded
+      # for its stack: the comparison below is then against the stack itself and
+      # not against the same job output twice. It has to be the stack's *state*
+      # and not its config, because `pulumi config set` writes a file in the job
+      # that ran it (deploy.yml and staged_digest.sh explain it; bead dv-yf4).
+      - name: Read the digest the staging stack is running
+        id: staged
+        env:
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/staged_digest.sh --env staging --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Promote the released digest to prod
+        id: promote
+        env:
+          DIGEST: ${{ needs.resolve.outputs.digest }}
+          STAGING_DIGEST: ${{ steps.staged.outputs.digest }}
+          TOKEN_FILE: ${{ steps.token.outputs.token_file }}
+        run: |
+          set -euo pipefail
+          out="$(scripts/release/promote.sh "$DIGEST" --staging-digest "$STAGING_DIGEST" --token-file "$TOKEN_FILE")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
+
+      - name: Check the prod service answers on its health path
+        env:
+          URL: ${{ steps.promote.outputs.url }}
+        run: scripts/release/health.sh --url "$URL" --health-path "$GT_HEALTH_PATH"
+
+      # What the run did, where a brought-back app is read from afterwards.
+      # There is no approval to record on this instance, so the summary names
+      # the tag push as the authorization, as deploy.yml's does.
+      - name: Record the redeploy in the run summary
+        env:
+          DIGEST: ${{ needs.resolve.outputs.digest }}
+          STAGING_URL: ${{ needs.staging.outputs.url }}
+          PROD_URL: ${{ steps.promote.outputs.url }}
+        run: |
+          set -euo pipefail
+          {
+            printf '### Brought back `%s`\n\n' "$GT_APP"
+            printf '| | |\n|---|---|\n'
+            printf '| tag | `%s` |\n' "${GITHUB_REF_NAME:-unknown}"
+            printf '| digest | `%s` |\n' "$DIGEST"
+            printf '| staging | %s |\n' "$STAGING_URL"
+            printf '| prod | %s |\n' "$PROD_URL"
+            printf '| tag pushed by | %s |\n' "${GITHUB_ACTOR:-unknown}"
+            printf '\n'
+            printf 'Nothing was rebuilt: this is the image the release above pushed, and prod runs\n'
+            printf 'the digest staging proved it with.\n'
+            printf 'No approval is recorded: this Forgejo has no Actions environments, so the tag\n'
+            printf 'push above is the authorization (docs/design.md, section 6.1).\n'
+          } >>"${GITHUB_STEP_SUMMARY:-/dev/null}"

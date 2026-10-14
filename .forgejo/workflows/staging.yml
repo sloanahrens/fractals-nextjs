@@ -5,18 +5,35 @@
 # after every landing, so a change that landed can be watched where it landed
 # instead of waiting for the next release: build the commit main is at, apply
 # that digest to staging, check its health, and test that service. Nothing else.
-# Four jobs, and there is no fifth: the later half of the release flow belongs
+# Five jobs, and there is no sixth: the later half of the release flow belongs
 # to deploy.yml and to a protected `v*` tag the human pushes, and nothing in
 # this file names, reaches or rebuilds for it.
 #
-# The first of the four is `fresh`, and it is its own job rather than a step
+# The first of the five is `off` (bead dv-sve9), and it decides whether the app
+# is off on purpose. An owner who takes an app down puts a plain file,
+# deploy/OFF, in the app repo (their wrapper adds and removes it), and a landing
+# while it is there must not recreate the staging service the owner took down.
+# `off` checks the run's commit out and looks for the file. When it is there the
+# run summary says "app is off on purpose (deploy/OFF): staging deploy and
+# integration skipped", and `fresh`, `build`, `staging` (whose last step is the
+# health check) and `integration` are all skipped. Skipped, not success, for the
+# reason `fresh` is a job (below): the release bot reads a run's job statuses, and
+# an `integration` job that read success would say a commit was deployed and
+# tested when nothing ran. The run itself still ends green, because `off` is a
+# job that succeeded, so the gate that reads the run's status is not left waiting
+# on a landing that has nothing to deploy; the release bot has its own app_off
+# rule and releases nothing from an app that is off. Unit CI is not in this
+# file and is not affected. Without deploy/OFF the file behaves as it did before
+# `off` existed: each condition below reduces to the `fresh` one it carried.
+#
+# The second of the five is `fresh`, and it is its own job rather than a step
 # inside the others (bead dv-7gsb). Landings arrive every few minutes, so a
 # queued run is usually superseded before it starts; a job that skips its own
 # steps still ends with status success, and the release bot and the dashboard's
 # Deploys block both read a run's *job statuses* to decide whether a commit was
 # deployed and tested. A superseded run whose jobs all read success therefore
 # says a commit reached staging and passed the integration tier when it reached
-# neither. So the read that compares main with the run's commit is the first job,
+# neither. So the read that compares main with the run's commit is a job of its own,
 # the three jobs that do the work depend on it, and each carries the same answer
 # as a job-level condition: a superseded run's jobs are skipped, which is not
 # success.
@@ -37,7 +54,7 @@
 # path and calls no script that mints a token. The base key in this file is
 # declared on the two jobs that run on the deploy runner rather than at the top
 # of the file, because a workflow-level variable is inherited by every job, the
-# `fresh` and `integration` ones included: an inherited variable is a key path
+# `off`, `fresh` and `integration` ones included: an inherited variable is a key path
 # the job holds.
 #
 # What authorizes a run here is main itself, and that is why this template
@@ -98,8 +115,50 @@ env:
   GT_HEALTH_PATH: /api/health
 
 jobs:
+  # Whether the app is off on purpose (bead dv-sve9), decided before anything
+  # else, and for the same reason `fresh` is a job: the answer has to be the
+  # *run's* status, and a step that skipped its own work would end with success.
+  # Every job below needs this one and carries its answer as a job-level
+  # condition, so an app that is off has jobs whose status is skipped.
+  #
+  # It runs on the CI runner and holds nothing: the file is read from a checkout
+  # of the run's commit, which keeps no token, and the job names no key path and
+  # calls no script that mints one. It changes nothing.
+  #
+  # The check fails closed on the one thing it cannot tell. A checkout that
+  # fails fails this job, and the jobs below are then skipped for want of it: a
+  # run that cannot read the repo deploys nothing, and says so as a failed run
+  # rather than as a green one.
+  off:
+    runs-on: ci-base
+    outputs:
+      # "true" when deploy/OFF is in the run's commit. Every job below carries
+      # the same value as a job-level condition.
+      off: ${{ steps.off.outputs.off }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Only the tree is read, and no later step needs a credential.
+          persist-credentials: false
+
+      - name: Check whether the app is off on purpose
+        id: off
+        run: |
+          set -euo pipefail
+
+          if [[ -f deploy/OFF ]]; then
+            msg='app is off on purpose (deploy/OFF): staging deploy and integration skipped'
+            printf '::notice::%s\n' "$msg"
+            printf '%s\n' "$msg" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+            printf 'off=true\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+
+          printf 'deploy/OFF is not there; this run goes on to deploy and test %s\n' "$GITHUB_SHA"
+          printf 'off=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+
   # Whether this run is still the run main is at, decided once, before anything
-  # else. It is a job of its own and the first one, and that is the whole point
+  # else but the check above. It is a job of its own, and that is the whole point
   # of it (bead dv-7gsb): the answer has to be the *run's* status, not a step
   # inside a job. A job that gates its own steps on a read still ends with
   # status success, and a superseded run whose three jobs each report success
@@ -111,6 +170,10 @@ jobs:
   # job every other job waits on.
   fresh:
     runs-on: ci-base
+    # An app that is off has nothing to deploy, so there is nothing to compare
+    # with main either: the job is skipped, and so is everything that needs it.
+    needs: off
+    if: needs.off.outputs.off != 'true'
     outputs:
       # "true" when main has moved past the commit this run was started for.
       # Every job below carries the same value as a job-level if, so the run's
@@ -159,10 +222,11 @@ jobs:
   # landing's identity for the job below; nothing between the two rebuilds it.
   build:
     runs-on: deploy
-    needs: fresh
-    # A superseded run does nothing at all, and this is the condition that says
-    # so: at the job level, so the job's status is skipped rather than success.
-    if: needs.fresh.outputs.stale != 'true'
+    needs: [off, fresh]
+    # A superseded run, and a run of an app that is off, do nothing at all, and
+    # this is the condition that says so: at the job level, so the job's status is
+    # skipped rather than success.
+    if: needs.off.outputs.off != 'true' && needs.fresh.outputs.stale != 'true'
     # The base key, as a path the deploy runner mounts, mode 600, inside a home
     # only gt-cloud can read (deploy.yml states why it is a path and never a
     # Forgejo secret). It is a job variable here and not a workflow one so that
@@ -216,8 +280,8 @@ jobs:
     # job applies. A backlog of queued landings would otherwise replay old
     # commits in order, and each one would roll staging back behind the landing
     # that came after it.
-    needs: [build, fresh]
-    if: needs.fresh.outputs.stale != 'true'
+    needs: [build, off, fresh]
+    if: needs.off.outputs.off != 'true' && needs.fresh.outputs.stale != 'true'
     # The same mount the build job states, for the same reason: this job mints a
     # token and applies a digest, and both need the base key.
     env:
@@ -279,8 +343,8 @@ jobs:
     # As the staging job: `staging` is the deploy whose commit this job tests,
     # and `fresh` is the job-level condition that keeps a superseded run from
     # testing a service some newer landing owns.
-    needs: [staging, fresh]
-    if: needs.fresh.outputs.stale != 'true'
+    needs: [staging, off, fresh]
+    if: needs.off.outputs.off != 'true' && needs.fresh.outputs.stale != 'true'
     # The version wait polls for up to 300s by default and the app's suite is the
     # app's own; the job names a bound of its own so that a service that never
     # settles cannot hold a runner past it.
