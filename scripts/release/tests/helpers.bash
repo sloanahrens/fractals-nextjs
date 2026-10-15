@@ -5,9 +5,10 @@
 #
 # Each test gets a fresh temporary directory holding:
 #
-#   bin/     the fake docker, gcloud, pulumi, curl and date, first on PATH, so a
-#            script under test cannot reach a real tool even by accident (date
-#            is only ever the real one unless a test sets FAKE_DATE_BAD)
+#   bin/     the fake docker, gcloud, pulumi, curl, date and sleep, first on PATH,
+#            so a script under test cannot reach a real tool even by accident
+#            (date is the real one unless a test sets FAKE_DATE_BAD or asks
+#            for the clock with +%s; sleep never waits, it moves the clock)
 #   fake.log every fake invocation, recorded verbatim
 #   fake-state  the fake cloud's serving/latest revision
 #   base-key.json  a key file containing a marker string that must never
@@ -38,13 +39,20 @@ setup_release_env() {
   FAKE_BIN=$BATS_TEST_TMPDIR/bin
   mkdir -p "$FAKE_BIN"
   cp -R "$BATS_TEST_DIRNAME/fakes/." "$FAKE_BIN/"
-  chmod +x "$FAKE_BIN"/docker "$FAKE_BIN"/gcloud "$FAKE_BIN"/pulumi "$FAKE_BIN"/curl "$FAKE_BIN"/date
+  chmod +x "$FAKE_BIN"/docker "$FAKE_BIN"/gcloud "$FAKE_BIN"/pulumi "$FAKE_BIN"/curl "$FAKE_BIN"/date "$FAKE_BIN"/sleep
   PATH="$FAKE_BIN:$PATH"
   export PATH
 
   FAKE_LOG=$BATS_TEST_TMPDIR/fake.log
   : >"$FAKE_LOG"
   export FAKE_LOG
+
+  # The test's clock (fakes/_fake.sh). Time starts at a fixed instant and moves
+  # only when a fake moves it, so no test result depends on how long anything
+  # really took. The fake sleep never waits.
+  FAKE_CLOCK_FILE=$BATS_TEST_TMPDIR/fake-clock
+  printf '%s\n' 1800000000 >"$FAKE_CLOCK_FILE"
+  export FAKE_CLOCK_FILE
 
   FAKE_STATE=$BATS_TEST_TMPDIR/fake-state
   export FAKE_STATE

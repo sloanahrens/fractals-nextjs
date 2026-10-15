@@ -106,6 +106,10 @@ body_commit() {
 }
 
 @test "exits 2 when the service is unreachable" {
+  # The clock is the test's (fakes/_fake.sh), so with a 1s budget and a 1s
+  # interval the script makes exactly two attempts: one at t=0, a wait to t=1,
+  # and one more because 0 + 1 fits; after it 1 + 1 does not. The count is the
+  # same on any machine (clock.bats pins the other cases).
   export FAKE_HTTP_FAIL=1
 
   run_wait --url "$VERSION_URL" --sha "$DEPLOYED_SHA" --timeout 1 --interval 1
@@ -115,17 +119,19 @@ body_commit() {
   [[ $WAIT_STDERR == *"no usable answer"* ]]
   # It retried rather than treating the first refused connection as the answer:
   # a service that is not there yet is the normal state just after a deploy.
-  [ "$(grep -c '^curl ' "$FAKE_LOG")" -ge 2 ]
+  [ "$(grep -c '^curl ' "$FAKE_LOG")" -eq 2 ]
 
   # The other shape of the same failure: curl answered, with the status it uses
   # when it got no response at all.
   unset FAKE_HTTP_FAIL
   export FAKE_HTTP_STATUS=000
+  : >"$FAKE_LOG"
 
   run_wait --url "$VERSION_URL" --sha "$DEPLOYED_SHA" --timeout 1 --interval 1
 
   [ "$WAIT_STATUS" -eq 2 ]
   [[ $WAIT_STDERR == *"status 000"* ]]
+  [ "$(grep -c '^curl ' "$FAKE_LOG")" -eq 2 ]
 }
 
 @test "exits 2 on a non-200, even when the body carries the commit" {

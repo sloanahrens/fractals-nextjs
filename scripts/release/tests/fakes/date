@@ -9,9 +9,14 @@
 # It follows the fakes' two rules (_fake.sh): every call is recorded, and no
 # credential value is ever read or printed.
 #
+# It is also the test's clock: `date +%s` answers from FAKE_CLOCK_FILE (see
+# _fake.sh), so the polling scripts read time the test controls. Any other
+# date call is the real date.
+#
 # Fake-specific environment:
-#   FAKE_DATE_BAD  set to 1 to answer with text that is not an RFC 3339
-#                  timestamp, so a test can watch a release refuse to deploy
+#   FAKE_DATE_BAD     set to 1 to answer with text that is not an RFC 3339
+#                     timestamp, so a test can watch a release refuse to deploy
+#   FAKE_CLOCK_FILE   the fake clock (see _fake.sh); `date +%s` reads it
 
 set -euo pipefail
 # shellcheck source=scripts/release/tests/fakes/_fake.sh
@@ -21,6 +26,11 @@ fake_log "date $*"
 
 if [[ ${FAKE_DATE_BAD:-0} == 1 ]]; then
   printf 'a moment ago\n'
+  exit 0
+fi
+
+if [[ -n ${FAKE_CLOCK_FILE:-} && $# -eq 1 && $1 == '+%s' ]]; then
+  fake_clock_now
   exit 0
 fi
 
