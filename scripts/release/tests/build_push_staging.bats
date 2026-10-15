@@ -213,3 +213,95 @@ commit_after_main() {
   [ "$status" -ne 0 ]
   [[ $output == *"is not on main"* ]]
 }
+
+# ── The bound on the build (bead dv-96nw) ──────────────────────────────────
+#
+# A build that stops writing output and never returns is what held the one
+# deploy runner for 50 minutes on 2026-10-15 and queued every later run of every
+# workflow of that repository behind it. The script now runs the build under a
+# bound and retries it once, and these are the four behaviours that has to have:
+# a build inside its bound is not retried, one past it is stopped and retried,
+# one that fails by itself is not retried, and the default bound is the one the
+# job's own bound is sized around.
+#
+# The clock is the fake one (tests/fakes/_fake.sh), so none of this waits: the
+# fake docker moves it by FAKE_DOCKER_BUILD_SECONDS, as the fake curl moves it
+# by FAKE_CURL_SECONDS, and the script's own bound is what decides. The numbers
+# in GT_BUILD_BOUND_SECONDS below are the test's, not the script's, wherever the
+# point is the behaviour rather than the default.
+
+@test "a build that runs past its bound is stopped, shown and retried once" {
+  # The build outlives its bound and never returns: nothing in the fake ends it,
+  # so the script's bound has to, twice. The clock is moved past the bound in
+  # one go, which is why this test takes no measurable time and does not depend
+  # on what the default bound is -- the assertion below pins that separately.
+  export GT_BUILD_BOUND_SECONDS=60
+  export FAKE_DOCKER_BUILD_SECONDS=100000
+  export FAKE_DOCKER_BUILD_HANGS=1
+
+  run "$RELEASE_DIR/build_push_staging.sh" --app "$APP" --project "$PROJECT" --source "$CHECKOUT"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"the build of $IMAGE:main-$SHORT_COMMIT ran past its 60s bound and was stopped"* ]]
+  [[ $output == *"retrying the build once"* ]]
+  [[ $output == *"ran past its 60s bound on both attempts"* ]]
+
+  # The diagnostic the bead asks for: which containers were there when it was
+  # stopped, and what they were running. Without it a stopped build says only
+  # that it stopped.
+  grep -q "docker ps --quiet" "$FAKE_LOG"
+  grep -q "docker top " "$FAKE_LOG"
+  [[ $output == *"next build"* ]]
+
+  # Twice and no more: the second attempt failed the job, and a loop that kept
+  # going would spend the job's whole bound rather than reporting it.
+  [ "$(grep -c '^docker build ' "$FAKE_LOG")" -eq 2 ]
+}
+
+@test "a build that finishes inside its bound is built once and not retried" {
+  export GT_BUILD_BOUND_SECONDS=60
+  export FAKE_DOCKER_BUILD_SECONDS=30
+
+  run "$RELEASE_DIR/build_push_staging.sh" --app "$APP" --project "$PROJECT" --source "$CHECKOUT"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"digest=$IMAGE@sha256:$DIGEST_HEX"* ]]
+  [ "$(grep -c '^docker build ' "$FAKE_LOG")" -eq 1 ]
+  [[ $output != *"retrying the build once"* ]]
+}
+
+@test "a build that fails by itself is not retried: it is not a stall" {
+  # A Dockerfile that does not build fails the same way twice, so the second
+  # attempt would spend the job's bound printing the same error. What the reader
+  # gets instead is the end of what the build wrote, which is the part a log's
+  # reader needs next to the refusal.
+  export FAKE_DOCKER_BUILD_STATUS=1
+  export FAKE_DOCKER_BUILD_LINES=60
+
+  run "$RELEASE_DIR/build_push_staging.sh" --app "$APP" --project "$PROJECT" --source "$CHECKOUT"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"the build of $IMAGE:main-$SHORT_COMMIT failed (exit 1)"* ]]
+  [[ $output == *"the last 50 lines it wrote"* ]]
+  [[ $output == *"build line 60"* ]]
+  [[ $output != *"retrying the build once"* ]]
+  [ "$(grep -c '^docker build ' "$FAKE_LOG")" -eq 1 ]
+}
+
+@test "the build's default bound is the eight minutes the job's bound is sized around" {
+  # The default is a number two files depend on: the build job is bounded at 20
+  # minutes so that two attempts at this bound, plus the checkout and the token,
+  # fit inside it (workflows/staging.yml). A default raised past ten would put
+  # the second attempt outside the job that runs it, which is why this is
+  # asserted rather than left to a comment. The clock is moved past any bound a
+  # build could name, so the assertion is about the number the script prints and
+  # not about how long anything took.
+  export FAKE_DOCKER_BUILD_SECONDS=1000000
+  export FAKE_DOCKER_BUILD_HANGS=1
+
+  run "$RELEASE_DIR/build_push_staging.sh" --app "$APP" --project "$PROJECT" --source "$CHECKOUT"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"ran past its 480s bound"* ]]
+  [[ $output != *"ran past its 600s bound"* ]]
+}

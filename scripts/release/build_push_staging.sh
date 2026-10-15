@@ -192,9 +192,24 @@ if [[ -n $TOKEN_FILE ]]; then
   run docker login --username oauth2accesstoken --password-stdin "$REGISTRY_HOST" <"$TOKEN_FILE"
 fi
 
+# The build runs under a bound and gets one automatic retry (bead dv-96nw). On
+# 2026-10-15 this step stopped writing output at 17:35:03Z, in the middle of
+# `next build`, and was still running 50 minutes later: the landing that was
+# waiting on it, every later run of every workflow of the repository and the one
+# deploy runner all waited with it, and the only thing that ended it was a human
+# cancelling the run. The same commit built in 19 seconds on the next attempt,
+# which is why the retry is worth having and why the bound is minutes rather
+# than the seconds a healthy build takes.
+#
+# lib.sh states both: docker_build_bounded is the bound and the retry, and the
+# workflow's own timeout-minutes is the backstop under it.
+#
+# If the stall comes back, the next thing to try is `next build --webpack`,
+# which takes Turbopack -- the compiler that stopped, at 4.8 seconds into it --
+# out of the build. That is a person's diagnostic step and not something this
+# script does; it is written down here because this is where the build is.
 step "Building $IMAGE:$TAG"
-run docker build --file "$SOURCE/Dockerfile" --tag "$IMAGE:$TAG" \
-  --build-arg "GIT_SHA=$head_commit" "$SOURCE"
+docker_build_bounded "$IMAGE:$TAG" "$SOURCE" "GIT_SHA=$head_commit"
 
 step "Pushing $IMAGE:$TAG"
 run docker push "$IMAGE:$TAG"

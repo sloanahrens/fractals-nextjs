@@ -3,7 +3,7 @@
 # Shared helpers for the release scripts (docs/plan.md, bead B5.2). This file is
 # sourced by every script in this directory; it is never executed on its own.
 #
-# Three things live here, and nothing else:
+# Four things live here, and nothing else:
 #
 #   1. The names. Every script derives the project, registry, image, stack,
 #      secrets provider and backend URL the same way from the same inputs, so a
@@ -25,12 +25,21 @@
 #      Credentials file Pulumi's own calls need is built from the base key by
 #      jq reading the key file (adc_credentials) rather than from anything in
 #      the environment. run() and capture() are the only ways a script executes
-#      an external command, so --dry-run prints every action before it happens
-#      and a script cannot quietly shell out.
+#      an external command, with the one exception item 4 states -- the build,
+#      which has to run in the background to be stoppable and says so through
+#      docker_build_bounded -- so --dry-run prints every action before it
+#      happens and a script cannot quietly shell out.
 #
 #   3. The cleanup. A script that has to remove something at exit registers it
 #      with on_exit rather than setting a trap of its own: this file installs
 #      the one EXIT trap, so no script's cleanup can clobber another's.
+#
+#   4. The bound on the build, and the retry under it. A docker build is the one
+#      thing in the release path that has been seen to stop writing output and
+#      never end (bead dv-96nw), so it is the one thing that runs under a
+#      timeout: run_under_bound is the bound, docker_build_bounded is the build
+#      both release scripts run under it with one automatic retry, and the rest
+#      of that section is what a stopped build shows a reader.
 #
 # Nothing here prints, echoes or hands out the contents of a key or a token
 # file. Two functions read one: require_key_file reads a key's "type" field to
@@ -178,6 +187,212 @@ _gt_cleanup_run() {
 }
 
 trap _gt_cleanup_run EXIT
+
+# ──────────────────────────────────────────────────────────────────────────
+# Running a command under a bound
+# ──────────────────────────────────────────────────────────────────────────
+
+# build_bound_seconds is the bound on one docker build, in seconds. 480 is
+# eight minutes, and it is not a rounder number because it has to satisfy two
+# things at once:
+#
+#   - the bound is generous under a healthy build. A build job's recent
+#     successful runs are p95 50s with a slowest of 142s, so eight minutes is
+#     five times the worst one and well above the rule the job bounds are sized
+#     by (twice the p95, never below five minutes).
+#   - two attempts at it fit inside the job that holds it. That job is bounded
+#     at 20 minutes (workflows/staging.yml) and has to hold the checkout, the
+#     token and the login as well; 2x8 is 16, which leaves four. The operator's
+#     own suggestion was about ten, and 2x10 is the job's whole bound with
+#     nothing left for the rest of the job.
+#
+# Why a build has a bound at all (bead dv-96nw): on 2026-10-15 a `next build`
+# inside this step stopped writing output at 17:35:03Z and was still running 50
+# minutes later, holding the one deploy runner and every run of every workflow
+# in that repository behind it, and nothing in the step could end it. The
+# job-level bound in the workflow is the backstop under this one; this one is
+# what turns the same event into a diagnostic and a second attempt.
+build_bound_seconds() { printf '%s' "${GT_BUILD_BOUND_SECONDS:-480}"; }
+
+# _GT_FLUSHED is how many bytes of a running command's output have already been
+# printed. It is a global because flush_new_output has to print the file's
+# contents and tell the caller how far it got, and a function does one or the
+# other.
+_GT_FLUSHED=0
+
+# flush_new_output FILE prints what FILE has gained since the last call, so a
+# command this script started in the background still reaches the job log while
+# it runs. The output goes to a file rather than through a pipe because the
+# command has to be stoppable: a pipeline's status is its last command's, and
+# there is no pid to signal that belongs to the command itself.
+flush_new_output() {
+  local size
+  size=$(wc -c <"$1" | tr -d '[:space:]')
+  ((size > _GT_FLUSHED)) || return 0
+  tail -c "+$((_GT_FLUSHED + 1))" "$1" || true
+  _GT_FLUSHED=$size
+}
+
+# print_last_lines FILE LINES prints the end of a command's output under a
+# heading, for the case where that is all a reader gets: a build that was
+# stopped mid-write, or one whose own output is long enough that the log's
+# reader needs the end of it next to the refusal rather than a screen above it.
+print_last_lines() {
+  local file=$1 lines=$2
+  if [[ ! -s $file ]]; then
+    note "it wrote nothing before it stopped"
+    return 0
+  fi
+  note "the last $lines lines it wrote:"
+  tail -n "$lines" "$file" || true
+}
+
+# build_container_diagnostics prints what docker had running when a build was
+# stopped. A build that stops writing output is not always a docker that is
+# wedged: a build runs its steps in containers of its own, and a step that is
+# stuck, or one that is consuming a machine the build does not own, is a
+# different finding from a docker daemon that has stopped answering. The list is
+# `docker ps` and `docker top`, which is what says which of the two it was
+# without the host's process table (the runner is another account's machine).
+#
+# Everything here is a read, and none of it can fail the build: a docker that
+# cannot answer is the answer, and the refusal below is what ends the step.
+build_container_diagnostics() {
+  local ids id
+  ids=$(docker ps --quiet 2>/dev/null || true)
+  if [[ -z $ids ]]; then
+    note "no container was running when it was stopped"
+    return 0
+  fi
+  note "containers running when it was stopped:"
+  docker ps --format '  {{.ID}}  {{.Image}}  {{.Status}}  {{.Names}}' 2>/dev/null || true
+  while read -r id; do
+    [[ -n $id ]] || continue
+    note "processes in container $id:"
+    docker top "$id" 2>/dev/null || note "docker top returned nothing for $id"
+  done <<<"$ids"
+}
+
+# run_under_bound BOUND LOGFILE CMD... runs CMD with a bound on how long it may
+# run, its output both printed as it comes and kept in LOGFILE.
+#
+# Returns 0 when CMD finished inside the bound, 124 when the bound ran out and
+# CMD was stopped, and CMD's own status when it ended by itself. 124 is the
+# status GNU timeout uses for the same event and the reason this one uses it
+# too, and it is not a status a build returns: docker says 125 for a failure of
+# docker itself and 1 for a build that failed.
+#
+# The clock is now_s and the wait between checks is sleep, which are the two
+# functions the polling scripts read time through, so a test drives this bound
+# from its own clock (scripts/release/tests/fakes) instead of from how fast the
+# machine is, the way wait_version.bats drives the version wait.
+run_under_bound() {
+  local bound=$1 logfile=$2
+  shift 2
+  local pid start now status=0
+
+  [[ $bound =~ ^[0-9]+$ ]] ||
+    die "the bound is not a whole number of seconds: $bound"
+  ((bound >= 1)) || die "the bound must be at least 1 second: $bound"
+
+  : >"$logfile"
+
+  "$@" >>"$logfile" 2>&1 &
+  pid=$!
+
+  start=$(now_s)
+  while kill -0 "$pid" 2>/dev/null; do
+    flush_new_output "$logfile"
+
+    now=$(now_s)
+    if ((now - start >= bound)); then
+      # SIGTERM first, so docker gets to stop the build and remove the
+      # containers it started; SIGKILL only after a second in which it did not.
+      # Whatever it wrote up to now is in LOGFILE either way, which is what the
+      # caller prints.
+      kill -TERM "$pid" 2>/dev/null || true
+      sleep 1
+      kill -KILL "$pid" 2>/dev/null || true
+      status=124
+      break
+    fi
+
+    sleep 1
+  done
+
+  if ((status == 0)); then
+    wait "$pid" 2>/dev/null || status=$?
+  else
+    wait "$pid" 2>/dev/null || true
+  fi
+  flush_new_output "$logfile"
+
+  return "$status"
+}
+
+# docker_build_bounded TAG SOURCE [BUILD_ARG...] builds SOURCE's Dockerfile as
+# TAG -- `docker build --file SOURCE/Dockerfile --tag TAG --build-arg ... SOURCE`
+# -- with a bound on the attempt and one automatic retry.
+#
+# This is the one place either release script builds an image, and the two build
+# the same one (workflows/README.md, "one build, two names"): build_push.sh
+# under a `v*` tag and build_push_staging.sh under the landing's commit. What
+# the retry is for is the event that produced this bead and not a way to paper
+# over a broken Dockerfile: an intermittent stall inside `next build`, which is
+# what stopped 2026-10-15's landing build, is exactly the failure that a second
+# attempt at the same commit fixes. A build that failed by itself is not
+# retried, because docker is deterministic about a Dockerfile it cannot build.
+docker_build_bounded() {
+  local tag=$1 source=$2
+  shift 2
+  local -a build=(docker build --file "$source/Dockerfile" --tag "$tag")
+  local arg attempt bound logfile status
+
+  for arg in "$@"; do
+    build+=(--build-arg "$arg")
+  done
+  build+=("$source")
+
+  if dry_run; then
+    printf '  [dry-run] %s\n' "${build[*]}"
+    return 0
+  fi
+
+  bound=$(build_bound_seconds)
+  logfile=$(mktemp "${TMPDIR:-/tmp}/gt-build-${tag##*/}.XXXXXX") ||
+    die "could not create a file for the build's output"
+  chmod 600 "$logfile"
+
+  attempt=1
+  while ((attempt <= 2)); do
+    status=0
+    _GT_FLUSHED=0
+    run_under_bound "$bound" "$logfile" "${build[@]}" || status=$?
+
+    if ((status == 0)); then
+      rm -f "$logfile"
+      return 0
+    fi
+
+    if ((status != 124)); then
+      print_last_lines "$logfile" 50
+      rm -f "$logfile"
+      die "the build of $tag failed (exit $status). It is not retried: a Dockerfile that does not build is not a stall, and a second attempt would spend the job's bound printing the same error again"
+    fi
+
+    warn "the build of $tag ran past its ${bound}s bound and was stopped"
+    build_container_diagnostics
+    print_last_lines "$logfile" 50
+
+    attempt=$((attempt + 1))
+    if ((attempt <= 2)); then
+      warn "retrying the build once, as the bead's step retry (dv-96nw): a stall inside a build is intermittent, and the same commit builds in seconds afterwards"
+    fi
+  done
+
+  rm -f "$logfile"
+  die "the build of $tag ran past its ${bound}s bound on both attempts"
+}
 
 # ──────────────────────────────────────────────────────────────────────────
 # Names derived from --app, --env, --project and --region
