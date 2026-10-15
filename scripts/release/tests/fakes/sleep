@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Fake sleep for the release script tests. It never waits: it moves the test's
+# clock (FAKE_CLOCK_FILE, see _fake.sh) on by the time it was asked to wait and
+# records the call, so a polling script runs through its whole timeout in no
+# real time and every elapsed time it reports is the one the arithmetic gives.
+#
+# It follows the fakes' two rules (_fake.sh): every call is recorded, and no
+# credential value is ever read or printed.
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+fake_log "sleep $*"
+
+# Whole seconds only, which is all the scripts ask for; anything else is a test
+# bug and says so rather than silently not moving the clock.
+if [[ $# -ne 1 || ! $1 =~ ^[0-9]+$ ]]; then
+  printf 'fake sleep: expected one whole number of seconds, got: %s\n' "$*" >&2
+  exit 2
+fi
+
+fake_clock_advance "$1"

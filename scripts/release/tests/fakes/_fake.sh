@@ -55,3 +55,21 @@ fake_mutation() { fake_log "MUTATION $*"; }
 # a fake can prove a secret came through stdin ("token on stdin, 32 bytes")
 # rather than on a command line.
 fake_stdin_bytes() { wc -c | tr -d ' '; }
+
+# The fake clock. The scripts that poll (health.sh, wait_version.sh) decide when
+# to stop from the time they read, so a test that lets real time pass makes its
+# result depend on how fast the machine is. Instead a test runs on a clock it
+# owns: FAKE_CLOCK_FILE holds the current time in whole seconds since the epoch,
+# the fake date answers `date +%s` from it, the fake sleep advances it by the
+# time it was asked to wait (and waits not at all), and the fake curl advances
+# it by FAKE_CURL_SECONDS, the time a request took. Every count of attempts and
+# every elapsed time a script reports is then arithmetic, the same on a slow
+# machine as on a fast one.
+#
+# fake_clock_now prints the fake time. fake_clock_advance SECONDS moves it on.
+fake_clock_now() { cat "${FAKE_CLOCK_FILE:?FAKE_CLOCK_FILE is not set}"; }
+fake_clock_advance() {
+  local now
+  now=$(fake_clock_now)
+  printf '%s\n' $((now + $1)) >"$FAKE_CLOCK_FILE"
+}

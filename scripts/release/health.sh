@@ -99,7 +99,7 @@ if dry_run; then
 fi
 
 step "Checking $TARGET (every ${INTERVAL}s, up to ${TIMEOUT}s)"
-started=$SECONDS
+started=$(now_s)
 attempt=0
 status=''
 
@@ -113,14 +113,14 @@ while :; do
   case $status in
   2??)
     printf 'health=ok url=%s status=%s attempts=%s seconds=%s\n' \
-      "$TARGET" "$status" "$attempt" "$((SECONDS - started))"
+      "$TARGET" "$status" "$attempt" "$(($(now_s) - started))"
     exit 0
     ;;
   esac
 
   note "attempt $attempt: ${status:-no response}"
-  ((SECONDS - started + INTERVAL <= TIMEOUT)) || break
+  (($(now_s) - started + INTERVAL <= TIMEOUT)) || break
   sleep "$INTERVAL"
 done
 
-die "health check failed: last status ${status:-no response} from $TARGET after $((SECONDS - started))s. Nothing was changed: the previous revision is still the one serving, and there is no automatic rollback (docs/design.md, section 6). Redeploy the previous digest through the same flow."
+die "health check failed: last status ${status:-no response} from $TARGET after $(($(now_s) - started))s. Nothing was changed: the previous revision is still the one serving, and there is no automatic rollback (docs/design.md, section 6). Redeploy the previous digest through the same flow."

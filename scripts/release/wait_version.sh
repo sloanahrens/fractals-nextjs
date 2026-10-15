@@ -190,7 +190,7 @@ if dry_run; then
 fi
 
 step "Waiting for $TARGET to report commit $SHA (every ${INTERVAL}s, up to ${TIMEOUT}s)"
-started=$SECONDS
+started=$(now_s)
 attempt=0
 observed=''
 last_reason='no attempt was made'
@@ -249,12 +249,12 @@ while :; do
   last_reason=$reason
 
   note "attempt $attempt: $reason"
-  ((SECONDS - started + INTERVAL <= TIMEOUT)) || break
+  (($(now_s) - started + INTERVAL <= TIMEOUT)) || break
   sleep "$INTERVAL"
 done
 
 if [[ -n $observed ]]; then
-  report 1 "timed out after $((SECONDS - started))s: $TARGET reports commit $observed, not $SHA, after $attempt attempt(s). The service is not serving the commit that was just deployed, so its result does not describe this commit."
+  report 1 "timed out after $(($(now_s) - started))s: $TARGET reports commit $observed, not $SHA, after $attempt attempt(s). The service is not serving the commit that was just deployed, so its result does not describe this commit."
 fi
 
-report 2 "timed out after $((SECONDS - started))s with no usable answer from $TARGET after $attempt attempt(s): the last one was $last_reason. An unreachable service, a non-200 and a body with no commit in it are the same thing to this job -- it cannot say the deployed commit is the one serving."
+report 2 "timed out after $(($(now_s) - started))s with no usable answer from $TARGET after $attempt attempt(s): the last one was $last_reason. An unreachable service, a non-200 and a body with no commit in it are the same thing to this job -- it cannot say the deployed commit is the one serving."

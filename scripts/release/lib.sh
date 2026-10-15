@@ -60,6 +60,19 @@ warn() { printf '%s: warning: %s\n' "${SCRIPT_NAME:-release}" "$*" >&2; }
 # note prints an indented line meant for a human reading the job log.
 note() { printf '  %s\n' "$*"; }
 
+# now_s prints the current time in whole seconds since the epoch. The polling
+# scripts (health.sh, wait_version.sh) decide whether one more attempt fits in
+# their timeout from it, so it is the one place they read time, and it goes
+# through `date` on purpose: bash's own $SECONDS counts whole seconds from a
+# boundary the script does not control, so an attempt that merely crosses one
+# looks a second longer than it was, and how many attempts fit then depends on
+# where in the wall-clock second the script started. A test cannot make that
+# repeatable; with `date` it can (tests/fakes/date answers +%s from a clock the
+# test owns, and tests/fakes/sleep moves it instead of waiting). The cost is that
+# a step of the host clock during a wait shifts one result by the step; a wait
+# is minutes, and a timeout that ends a little early or late is not a fault.
+now_s() { date +%s; }
+
 # step prints a section heading: one per action the script takes.
 step() { printf '\n== %s\n' "$*"; }
 

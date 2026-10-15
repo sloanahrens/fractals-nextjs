@@ -15,6 +15,8 @@
 #                       one repeating; overrides FAKE_HTTP_STATUS
 #   FAKE_HTTP_BODY      the body to hand back, default empty; written to the
 #                       file --output names, or to stdout when there is none
+#   FAKE_CURL_SECONDS   how long each request takes on the fake clock (see
+#                       _fake.sh), default 0; the answer comes after that time
 #   FAKE_HTTP_FAIL      when set, no body and no status are printed and curl's
 #                       "couldn't connect" status (7) is returned. A service
 #                       that is not there usually makes curl report the status
@@ -27,6 +29,9 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
 
 fake_log "curl $*"
+
+# The request takes this long on the test's clock, whatever the answer is.
+if [[ -n ${FAKE_CLOCK_FILE:-} ]]; then fake_clock_advance "${FAKE_CURL_SECONDS:-0}"; fi
 
 # Where the body goes: the file --output names, in either spelling curl accepts,
 # or stdout when the caller named none.
