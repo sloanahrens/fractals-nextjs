@@ -112,6 +112,25 @@ setup() {
   assert_no_token_value "$(cat "$FAKE_LOG")"
 }
 
+@test "a build that runs past its bound is stopped and retried once, as the landing build's is" {
+  # The release build is the landing build under another name, so the step that
+  # can stop writing output is the same step and it is bounded the same way
+  # (bead dv-96nw). build_push_staging.bats is where the behaviour is tested in
+  # full -- the diagnostic, the retry, the build that fails by itself, the
+  # default bound -- and this is the half that says the release path goes
+  # through the same helper rather than a `docker build` of its own.
+  export GT_BUILD_BOUND_SECONDS=60
+  export FAKE_DOCKER_BUILD_SECONDS=100000
+  export FAKE_DOCKER_BUILD_HANGS=1
+
+  run "$RELEASE_DIR/build_push.sh" --app "$APP" --project "$PROJECT" --tag v1.0.0 --source "$CHECKOUT"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"the build of $IMAGE:v1.0.0 ran past its 60s bound"* ]]
+  [[ $output == *"ran past its 60s bound on both attempts"* ]]
+  [ "$(grep -c '^docker build ' "$FAKE_LOG")" -eq 2 ]
+}
+
 @test "a dry run prints the build and push without running them" {
   run "$RELEASE_DIR/build_push.sh" --app "$APP" --tag v1.0.0 --source "$CHECKOUT" --dry-run
 

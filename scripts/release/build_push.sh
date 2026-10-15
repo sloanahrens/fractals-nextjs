@@ -151,9 +151,14 @@ if [[ -n $TOKEN_FILE ]]; then
   run docker login --username oauth2accesstoken --password-stdin "$REGISTRY_HOST" <"$TOKEN_FILE"
 fi
 
+# The build runs under a bound and gets one automatic retry, exactly as the
+# landing build's does (bead dv-96nw, and scripts/release/build_push_staging.sh
+# states the incident): it is the same build, so the step that can stop writing
+# output is the same step, and a release that meets it should end the same way a
+# landing does — with a diagnostic, a second attempt and a failed job rather
+# than a runner held until someone notices.
 step "Building $IMAGE:$TAG"
-run docker build --file "$SOURCE/Dockerfile" --tag "$IMAGE:$TAG" \
-  --build-arg "GIT_SHA=$GIT_SHA" "$SOURCE"
+docker_build_bounded "$IMAGE:$TAG" "$SOURCE" "GIT_SHA=$GIT_SHA"
 
 step "Pushing $IMAGE:$TAG"
 run docker push "$IMAGE:$TAG"

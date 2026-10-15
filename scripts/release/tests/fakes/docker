@@ -9,16 +9,72 @@
 # Fake-specific environment:
 #   FAKE_LOG          where invocations are recorded (default /dev/null)
 #   FAKE_DIGEST_HEX   64 lowercase hex characters, default eight `deadbeef`
+#
+# A build is also where the bound a script puts on it is tested (bead dv-96nw),
+# so a `build` reads four more:
+#
+#   FAKE_DOCKER_BUILD_SECONDS  how long the build takes. It moves the test's
+#                              clock on by that much, the way the fake curl
+#                              moves it by FAKE_CURL_SECONDS, so the script's own
+#                              bound is what decides. Unset, the build is over
+#                              at once, as every other fake's work is.
+#   FAKE_DOCKER_BUILD_HANGS    1 is a build that never returns: the clock has
+#                              moved and docker has nothing more to say, which is
+#                              the shape 2026-10-15's stall had. Nothing in this
+#                              fake ends it -- the script's bound has to, and a
+#                              test that has no bound to reach hangs rather than
+#                              passes, which is the honest answer.
+#   FAKE_DOCKER_BUILD_STATUS   the build's exit status, default 0.
+#   FAKE_DOCKER_BUILD_LINES    how many numbered lines the build writes before
+#                              it ends, so a test can say which of them the
+#                              script printed after it stopped.
 
 set -euo pipefail
 # shellcheck source=scripts/release/tests/fakes/_fake.sh
 . "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
 
 digest=${FAKE_DIGEST_HEX:-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef}
+container=${FAKE_DOCKER_CONTAINER_ID:-3f2a1b0c9d8e}
 
 case ${1:-} in
 build | push)
   fake_log "docker $*"
+
+  if [[ ${1:-} == build ]]; then
+    if [[ -n ${FAKE_DOCKER_BUILD_LINES:-} ]]; then
+      for ((line = 1; line <= FAKE_DOCKER_BUILD_LINES; line++)); do
+        printf 'build line %d\n' "$line"
+      done
+    fi
+    if [[ -n ${FAKE_DOCKER_BUILD_SECONDS:-} ]]; then
+      fake_clock_advance "$FAKE_DOCKER_BUILD_SECONDS"
+    fi
+    if [[ ${FAKE_DOCKER_BUILD_HANGS:-0} == 1 ]]; then
+      # /bin/sleep, not sleep: the script's PATH has the fake one, which does
+      # not wait, and a build that hangs has to stay there until it is stopped.
+      while :; do /bin/sleep 0.05; done
+    fi
+    exit "${FAKE_DOCKER_BUILD_STATUS:-0}"
+  fi
+  ;;
+ps)
+  # `docker ps` and `docker ps --quiet`, which is what a script prints when it
+  # has stopped a build (build_container_diagnostics). One container is running
+  # unless a test says none is.
+  fake_log "docker $*"
+  if [[ ${FAKE_DOCKER_NO_CONTAINERS:-0} == 1 ]]; then
+    exit 0
+  fi
+  if [[ $* == *--quiet* ]]; then
+    printf '%s\n' "$container"
+  else
+    printf '  %s  node:20  Up 51 minutes  build\n' "$container"
+  fi
+  ;;
+top)
+  fake_log "docker $*"
+  printf 'UID   PID   PPID  C  STIME  TTY  TIME      CMD\n'
+  printf 'root  1234  1     0  17:35  ?    00:00:00  next build\n'
   ;;
 login)
   # The password arrives on stdin (docker --password-stdin) and is never read
