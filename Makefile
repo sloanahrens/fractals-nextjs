@@ -1,4 +1,4 @@
-.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration deploy-check
+.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration smoke deploy-check
 
 # Default target
 help:
@@ -21,6 +21,9 @@ help:
 	@echo ""
 	@echo "Integration (calls a deployed app over the network; not part of the gate):"
 	@echo "  make integration STAGING_URL=<url> [EXPECT_SHA=<commit>]"
+	@echo ""
+	@echo "Smoke (a deployment that is already serving; read-only, not part of the gate):"
+	@echo "  make smoke URL=<url>"
 	@echo ""
 	@echo "Deploy:"
 	@echo "  make deploy-check  Test and vet the deploy program (deploy/, Go)"
@@ -126,6 +129,24 @@ check-staging-url:
 		echo "EXPECT_SHA=<commit> is optional, and makes the version check exact."; \
 		exit 1; \
 	fi
+
+# ── Smoke check (a deployment that is already serving) ───────────────────
+# One read-only pass over a service that is up: its health path, the explorer
+# page, the version route and the static social card. It reads status codes and
+# nothing else -- no body, no credential -- so it is safe to point at anything
+# that is serving, and it is the quick answer to "the deploy said it was up; is
+# it answering".
+#
+# Deliberately not in `gate`: like `integration`, it needs a deployment to call,
+# and the gate runs with none. It is not `integration` either: that tier reads
+# what the pages say and installs node_modules to do it, while this needs a
+# shell, curl and nothing checked out.
+#
+# The target is one line on purpose. A run with no URL is refused by the script
+# (it names the flag and the variable behind it), so what a missing URL says is
+# written in one place rather than echoed here as well.
+smoke:
+	scripts/smoke.sh --url "$(URL)"
 
 # ── The deploy program (deploy/, a Go module of its own) ──────────────────
 # The Pulumi program the release flow runs, and the mock test that covers it
