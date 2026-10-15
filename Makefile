@@ -1,4 +1,4 @@
-.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration smoke deploy-check
+.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration check-prod-url smoke deploy-check
 
 # Default target
 help:
@@ -23,7 +23,7 @@ help:
 	@echo "  make integration STAGING_URL=<url> [EXPECT_SHA=<commit>]"
 	@echo ""
 	@echo "Smoke (a deployment that is already serving; read-only, not part of the gate):"
-	@echo "  make smoke URL=<url>"
+	@echo "  make smoke PROD_URL=<url>"
 	@echo ""
 	@echo "Deploy:"
 	@echo "  make deploy-check  Test and vet the deploy program (deploy/, Go)"
@@ -142,11 +142,31 @@ check-staging-url:
 # what the pages say and installs node_modules to do it, while this needs a
 # shell, curl and nothing checked out.
 #
-# The target is one line on purpose. A run with no URL is refused by the script
-# (it names the flag and the variable behind it), so what a missing URL says is
-# written in one place rather than echoed here as well.
-smoke:
-	scripts/smoke.sh --url "$(URL)"
+# The URL arrives as PROD_URL, named for the environment it points at the way
+# `integration` is handed STAGING_URL. That name is the caller's, not this
+# file's: the hourly check of a service people are using runs
+# `make smoke PROD_URL=<url>`, so the variable is part of what the target
+# promises rather than a local choice. A caller who knows the script better than
+# the target has nothing to learn -- scripts/smoke.sh's own --url and
+# GT_SERVICE_URL work as they always did, and PROD_URL is this target's name for
+# the same URL.
+smoke: check-prod-url
+	scripts/smoke.sh --url "$(PROD_URL)"
+
+# Refuse a run that names no service, before the script is reached. The script
+# refuses one too, but it names its own flag and the variable behind it, and the
+# name the caller of this target is given is PROD_URL. It is a prerequisite,
+# ahead of the run, as check-staging-url is on `integration` above: a run that
+# forgot the URL is told so in a second, and what this target reads is legible
+# without following it into the script.
+check-prod-url:
+	@if [ -z "$(strip $(PROD_URL))" ]; then \
+		printf '%s\n' \
+			'PROD_URL is not set, so there is no service to smoke.' \
+			'Set it to the URL of the deployment to check, for example:' \
+			'    make smoke PROD_URL=https://fractals-nextjs-prod-example.run.app' >&2; \
+		exit 1; \
+	fi
 
 # ── The deploy program (deploy/, a Go module of its own) ──────────────────
 # The Pulumi program the release flow runs, and the mock test that covers it

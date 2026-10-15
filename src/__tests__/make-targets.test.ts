@@ -133,14 +133,18 @@ describe("the integration target", () => {
 describe("the smoke target", () => {
   it("runs the read-only script against the URL it was given", () => {
     expect(target("smoke").recipe.join("\n")).toContain(
-      'scripts/smoke.sh --url "$(URL)"',
+      'scripts/smoke.sh --url "$(PROD_URL)"',
     );
   });
 
-  it("has no prerequisite, so a missing URL is answered by the script", () => {
-    // Unlike `integration`, there is nothing to install ahead of the run: a
-    // guard target here would be a second copy of the script's own refusal.
-    expect(target("smoke").prerequisites).toEqual([]);
+  it("names the URL PROD_URL, ahead of the run", () => {
+    // The hourly prod check runs `make smoke PROD_URL=<url>` and devops' app
+    // readiness check reads the Makefile for a variable named for the
+    // environment, so the variable is the target's, not the script's. The
+    // guard is a prerequisite, as check-staging-url is on `integration`: a run
+    // handed no URL is refused before the script is reached, with the name the
+    // caller was given.
+    expect(target("smoke").prerequisites).toEqual(["check-prod-url"]);
   });
 });
 
@@ -159,6 +163,7 @@ describe("the gate", () => {
 
     expect(reached).not.toContain("integration");
     expect(reached).not.toContain("check-staging-url");
+    expect(reached).not.toContain("check-prod-url");
     // `smoke` calls a service like `integration` does. Its own checks run in
     // the suite against a stand-in on this machine, which is not the same
     // thing as the gate needing a deployment to pass.
