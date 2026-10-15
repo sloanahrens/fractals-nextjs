@@ -130,6 +130,20 @@ describe("the integration target", () => {
   });
 });
 
+describe("the smoke target", () => {
+  it("runs the read-only script against the URL it was given", () => {
+    expect(target("smoke").recipe.join("\n")).toContain(
+      'scripts/smoke.sh --url "$(URL)"',
+    );
+  });
+
+  it("has no prerequisite, so a missing URL is answered by the script", () => {
+    // Unlike `integration`, there is nothing to install ahead of the run: a
+    // guard target here would be a second copy of the script's own refusal.
+    expect(target("smoke").prerequisites).toEqual([]);
+  });
+});
+
 describe("the gate", () => {
   it("installs its own dependencies", () => {
     expect(target("gate").prerequisites).toEqual([
@@ -140,10 +154,14 @@ describe("the gate", () => {
     ]);
   });
 
-  it("reaches no integration tier, however the chain is written", () => {
+  it("reaches no tier that needs a deployment, however the chain is written", () => {
     const reached = reachable(targets, "gate");
 
     expect(reached).not.toContain("integration");
     expect(reached).not.toContain("check-staging-url");
+    // `smoke` calls a service like `integration` does. Its own checks run in
+    // the suite against a stand-in on this machine, which is not the same
+    // thing as the gate needing a deployment to pass.
+    expect(reached).not.toContain("smoke");
   });
 });
