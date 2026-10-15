@@ -109,6 +109,10 @@ jobs:
       # The commit the released image carries, which is what the service has to
       # report before the integration tier can say anything about it.
       sha: ${{ steps.release.outputs.sha }}
+      # The environments this run brings back: `staging prod` for a plain tag and
+      # `staging` for a `-staging` tag (bead dv-93iw). The ref guard is the only
+      # step that computes it, and the prod job's condition reads it.
+      envs: ${{ steps.ref.outputs.envs }}
     steps:
       # First, before the checkout and before any call that would touch the
       # cloud: a run that is not at a protected `up-v*` tag is refused here, and
@@ -116,14 +120,30 @@ jobs:
       # checked rather than the tag name, because a branch is exactly the ref a
       # worker can push and a branch named `up-v1.2.3` is a branch (teardown.yml
       # makes the same check the same way).
+      #
+      # The same step reads which environments the tag names (bead dv-93iw). A
+      # tag that ends in `-staging`, or `-staging-N` for the wrapper's retry,
+      # brings back staging only, so the knob can be proved on staging before it
+      # is used on prod. Any other tag that mentions `staging` is refused rather
+      # than read as a plain tag: `up-v1.2.3-stagingx` is a typo for the
+      # staging-only form, and taking it as a plain release suffix would bring
+      # prod back too.
       - name: Refuse anything but a protected up tag
+        id: ref
         run: |
           set -euo pipefail
-          if [[ ! $GITHUB_REF =~ ^refs/tags/up-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+          staging_re='^refs/tags/up-v[0-9]+\.[0-9]+\.[0-9]+-staging(-[0-9]+)?$'
+          release_re='^refs/tags/up-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'
+          if [[ $GITHUB_REF =~ $staging_re ]]; then
+            envs='staging'
+          elif [[ $GITHUB_REF =~ $release_re && $GITHUB_REF != *staging* ]]; then
+            envs='staging prod'
+          else
             printf 'refusing an up outside a protected up tag: %s\n' "$GITHUB_REF" >&2
             exit 1
           fi
-          printf 'bringing %s back as %s, at %s\n' "$GT_APP" "${GITHUB_REF#refs/tags/}" "$GITHUB_SHA"
+          printf 'envs=%s\n' "$envs" >>"$GITHUB_OUTPUT"
+          printf 'bringing %s back (%s) as %s, at %s\n' "$GT_APP" "$envs" "${GITHUB_REF#refs/tags/}" "$GITHUB_SHA"
 
       - uses: actions/checkout@v4
         with:
@@ -153,12 +173,29 @@ jobs:
       # revision happens to be serving. It is deliberately not GITHUB_SHA: the
       # up tag is pushed wherever the release is being brought back from, and
       # only the release tag names the image's commit.
+      #
+      # The version is the up tag's name without its leading `up-`, without a
+      # trailing `-staging` and the `-N` after it (bead dv-93iw): `up-v1.2.3-staging-2`
+      # brings back `v1.2.3`. If that is not a tag, one trailing `-N` is stripped
+      # too, because the wrapper retries a plain `up-v1.2.3` as `up-v1.2.3-2`. The
+      # version found is an output, so the registry read below asks about the same
+      # release this step read the commit of.
       - name: Read the commit the released tag names
         id: release
         run: |
           set -euo pipefail
           version=${UP_TAG#up-}
+          if [[ $version =~ ^(.+)-staging(-[0-9]+)?$ ]]; then
+            version=${BASH_REMATCH[1]}
+          fi
           sha=$(git rev-parse -q --verify "refs/tags/$version^{commit}" || true)
+          if [[ -z $sha && $version =~ ^(.+)-[0-9]+$ ]]; then
+            retried=${BASH_REMATCH[1]}
+            sha=$(git rev-parse -q --verify "refs/tags/$retried^{commit}" || true)
+            if [[ -n $sha ]]; then
+              version=$retried
+            fi
+          fi
           if [[ -z $sha ]]; then
             printf '::error::this repository has no tag %s, so the commit the image was built from cannot\n' "$version"
             printf 'be read and the integration tier below could not say which revision is serving:\n'
@@ -167,6 +204,7 @@ jobs:
           fi
           printf 'the released image is the one %s built, at %s\n' "$version" "$sha"
           printf 'sha=%s\n' "$sha" >>"$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$version" >>"$GITHUB_OUTPUT"
 
       # The tag to digest read. What comes back is the immutable reference the
       # rest of the flow takes, and it is the only thing that reaches up.sh and
@@ -177,10 +215,11 @@ jobs:
       - name: Resolve the digest the released tag names in the registry
         id: digest
         env:
+          VERSION: ${{ steps.release.outputs.version }}
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/digest_for_tag.sh --tag "${UP_TAG#up-}" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/digest_for_tag.sh --tag "$VERSION" --token-file "$TOKEN_FILE")"
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -303,8 +342,13 @@ jobs:
   # staging proved" is checked rather than assumed -- the same check deploy.yml's
   # prod job makes, and it is the reason this job reads the staging stack's own
   # state instead of trusting a value both jobs happen to hold.
+  #
+  # A `-staging` tag skips this job (bead dv-93iw): the ref guard's list has no
+  # prod in it, so prod is neither promoted nor health checked. Nothing needs this
+  # job, so skipping it leaves the run's other jobs as they are.
   prod:
     runs-on: deploy
+    if: ${{ contains(needs.resolve.outputs.envs, 'prod') }}
     # integration is named because an app that comes back broken must not reach
     # prod; staging, because this job reads the URL the staging job recorded;
     # resolve, because the digest comes from there.

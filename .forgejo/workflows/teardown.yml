@@ -83,6 +83,12 @@ jobs:
   # the first destroy.
   preview:
     runs-on: deploy
+    outputs:
+      # The environments this run deletes, in the order it deletes them: `staging
+      # prod` for a plain tag and `staging` for a `-staging` tag. The ref guard
+      # below is the only step that computes it, so the preview, the plan summary
+      # and the destroy-prod condition all read one answer.
+      envs: ${{ steps.ref.outputs.envs }}
     steps:
       # First, before the checkout and before any call that would touch the
       # cloud: a run that is not at a protected `teardown-v*` tag is refused
@@ -91,7 +97,15 @@ jobs:
       # another copy of this file on a branch (the header; bead dv-x3a) — and
       # what it refuses is a start this flow does not design for, the
       # `teardown-vnext` typo included, which would otherwise destroy two stacks.
+      #
+      # The same step reads which stacks the tag names (bead dv-93iw). A tag that
+      # ends in `-staging`, or `-staging-N` for the wrapper's retry, destroys
+      # staging only, so the knob can be proved on staging before it is used on
+      # prod. Any other tag that mentions `staging` is refused rather than read as
+      # a plain tag: `teardown-v1.2.3-stagingx` is a typo for the staging-only
+      # form, and taking it as a plain release suffix would destroy prod too.
       - name: Refuse anything but a protected teardown tag
+        id: ref
         run: |
           set -euo pipefail
           # The whole ref, not the tag name: a branch is exactly the ref a worker
@@ -99,11 +113,18 @@ jobs:
           # is the one require_release_tag accepts in scripts/release/lib.sh,
           # behind the `teardown-` prefix this flow adds, rather than the looser
           # `teardown-v[0-9]*` glob a case statement would allow.
-          if [[ ! $GITHUB_REF =~ ^refs/tags/teardown-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+          staging_re='^refs/tags/teardown-v[0-9]+\.[0-9]+\.[0-9]+-staging(-[0-9]+)?$'
+          release_re='^refs/tags/teardown-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'
+          if [[ $GITHUB_REF =~ $staging_re ]]; then
+            envs='staging'
+          elif [[ $GITHUB_REF =~ $release_re && $GITHUB_REF != *staging* ]]; then
+            envs='staging prod'
+          else
             printf 'refusing a teardown outside a protected teardown tag: %s\n' "$GITHUB_REF" >&2
             exit 1
           fi
-          printf 'teardown of %s for %s, at %s\n' "$GT_APP" "${GITHUB_REF#refs/tags/}" "$GITHUB_SHA"
+          printf 'envs=%s\n' "$envs" >>"$GITHUB_OUTPUT"
+          printf 'teardown of %s (%s) for %s, at %s\n' "$GT_APP" "$envs" "${GITHUB_REF#refs/tags/}" "$GITHUB_SHA"
 
       - uses: actions/checkout@v4
         with:
@@ -126,9 +147,10 @@ jobs:
       #
       # `--preview-only` is the whole point of this job: the plan is written to
       # a file and shown to the human before anything is deleted.
-      - name: Preview the staging and prod destroys
+      - name: Preview the destroys
         id: plan
         env:
+          ENVS: ${{ steps.ref.outputs.envs }}
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
@@ -138,7 +160,8 @@ jobs:
           # and pulumi_env exports that (lib.sh). Calling pulumi_env before it
           # would read an unset variable and stop the step before it previews
           # anything.
-          for env_name in staging prod; do
+          # ENVS is the fixed list the ref guard wrote, split on purpose.
+          for env_name in $ENVS; do
             ENV_NAME="$env_name"
             release_target
             pulumi_env "$TOKEN_FILE"
@@ -148,20 +171,21 @@ jobs:
           done
           printf 'work=%s\n' "$work" >>"$GITHUB_OUTPUT"
 
-      - name: Attach both plans to the run record
+      - name: Attach the plans to the run record
         env:
+          ENVS: ${{ steps.ref.outputs.envs }}
           WORK: ${{ steps.plan.outputs.work }}
         run: |
           set -euo pipefail
-          for env_name in staging prod; do
+          for env_name in $ENVS; do
             printf '===== %s: what pulumi destroy will delete =====\n' "$env_name"
             cat "$WORK/destroy-$env_name.diff"
           done
           {
             printf '### Teardown of `%s`\n\n' "$GT_APP"
-            printf 'This run deletes staging first, then prod. Both plans are above.\n'
+            printf 'This run deletes: %s. The plans are above.\n' "${ENVS// /, then }"
             printf 'Each deletes exactly the plan below, and the app'"'"'s project is not touched.\n\n'
-            for env_name in staging prod; do
+            for env_name in $ENVS; do
               printf '#### %s\n\n' "$env_name"
               printf '````\n'
               cat "$WORK/destroy-$env_name.diff"
@@ -215,9 +239,14 @@ jobs:
   # after staging is gone, and its plan is the prod half of the preview above:
   # nothing this workflow does changes prod in between. No environment, for the
   # same reason as destroy-staging.
+  #
+  # A `-staging` tag skips this job (bead dv-93iw): the ref guard's list has no
+  # prod in it, so the prod stack is neither previewed nor destroyed. `preview` is
+  # named in needs because a job reads only its direct needs' outputs.
   destroy-prod:
     runs-on: deploy
-    needs: destroy-staging
+    needs: [preview, destroy-staging]
+    if: ${{ contains(needs.preview.outputs.envs, 'prod') }}
     steps:
       - uses: actions/checkout@v4
         with:
