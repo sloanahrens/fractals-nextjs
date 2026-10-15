@@ -109,9 +109,10 @@ jobs:
       # The commit the released image carries, which is what the service has to
       # report before the integration tier can say anything about it.
       sha: ${{ steps.release.outputs.sha }}
-      # The environments this run brings back: `staging prod` for a plain tag and
-      # `staging` for a `-staging` tag (bead dv-93iw). The ref guard is the only
-      # step that computes it, and the prod job's condition reads it.
+      # The environments this run brings back: `staging prod` for a plain tag,
+      # `staging` for a `-staging` tag (bead dv-93iw) and `prod` for a `-prod` tag
+      # (bead dv-6wh8). The ref guard is the only step that computes it, and the
+      # staging, integration and prod jobs' conditions read it.
       envs: ${{ steps.ref.outputs.envs }}
     steps:
       # First, before the checkout and before any call that would touch the
@@ -128,15 +129,26 @@ jobs:
       # than read as a plain tag: `up-v1.2.3-stagingx` is a typo for the
       # staging-only form, and taking it as a plain release suffix would bring
       # prod back too.
+      #
+      # A tag that ends in `-prod`, or `-prod-N`, brings back prod only (bead
+      # dv-6wh8), for the staging that stayed up while prod was down. The plain
+      # release regex accepts `-prod` as an ordinary suffix, so the `-prod` form
+      # is tested first and the plain form is refused for any ref that mentions
+      # prod at all: `up-v1.2.3-prodx` and `-staging-prod` are typos for a
+      # single-environment form, and read as plain tags they would apply staging
+      # as well.
       - name: Refuse anything but a protected up tag
         id: ref
         run: |
           set -euo pipefail
+          prod_re='^refs/tags/up-v[0-9]+\.[0-9]+\.[0-9]+-prod(-[0-9]+)?$'
           staging_re='^refs/tags/up-v[0-9]+\.[0-9]+\.[0-9]+-staging(-[0-9]+)?$'
           release_re='^refs/tags/up-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'
-          if [[ $GITHUB_REF =~ $staging_re ]]; then
+          if [[ $GITHUB_REF =~ $prod_re ]]; then
+            envs='prod'
+          elif [[ $GITHUB_REF =~ $staging_re ]]; then
             envs='staging'
-          elif [[ $GITHUB_REF =~ $release_re && $GITHUB_REF != *staging* ]]; then
+          elif [[ $GITHUB_REF =~ $release_re && $GITHUB_REF != *staging* && $GITHUB_REF != *prod* ]]; then
             envs='staging prod'
           else
             printf 'refusing an up outside a protected up tag: %s\n' "$GITHUB_REF" >&2
@@ -175,8 +187,9 @@ jobs:
       # only the release tag names the image's commit.
       #
       # The version is the up tag's name without its leading `up-`, without a
-      # trailing `-staging` and the `-N` after it (bead dv-93iw): `up-v1.2.3-staging-2`
-      # brings back `v1.2.3`. If that is not a tag, one trailing `-N` is stripped
+      # trailing `-staging` or `-prod` and the `-N` after it (beads dv-93iw,
+      # dv-6wh8): `up-v1.2.3-staging-2` and `up-v1.2.3-prod-2` bring back
+      # `v1.2.3`. If that is not a tag, one trailing `-N` is stripped
       # too, because the wrapper retries a plain `up-v1.2.3` as `up-v1.2.3-2`. The
       # version found is an output, so the registry read below asks about the same
       # release this step read the commit of.
@@ -185,7 +198,7 @@ jobs:
         run: |
           set -euo pipefail
           version=${UP_TAG#up-}
-          if [[ $version =~ ^(.+)-staging(-[0-9]+)?$ ]]; then
+          if [[ $version =~ ^(.+)-(staging|prod)(-[0-9]+)?$ ]]; then
             version=${BASH_REMATCH[1]}
           fi
           sha=$(git rev-parse -q --verify "refs/tags/$version^{commit}" || true)
@@ -236,9 +249,14 @@ jobs:
   # leaves the stack and its config, so the apply here needs no stack creation
   # -- it writes the digest into the stack's config and applies it, and the
   # stack is populated again.
+  #
+  # A `-prod` tag skips this job (bead dv-6wh8): staging stayed up, so it is
+  # neither applied nor health checked, and the integration job below is skipped
+  # with it.
   staging:
     runs-on: deploy
     needs: resolve
+    if: ${{ contains(needs.resolve.outputs.envs, 'staging') }}
     env:
       GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
     outputs:
@@ -289,6 +307,7 @@ jobs:
     # `staging` is the service this job tests, and `resolve` carries the commit
     # the service has to report before the tests can mean anything.
     needs: [resolve, staging]
+    if: ${{ contains(needs.resolve.outputs.envs, 'staging') }}
     # The version wait polls for up to 300s by default and the app's suite is
     # the app's own; the job names a bound so a service that never settles
     # cannot hold a runner past it.
@@ -346,9 +365,21 @@ jobs:
   # A `-staging` tag skips this job (bead dv-93iw): the ref guard's list has no
   # prod in it, so prod is neither promoted nor health checked. Nothing needs this
   # job, so skipping it leaves the run's other jobs as they are.
+  #
+  # A `-prod` tag skips staging and integration instead (bead dv-6wh8), and a job
+  # whose need was skipped is skipped with it unless its condition says
+  # otherwise, so the condition does. `!cancelled()` stops the implicit success()
+  # from vetoing the run, and the rest puts back what success() was there for:
+  # resolve passed, and either the list is prod alone (staging and integration
+  # were never going to run) or both of them succeeded. A staging apply or an
+  # integration tier that failed still keeps the digest out of prod.
+  #
+  # The digest prod gets is still the one resolve read for the release the tag
+  # names, so a `-prod` run deploys that release and nothing the staging stack
+  # happens to hold.
   prod:
     runs-on: deploy
-    if: ${{ contains(needs.resolve.outputs.envs, 'prod') }}
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && contains(needs.resolve.outputs.envs, 'prod') && (needs.resolve.outputs.envs == 'prod' || (needs.staging.result == 'success' && needs.integration.result == 'success')) }}
     # integration is named because an app that comes back broken must not reach
     # prod; staging, because this job reads the URL the staging job recorded;
     # resolve, because the digest comes from there.
@@ -373,8 +404,16 @@ jobs:
       # not against the same job output twice. It has to be the stack's *state*
       # and not its config, because `pulumi config set` writes a file in the job
       # that ran it (deploy.yml and staged_digest.sh explain it; bead dv-yf4).
+      #
+      # A `-prod` run skips this step and promote.sh's comparison with it (bead
+      # dv-6wh8). Staging stayed up while prod was down, and every landing
+      # redeploys it, so the stack usually runs a newer commit than the release
+      # being brought back; comparing against it would refuse every such run.
+      # Nothing in the run proved the digest on staging, but the release flow
+      # already did, and the digest is the registry's answer for the tag.
       - name: Read the digest the staging stack is running
         id: staged
+        if: ${{ contains(needs.resolve.outputs.envs, 'staging') }}
         env:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
@@ -391,7 +430,10 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/promote.sh "$DIGEST" --staging-digest "$STAGING_DIGEST" --token-file "$TOKEN_FILE")"
+          # The check is passed whenever the staged read ran, and its absence is
+          # only ever the `-prod` form: a plain tag whose read failed stopped
+          # at that step, before this one.
+          out="$(scripts/release/promote.sh "$DIGEST" ${STAGING_DIGEST:+--staging-digest "$STAGING_DIGEST"} --token-file "$TOKEN_FILE")"
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -415,12 +457,12 @@ jobs:
             printf '| | |\n|---|---|\n'
             printf '| tag | `%s` |\n' "${GITHUB_REF_NAME:-unknown}"
             printf '| digest | `%s` |\n' "$DIGEST"
-            printf '| staging | %s |\n' "$STAGING_URL"
+            printf '| staging | %s |\n' "${STAGING_URL:-not touched by this run}"
             printf '| prod | %s |\n' "$PROD_URL"
             printf '| tag pushed by | %s |\n' "${GITHUB_ACTOR:-unknown}"
             printf '\n'
             printf 'Nothing was rebuilt: this is the image the release above pushed, and prod runs\n'
-            printf 'the digest staging proved it with.\n'
+            printf 'the digest staging proved it with (a -prod tag leaves staging as it was).\n'
             printf 'No approval is recorded: this Forgejo has no Actions environments, so the tag\n'
             printf 'push above is the authorization (docs/design.md, section 6.1).\n'
           } >>"${GITHUB_STEP_SUMMARY:-/dev/null}"

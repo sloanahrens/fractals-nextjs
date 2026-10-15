@@ -85,9 +85,9 @@ jobs:
     runs-on: deploy
     outputs:
       # The environments this run deletes, in the order it deletes them: `staging
-      # prod` for a plain tag and `staging` for a `-staging` tag. The ref guard
-      # below is the only step that computes it, so the preview, the plan summary
-      # and the destroy-prod condition all read one answer.
+      # prod` for a plain tag, `staging` for a `-staging` tag and `prod` for a
+      # `-prod` tag. The ref guard below is the only step that computes it, so the
+      # preview, the plan summary and both destroy conditions read one answer.
       envs: ${{ steps.ref.outputs.envs }}
     steps:
       # First, before the checkout and before any call that would touch the
@@ -104,6 +104,14 @@ jobs:
       # prod. Any other tag that mentions `staging` is refused rather than read as
       # a plain tag: `teardown-v1.2.3-stagingx` is a typo for the staging-only
       # form, and taking it as a plain release suffix would destroy prod too.
+      #
+      # A tag that ends in `-prod`, or `-prod-N`, destroys prod only (bead dv-6wh8):
+      # staging stays up while prod is down. It is the dangerous form, because the
+      # plain release regex accepts `-prod` as an ordinary suffix, so the `-prod`
+      # form is tested first and the plain form is refused for any ref that
+      # mentions prod at all. `teardown-v1.2.3-prodx` and `-staging-prod` are typos
+      # for a single-environment form; read as plain tags they would destroy both
+      # stacks.
       - name: Refuse anything but a protected teardown tag
         id: ref
         run: |
@@ -113,11 +121,14 @@ jobs:
           # is the one require_release_tag accepts in scripts/release/lib.sh,
           # behind the `teardown-` prefix this flow adds, rather than the looser
           # `teardown-v[0-9]*` glob a case statement would allow.
+          prod_re='^refs/tags/teardown-v[0-9]+\.[0-9]+\.[0-9]+-prod(-[0-9]+)?$'
           staging_re='^refs/tags/teardown-v[0-9]+\.[0-9]+\.[0-9]+-staging(-[0-9]+)?$'
           release_re='^refs/tags/teardown-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'
-          if [[ $GITHUB_REF =~ $staging_re ]]; then
+          if [[ $GITHUB_REF =~ $prod_re ]]; then
+            envs='prod'
+          elif [[ $GITHUB_REF =~ $staging_re ]]; then
             envs='staging'
-          elif [[ $GITHUB_REF =~ $release_re && $GITHUB_REF != *staging* ]]; then
+          elif [[ $GITHUB_REF =~ $release_re && $GITHUB_REF != *staging* && $GITHUB_REF != *prod* ]]; then
             envs='staging prod'
           else
             printf 'refusing a teardown outside a protected teardown tag: %s\n' "$GITHUB_REF" >&2
@@ -199,9 +210,13 @@ jobs:
   # because the instance has none (docs/design.md, section 6.1): what authorizes
   # this run is the ref it is at, checked by the preview job above, and the plan
   # it wrote is in the run summary.
+  #
+  # A `-prod` tag skips this job (bead dv-6wh8): the ref guard's list has no
+  # staging in it, so the staging stack is neither previewed nor destroyed.
   destroy-staging:
     runs-on: deploy
     needs: preview
+    if: ${{ contains(needs.preview.outputs.envs, 'staging') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -243,10 +258,18 @@ jobs:
   # A `-staging` tag skips this job (bead dv-93iw): the ref guard's list has no
   # prod in it, so the prod stack is neither previewed nor destroyed. `preview` is
   # named in needs because a job reads only its direct needs' outputs.
+  #
+  # A `-prod` tag skips destroy-staging, and a job whose need was skipped is
+  # skipped with it unless its condition says otherwise, so the condition does:
+  # `!cancelled()` stops the implicit success() from vetoing the run, and the rest
+  # puts back what success() was there for. The preview must have passed, and
+  # either the list is prod alone (staging was never going to run) or staging's
+  # destroy succeeded. A staging destroy that failed or was cancelled still
+  # leaves prod alone, as before.
   destroy-prod:
     runs-on: deploy
     needs: [preview, destroy-staging]
-    if: ${{ contains(needs.preview.outputs.envs, 'prod') }}
+    if: ${{ !cancelled() && needs.preview.result == 'success' && contains(needs.preview.outputs.envs, 'prod') && (needs.preview.outputs.envs == 'prod' || needs.destroy-staging.result == 'success') }}
     steps:
       - uses: actions/checkout@v4
         with:
