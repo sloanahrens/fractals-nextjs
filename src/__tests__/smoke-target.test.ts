@@ -98,11 +98,12 @@ interface Run {
  *
  * The waits are cut to their floor: what is under test is what a non-2xx does,
  * not how long the check is willing to wait for one. GT_SERVICE_URL is cleared
- * so a run without a URL cannot be rescued by the environment of the machine
- * running the suite.
+ * as well: this suite hands its URL to the target as PROD_URL, and a machine
+ * with the script's own variable exported should not be able to stand in for
+ * it.
  */
 function smoke(url: string | null, env: Record<string, string> = {}) {
-  const args = url === null ? ["smoke"] : ["smoke", `URL=${url}`];
+  const args = url === null ? ["smoke"] : ["smoke", `PROD_URL=${url}`];
 
   return new Promise<Run>((resolve, reject) => {
     const child = spawn("make", args, {
@@ -181,10 +182,13 @@ describe("make smoke", () => {
     expect(reasonFor(result.stdout, PAGE)).toContain("no response");
   });
 
-  it("refuses to run with no URL, rather than passing by checking nothing", async () => {
+  it("refuses to run with no PROD_URL, rather than passing by checking nothing", async () => {
     const result = await smoke(null);
 
     expect(result.status).not.toBe(0);
-    expect(`${result.stdout}${result.stderr}`).toContain("GT_SERVICE_URL");
+    // The name the caller was handed, and the one the hourly prod check passes:
+    // the target's refusal has to name the variable a run of `make smoke` is
+    // given, not the script's own flag behind it.
+    expect(`${result.stdout}${result.stderr}`).toContain("PROD_URL");
   });
 });
