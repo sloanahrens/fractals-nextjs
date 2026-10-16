@@ -95,10 +95,26 @@ env:
   GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
 
 jobs:
+  # Every job below names a timeout-minutes, and every number is a measurement
+  # rather than a guess (bead dv-96nw). A release is the flow where a job with
+  # no bound costs the most: it holds the deploy runner the repository has one
+  # of, and every later run of every workflow in the repo queues behind it until
+  # a human cancels it. staging.yml states the rule these numbers come from and
+  # the 2026-10-15 hang that produced it; what is specific to this file is that
+  # its jobs are the release's, so the numbers below are the p95 over the runs
+  # of `v*` tags, which are fewer and slower than a landing's.
+  #
   # Step 2 of the flow: build the tag and push it to the app's registry. The
   # digest this prints is the release's identity from here on.
   build:
     runs-on: deploy
+    # The same build staging.yml's `build` job runs, and measured over 19
+    # releases: p95 12s (a cold one is 26s) and a floor of five minutes by the
+    # rule. The bead names 20 for it and it is the same number here, for the
+    # same reason: the step inside it carries an eight-minute bound and one
+    # automatic retry (scripts/release/build_push.sh, lib.sh), and this job has
+    # to hold two of those plus the checkout and the token.
+    timeout-minutes: 20
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     steps:
@@ -187,7 +203,14 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          # The capture holds what the script writes on stdout, and a failure
+          # ends the step at the assignment, before the print below can show
+          # any of it: print what it wrote, then fail with its own status.
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -197,7 +220,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/build_push.sh --tag "$GITHUB_REF_NAME" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/build_push.sh --tag "$GITHUB_REF_NAME" --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -210,6 +237,10 @@ jobs:
   staging-preview:
     runs-on: deploy
     needs: build
+    # The plan a human reads before staging changes, and p95 67s over 20
+    # releases: twice it is 134s, so the rule leaves this at its five-minute
+    # floor.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -220,7 +251,11 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -231,7 +266,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/preview.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/preview.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -270,6 +309,11 @@ jobs:
     # one of them. workflows_test.go checks every `needs.<job>.outputs.<key>`
     # reference against the job's own needs list.
     needs: [build, staging-preview]
+    # Applying the release's digest and waiting for the revision to serve is p95
+    # 107s over 11 releases, so twice it is under four minutes and the rule would
+    # leave this at its floor; the bead names 15, the number staging.yml's own
+    # staging job carries.
+    timeout-minutes: 15
     outputs:
       digest: ${{ needs.build.outputs.digest }}
       url: ${{ steps.up.outputs.url }}
@@ -283,7 +327,11 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -294,7 +342,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -311,6 +363,10 @@ jobs:
   prod:
     runs-on: deploy
     needs: staging
+    # Promoting the digest staging proved and waiting for prod to serve it is p95
+    # 134s over 20 releases (the slowest is 140s), so twice it is four and a
+    # half minutes and the rule leaves this at its five-minute floor.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -321,7 +377,11 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -348,7 +408,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/staged_digest.sh --env staging --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/staged_digest.sh --env staging --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -360,7 +424,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/promote.sh "$DIGEST" --staging-digest "$STAGING_DIGEST" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/promote.sh "$DIGEST" --staging-digest "$STAGING_DIGEST" --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 

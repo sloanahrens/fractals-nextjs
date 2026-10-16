@@ -1,0 +1,435 @@
+# Hourly health-check workflow template for an app repo (bead dv-4qtt.1).
+#
+# Copy this file into an app repo as .forgejo/workflows/health.yml, beside
+# deploy.yml, staging.yml, teardown.yml and up.yml. Those four answer "may this
+# change be released" (deploy.yml, at a protected tag), "did the landing reach
+# staging and work there" (staging.yml, on every landing to main) and "is this
+# environment up at all" (teardown.yml, up.yml). This one answers the question
+# an owner asks between those events: a deployment that is turned on is still
+# serving, an hour after the landing that put it there and an hour after the
+# release that promoted it. It reads two services and changes nothing.
+#
+# It is a separate workflow file, and that is a requirement rather than a
+# preference (the epic dv-4qtt states it): the release bot reads the *job
+# statuses* of the newest successful staging.yml run for main to decide which
+# commit is green (cmd/releasebot's greenCommit, and workflows/README.md says
+# why that is a read of jobs rather than of a run), and a scheduled run inside
+# staging.yml would be a second kind of run under that same name for every
+# reader of it to learn. A separate file cannot be mistaken for one: the bot's
+# run read is filtered by the workflow's file name and the commit it accepts is
+# the one whose run carries a job named `integration`, and this file is
+# health.yml with its two checks named for the environment each one reads. The
+# check that keeps the two apart is in cmd/releasebot's own tests, against the
+# identifiers that package reads runs with.
+#
+# What the file holds, in one line: no cloud credential, and the token the
+# runner gives every job of every workflow for the run's own repository. Both
+# checks run on `runs-on: ci-base`, the runner with no base key mounted on it
+# and no cloud credential, because both of them are HTTP reads of a service that
+# is already deployed — the app's own `make integration`, which staging.yml's
+# landing run also runs, and the app's own `make smoke`, the read-only check of a
+# service people are using (beads dv-4qtt.1 and dv-4qtt.2). No step here names a
+# key path and no step calls a script that mints a token, and there is no cloud
+# call to make: a check that needed a credential to run hourly would be one that
+# could change what it is checking. The one credential the file does hold is the
+# `released` job's read of the repository's own tags, which is not a cloud
+# credential and grants nothing the file does not already read: every app repo
+# is private, so an anonymous `git ls-remote` of one answers 401, and the read
+# is authenticated with the run's own token for the run's own repository and
+# with nothing wider (bead dv-gx2s, and the job below says which credential and
+# why). That token is the one `actions/checkout` uses, so the file is no more
+# credentialled than a job that checks the tree out — and it is read by a step
+# that names it, never by a step that leaves it in `.git/config`.
+#
+# The four jobs, and why each is a job of its own:
+#
+# The first is `off`, and it reads the marker staging.yml's `off` reads: an
+# owner who takes an app down puts a plain file, deploy/OFF, in the app repo,
+# and an app that is off on purpose must not be checked against services that
+# are not there. It decides the run's *status*, so it is a job rather than a
+# step, and every job below carries its answer as a job-level condition: with
+# the file there the checks are skipped rather than successful, for the reason
+# staging.yml gives at length — a check that skipped its own work and ended
+# green is a check nobody can tell from one that passed, and a red run whose
+# only failure is an app that is off on purpose is noise an owner stops reading.
+#
+# The second is `released`, and it answers the one question the prod check has
+# to ask first: does prod hold anything? prod is written by one flow and no
+# other — deploy.yml, which only a protected `v*` tag starts — so a repository
+# with no tag of that shape has nothing promoted to prod, and its smoke check
+# is skipped rather than failed. The read is `git ls-remote` against the
+# repository over HTTP, which needs no checkout and no key path, and what it
+# reads is tags and nothing else. It is authenticated with the run's own
+# repository token, which the runner gives every job of every workflow — the
+# same credential actions/checkout uses, minted by the runner for the length of
+# the run and good for this repository only (bead dv-gx2s).
+#
+# The third is `staging-integration`: the app's own integration suite against
+# the staging URL, which is the hourly half of what staging.yml's integration
+# job does once per landing. It is the same command line — `make integration
+# STAGING_URL=<url>` — with one deliberate difference: it names no commit to
+# expect. staging.yml's job can require the service to report the commit its
+# own deploy step just applied, because that job deployed it. An hourly run
+# cannot, and must not pretend to: it is created at whatever main is at, then
+# queues behind the landings and releases that share this file's concurrency
+# group, so by the time it runs staging may legitimately be serving a commit it
+# has never heard of — and an `up-v*` bring-back redeploys a *released* digest
+# over the tip of main. Neither of those is a deployment that is not working,
+# and a check that failed on them would be a check that escalated landings. So
+# this job tests the deployment that is up and leaves "which commit" to the
+# landing run whose deploy it was; what it keeps is the contract, that the
+# suite exits non-zero with the reason when the deployment is not working.
+#
+# The fourth is `prod-smoke`: the app's own read-only smoke check against the
+# prod URL, run only when the tag read above found a release. It is the one
+# thing here that reads a service people are using, so what it may do is the
+# app's own contract (workflows/README.md, "The smoke contract"): the health
+# path and the app's key pages, GET only, no writes, no credential, over in
+# under a minute, the reason printed and a non-zero exit when a page does not
+# answer. An app is onboarded with that target — scripts/app_readiness.sh
+# refuses one whose smoke target writes anything or tests a URL of its own —
+# and nothing in this file could fence off a target that did not keep to it.
+#
+# What authorizes a run here, and why there is no ref guard: nothing in this
+# file changes anything, so there is no ref a run at it could harm. A schedule
+# fires at the default branch, and a dispatch names any ref a person likes; the
+# worst a run of this file can do is read the app's own checks against the
+# app's own deployed services, and a worker's branch copy of it is the copy
+# they wrote and can read. main is not part of it either — an hourly check of a
+# deployment is not a statement about a commit — which is also why the file
+# carries no `fresh` job: a landing run that is superseded deploys nothing, and
+# an hourly check that is superseded is the same check a few minutes later
+# against the service it was going to read anyway.
+
+name: health
+
+# Two events, and no third: the hour, and a person asking now.
+on:
+  # The minute is this app's own, and it is the one line an app changes when it
+  # copies this file. These checks are small but not free — each one wakes a
+  # service that scales to zero — and a fleet that used the same minute would
+  # put every app's check on a runner at the same moment. Forgejo reads this
+  # field as five plain cron fields and takes no expression here, so an app's
+  # offset is written into the file rather than derived from its name.
+  schedule:
+    - cron: "17 * * * *"
+
+  # And by hand: the question "is it up *now*", after something changed in the
+  # app or in the world, without waiting for the hour. It is safe at any ref
+  # for the reason the header gives — every job of this file is a read — and it
+  # is the one way to start this file that a person chooses.
+  workflow_dispatch:
+
+# The group deploy.yml, staging.yml, teardown.yml and up.yml declare, and
+# deliberately the same one. On this Forgejo a concurrency group is shared
+# across every workflow in the repository, so one group is one queue: naming
+# the same group in each file is what makes "one run at a time in this
+# repository" a property of the files rather than of the runner's
+# implementation.
+#
+# A check that waited its turn is a check a few minutes later. A check that ran
+# while a release was applying a stack, or while a landing was moving the
+# staging service under it, is a check that read a service nobody can describe
+# — and the cost is bounded on this side: an app repo has one of these runs an
+# hour. cancel-in-progress: false for the reason the other files give: the
+# invocation it would cancel may be a release half-way through a stack.
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  # The two services this file reads, and they are the app's own. Neither can be
+  # derived: a Cloud Run URL is computed when the service is first created, by a
+  # flow that has no way to hand it to a run an hour later (the landing run's
+  # `staging` job exports the URL to the jobs of that run and no further, and
+  # nothing on a runner may read a stack to ask). What an app's owner has is the
+  # table deploy.yml prints in its run summary, and the reviewed values live in
+  # the app's registry entry (apps/<app>.yaml's urls:, pkg/appregistry), which
+  # is what the rollout of this file reads when it writes an app's copy.
+  #
+  # Empty until then on purpose. An app's make target refuses a run that is
+  # handed no URL, with a message naming the variable, so a copy of this file
+  # that was never given a URL fails saying so rather than checking a host
+  # nobody chose.
+  GT_STAGING_URL: "https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app"
+  GT_PROD_URL: "https://fractals-nextjs-prod-robymk5mfq-uc.a.run.app"
+
+jobs:
+  # Every job below names a timeout-minutes, sized by the rule staging.yml
+  # states in full (bead dv-96nw): twice the p95 of that job's recent successful
+  # runs, never below five minutes, never above the hour the gate bounds every
+  # job by. This file landed on 2026-10-15 and none of its four jobs has a run of
+  # its own yet, so no number here is measured from a run of this file: each is
+  # the bound the job it copies takes where it already runs. The two checks carry
+  # the bounds the bead names for the work they do -- the app's suite, which is
+  # staging.yml's integration tier verbatim, and the read-only smoke -- and the
+  # two reads that decide what to check carry the rule's five-minute floor, which
+  # is the bound the same reads take in staging.yml. The `fresh` job's
+  # `git ls-remote` is p95 1s over 142 runs and every one of those is a run in
+  # which that read answered 401 and the job failed open (bead dv-gx2s); the
+  # authenticated read this file now makes is the same request to the same
+  # server, and the floor is what the rule leaves either way.
+  #
+  # An hourly check with no bound is worse than a check that fails: it holds a
+  # runner for as long as the platform allows, and the sweep it belongs to
+  # reports nothing at all for the hour rather than reporting a broken service.
+  #
+  # Whether the app is off on purpose, decided before anything else is read.
+  # This is staging.yml's first job, for the same reason and in the same shape:
+  # the answer has to be the run's status, and a step that skipped its own work
+  # would end with success.
+  #
+  # It runs on the CI runner and holds no key path and no cloud credential: the
+  # file is read from a checkout of the run's commit, which fetches with the
+  # runner's own repository token and sets persist-credentials: false so that
+  # token is not kept behind it, and the job names no key path and calls no
+  # script that mints one. It changes nothing.
+  #
+  # The check fails closed on the one thing it cannot tell: a checkout that
+  # fails fails this job, and the checks below are then skipped for want of it,
+  # so a run that cannot read the repository is a failed run rather than a green
+  # one.
+  off:
+    runs-on: ci-base
+    # It reads one file and prints a line, the same job staging.yml's `off` is:
+    # the rule's five-minute floor.
+    timeout-minutes: 5
+    outputs:
+      # "true" when deploy/OFF is in the run's commit. Every job below carries
+      # the same value as a job-level condition.
+      off: ${{ steps.off.outputs.off }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Only the tree is read, and no later step needs a credential.
+          persist-credentials: false
+
+      - name: Check whether the app is off on purpose
+        id: off
+        run: |
+          set -euo pipefail
+
+          if [[ -f deploy/OFF ]]; then
+            msg='app is off on purpose (deploy/OFF): the hourly checks are skipped'
+            printf '::notice::%s\n' "$msg"
+            printf '%s\n' "$msg" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+            printf 'off=true\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+
+          printf 'deploy/OFF is not there; this run checks what %s is serving\n' "$GITHUB_SHA"
+          printf 'off=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+
+  # Whether the app has released anything: the question the prod check has to
+  # answer before it reads prod. It runs on the CI runner and holds no key path
+  # and no cloud credential — the read is `git ls-remote` against the repository
+  # over HTTP, so it needs no checkout — and what it holds is the run's own
+  # repository token, which is what makes that read answer at all: the app repos
+  # are private, and an anonymous `git ls-remote` of one gets 401 (bead dv-gx2s).
+  # It reads nothing else.
+  #
+  # The tag pattern is the one deploy.yml's trigger names, so "a release tag"
+  # means the same thing in both files: whatever a `v*` tag push starts there is
+  # what this read counts here.
+  released:
+    runs-on: ci-base
+    # An app that is off has nothing in prod either, and nothing to read: the
+    # job is skipped, and so is the check that needs it.
+    needs: off
+    if: needs.off.outputs.off != 'true'
+    # A tag listing over HTTP and nothing else, as the `fresh` job's
+    # `git ls-remote` takes in staging.yml: the rule's five-minute floor.
+    timeout-minutes: 5
+    outputs:
+      # "true" when the repository carries no release tag. The prod check below
+      # carries the same value as a job-level if, so an app that has never
+      # released is skipped rather than failed.
+      unreleased: ${{ steps.tags.outputs.unreleased }}
+    steps:
+      - name: Check whether the app has released anything
+        id: tags
+        run: |
+          set -euo pipefail
+
+          # Read from the repository, not from a checkout: this job makes none,
+          # and the refs in question are the remote's tags rather than the ref
+          # the run started at. It is read by URL for that reason, the way
+          # staging.yml's `fresh` job reads main.
+          #
+          # The read is authenticated as this run. Every app repo is private, so
+          # an anonymous `git ls-remote` of one answers 401 and a read written
+          # that way can only ever end red — which is what the review of this
+          # file's first rollout found, and why no app has this file yet
+          # (bead dv-gx2s). The credential is the token the runner gives every
+          # job of every workflow for the run's own repository, which is the one
+          # actions/checkout uses here and is good for this repository and no
+          # other. Nothing mints it, no key path is read for it, and it is not a
+          # cloud credential: what it opens is the ref list this job was put in
+          # the file to read.
+          #
+          # Every way this read can fail fails the job, and that is the opposite
+          # choice from `fresh`'s. `fresh` fails open because the two mistakes
+          # are not symmetric: a wrong skip deploys nothing, invisibly, while a
+          # wrong deploy publishes a commit that is on main and passed the gate.
+          # Here neither answer is an action. Smoking a prod that was never
+          # deployed would report an app that is not there as an app that is
+          # broken, and skipping quietly would leave prod unchecked for as long
+          # as the read kept failing, with the run green — so the job says which
+          # read failed and ends red, which is the one reading of this file that
+          # a person has to act on.
+          if [[ -z ${GITHUB_SERVER_URL:-} || -z ${GITHUB_REPOSITORY:-} ]]; then
+            printf '::error::the runner names no server or repository, so this run cannot read the\n'
+            printf 'tags of the app it checks, which are what say whether prod holds anything\n'
+            exit 1
+          fi
+          remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+
+          if [[ -z ${GITHUB_TOKEN:-} ]]; then
+            printf '::error::this runner gave the job no token, so the tags of %s\n' "$GITHUB_REPOSITORY"
+            printf 'cannot be read, and they are what say whether prod holds anything\n'
+            exit 1
+          fi
+
+          # git takes the token as basic auth, so the header is
+          # `Authorization: Basic base64(<user>:<token>)` — and the user does not
+          # matter: on this server a non-empty password is read as the token and
+          # is looked up on its own, so the name below is the one
+          # actions/checkout uses for a server deployment rather than an account
+          # this file has to know (services/auth/basic.go, GetRunningTaskByToken).
+          auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
+
+          # The header reaches git through its environment — GIT_CONFIG_* is
+          # git's own way to set one config value for one command — so the token
+          # is on no command line for a `ps` in the job's own container to read,
+          # and 2>/dev/null keeps git's own output out of the log, where a URL
+          # it prints on the way out would be the only place the run could leak
+          # anything. No branch below prints the header or the token: what a
+          # reader sees is a count of tags, a refusal, or git's own failure.
+          if ! out=$(env GIT_TERMINAL_PROMPT=0 \
+              GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader \
+              GIT_CONFIG_VALUE_0="Authorization: Basic $auth" \
+              git ls-remote --tags "$remote" 'refs/tags/v*' 2>/dev/null); then
+            printf '::error::could not read the tags of %s, which are what say whether prod\n' "$remote"
+            printf 'holds anything; the prod smoke check is skipped for this hour\n'
+            exit 1
+          fi
+
+          if [[ -z $out ]]; then
+            msg='app has no release tag: nothing is deployed to prod, so the prod smoke check is skipped'
+            printf '::notice::%s\n' "$msg"
+            printf '%s\n' "$msg" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+            printf 'unreleased=true\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+
+          # How many, and not which: the count is what says the authenticated
+          # read answered with the repository's refs rather than that a step was
+          # reached, and it is the whole of what this job's log may say about a
+          # read it made with a credential (bead dv-gx2s).
+          tags=$(printf '%s\n' "$out" | wc -l | tr -d ' ')
+          printf 'the app carries %s release tag(s), so this run smokes prod as well as staging\n' "$tags"
+          printf 'unreleased=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+
+  # The staging check: the app's own integration suite, run against the service
+  # staging is serving now. Where the job of the same name in staging.yml says a
+  # commit is green, this one says the deployment works, so it names no commit
+  # to expect (the header gives the reason).
+  #
+  # It is on the CI runner and reaches for nothing: no key path, no cloud call,
+  # and the run's repository token is named nowhere in it. Everything it does is
+  # a read of the deployed service over HTTP and the app's own suite, and what it
+  # writes is a job result.
+  staging-integration:
+    runs-on: ci-base
+    needs: off
+    # An app that is off is skipped rather than checked, and skipped rather than
+    # successful: the job's status is what a reader of the run sees.
+    if: needs.off.outputs.off != 'true'
+    # The app's own suite, installed and run from a fresh checkout, and the bound
+    # is the rule's own arithmetic rather than a number picked for it: the suite
+    # is p95 15s over the 163 runs staging.yml has of it (16s the slowest), so
+    # twice the p95 is 30s and the rule's five-minute floor is what is left of
+    # that — and what the job carries is 15, which is the number bead dv-96nw
+    # names for this tier and the bound staging.yml's integration job takes for
+    # the same suite. It is not cut to fit the check: half an hour would be a
+    # backstop under a step that has never taken a minute, and a bound that loose
+    # is one nothing distinguishes from the platform's own job limit, which is
+    # the thing a check that holds the deploy runner must be kept under (bead
+    # dv-96nw's incident).
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The app's own suite and the Makefile that runs it live in this
+          # repository. Nothing here reads a commit, so the checkout carries no
+          # history and leaves no token in .git/config behind it.
+          persist-credentials: false
+
+      - name: Run the app's integration tests against the deployment
+        run: |
+          set -euo pipefail
+
+          # An app that has not written its integration tier is a failure here,
+          # and it has to say which contract is missing rather than leave the
+          # job's reader with make's own "No rule to make target": an app with
+          # no tests and an app whose tests failed are different findings.
+          if ! target_err=$(make --dry-run integration 2>&1 >/dev/null); then
+            printf '::error::%s has no `make integration` target, so this run cannot say whether\n' "$GITHUB_REPOSITORY"
+            printf 'the deployment works. Define one: `make integration STAGING_URL=<url>` must\n'
+            printf 'test the service at %s and exit non-zero, with the reason, when it is broken\n' "$GT_STAGING_URL"
+            printf '%s\n' "$target_err"
+            exit 1
+          fi
+
+          # The URL reaches the target as a variable on its command line, from
+          # this file's own settings, and never as text spliced into this script.
+          make integration STAGING_URL="$GT_STAGING_URL"
+
+  # The prod check: the app's own read-only smoke target, against the service
+  # prod is serving. It runs when the app has released, and only then: prod holds
+  # nothing before the first release.
+  #
+  # It is on the CI runner and reaches for nothing, as the staging check does: it
+  # names the run's repository token nowhere, and it is the read-only half by
+  # contract rather than by anything this file can enforce: the app's own
+  # readiness check is what refuses a smoke target that writes, and an hourly
+  # read of a service people are using is why that check exists (bead dv-4qtt.2).
+  prod-smoke:
+    runs-on: ci-base
+    # Both, and each for its own reason: `off` is the app that is not there, and
+    # `released` is the prod that is not there. An app that is off, or has never
+    # released, has nothing to smoke — and the job's status is skipped, so the
+    # answer is legible in the run.
+    needs: [off, released]
+    if: needs.off.outputs.off != 'true' && needs.released.outputs.unreleased != 'true'
+    # The smoke contract bounds the check itself at under a minute, so twice its
+    # p95 is under the rule's floor and five minutes is what the rule leaves
+    # (bead dv-96nw). This bound is the backstop under a step that never
+    # returns, and it is smaller than the staging job's 15 because this check
+    # reads a handful of paths and waits for nothing.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The app's own smoke target and the Makefile that runs it, with no
+          # history read and no token left behind.
+          persist-credentials: false
+
+      - name: Run the app's smoke check against prod
+        run: |
+          set -euo pipefail
+
+          # As above, and for the same reason: an app that has not written its
+          # smoke target fails with the contract named rather than with make's
+          # own error.
+          if ! target_err=$(make --dry-run smoke 2>&1 >/dev/null); then
+            printf '::error::%s has no `make smoke` target, so this run cannot say whether prod\n' "$GITHUB_REPOSITORY"
+            printf 'is serving. Define one: `make smoke PROD_URL=<url>` must read the service at %s\n' "$GT_PROD_URL"
+            printf '(the health path and the key pages, GET only) and exit non-zero when it is not\n'
+            printf '%s\n' "$target_err"
+            exit 1
+          fi
+
+          # Read-only, and named for the environment it points at, as make
+          # integration is handed STAGING_URL.
+          make smoke PROD_URL="$GT_PROD_URL"
