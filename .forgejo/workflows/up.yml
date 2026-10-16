@@ -81,6 +81,13 @@ env:
   GT_HEALTH_PATH: /api/health
 
 jobs:
+  # Every job below names a timeout-minutes, sized by the rule staging.yml
+  # states in full (bead dv-96nw): twice the p95 of that job's recent successful
+  # runs, never below five minutes. Bringing an app back is a rare flow -- one
+  # run of it exists -- so most of these numbers are the rule's five-minute
+  # floor standing on a duration far under it, and the comment beside each one
+  # says which.
+  #
   # What to bring back: the digest the registry tag names, and the commit the
   # image was built from. Its first step is the ref guard, so a run that is not
   # at a protected up tag stops here, before the checkout, before the token and
@@ -92,6 +99,9 @@ jobs:
   # integration job waits for, so one read per value is one thing to check.
   resolve:
     runs-on: deploy
+    # Two registry reads and no cloud call: 5s in the one run there is, so the
+    # rule leaves it at its five-minute floor.
+    timeout-minutes: 5
     # The base key, as a path the deploy runner mounts mode 600 inside a home
     # only gt-cloud can read (deploy.yml states why it is a path and never a
     # Forgejo secret). It is a job variable here rather than a workflow one so
@@ -174,7 +184,14 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          # The capture holds what the script writes on stdout, and a failure
+          # ends the step at the assignment, before the print below can show
+          # any of it: print what it wrote, then fail with its own status.
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -232,7 +249,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/digest_for_tag.sh --tag "$VERSION" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/digest_for_tag.sh --tag "$VERSION" --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -257,6 +278,11 @@ jobs:
     runs-on: deploy
     needs: resolve
     if: ${{ contains(needs.resolve.outputs.envs, 'staging') }}
+    # Applying the release's digest and waiting for the revision to serve is 93s
+    # in the one run there is, so twice it is under four minutes and the rule
+    # would leave this at its floor; the bead names 15, the number staging.yml's
+    # own staging job carries.
+    timeout-minutes: 15
     env:
       GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
     outputs:
@@ -272,7 +298,11 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -283,7 +313,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -310,8 +344,12 @@ jobs:
     if: ${{ contains(needs.resolve.outputs.envs, 'staging') }}
     # The version wait polls for up to 300s by default and the app's suite is
     # the app's own; the job names a bound so a service that never settles
-    # cannot hold a runner past it.
-    timeout-minutes: 30
+    # cannot hold a runner past it. The suite is the same one staging.yml runs
+    # and takes the same p95 15s over 163 runs there (bead dv-96nw), so even
+    # with the wait's whole five minutes spent this is several times the job's
+    # own work; the bead names 15, and staging.yml and health.yml give the same
+    # suite the same bound.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -384,6 +422,11 @@ jobs:
     # prod; staging, because this job reads the URL the staging job recorded;
     # resolve, because the digest comes from there.
     needs: [integration, resolve, staging]
+    # No up of prod has run yet -- every bring-back this repository has done is
+    # a staging one -- so there is no duration to size this from and the rule's
+    # floor is the whole of the argument: five minutes. It is the same job
+    # deploy.yml promotes with, and that one is p95 134s over 20 releases.
+    timeout-minutes: 5
     env:
       GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
     steps:
@@ -395,7 +438,11 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -418,7 +465,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/staged_digest.sh --env staging --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/staged_digest.sh --env staging --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -433,7 +484,11 @@ jobs:
           # The check is passed whenever the staged read ran, and its absence is
           # only ever the `-prod` form: a plain tag whose read failed stopped
           # at that step, before this one.
-          out="$(scripts/release/promote.sh "$DIGEST" ${STAGING_DIGEST:+--staging-digest "$STAGING_DIGEST"} --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/promote.sh "$DIGEST" ${STAGING_DIGEST:+--staging-digest "$STAGING_DIGEST"} --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 

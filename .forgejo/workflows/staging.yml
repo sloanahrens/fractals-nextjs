@@ -51,11 +51,13 @@
 # That job runs on `runs-on: ci-base`, and that is the point of it: an app's
 # integration tests need no cloud credential to do their work, so the runner
 # that holds none is the runner that runs them. The job therefore holds no key
-# path and calls no script that mints a token. The base key in this file is
-# declared on the two jobs that run on the deploy runner rather than at the top
-# of the file, because a workflow-level variable is inherited by every job, the
-# `off`, `fresh` and `integration` ones included: an inherited variable is a key path
-# the job holds.
+# path, calls no script that mints a token, and reaches for the run's own
+# repository token nowhere — the `fresh` job below is the one job on this
+# runner that does, and only to read this repository's own main (bead dv-gx2s).
+# The base key in this file is declared on the two jobs that run on the deploy
+# runner rather than at the top of the file, because a workflow-level variable is
+# inherited by every job, the `off`, `fresh` and `integration` ones included: an
+# inherited variable is a key path the job holds.
 #
 # What authorizes a run here is main itself, and that is why this template
 # carries no ref guard where deploy.yml carries one. main only ever moves
@@ -71,10 +73,12 @@
 #
 # The jobs that build and deploy run on `runs-on: deploy` for the same reason
 # deploy.yml does: that label is the only runner with the base key, and Forgejo
-# restricts it to the app repos (bead B5.4). No file here holds a credential, and
-# each checkout sets persist-credentials: false so the runner's own repository
-# token is not left in .git/config for a later step to pick up (deploy.yml says
-# why at length).
+# restricts it to the app repos (bead B5.4). No job here holds a cloud
+# credential, and every step that uses the runner's own repository token is the
+# `fresh` job's read of this repository's main (bead dv-gx2s): each checkout sets
+# persist-credentials: false so that token is not left in .git/config for a later
+# step to pick up, and no step in the file names it other than the one step that
+# makes the read (deploy.yml says why at length).
 
 name: staging
 
@@ -115,15 +119,41 @@ env:
   GT_HEALTH_PATH: /api/health
 
 jobs:
+  # Every job below names a timeout-minutes, and every number is a measurement
+  # rather than a guess (bead dv-96nw). A job with no bound is not a job that
+  # waits; it is a job that holds its runner until a human cancels it, and on
+  # this repository that runner is the deploy runner the repo has one of. On
+  # 2026-10-15 a `next build` inside this file's `build` job stopped writing
+  # output at 17:35:03Z and was still "running" 50 minutes later: every later
+  # run of every workflow in the repository queued behind it, and nothing in
+  # these files could end it.
+  #
+  # The number each job gets is the rule the bead sets, applied to that job's
+  # own recent successful runs (measured from the Forgejo API over the two apps
+  # the templates are copied into, arkansas-beaver-committee and
+  # fractals-nextjs): twice the p95, never below five minutes, and never above
+  # the hour the gate bounds every job by. Twice the p95 is the whole of the
+  # headroom argument -- a job already at twice its p95 is a job that is stuck
+  # rather than slow -- and the five-minute floor is there because a bound tight
+  # enough to end a cold pull is a bound that fails a healthy landing.
+  #
+  # `build` and `staging` are the two jobs the bead names a number for, and both
+  # are at or above what the rule gives them; the rest carry theirs in a comment
+  # beside it. A timed-out job fails: Forgejo reports the job as failed and the
+  # run as failed, never as skipped and never as successful, which is what lets
+  # the deploy.failed poller (bead gt-hcbft) see it at all.
+  #
   # Whether the app is off on purpose (bead dv-sve9), decided before anything
   # else, and for the same reason `fresh` is a job: the answer has to be the
   # *run's* status, and a step that skipped its own work would end with success.
   # Every job below needs this one and carries its answer as a job-level
   # condition, so an app that is off has jobs whose status is skipped.
   #
-  # It runs on the CI runner and holds nothing: the file is read from a checkout
-  # of the run's commit, which keeps no token, and the job names no key path and
-  # calls no script that mints one. It changes nothing.
+  # It runs on the CI runner and holds no key path and no cloud credential: the
+  # file is read from a checkout of the run's commit, which fetches with the
+  # runner's own repository token and sets persist-credentials: false so that
+  # token is not kept behind it, and the job names no key path and calls no
+  # script that mints one. It changes nothing.
   #
   # The check fails closed on the one thing it cannot tell. A checkout that
   # fails fails this job, and the jobs below are then skipped for want of it: a
@@ -131,6 +161,9 @@ jobs:
   # rather than as a green one.
   off:
     runs-on: ci-base
+    # It reads one file and prints a line: p95 3s over 16 runs, so the rule
+    # leaves it at its five-minute floor, and the bead names five for it.
+    timeout-minutes: 5
     outputs:
       # "true" when deploy/OFF is in the run's commit. Every job below carries
       # the same value as a job-level condition.
@@ -164,16 +197,26 @@ jobs:
   # status success, and a superseded run whose three jobs each report success
   # is a commit the release bot reads as deployed and tested.
   #
-  # It runs on the CI runner and holds nothing: the read is `git ls-remote`
-  # against the repository over HTTP, so it needs no checkout, no token and no
-  # key path. It reads nothing and changes nothing, which is what lets it be the
-  # job every other job waits on.
+  # It runs on the CI runner and holds no key path and no cloud credential: the
+  # read is `git ls-remote` against the repository over HTTP, so it needs no
+  # checkout. What it does hold is the token the runner gives every job of every
+  # workflow for the run's own repository, which is what the read authenticates
+  # with: every app repo is private, so an anonymous `git ls-remote` of one
+  # answers 401, and until this bead every run of this job failed open on that
+  # answer (bead dv-gx2s). It reads nothing and changes nothing, which is what
+  # lets it be the job every other job waits on.
   fresh:
     runs-on: ci-base
     # An app that is off has nothing to deploy, so there is nothing to compare
     # with main either: the job is skipped, and so is everything that needs it.
     needs: off
     if: needs.off.outputs.off != 'true'
+    # One `git ls-remote` over HTTP: p95 1s over 142 runs, so the rule leaves it
+    # at its five-minute floor, and the bead names five for it. Every one of
+    # those 142 is a run in which the read answered 401 and this job failed open
+    # on it (bead dv-gx2s); the authenticated read is the same request to the
+    # same server, and the floor is what the rule leaves either way.
+    timeout-minutes: 5
     outputs:
       # "true" when main has moved past the commit this run was started for.
       # Every job below carries the same value as a job-level if, so the run's
@@ -192,6 +235,14 @@ jobs:
           # Read from the repository, not from a checkout: this job makes none,
           # and the ref in question is the remote's main, not the ref the run
           # started at. It is read by URL for that reason.
+          #
+          # The read is authenticated as this run, with the token the runner
+          # gives every job of every workflow for the run's own repository —
+          # nothing is minted for it, no key path is read, and it opens this
+          # repository and no other. Every app repo is private, so an anonymous
+          # `git ls-remote` of main answers 401: this read has never once
+          # succeeded, and this job has failed open on every run it has had
+          # (bead dv-gx2s).
           if [[ -z ${GITHUB_SERVER_URL:-} || -z ${GITHUB_REPOSITORY:-} ]]; then
             printf '::notice::the runner names no server or repository, so main cannot be read\n'
             printf 'deploying and testing %s rather than skipping it silently\n' "$GITHUB_SHA"
@@ -200,7 +251,32 @@ jobs:
           fi
           remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
 
-          if ! out=$(git ls-remote "$remote" refs/heads/main 2>/dev/null); then
+          if [[ -z ${GITHUB_TOKEN:-} ]]; then
+            printf '::notice::this runner gave the job no token, so main cannot be read\n'
+            printf 'deploying and testing %s rather than skipping it silently\n' "$GITHUB_SHA"
+            printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+
+          # git takes the token as basic auth, so the header is
+          # `Authorization: Basic base64(<user>:<token>)` — and the user does not
+          # matter: on this server a non-empty password is read as the token and
+          # is looked up on its own, so the name below is the one
+          # actions/checkout uses for a server deployment rather than an account
+          # this file has to know (services/auth/basic.go, GetRunningTaskByToken).
+          auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
+
+          # The header reaches git through its environment — GIT_CONFIG_* is
+          # git's own way to set one config value for one command — so the token
+          # is on no command line for a `ps` in the job's own container to read,
+          # and 2>/dev/null keeps git's own output out of the log, where a URL
+          # it prints on the way out would be the only place the run could leak
+          # anything. No branch below prints the header or the token: what a
+          # reader sees is main's own sha or the notice above.
+          if ! out=$(env GIT_TERMINAL_PROMPT=0 \
+              GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader \
+              GIT_CONFIG_VALUE_0="Authorization: Basic $auth" \
+              git ls-remote "$remote" refs/heads/main 2>/dev/null); then
             printf '::notice::could not read main from %s\n' "$remote"
             printf 'deploying and testing %s rather than skipping it silently\n' "$GITHUB_SHA"
             printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
@@ -227,6 +303,17 @@ jobs:
     # this is the condition that says so: at the job level, so the job's status is
     # skipped rather than success.
     if: needs.off.outputs.off != 'true' && needs.fresh.outputs.stale != 'true'
+    # The job that hung on 2026-10-15, and the one this bead is about. Its
+    # successful runs are p95 50s over 164 (a cold one is 142s), and the rule
+    # would leave it at the floor; the bead names 20 for it because the build
+    # step inside it carries a bound of its own and one automatic retry
+    # (scripts/release/build_push_staging.sh), and this bound has to hold two
+    # of those plus the checkout and the token. Eight and a half minutes each is
+    # what that arithmetic allows, so the step's own bound is eight
+    # (lib.sh, build_bound_seconds) and two of them leave this job four minutes
+    # of room; the operator's suggestion of ten for the step would have made the
+    # two attempts this job's whole bound.
+    timeout-minutes: 20
     # The base key, as a path the deploy runner mounts, mode 600, inside a home
     # only gt-cloud can read (deploy.yml states why it is a path and never a
     # Forgejo secret). It is a job variable here and not a workflow one so that
@@ -253,7 +340,14 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          # The capture holds what the script writes on stdout, and a failure
+          # ends the step at the assignment, before the print below can show
+          # any of it: print what it wrote, then fail with its own status.
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -267,7 +361,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/build_push_staging.sh --ref "$REF" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/build_push_staging.sh --ref "$REF" --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -282,6 +380,12 @@ jobs:
     # that came after it.
     needs: [build, off, fresh]
     if: needs.off.outputs.off != 'true' && needs.fresh.outputs.stale != 'true'
+    # Applying a digest and waiting for the revision to serve is p95 104s over
+    # 61 runs (the slowest healthy one is 105s), so twice it is under four
+    # minutes and the rule would leave this at its floor; the bead names 15.
+    # That is the bound on the job, not on the wait inside it: up.sh's own
+    # service wait has its own timeout, and this is the backstop under both.
+    timeout-minutes: 15
     # The same mount the build job states, for the same reason: this job mints a
     # token and applies a digest, and both need the base key.
     env:
@@ -302,7 +406,11 @@ jobs:
         id: token
         run: |
           set -euo pipefail
-          out="$(scripts/release/mint_token.sh)"
+          out="$(scripts/release/mint_token.sh)" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -319,7 +427,11 @@ jobs:
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
-          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")"
+          out="$(scripts/release/up.sh --env staging --digest "$DIGEST" --token-file "$TOKEN_FILE")" || {
+            status=$?
+            printf '%s\n' "$out"
+            exit "$status"
+          }
           printf '%s\n' "$out"
           printf '%s\n' "$out" | grep -E '^[a-z_]+=' >>"$GITHUB_OUTPUT"
 
@@ -332,12 +444,12 @@ jobs:
   # so that "this commit is green on staging" is a fact about one commit rather
   # than about whatever staging happened to serve when a sweep fired.
   #
-  # This job is on the CI runner and holds nothing: no key path, no token, no
-  # cloud call. Everything it does is a read of the deployed service over HTTP —
-  # the version wait, and the app's own suite — and what it writes is a job
-  # result. That is what makes it the job a release can read: it cannot change
-  # anything, so its answer cannot be one a broken run gave before it changed
-  # something.
+  # This job is on the CI runner and reaches for nothing: no key path, no cloud
+  # call, and it names the run's repository token nowhere. Everything it does is
+  # a read of the deployed service over HTTP — the version wait, and the app's
+  # own suite — and what it writes is a job result. That is what makes it the job
+  # a release can read: it cannot change anything, so its answer cannot be one a
+  # broken run gave before it changed something.
   integration:
     runs-on: ci-base
     # As the staging job: `staging` is the deploy whose commit this job tests,
@@ -347,8 +459,12 @@ jobs:
     if: needs.off.outputs.off != 'true' && needs.fresh.outputs.stale != 'true'
     # The version wait polls for up to 300s by default and the app's suite is the
     # app's own; the job names a bound of its own so that a service that never
-    # settles cannot hold a runner past it.
-    timeout-minutes: 30
+    # settles cannot hold a runner past it. The suite takes p95 15s over 163
+    # runs (16s is the slowest), so even with the wait's whole five minutes
+    # spent and the suite at its worst this is several times the job's own
+    # work; the bead names 15, and health.yml and up.yml give the same suite
+    # the same bound.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
