@@ -2,12 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   EXPECT_SHA_VAR,
+  INTEGRATION_URL_VAR,
+  MISSING_URL_MESSAGE,
   STAGING_URL_VAR,
   requestUrl,
   resolveIntegrationTarget,
 } from "../integrationTarget";
 
 const STAGING = "https://fractals-nextjs-staging-example.run.app";
+const PROD = "https://fractals-nextjs-prod-example.run.app";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -16,11 +19,42 @@ afterEach(() => {
 describe("resolveIntegrationTarget", () => {
   it("reads the URL and the commit to expect", () => {
     expect(
+      resolveIntegrationTarget({
+        INTEGRATION_URL: STAGING,
+        EXPECT_SHA: "abc1234",
+      }),
+    ).toEqual({ baseUrl: STAGING, expectSha: "abc1234" });
+  });
+
+  it("still reads STAGING_URL, as an alias for INTEGRATION_URL", () => {
+    expect(
       resolveIntegrationTarget({ STAGING_URL: STAGING, EXPECT_SHA: "abc1234" }),
     ).toEqual({ baseUrl: STAGING, expectSha: "abc1234" });
   });
 
+  it("prefers INTEGRATION_URL when both names are set", () => {
+    expect(
+      resolveIntegrationTarget({ INTEGRATION_URL: PROD, STAGING_URL: STAGING })
+        .baseUrl,
+    ).toBe(PROD);
+  });
+
+  it("falls back to STAGING_URL when INTEGRATION_URL is blank", () => {
+    expect(
+      resolveIntegrationTarget({ INTEGRATION_URL: "  ", STAGING_URL: STAGING })
+        .baseUrl,
+    ).toBe(STAGING);
+  });
+
+  it("returns the commit to expect, so a prod run can prove the release", () => {
+    expect(
+      resolveIntegrationTarget({ INTEGRATION_URL: PROD, EXPECT_SHA: "0123abc" })
+        .expectSha,
+    ).toBe("0123abc");
+  });
+
   it("reads the process environment when given none", () => {
+    vi.stubEnv(INTEGRATION_URL_VAR, undefined);
     vi.stubEnv(STAGING_URL_VAR, `${STAGING}/`);
     vi.stubEnv(EXPECT_SHA_VAR, undefined);
 
@@ -55,13 +89,28 @@ describe("resolveIntegrationTarget", () => {
     ).toEqual({ baseUrl: STAGING, expectSha: "abc1234" });
   });
 
-  it("refuses a missing or blank STAGING_URL, with the command to type", () => {
-    for (const env of [{}, { STAGING_URL: "" }, { STAGING_URL: "  " }]) {
-      expect(() => resolveIntegrationTarget(env)).toThrow(STAGING_URL_VAR);
-      expect(() => resolveIntegrationTarget(env)).toThrow(
-        /make integration STAGING_URL=/,
-      );
+  it("refuses a missing or blank URL in one line naming both variables", () => {
+    expect(MISSING_URL_MESSAGE).not.toContain("\n");
+    expect(MISSING_URL_MESSAGE).toContain(INTEGRATION_URL_VAR);
+    expect(MISSING_URL_MESSAGE).toContain(STAGING_URL_VAR);
+
+    for (const env of [
+      {},
+      { STAGING_URL: "" },
+      { STAGING_URL: "  " },
+      { INTEGRATION_URL: " ", STAGING_URL: "" },
+    ]) {
+      expect(() => resolveIntegrationTarget(env)).toThrow(MISSING_URL_MESSAGE);
     }
+  });
+
+  it("names the variable that held an unusable URL", () => {
+    expect(() =>
+      resolveIntegrationTarget({ INTEGRATION_URL: "not a url" }),
+    ).toThrow(/INTEGRATION_URL is not a URL/);
+    expect(() =>
+      resolveIntegrationTarget({ STAGING_URL: "not a url" }),
+    ).toThrow(/STAGING_URL is not a URL/);
   });
 
   it("refuses a URL it cannot parse or call", () => {

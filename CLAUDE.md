@@ -28,14 +28,16 @@ make check         # lint + typecheck (`make presubmit` runs that pair alone)
 make test          # the unit suite (`vitest run`)
 make dev           # the development server
 make build         # `next build`
-make integration STAGING_URL=<url> [EXPECT_SHA=<commit>]   # a deployment
+make integration INTEGRATION_URL=<url> [EXPECT_SHA=<commit>]   # a deployment (STAGING_URL= also works)
+make integration-prod PROD_URL=<url> [EXPECT_SHA=<commit>]      # the same read-only suite against prod
 make deploy-check  # the Go deploy program's tests and `go vet`
 ```
 
 `make integration` and `make deploy-check` are deliberately not in `gate`: one
 needs a deployment to call, the other the Forgejo Go registry `deploy/go.mod`
 resolves through. `make integration` installs its own dependencies and checks
-`STAGING_URL` first, because the staging workflow runs it in a fresh checkout.
+`INTEGRATION_URL` (or `STAGING_URL`) first, because the staging workflow runs it
+in a fresh checkout.
 `npm run make-og-previews` (no Make target) redraws `public/og/` after a place
 changes.
 

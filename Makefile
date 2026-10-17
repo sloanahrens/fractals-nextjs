@@ -1,4 +1,4 @@
-.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration check-prod-url smoke deploy-check
+.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration integration-prod check-integration-url check-integration-prod-url check-prod-url smoke deploy-check
 
 # Default target
 help:
@@ -20,7 +20,8 @@ help:
 	@echo "  make check         Run all quality checks (lint + typecheck)"
 	@echo ""
 	@echo "Integration (calls a deployed app over the network; not part of the gate):"
-	@echo "  make integration STAGING_URL=<url> [EXPECT_SHA=<commit>]"
+	@echo "  make integration INTEGRATION_URL=<url> [EXPECT_SHA=<commit>]   (STAGING_URL=<url> also works)"
+	@echo "  make integration-prod PROD_URL=<url> [EXPECT_SHA=<commit>]     (the same read-only suite; refuses a staging URL)"
 	@echo ""
 	@echo "Smoke (a deployment that is already serving; read-only, not part of the gate):"
 	@echo "  make smoke PROD_URL=<url>"
@@ -83,7 +84,7 @@ clean:
 	@echo "Build artifacts cleaned"
 
 # ── Gas Town landing gate (no cloud access, no secrets) ──────────────────
-.PHONY: ci-install test presubmit gate check-staging-url
+.PHONY: ci-install test presubmit gate
 
 ci-install:
 	npm ci
@@ -100,33 +101,52 @@ gate: ci-install check build test
 # The checks that call a deployed app, and the one suite here that needs the
 # network. It is deliberately not in `gate`: the gate runs with no network and
 # no deployment to call, and it must keep passing on a machine that has neither.
-# Run by hand against staging, or by the staging workflow after a deploy
-# (`make integration STAGING_URL=<url> EXPECT_SHA=<commit>`).
+# Run by hand against any deployment, or by the staging workflow after a deploy
+# (`make integration INTEGRATION_URL=<url> EXPECT_SHA=<commit>`). STAGING_URL is
+# the older name for the same URL and still works; INTEGRATION_URL wins if both
+# are set.
 #
 # The target installs its own dependencies (`ci-install`), because the staging
 # workflow checks the repository out fresh and runs this one command: that
 # checkout has no node_modules, and `npm run test:integration` died on
 # `vitest: not found` before it could say anything about the deployment.
 #
-# `check-staging-url` is a prerequisite ahead of the install, so a run that
-# forgot STAGING_URL still fails with the command to type (the message
+# `check-integration-url` is a prerequisite ahead of the install, so a run that
+# forgot the URL still fails with the command to type (the message
 # src/lib/integrationTarget.ts gives) in a second, rather than after npm ci.
-integration: check-staging-url ci-install
+integration: check-integration-url ci-install
 	npm run test:integration
 
-# The same message integrationTarget.ts gives for a missing STAGING_URL. It is
-# written out twice on purpose: this one has to answer before node_modules
-# exists, so it cannot come from the TypeScript. `make-targets.test.ts` fails
-# if the two stop being identical, so change this one and that one together.
-check-staging-url:
-	@if [ -z "$(STAGING_URL)" ]; then \
-		echo "STAGING_URL is not set."; \
-		echo ""; \
-		echo "Set STAGING_URL to the deployment to test, for example:"; \
-		echo "  make integration STAGING_URL=https://fractals-nextjs-staging-example.run.app"; \
-		echo "  STAGING_URL=https://... npm run test:integration"; \
-		echo ""; \
-		echo "EXPECT_SHA=<commit> is optional, and makes the version check exact."; \
+# The same one-line message integrationTarget.ts gives when neither variable is
+# set. It is written out twice on purpose: this one has to answer before
+# node_modules exists, so it cannot come from the TypeScript.
+# `make-targets.test.ts` fails if the two stop being identical, so change this
+# one and that one together.
+check-integration-url:
+	@if [ -z "$(strip $(INTEGRATION_URL))" ] && [ -z "$(strip $(STAGING_URL))" ]; then \
+		echo "INTEGRATION_URL (or its alias STAGING_URL) is not set: make integration INTEGRATION_URL=<url> [EXPECT_SHA=<commit>]"; \
+		exit 1; \
+	fi
+
+# The same suite against production, for the deploy workflow's check that the
+# release it just rolled out is the one serving. It is read-only by construction
+# (`integration-read-only.test.ts` holds tests/integration to GET and HEAD), and
+# EXPECT_SHA=<commit> makes the version check prove the released commit rather
+# than any commit. PROD_URL is the variable `smoke` takes for the same URL; it
+# becomes INTEGRATION_URL here, ahead of any STAGING_URL in the environment.
+integration-prod: check-integration-prod-url ci-install
+	INTEGRATION_URL="$(PROD_URL)" npm run test:integration
+
+# Refuse a run with no URL, and a URL that names staging: the prod check pointed
+# at staging would pass for the wrong deployment. Both answer before the
+# install, as `check-integration-url` does.
+check-integration-prod-url:
+	@if [ -z "$(strip $(PROD_URL))" ]; then \
+		echo "PROD_URL is not set: make integration-prod PROD_URL=<url> [EXPECT_SHA=<commit>]"; \
+		exit 1; \
+	fi
+	@if printf '%s' "$(PROD_URL)" | grep -qi staging; then \
+		echo "PROD_URL names staging, so make integration-prod will not run against it: use make integration INTEGRATION_URL=<url>"; \
 		exit 1; \
 	fi
 
@@ -143,7 +163,7 @@ check-staging-url:
 # shell, curl and nothing checked out.
 #
 # The URL arrives as PROD_URL, named for the environment it points at the way
-# `integration` is handed STAGING_URL. That name is the caller's, not this
+# `integration` is handed INTEGRATION_URL. That name is the caller's, not this
 # file's: the hourly check of a service people are using runs
 # `make smoke PROD_URL=<url>`, so the variable is part of what the target
 # promises rather than a local choice. A caller who knows the script better than
@@ -156,7 +176,7 @@ smoke: check-prod-url
 # Refuse a run that names no service, before the script is reached. The script
 # refuses one too, but it names its own flag and the variable behind it, and the
 # name the caller of this target is given is PROD_URL. It is a prerequisite,
-# ahead of the run, as check-staging-url is on `integration` above: a run that
+# ahead of the run, as check-integration-url is on `integration` above: a run that
 # forgot the URL is told so in a second, and what this target reads is legible
 # without following it into the script.
 check-prod-url:

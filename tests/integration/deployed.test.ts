@@ -6,7 +6,7 @@ import { copyLinkUrl } from "@/lib/viewQuery";
 import { linkHref, metaContent } from "./html";
 import { get } from "./http";
 
-// Read once, while the suite is collected: a missing STAGING_URL fails the file
+// Read once, while the suite is collected: a missing INTEGRATION_URL fails the file
 // with the command to type, instead of every check failing to run.
 const target = resolveIntegrationTarget();
 
@@ -58,7 +58,7 @@ describe(`the deployment at ${target.baseUrl}`, () => {
     if (target.expectSha) {
       expect(
         body.commit,
-        `the deployment is not serving ${target.expectSha} (its commit is ${JSON.stringify(body.commit)}), so staging has not caught up with this build`,
+        `the deployment is not serving ${target.expectSha} (its commit is ${JSON.stringify(body.commit)}), so it has not caught up with this build`,
       ).toBe(target.expectSha);
     }
   });

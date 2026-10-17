@@ -62,7 +62,8 @@ make gate          # ci-install -> check -> build -> test: exactly what CI runs
 make check         # lint + typecheck
 make test          # the unit suite (`vitest run`), with no network
 make build         # next build
-make integration STAGING_URL=<url> [EXPECT_SHA=<commit>]   # a deployment
+make integration INTEGRATION_URL=<url> [EXPECT_SHA=<commit>]   # a deployment (STAGING_URL= also works)
+make integration-prod PROD_URL=<url> [EXPECT_SHA=<commit>]      # the same read-only suite against prod
 make deploy-check  # the Go deploy program's tests and `go vet`
 ```
 
@@ -72,10 +73,13 @@ make deploy-check  # the Go deploy program's tests and `go vet`
 source-text checks the panel tests make. It runs in Node with no browser, no
 canvas package and no network.
 
-The integration tier is the other half. `make integration STAGING_URL=<url>`
-calls a deployment that is already up — staging, or a container on
-`localhost:8080` — over HTTP, and `EXPECT_SHA=<commit>` makes the version check
-exact. It is deliberately not in `make gate`, which has to keep passing with no
+The integration tier is the other half. `make integration INTEGRATION_URL=<url>`
+(`STAGING_URL` is the older name and still works) calls a deployment that is
+already up — staging, or a container on `localhost:8080` — over HTTP, and
+`EXPECT_SHA=<commit>` makes the version check exact. `make integration-prod
+PROD_URL=<url>` runs the same suite against production and refuses a URL that
+names staging; the suite only sends GET and HEAD, and a unit test holds it to
+that. It is deliberately not in `make gate`, which has to keep passing with no
 network and no deployment to call; the checks are in
 `tests/integration/deployed.test.ts`.
 
