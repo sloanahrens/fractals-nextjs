@@ -13,7 +13,16 @@
 /** How long one request may take before it is abandoned, in milliseconds. */
 export const REQUEST_TIMEOUT_MS = 15_000;
 
-/** The deployment to test. Required — there is nothing sensible to default to. */
+/**
+ * The deployment to test, whichever environment it is. Required — there is
+ * nothing sensible to default to.
+ */
+export const INTEGRATION_URL_VAR = "INTEGRATION_URL";
+
+/**
+ * The older name for the same thing, from when the tier only called staging. It
+ * still works, and INTEGRATION_URL wins when both are set.
+ */
 export const STAGING_URL_VAR = "STAGING_URL";
 
 /** The commit the deployment should be serving. Optional. */
@@ -27,10 +36,18 @@ export interface IntegrationTarget {
   expectSha: string | null;
 }
 
-/** Typed at a terminal when STAGING_URL is missing or unusable. */
-const USAGE = `Set STAGING_URL to the deployment to test, for example:
-  make integration STAGING_URL=https://fractals-nextjs-staging-example.run.app
-  STAGING_URL=https://... npm run test:integration
+/**
+ * Said, on one line, when neither variable is set. The Makefile's
+ * `check-integration-url` echoes the same line before node_modules exists, and
+ * `make-targets.test.ts` fails if the two stop being identical.
+ */
+export const MISSING_URL_MESSAGE =
+  "INTEGRATION_URL (or its alias STAGING_URL) is not set: make integration INTEGRATION_URL=<url> [EXPECT_SHA=<commit>]";
+
+/** The hint after a URL that is set but unusable. */
+const USAGE = `Set ${INTEGRATION_URL_VAR} to the deployment to test, for example:
+  make integration INTEGRATION_URL=https://fractals-nextjs-staging-example.run.app
+  INTEGRATION_URL=https://... npm run test:integration
 
 EXPECT_SHA=<commit> is optional, and makes the version check exact.`;
 
@@ -45,25 +62,29 @@ function present(value: string | undefined): string | null {
  *
  * @param env - The environment to read; the process's own by default
  * @returns The URL to call and the commit to expect, if one was given
- * @throws When STAGING_URL is missing, blank, not a URL, or not http(s) — each
- *   with the command to type, because a run without it has nothing to test and
- *   the message is the only thing it can usefully say
+ * @throws When neither INTEGRATION_URL nor STAGING_URL is set, or the one that
+ *   is, is blank, not a URL, or not http(s) — each with the command to type,
+ *   because a run without it has nothing to test and the message is the only
+ *   thing it can usefully say
  */
 export function resolveIntegrationTarget(
   env: Record<string, string | undefined> = process.env,
 ): IntegrationTarget {
-  const raw = present(env[STAGING_URL_VAR]);
-  if (!raw) throw new Error(`${STAGING_URL_VAR} is not set.\n\n${USAGE}`);
+  const name = present(env[INTEGRATION_URL_VAR])
+    ? INTEGRATION_URL_VAR
+    : STAGING_URL_VAR;
+  const raw = present(env[name]);
+  if (!raw) throw new Error(MISSING_URL_MESSAGE);
 
   let parsed: URL;
   try {
     parsed = new URL(raw);
   } catch {
-    throw new Error(`${STAGING_URL_VAR} is not a URL: ${raw}\n\n${USAGE}`);
+    throw new Error(`${name} is not a URL: ${raw}\n\n${USAGE}`);
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error(
-      `${STAGING_URL_VAR} must be an http or https URL, not ${parsed.protocol}\n\n${USAGE}`,
+      `${name} must be an http or https URL, not ${parsed.protocol}\n\n${USAGE}`,
     );
   }
 

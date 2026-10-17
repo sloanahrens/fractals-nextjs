@@ -10,7 +10,7 @@ import { defineConfig } from "vitest/config";
  * deployment to call. `include` names `tests/integration/**` and nothing else,
  * so `npm test` cannot pick these checks up and this config cannot pick up a
  * unit test. `make integration` and `npm run test:integration` run it, and both
- * need STAGING_URL in the environment (src/lib/integrationTarget.ts).
+ * need INTEGRATION_URL (or its alias STAGING_URL) in the environment (src/lib/integrationTarget.ts).
  */
 export default defineConfig({
   resolve: {

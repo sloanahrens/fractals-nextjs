@@ -6,18 +6,21 @@
  * reaches the integration tier. Both facts live in the Makefile and nowhere
  * else, so this parses it rather than shelling out to `make -n`.
  */
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import {
+  INTEGRATION_URL_VAR,
   STAGING_URL_VAR,
   resolveIntegrationTarget,
 } from "@/lib/integrationTarget";
 
 // `import.meta.url` is this file: src/__tests__/, so ".." twice is the root.
-const MAKEFILE = fileURLToPath(new URL("../../Makefile", import.meta.url));
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const MAKEFILE = `${ROOT}Makefile`;
 
 /** One rule in the Makefile: what it needs, and what it runs. */
 interface Target {
@@ -87,7 +90,7 @@ function target(name: string): Target {
   return found;
 }
 
-/** The message the integration tier gives for a missing STAGING_URL. */
+/** The message the integration tier gives when no URL is set. */
 function missingUrlMessage(): string {
   try {
     resolveIntegrationTarget({});
@@ -104,12 +107,29 @@ function echoed(recipe: string[]): string {
     .join("\n");
 }
 
+/**
+ * Run `make` with these arguments and no inherited URL, so a variable set in
+ * the shell running the suite cannot answer for the one under test.
+ */
+function make(...args: string[]) {
+  const env = { ...process.env };
+  for (const name of [INTEGRATION_URL_VAR, STAGING_URL_VAR, "PROD_URL"]) {
+    delete env[name];
+  }
+  const run = spawnSync("make", ["--no-print-directory", ...args], {
+    cwd: ROOT,
+    env,
+    encoding: "utf8",
+  });
+  return { status: run.status, output: `${run.stdout}${run.stderr}` };
+}
+
 describe("the integration target", () => {
   it("has the guard and the dependency install ahead of its own command", () => {
-    // In order: a missing STAGING_URL is answered before the install, which is
+    // In order: a missing URL is answered before the install, which is
     // answered before the tests. Swapping these is the failure this pins.
     expect(target("integration").prerequisites).toEqual([
-      "check-staging-url",
+      "check-integration-url",
       "ci-install",
     ]);
   });
@@ -120,13 +140,88 @@ describe("the integration target", () => {
     );
   });
 
-  it("still says how to run itself when STAGING_URL is missing", () => {
+  it("says in one line how to run itself when no URL is set", () => {
     const message = missingUrlMessage();
 
+    // Both names, so a caller using either is told about the other.
+    expect(message).toContain(INTEGRATION_URL_VAR);
     expect(message).toContain(STAGING_URL_VAR);
+    expect(message).not.toContain("\n");
     // The shell guard has to answer before node_modules exists, so it cannot
     // read the TypeScript below; this is what keeps the two copies one message.
-    expect(echoed(target("check-staging-url").recipe)).toBe(message);
+    expect(echoed(target("check-integration-url").recipe)).toBe(message);
+  });
+
+  it("refuses to run with neither name set, and accepts either one", () => {
+    const refused = make("check-integration-url");
+    expect(refused.status).not.toBe(0);
+    expect(refused.output.split("\n")[0]).toBe(missingUrlMessage());
+
+    for (const name of [INTEGRATION_URL_VAR, STAGING_URL_VAR]) {
+      const accepted = make("check-integration-url", `${name}=https://x.test`);
+      expect(accepted.status, name).toBe(0);
+    }
+  });
+});
+
+describe("the integration-prod target", () => {
+  it("has its guard and the dependency install ahead of the run", () => {
+    expect(target("integration-prod").prerequisites).toEqual([
+      "check-integration-prod-url",
+      "ci-install",
+    ]);
+  });
+
+  it("runs the same suite as integration, pointed at PROD_URL", () => {
+    const recipe = target("integration-prod").recipe.join("\n");
+
+    expect(recipe).toContain("npm run test:integration");
+    expect(recipe).toContain(`${INTEGRATION_URL_VAR}="$(PROD_URL)"`);
+  });
+
+  it("hands the suite PROD_URL as INTEGRATION_URL and passes EXPECT_SHA on", () => {
+    // A dry run prints the recipe without running the guard or the install.
+    const dry = make(
+      "-n",
+      "integration-prod",
+      "PROD_URL=https://prod.example.test",
+      "EXPECT_SHA=abc1234",
+    );
+
+    expect(dry.status).toBe(0);
+    expect(dry.output).toContain(
+      'INTEGRATION_URL="https://prod.example.test" npm run test:integration',
+    );
+  });
+
+  it("refuses a run with no PROD_URL, before it installs anything", () => {
+    const run = make("integration-prod");
+
+    expect(run.status).not.toBe(0);
+    expect(run.output).toContain("PROD_URL is not set");
+    expect(run.output).not.toMatch(/npm ci|npm run/);
+  });
+
+  it("refuses a URL that names staging, whatever its case", () => {
+    for (const url of [
+      "https://fractals-nextjs-staging-abc.run.app",
+      "https://FRACTALS-STAGING.example.test/",
+    ]) {
+      const run = make("integration-prod", `PROD_URL=${url}`);
+
+      expect(run.status, url).not.toBe(0);
+      expect(run.output, url).toContain("names staging");
+      expect(run.output, url).not.toMatch(/npm ci|npm run/);
+    }
+  });
+
+  it("lets a production URL through its guard", () => {
+    const run = make(
+      "check-integration-prod-url",
+      "PROD_URL=https://fractals-nextjs-prod-abc.run.app",
+    );
+
+    expect(run.status).toBe(0);
   });
 });
 
@@ -162,7 +257,9 @@ describe("the gate", () => {
     const reached = reachable(targets, "gate");
 
     expect(reached).not.toContain("integration");
-    expect(reached).not.toContain("check-staging-url");
+    expect(reached).not.toContain("integration-prod");
+    expect(reached).not.toContain("check-integration-url");
+    expect(reached).not.toContain("check-integration-prod-url");
     expect(reached).not.toContain("check-prod-url");
     // `smoke` calls a service like `integration` does. Its own checks run in
     // the suite against a stand-in on this machine, which is not the same

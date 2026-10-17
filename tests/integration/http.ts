@@ -5,7 +5,11 @@ const ATTEMPTS = 2;
 
 /** One GET at the tier's deadline. A 5xx is a failure like any other here. */
 async function getOnce(url: string): Promise<Response> {
+  // The tier also runs against production (`make integration-prod`), so it only
+  // reads: this is the one `fetch` here, and integration-read-only.test.ts
+  // fails any other method.
   const response = await fetch(url, {
+    method: "GET",
     redirect: "follow",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
