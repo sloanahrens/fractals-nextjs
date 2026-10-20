@@ -60,7 +60,8 @@ const TITLE_CLASSES = "sr-only text-lg font-semibold sm:not-sr-only";
  *
  * A faded bar takes no pointer events: the touch that brings it back should
  * not also press whatever button is under the finger.
- */ export function TopBar({
+ */
+export function TopBar({
   onBack,
   onForward,
   canGoBack,

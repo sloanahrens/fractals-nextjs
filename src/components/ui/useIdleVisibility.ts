@@ -3,10 +3,10 @@
 import { useEffect, useState, type FocusEvent } from "react";
 
 import {
-  CHROME_ACTIVITY_EVENTS,
   CHROME_SELECTOR,
   chromeHeld,
-  createIdleFade,
+  chromeShown,
+  watchChromeActivity,
   type ChromeHolds,
 } from "../../lib/idleFade";
 
@@ -45,23 +45,12 @@ export function useIdleVisibility(holds: Omit<ChromeHolds, "focusWithin">) {
     setVisible(true);
   }
 
-  useEffect(() => {
-    const fade = createIdleFade({ onChange: setVisible, held });
-    const handleActivity = () => fade.activity();
+  useEffect(
+    () => watchChromeActivity({ target: window, onChange: setVisible, held }),
+    [held],
+  );
 
-    for (const name of CHROME_ACTIVITY_EVENTS) {
-      window.addEventListener(name, handleActivity, { passive: true });
-    }
-
-    return () => {
-      for (const name of CHROME_ACTIVITY_EVENTS) {
-        window.removeEventListener(name, handleActivity);
-      }
-      fade.dispose();
-    };
-  }, [held]);
-
-  const shown = held || visible;
+  const shown = chromeShown(held, visible);
 
   const focusProps = {
     // Only focus a keyboard user would see counts. A mouse click also focuses

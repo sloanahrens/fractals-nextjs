@@ -141,3 +141,39 @@ export function createIdleFade({
     dispose: stop,
   };
 }
+
+export interface ChromeWatchOptions extends IdleFadeOptions {
+  /** Where input is heard: the window, on the page. */
+  target: EventTarget;
+}
+
+/**
+ * The idle clock wired to input: a `createIdleFade` whose `activity()` is
+ * called by each of `CHROME_ACTIVITY_EVENTS` on `target`. The pointer leaving
+ * the window is not one of them, so it neither fades the chrome at once nor
+ * restarts the wait. Returns the cleanup, which removes the listeners and stops
+ * the clock; the page calls it and makes a new one whenever a hold changes.
+ */
+export function watchChromeActivity({
+  target,
+  ...options
+}: ChromeWatchOptions): () => void {
+  const fade = createIdleFade(options);
+  const handleActivity = () => fade.activity();
+
+  for (const name of CHROME_ACTIVITY_EVENTS) {
+    target.addEventListener(name, handleActivity, { passive: true });
+  }
+
+  return () => {
+    for (const name of CHROME_ACTIVITY_EVENTS) {
+      target.removeEventListener(name, handleActivity);
+    }
+    fade.dispose();
+  };
+}
+
+/** Whether the controls show: a hold keeps them up whatever the clock says. */
+export function chromeShown(held: boolean, visible: boolean): boolean {
+  return held || visible;
+}

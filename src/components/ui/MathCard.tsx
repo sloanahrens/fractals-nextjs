@@ -28,7 +28,11 @@ import {
   setMathCardExpanded,
   subscribeToMathCard,
 } from "../../lib/mathCard";
-import { type PointProbe, colourCss, describeProbe } from "../../lib/mathProbe";
+import {
+  type PointProbe,
+  colourCss,
+  describeProbe,
+} from "../../lib/mathProbe";
 import { PLACES, placeAtView } from "../../lib/places";
 import { MathView } from "./MathView";
 import { OrbitPlot } from "./OrbitPlot";

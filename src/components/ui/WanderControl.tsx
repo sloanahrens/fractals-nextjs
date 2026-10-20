@@ -81,8 +81,8 @@ function Glyph({ kind }: { kind: "play" | "pause" }) {
  * It holds no walk state — the page does, and the Settings checkbox is another
  * view of it. It fades with the page's other controls after a quiet spell
  * (`data-chrome`); that is only its opacity, so the countdown in its label
- * keeps counting while it is gone. Beside the Nearby strip's longest row it sits in
- * the corner; on a narrower picture it stacks over the strip's right end, so it
+ * keeps counting while it is gone. Beside the Nearby strip's longest row it
+ * sits in the corner; on a narrower picture it stacks over the strip's right end, so it
  * is never over a tile (`wanderPlacement`, from the picture's measured width).
  * The Look control rides in the same row as `leading`, with its width reserved
  * in that measure, so the two are placed together and cannot overlap.

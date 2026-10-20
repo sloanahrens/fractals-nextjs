@@ -161,8 +161,9 @@ function Tile({
  * is a flat grey tile; the place is still a button that works.
  *
  * It fades with the page's other controls after a quiet spell (`data-chrome`),
- * and `hidden` takes it away outright. The row scrolls sideways when it is wider than the canvas. Only the tiles take
- * pointer events, so the canvas under the gaps still pans.
+ * and `hidden` takes it away outright. The row scrolls sideways when it is
+ * wider than the canvas. Only the tiles take pointer events, so the canvas
+ * under the gaps still pans.
  */
 export function NearbyStrip({
   places,

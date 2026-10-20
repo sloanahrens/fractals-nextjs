@@ -58,7 +58,7 @@ Stack: Next.js (App Router), React, strict TypeScript, Tailwind, Vitest.
 
 ## Invariants
 
-Five things the suite holds the code to. Breaking one fails the gate.
+Six things the suite holds the code to. Breaking one fails the gate.
 
 1. **A kind's `trapDistance` is the least distance to the trap over its own
    `orbit` points, from the second on.** `orbitTrap.ts` defines the shapes and
@@ -78,7 +78,14 @@ Five things the suite holds the code to. Breaking one fails the gate.
    the asked mode and shape, and the caller must then render. `COLOUR_ONLY_KEYS`
    is `s`, `r` and `o`; the key `m` (an orbit trap) is **not** colour-only, so
    turning a trap on or off is a render.
-5. **`/api/og` draws nothing.** It answers `308` to the pre-built picture for
+5. **Every control over the picture fades on one page clock.** After 3 s
+   without input the controls fade and return on input, and a new control
+   joins by carrying `data-chrome` on its outermost element, not by running a
+   clock of its own. `useIdleVisibility` runs the one clock in
+   `FractalExplorer.tsx`; a dialog, an open Look menu, an expanded Math card
+   or keyboard focus on a control holds them up (`chromeHeld`). Fading is
+   opacity and `pointer-events` only, so Auto-wander keeps running.
+6. **`/api/og` draws nothing.** It answers `308` to the pre-built picture for
    the view (`ogImageFor`), so no request can spend a render.
 
 ## Adding a fractal

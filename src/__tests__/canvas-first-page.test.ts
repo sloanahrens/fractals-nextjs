@@ -168,22 +168,15 @@ describe("the top bar", () => {
   it("fades on the page's one idle clock and listens for input on the window", () => {
     expect(topBar).not.toContain("useIdleVisibility");
     expect(page.match(/useIdleVisibility\(/g)).toHaveLength(1);
+    // The clock and its listeners are tested by behaviour in `idleFade.test.ts`.
     expect(idleVisibility).toContain(
-      "createIdleFade({ onChange: setVisible, held })",
+      "watchChromeActivity({ target: window, onChange: setVisible, held })",
     );
-    expect(idleVisibility).toContain("CHROME_ACTIVITY_EVENTS");
-    expect(idleVisibility).toContain(
-      "window.addEventListener(name, handleActivity",
-    );
-    expect(idleVisibility).toContain(
-      "window.removeEventListener(name, handleActivity)",
-    );
-    expect(idleVisibility).toContain("fade.dispose()");
   });
 
   it("stays up while a dialog, the Look menu or the Math card is open, or a control has focus", () => {
     expect(idleVisibility).toContain("chromeHeld({ ...holds, focusWithin })");
-    expect(idleVisibility).toContain("const shown = held || visible;");
+    expect(idleVisibility).toContain("chromeShown(held, visible)");
     expect(idleVisibility).toContain("onFocus:");
     expect(idleVisibility).toContain("onBlur:");
     expect(page).toContain("{...chromeFocusProps}");
@@ -253,9 +246,7 @@ describe("the canvas", () => {
     // focus is (`pageKeys.ts`); the canvas handles none of them itself, which
     // is what keeps a focused picture from moving the view twice per press.
     expect(page).not.toContain("handleCanvasKeyDown");
-    expect(page).toContain(
-      'window.addEventListener("keydown", handlePageKeyDown)',
-    );
+    expect(page).toContain('window.addEventListener("keydown", handlePageKeyDown)');
   });
 
   it("shows render progress as a line on its top edge, and says it as text", () => {

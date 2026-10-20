@@ -105,8 +105,6 @@
   cursor: grabbing;
 }
 
-/* While a tour plays nothing but the picture shows: no pointer over it, and no
-   focus ring left on the canvas by a keyboard user who then went quiet. */
 /* The chrome: every control over the picture carries `data-chrome`, and the page
    sets `data-idle` on the stage once the idle wait runs out. A faded control
    takes no pointer events, nor do the buttons inside it, which set their own
@@ -131,6 +129,8 @@
   }
 }
 
+/* While a tour plays nothing but the picture shows: no pointer over it, and no
+   focus ring left on the canvas by a keyboard user who then went quiet. */
 .fractal-stage[data-tour="true"],
 .fractal-stage[data-tour="true"] .fractal-canvas {
   cursor: none;

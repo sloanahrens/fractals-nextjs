@@ -5,7 +5,9 @@ import {
   CHROME_FADE_MS,
   CHROME_IDLE_MS,
   chromeHeld,
+  chromeShown,
   createIdleFade,
+  watchChromeActivity,
   type ChromeHolds,
 } from "../idleFade";
 
@@ -158,48 +160,132 @@ describe("chromeHeld", () => {
   );
 });
 
-describe("the chrome's clock under each hold", () => {
-  // The owner remakes the clock with `held` from `chromeHeld` whenever a hold
-  // starts or ends, as the page's hook does.
-  it.each(Object.keys(NO_HOLDS) as Array<keyof ChromeHolds>)(
-    "does not fade while %s holds, and waits in full once it ends",
-    (reason) => {
+describe("watchChromeActivity", () => {
+  it.each(CHROME_ACTIVITY_EVENTS)(
+    "fades after 3000 ms of quiet and %s brings the chrome back at once",
+    (name) => {
+      const target = new EventTarget();
       const onChange = vi.fn();
-      const held = createIdleFade({
-        onChange,
-        held: chromeHeld({ ...NO_HOLDS, [reason]: true }),
-      });
+      watchChromeActivity({ target, onChange });
 
-      vi.advanceTimersByTime(60 * CHROME_IDLE_MS);
-      expect(onChange).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(CHROME_IDLE_MS);
+      expect(onChange).toHaveBeenLastCalledWith(false);
 
-      held.dispose();
-      createIdleFade({ onChange, held: chromeHeld(NO_HOLDS) });
+      target.dispatchEvent(new Event(name));
+      expect(onChange).toHaveBeenLastCalledWith(true);
 
       vi.advanceTimersByTime(CHROME_IDLE_MS - 1);
-      expect(onChange).not.toHaveBeenCalled();
-
+      expect(onChange).toHaveBeenLastCalledWith(true);
       vi.advanceTimersByTime(1);
-      expect(onChange).toHaveBeenCalledTimes(1);
       expect(onChange).toHaveBeenLastCalledWith(false);
     },
   );
 
-  it("fades after exactly 3000 ms of quiet and returns on each kind of input", () => {
+  it("restarts the wait on input before the chrome has faded", () => {
+    const target = new EventTarget();
     const onChange = vi.fn();
-    const fade = createIdleFade({ onChange });
+    watchChromeActivity({ target, onChange });
 
-    vi.advanceTimersByTime(2999);
+    vi.advanceTimersByTime(CHROME_IDLE_MS - 1);
+    target.dispatchEvent(new Event("pointermove"));
+    vi.advanceTimersByTime(CHROME_IDLE_MS - 1);
     expect(onChange).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
-    expect(onChange).toHaveBeenLastCalledWith(false);
 
-    // One round per kind of input; the clock treats them all alike.
-    CHROME_ACTIVITY_EVENTS.forEach(() => {
-      fade.activity();
-      expect(onChange).toHaveBeenLastCalledWith(true);
-      vi.advanceTimersByTime(3000);
-      expect(onChange).toHaveBeenLastCalledWith(false);
+    vi.advanceTimersByTime(1);
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fade the chrome at once when the pointer leaves, nor restart the wait", () => {
+    const target = new EventTarget();
+    const onChange = vi.fn();
+    watchChromeActivity({ target, onChange });
+
+    vi.advanceTimersByTime(1000);
+    target.dispatchEvent(new Event("pointerleave"));
+    expect(onChange).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(CHROME_IDLE_MS - 1000);
+    expect(onChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("stops listening and counting once cleaned up", () => {
+    const target = new EventTarget();
+    const onChange = vi.fn();
+    const stop = watchChromeActivity({ target, onChange });
+
+    stop();
+    target.dispatchEvent(new Event("pointermove"));
+    vi.advanceTimersByTime(10 * CHROME_IDLE_MS);
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  describe("under each hold, as the page remakes the watch when a hold changes", () => {
+    // What `useIdleVisibility` does: a hold starting or ending shows the
+    // controls and gives the new watch a full wait.
+    function page() {
+      const target = new EventTarget();
+      let holds = NO_HOLDS;
+      let visible = true;
+      let stop = () => {};
+
+      const watch = () => {
+        stop();
+        stop = watchChromeActivity({
+          target,
+          onChange: (next) => (visible = next),
+          held: chromeHeld(holds),
+        });
+      };
+      watch();
+
+      return {
+        target,
+        shown: () => chromeShown(chromeHeld(holds), visible),
+        hold: (next: Partial<ChromeHolds>) => {
+          const before = chromeHeld(holds);
+          holds = { ...holds, ...next };
+          if (chromeHeld(holds) !== before) {
+            visible = true;
+            watch();
+          }
+        },
+      };
+    }
+
+    it.each(Object.keys(NO_HOLDS) as Array<keyof ChromeHolds>)(
+      "%s keeps the controls up however long, and they fade 3000 ms after it ends",
+      (reason) => {
+        const chrome = page();
+
+        chrome.hold({ [reason]: true });
+        vi.advanceTimersByTime(60 * CHROME_IDLE_MS);
+        expect(chrome.shown()).toBe(true);
+
+        chrome.hold({ [reason]: false });
+        vi.advanceTimersByTime(CHROME_IDLE_MS - 1);
+        expect(chrome.shown()).toBe(true);
+
+        vi.advanceTimersByTime(1);
+        expect(chrome.shown()).toBe(false);
+
+        chrome.target.dispatchEvent(new Event("keydown"));
+        expect(chrome.shown()).toBe(true);
+      },
+    );
+
+    it("keeps them up while any one of several holds remains", () => {
+      const chrome = page();
+
+      chrome.hold({ settingsOpen: true, lookMenuOpen: true });
+      chrome.hold({ settingsOpen: false });
+      vi.advanceTimersByTime(60 * CHROME_IDLE_MS);
+      expect(chrome.shown()).toBe(true);
+
+      chrome.hold({ lookMenuOpen: false });
+      vi.advanceTimersByTime(CHROME_IDLE_MS);
+      expect(chrome.shown()).toBe(false);
     });
   });
 });
