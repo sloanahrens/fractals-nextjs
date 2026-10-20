@@ -1,12 +1,6 @@
 "use client";
 
-import React, {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import {
   LOOK_CONTROL_NAME,
@@ -22,6 +16,8 @@ interface LookControlProps {
   rendering: boolean;
   /** Chooses a look: the Settings select's own handler. */
   onChange: (value: string) => void;
+  /** Told `true` while the menu is open, so the page can keep its controls up. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 const BUTTON_CLASSES =
@@ -159,8 +155,23 @@ function LookMenu({
  * row (`WanderControl`'s `leading` slot), so it is hidden whenever the pill is
  * and placed by the same measure.
  */
-export function LookControl({ value, rendering, onChange }: LookControlProps) {
+export function LookControl({
+  value,
+  rendering,
+  onChange,
+  onOpenChange,
+}: LookControlProps) {
   const [open, setOpen] = useState(false);
+
+  // The cleanup answers `false` as the menu closes and when the control goes
+  // away with it open, so the page is never left holding for a menu that is gone.
+  useEffect(() => {
+    if (!open || !onOpenChange) return;
+
+    onOpenChange(true);
+    return () => onOpenChange(false);
+  }, [open, onOpenChange]);
+
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();

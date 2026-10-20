@@ -80,8 +80,8 @@ describe("the Nearby strip", () => {
     expect(page).toContain("nextNearbyOffset(previous.pool.length");
   });
 
-  it("never fades: only the top bar does", () => {
-    expect(strip).toContain('data-visible="true"');
+  it("fades with the page's other controls, on the page's one clock", () => {
+    expect(strip).toContain('data-chrome=""');
     expect(strip).not.toContain("useIdleVisibility");
     expect(strip).not.toContain("idleFade");
     expect(strip).not.toContain("focusProps");
@@ -91,8 +91,9 @@ describe("the Nearby strip", () => {
     expect(strip).toContain(
       '<div className="pointer-events-auto flex gap-2 overflow-x-auto pb-1">',
     );
-    // The bar keeps its own fade.
-    expect(topBar).toContain("useIdleVisibility(settingsOpen)");
+    // The page runs the one clock; the bar no longer has its own.
+    expect(page).toContain("useIdleVisibility({");
+    expect(topBar).not.toContain("useIdleVisibility");
   });
 
   it("takes an optional hidden prop that renders nothing and asks for no pictures", () => {

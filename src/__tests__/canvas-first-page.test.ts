@@ -165,12 +165,13 @@ describe("the top bar", () => {
     expect(page.indexOf("<canvas")).toBeGreaterThan(page.indexOf("<TopBar"));
   });
 
-  it("fades on the idle clock and listens for input on the window", () => {
-    expect(topBar).toContain("useIdleVisibility(settingsOpen)");
+  it("fades on the page's one idle clock and listens for input on the window", () => {
+    expect(topBar).not.toContain("useIdleVisibility");
+    expect(page.match(/useIdleVisibility\(/g)).toHaveLength(1);
     expect(idleVisibility).toContain(
       "createIdleFade({ onChange: setVisible, held })",
     );
-    expect(idleVisibility).toContain("TOP_BAR_ACTIVITY_EVENTS");
+    expect(idleVisibility).toContain("CHROME_ACTIVITY_EVENTS");
     expect(idleVisibility).toContain(
       "window.addEventListener(name, handleActivity",
     );
@@ -180,17 +181,48 @@ describe("the top bar", () => {
     expect(idleVisibility).toContain("fade.dispose()");
   });
 
-  it("stays up while the drawer is open or a control in it has focus", () => {
-    expect(idleVisibility).toContain("const held = hold || focusWithin;");
+  it("stays up while a dialog, the Look menu or the Math card is open, or a control has focus", () => {
+    expect(idleVisibility).toContain("chromeHeld({ ...holds, focusWithin })");
     expect(idleVisibility).toContain("const shown = held || visible;");
     expect(idleVisibility).toContain("onFocus:");
     expect(idleVisibility).toContain("onBlur:");
-    expect(topBar).toContain("{...focusProps}");
-    expect(page).toContain("settingsOpen={settingsOpen}");
+    expect(page).toContain("{...chromeFocusProps}");
+    for (const hold of [
+      "settingsOpen,",
+      "helpOpen,",
+      "lookMenuOpen,",
+      "mathExpanded: mathOpen && mathExpanded,",
+      "nudgeShown: wanderNudge,",
+    ]) {
+      expect(page).toContain(hold);
+    }
+    expect(page).toContain("onOpenChange={setLookMenuOpen}");
   });
 
-  it("takes no pointer events while faded", () => {
-    expect(topBar).toContain("pointer-events-none opacity-0");
+  it("marks every control over the picture, and the stylesheet fades them with no pointer events", () => {
+    expect(page).toContain("data-idle={!chromeShown}");
+    for (const control of [
+      topBar,
+      source("../components/ui/FractalSwitcher.tsx"),
+      source("../components/ui/MathCard.tsx"),
+      source("../components/ui/NearbyStrip.tsx"),
+      source("../components/ui/WanderControl.tsx"),
+    ]) {
+      expect(control).toContain('data-chrome=""');
+    }
+    expect(css).toMatch(
+      /\.fractal-stage\[data-idle="true"\] \[data-chrome\]\s*{[^}]*opacity: 0;[^}]*pointer-events: none/,
+    );
+    // The buttons inside set pointer-events-auto themselves.
+    expect(css).toMatch(
+      /\[data-chrome\] \*\s*{[^}]*pointer-events: none !important/,
+    );
+  });
+
+  it("only hides, without a transition, for a visitor who asked for reduced motion", () => {
+    expect(css).toMatch(
+      /prefers-reduced-motion: reduce\)\s*{\s*\.fractal-stage \[data-chrome\]\s*{\s*transition: none/,
+    );
   });
 });
 
@@ -221,7 +253,9 @@ describe("the canvas", () => {
     // focus is (`pageKeys.ts`); the canvas handles none of them itself, which
     // is what keeps a focused picture from moving the view twice per press.
     expect(page).not.toContain("handleCanvasKeyDown");
-    expect(page).toContain('window.addEventListener("keydown", handlePageKeyDown)');
+    expect(page).toContain(
+      'window.addEventListener("keydown", handlePageKeyDown)',
+    );
   });
 
   it("shows render progress as a line on its top edge, and says it as text", () => {

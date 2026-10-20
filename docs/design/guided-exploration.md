@@ -45,8 +45,11 @@ types, a captioned tour, a gallery-first home page.
 The deviations worth knowing; the code is the truth.
 
 - **Top bar order**: title left, Surprise me and Tour centre, the rest right.
-  **The strip does not fade** — a fading strip hid the page's way out of an
-  empty field, though the design had only the bar fading.
+  The strip did not fade at first — a fading strip hid the page's way out of an
+  empty field. Since then every control over the picture fades together after
+  3 s without input (`data-chrome`, one clock in `useIdleVisibility`), and
+  returns on any input; a dialog, an open Look menu or expanded Math card, or
+  keyboard focus on a control holds them up.
 - **A tile is drawn in the scheme its click applies** (`placeColorScheme`), and
   **Surprise me** goes through the tile's own click handler, so both match the
   picture a click shows (`src/lib/places.ts`, `src/lib/surprise.ts`).
