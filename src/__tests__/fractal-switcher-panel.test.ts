@@ -134,7 +134,7 @@ describe("the Julia chips", () => {
 });
 
 describe("the switcher's place on the page", () => {
-  it("is drawn inside the canvas's wrapper, over the picture, and never fades", () => {
+  it("is drawn inside the canvas's wrapper, over the picture, and fades on the page's clock", () => {
     const wrapper = page.slice(
       page.indexOf('<div className="relative">'),
       page.indexOf("</main>"),
@@ -142,6 +142,7 @@ describe("the switcher's place on the page", () => {
 
     expect(wrapper).toContain("<FractalSwitcher");
     expect(switcher).toMatch(/absolute inset-x-3 top-3 z-10/);
+    expect(switcher).toContain('data-chrome=""');
     expect(switcher).not.toContain("useIdleVisibility");
     expect(switcher).not.toMatch(/opacity-0|transition-opacity/);
   });

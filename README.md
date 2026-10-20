@@ -41,6 +41,11 @@ Built with Next.js (App Router), React, strict TypeScript, Tailwind and Vitest.
   (`src/lib/ogImage.ts`).
 - **Download PNG** — the canvas, a larger whole multiple of it, or a wallpaper
   shape.
+- **Screensaver feel** — every control over the picture (the top bar, the
+  fractal tabs, the Math card, the Nearby strip, Look and Auto-wander) fades
+  after 3 s without input, leaving only the fractal, and returns on any pointer
+  move, press, key or touch. A dialog, the Look menu, an expanded Math card or
+  keyboard focus on a control keeps them up; a tour hides them throughout.
 - **Keys everywhere** — the pan, zoom and reset keys work from anywhere on the
   page, and reduced motion is honoured.
 

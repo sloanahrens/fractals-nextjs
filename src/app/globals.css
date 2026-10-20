@@ -105,6 +105,30 @@
   cursor: grabbing;
 }
 
+/* The chrome: every control over the picture carries `data-chrome`, and the page
+   sets `data-idle` on the stage once the idle wait runs out. A faded control
+   takes no pointer events, nor do the buttons inside it, which set their own
+   `pointer-events-auto` so the canvas around them still pans. A system request
+   for reduced motion gets no transition: the controls simply hide. */
+.fractal-stage [data-chrome] {
+  transition: opacity var(--chrome-fade-ms, 300ms) ease;
+}
+
+.fractal-stage[data-idle="true"] [data-chrome] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fractal-stage[data-idle="true"] [data-chrome] * {
+  pointer-events: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fractal-stage [data-chrome] {
+    transition: none;
+  }
+}
+
 /* While a tour plays nothing but the picture shows: no pointer over it, and no
    focus ring left on the canvas by a keyboard user who then went quiet. */
 .fractal-stage[data-tour="true"],

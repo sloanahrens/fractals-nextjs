@@ -44,8 +44,8 @@ const RESTING = "bg-white/10 text-white hover:bg-white/20";
  *
  * It is drawn inside the canvas's own wrapper, so it sits under the top bar and
  * clear of the progress line, and below the blank-picture hint's row, which the
- * page moves down for it. Unlike the bar it never fades: a visitor who has lost
- * the picture needs it most. Only its buttons take pointer events, so the
+ * page moves down for it. It fades with the page's other controls after a quiet
+ * spell (`data-chrome`). Only its buttons take pointer events, so the
  * canvas around them still pans, and the chip row scrolls sideways when it is
  * wider than the picture rather than wrapping across it.
  *
@@ -80,7 +80,10 @@ export function FractalSwitcher({
   const customCurrent = isCustomVariant(fractalType, variant);
 
   return (
-    <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2">
+    <div
+      data-chrome=""
+      className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col items-start gap-2"
+    >
       <div
         role="group"
         aria-label="Fractal"

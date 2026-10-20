@@ -50,7 +50,8 @@ describe("the pill", () => {
     expect(pill).not.toMatch(/from "(lucide|react-icons|@heroicons|@radix)/);
   });
 
-  it("never fades: no idle hook, no opacity transition", () => {
+  it("fades on the page's clock: no idle hook of its own, no opacity classes", () => {
+    expect(pill).toContain('data-chrome=""');
     expect(pill).not.toContain("useIdleVisibility");
     expect(pill).not.toMatch(/opacity-0|transition-opacity/);
   });

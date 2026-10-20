@@ -160,11 +160,10 @@ function Tile({
  * the list changes or the strip goes away. A picture that could not be drawn
  * is a flat grey tile; the place is still a button that works.
  *
- * It does not fade. The top bar goes after a quiet two seconds, but the strip
- * is the page's main way of moving and is most needed when the visitor is lost,
- * so it stays up (`hidden` is the only thing that takes it away). The row
- * scrolls sideways when it is wider than the canvas. Only the tiles take
- * pointer events, so the canvas under the gaps still pans.
+ * It fades with the page's other controls after a quiet spell (`data-chrome`),
+ * and `hidden` takes it away outright. The row scrolls sideways when it is
+ * wider than the canvas. Only the tiles take pointer events, so the canvas
+ * under the gaps still pans.
  */
 export function NearbyStrip({
   places,
@@ -199,7 +198,7 @@ export function NearbyStrip({
   return (
     <section
       aria-labelledby="nearby-strip-label"
-      data-visible="true"
+      data-chrome=""
       className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-3 pb-3 pt-10"
     >
       <h2

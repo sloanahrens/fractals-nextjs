@@ -79,8 +79,10 @@ function Glyph({ kind }: { kind: "play" | "pause" }) {
  * button whose accessible name is "Auto-wander" in both states.
  *
  * It holds no walk state — the page does, and the Settings checkbox is another
- * view of it. It never fades. Beside the Nearby strip's longest row it sits in
- * the corner; on a narrower picture it stacks over the strip's right end, so it
+ * view of it. It fades with the page's other controls after a quiet spell
+ * (`data-chrome`); that is only its opacity, so the countdown in its label
+ * keeps counting while it is gone. Beside the Nearby strip's longest row it
+ * sits in the corner; on a narrower picture it stacks over the strip's right end, so it
  * is never over a tile (`wanderPlacement`, from the picture's measured width).
  * The Look control rides in the same row as `leading`, with its width reserved
  * in that measure, so the two are placed together and cannot overlap.
@@ -119,7 +121,11 @@ export function WanderControl({
   const showNudge = nudge && !hidden;
 
   return (
-    <div ref={rootRef} className="pointer-events-none absolute inset-0 z-10">
+    <div
+      ref={rootRef}
+      data-chrome=""
+      className="pointer-events-none absolute inset-0 z-10"
+    >
       {!hidden && (
         <div
           className={`absolute flex flex-col items-end gap-1.5 ${PLACEMENT_CLASSES[placement]}`}

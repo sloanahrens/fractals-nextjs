@@ -234,6 +234,8 @@ import { LookControl } from "../components/ui/LookControl";
 import { WanderControl } from "../components/ui/WanderControl";
 import { LOOK_PILL_MAX_WIDTH } from "../lib/lookControl";
 import { useWanderNudge } from "../components/ui/useWanderNudge";
+import { useIdleVisibility } from "../components/ui/useIdleVisibility";
+import { CHROME_FADE_MS } from "../lib/idleFade";
 
 // The four manual coordinate boxes. A field is present only once the user has
 // typed in it; while it is absent the box shows the current view.
@@ -2657,6 +2659,19 @@ export default function Home() {
     overlayOpen: tourOverlayOpen,
   });
 
+  // Every control over the picture fades together after a quiet spell and
+  // returns on input (`globals.css` does the fading, off `data-idle` on the
+  // stage). The Look menu reports its own state, as nothing else here sees it.
+  const [lookMenuOpen, setLookMenuOpen] = useState(false);
+  const { shown: chromeShown, focusProps: chromeFocusProps } =
+    useIdleVisibility({
+      settingsOpen,
+      helpOpen,
+      lookMenuOpen,
+      mathExpanded: mathOpen && mathExpanded,
+      nudgeShown: wanderNudge,
+    });
+
   // What only the browser knows: whether the tab is showing, whether the window
   // has focus, whether a field has it, and whether anyone is here. Input on the
   // window, in the capture phase, so nothing on the page can keep it from being
@@ -2962,7 +2977,13 @@ export default function Home() {
     !tourPlaying && blankLink !== null && blankLink === currentLink;
 
   return (
-    <div className="fractal-stage bg-gray-950" data-tour={tourPlaying}>
+    <div
+      className="fractal-stage bg-gray-950"
+      data-tour={tourPlaying}
+      data-idle={!chromeShown}
+      style={{ "--chrome-fade-ms": `${CHROME_FADE_MS}ms` } as CSSProperties}
+      {...chromeFocusProps}
+    >
       {/* A tour shows the picture and nothing else: the bar, the strip, the
           progress line and the hint are all keyed on `tourPlaying`, and the
           drawer and the help are closed dialogs. Any input ends the tour and
@@ -2981,7 +3002,6 @@ export default function Home() {
           mathButtonRef={mathButtonRef}
           onHelp={() => setHelpOpen(true)}
           onSettings={() => setSettingsOpen(true)}
-          settingsOpen={settingsOpen}
           settingsButtonRef={settingsButtonRef}
         />
       )}
@@ -3117,6 +3137,7 @@ export default function Home() {
                 value={trapToControl(trap)}
                 rendering={isRendering}
                 onChange={handleTrapChange}
+                onOpenChange={setLookMenuOpen}
               />
             }
           />

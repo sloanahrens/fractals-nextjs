@@ -249,6 +249,7 @@ export function MathCard({
 
   return (
     <div
+      data-chrome=""
       className={`pointer-events-none absolute bottom-[9.75rem] left-3 z-10 flex min-h-11 max-w-[calc(100%-1.5rem)] items-start ${
         belowChips ? "top-[5.25rem] sm:top-[5.75rem]" : "top-14"
       } ${stepAside ? "max-sm:hidden" : ""}`}

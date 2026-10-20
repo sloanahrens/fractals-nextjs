@@ -2,9 +2,6 @@
 
 import React from "react";
 
-import { TOP_BAR_FADE_MS } from "../../lib/idleFade";
-import { useIdleVisibility } from "./useIdleVisibility";
-
 interface TopBarProps {
   /** Steps back through the journey, as the browser's Back does. */
   onBack: () => void;
@@ -30,8 +27,6 @@ interface TopBarProps {
   onHelp: () => void;
   /** Opens the Settings drawer. */
   onSettings: () => void;
-  /** Whether the drawer is open, which keeps the bar up. */
-  settingsOpen: boolean;
   /** The Settings button, so the drawer can hand focus back to it on close. */
   settingsButtonRef?: React.Ref<HTMLButtonElement>;
 }
@@ -54,9 +49,9 @@ const TITLE_CLASSES = "sr-only text-lg font-semibold sm:not-sr-only";
  * a button with nowhere to go is disabled rather than hidden so the bar does not
  * change shape.
  *
- * It fades to nothing after `TOP_BAR_IDLE_MS` without a pointer move, key press
- * or touch, and any of those brings it back. The drawer being open, and focus
- * being on a control inside the bar, hold it up (`useIdleVisibility`).
+ * It is one of the page's controls over the picture, which fade together after
+ * `CHROME_IDLE_MS` without input, on a clock the page runs; the `data-chrome`
+ * attribute is what the stylesheet fades.
  *
  * Surprise me takes the user to one of the places the Nearby strip would
  * offer, chosen at random; it is disabled when there are none. Tour, beside it,
@@ -79,19 +74,12 @@ export function TopBar({
   mathButtonRef,
   onHelp,
   onSettings,
-  settingsOpen,
   settingsButtonRef,
 }: TopBarProps) {
-  const { shown, focusProps } = useIdleVisibility(settingsOpen);
-
   return (
     <header
-      data-visible={shown}
-      {...focusProps}
-      style={{ transitionDuration: `${TOP_BAR_FADE_MS}ms` }}
-      className={`fixed inset-x-0 top-0 z-20 flex h-[var(--top-bar-height)] items-center justify-between gap-1 bg-gray-900/80 px-1 text-white backdrop-blur transition-opacity sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-2 sm:px-4 ${
-        shown ? "opacity-100" : "pointer-events-none opacity-0"
-      }`}
+      data-chrome=""
+      className="fixed inset-x-0 top-0 z-20 flex h-[var(--top-bar-height)] items-center justify-between gap-1 bg-gray-900/80 px-1 text-white backdrop-blur sm:grid sm:grid-cols-[1fr_auto_1fr] sm:gap-2 sm:px-4"
     >
       <h1 className={TITLE_CLASSES}>Fractal Explorer</h1>
       <div className="flex gap-0.5 sm:gap-2">
