@@ -19,6 +19,11 @@
       "guidance": "Rendering and math logic must have tests that would fail if the logic regressed; tests must run without network or a browser. Do not accept a test edited to pass or a snapshot regenerated without explanation."
     },
     {
+      "name": "test-engineering",
+      "weight": 2,
+      "guidance": "Test debt is a finding (standard: ~/.claude/docs/standards/test-engineering.md). MAJOR: an unbounded wait or loop; a timeout, budget or ratchet raised to land the change; a test that runs a script or binary in a subprocess without reading it, so the result cache serves a stale pass; sleep used to synchronise; a failing test retried or skipped to pass; a clock baseline read after the launch it times; a test that asserts implementation details so a refactor breaks it. MINOR: a test over its tier's cost; a fixture rebuilt for every case; a family of near-identical slow cases; a failure message that names no cause; shared state or ordering between tests. Phrase test findings as static hypotheses from the code, never as 'fails when run'."
+    },
+    {
       "name": "dependency-hygiene",
       "weight": 1,
       "guidance": "package.json and package-lock.json changes must be explained: which package, why, and whether it is a major bump. next stays on the 16.x line unless a bead says otherwise. An audit fix that pulls a major bump with no note is a finding."
