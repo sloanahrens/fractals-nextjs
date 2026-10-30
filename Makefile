@@ -41,24 +41,39 @@ help:
 install:
 	npm ci
 
+# A fresh checkout or worktree has no node_modules, and a lockfile that moved on
+# leaves an old one behind, so the targets an agent runs before it submits
+# (lint, typecheck, build and test, which `check` and `presubmit` reach) take
+# `deps`, and `deps` installs when the dependencies are missing or older than
+# package-lock.json. npm writes its own hidden lockfile into node_modules on every
+# install; that file is the stamp, so a warm tree pays nothing. `ci-install`
+# below still installs every time, and `gate` runs it first, so `deps` is already
+# satisfied by the time the gate reaches `check` and nothing installs twice.
+.PHONY: deps
+deps: node_modules/.package-lock.json
+
+node_modules/.package-lock.json: package-lock.json
+	npm ci
+	@touch $@
+
 # Development
 dev:
 	npm run dev
 
-build:
+build: deps
 	npm run build
 
 start:
 	npm start
 
 # Quality
-lint:
+lint: deps
 	npm run lint
 
 format:
 	npm run format
 
-typecheck:
+typecheck: deps
 	npx tsc --noEmit
 
 check: lint typecheck
@@ -90,7 +105,7 @@ ci-install:
 	npm ci
 
 # Vitest suite for the pure logic in src/lib and the /api/health route.
-test:
+test: deps
 	npm test
 
 presubmit: check
