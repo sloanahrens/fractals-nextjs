@@ -11,6 +11,7 @@ import {
   parseMagnetType,
 } from "../magnet";
 import { calculateZoomBounds } from "../mandelbrot";
+import { sweep } from "./sweep";
 
 const CAP = 200;
 
@@ -349,36 +350,37 @@ describe.each(CASES)("magnet type $type", (typeCase) => {
   });
 
   it("keeps a finite count in range everywhere", () => {
-    // 16,200 samples, so one assertion over the whole grid rather than three per
-    // sample: an expect per sample costs more than the count does. The first few
-    // offenders are named, so a failure still says where.
-    const offenders: string[] = [];
+    // 16,200 samples swept in one assertion (see sweep.ts): an expect per sample
+    // costs more than the count does, and a sample that is not a finite number
+    // fails whatever the bound says.
+    function* samples() {
+      for (let row = 0; row < 90; row++) {
+        for (let column = 0; column < 90; column++) {
+          const point = {
+            real: -3 + (8 * column) / 89,
+            imaginary: -3 + (8 * row) / 89,
+          };
 
-    for (let row = 0; row < 90; row++) {
-      for (let column = 0; column < 90; column++) {
-        const point = {
-          real: -3 + (8 * column) / 89,
-          imaginary: -3 + (8 * row) / 89,
-        };
-
-        for (const smooth of [false, true]) {
-          const count = kind.iterations(point, CAP, smooth);
-
-          // A point just off a pole steps out enormously, and the smooth count
-          // of an enormous step is a little under zero; the other kinds' is
-          // too, and the colour mapping reads a negative count as the start of
-          // the palette rather than refusing it.
-          if (!Number.isFinite(count) || count > CAP || !(count > -8)) {
-            if (offenders.length < 5) {
-              offenders.push(
-                `${JSON.stringify(point)} smooth=${smooth} gave ${count}`,
-              );
-            }
+          for (const smooth of [false, true]) {
+            yield {
+              at: { point, smooth },
+              value: kind.iterations(point, CAP, smooth),
+            };
           }
         }
       }
     }
 
+    // A point just off a pole steps out enormously, and the smooth count of an
+    // enormous step is a little under zero; the other kinds' is too, and the
+    // colour mapping reads a negative count as the start of the palette rather
+    // than refusing it.
+    const { offenders, checked } = sweep(
+      samples(),
+      (count) => count <= CAP && count > -8,
+    );
+
+    expect(checked).toBe(90 * 90 * 2);
     expect(offenders).toEqual([]);
   });
 

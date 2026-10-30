@@ -8,6 +8,7 @@ import {
 } from "../nova";
 import { FRACTAL_TYPES, defaultViewFor, resolveFractalKind } from "../fractalTypes";
 import type { ComplexNumber } from "../../types/fractal";
+import { largestJump } from "./sweep";
 
 const CAP = 200;
 const ORIGIN: ComplexNumber = { real: 0, imaginary: 0 };
@@ -278,27 +279,23 @@ describe("the smooth count", () => {
   });
 
   it("moves by under a tenth of a step between samples 1e-4 apart along a line", () => {
-    let last = count(at(0.4), CAP, true);
-    let largestJump = 0;
-    let largestJumpAt = 0.4;
+    // 26,000 samples along the line, swept in one assertion (see sweep.ts): the
+    // largest jump and where it was. A sample that is not a finite number is an
+    // infinite jump, so it cannot hide among small ones.
     let samples = 0;
+    function* line() {
+      yield { at: 0.4, value: count(at(0.4), CAP, true) };
 
-    // 26,000 samples; the largest jump is kept and asserted once, with where it
-    // was, because an expect per sample costs more than the count does.
-    for (let real = 0.4001; real < 3; real += 1e-4) {
-      const current = count(at(real), CAP, true);
-      const jump = Math.abs(current - last);
-
-      if (jump > largestJump) {
-        largestJump = jump;
-        largestJumpAt = real;
+      for (let real = 0.4001; real < 3; real += 1e-4) {
+        samples++;
+        yield { at: real, value: count(at(real), CAP, true) };
       }
-      samples++;
-      last = current;
     }
 
+    const { jump, at: where } = largestJump(line());
+
     expect(samples).toBeGreaterThan(25000);
-    expect(largestJump, `at c = ${largestJumpAt}`).toBeLessThan(0.1);
+    expect(jump, `at c = ${where}`).toBeLessThan(0.1);
   });
 
   it("is continuous across the first step's boundary, where |c| crosses the tolerance", () => {
