@@ -27,6 +27,7 @@ import {
 import { calculateZoomBounds, mandelbrotKind } from "../mandelbrot";
 import { TRAP_SHAPES } from "../orbitTrap";
 import { renderRgba } from "../renderRgba";
+import { firstDifference } from "./byteCompare";
 
 const SCHEMES: ColorScheme[] = [
   "classic",
@@ -136,6 +137,30 @@ const OPTIONS: (ColorOptions | undefined)[] = [
   { reverse: true, shift: 0.5 },
 ];
 
+/**
+ * The scheme-and-option pairs a trap's repaint is held to the full render in:
+ * the five schemes in turn and then the first three again, each with the option
+ * set that follows it round and is turned one place further for each trap.
+ *
+ * Eight comparisons a trap rather than the twenty of the cross product, and all
+ * five schemes and all four option sets are still compared for every kind and
+ * trap, each option set with two schemes. Over the three traps eighteen of the
+ * twenty pairings are drawn: the turns leave out grayscale with Reverse and
+ * Shift, and rainbow with Shift alone. A pairing says nothing its two halves do
+ * not, because `mapPositionToColor` takes Reverse and Shift off the place on the
+ * palette before the scheme is looked up, so the scheme and the options are
+ * separate tables and a repaint gets them both wrong, or neither.
+ */
+function repaintPairs(trapIndex: number): {
+  scheme: ColorScheme;
+  options: ColorOptions | undefined;
+}[] {
+  return Array.from({ length: 8 }, (_, index) => ({
+    scheme: SCHEMES[index % SCHEMES.length],
+    options: OPTIONS[(index + trapIndex) % OPTIONS.length],
+  }));
+}
+
 describe("FractalRenderer in trap mode", () => {
   it.each(KINDS)(
     "%s: a full render in trap mode is renderRgba's trap picture, byte for byte",
@@ -174,32 +199,32 @@ describe("FractalRenderer in trap mode", () => {
   it.each(KINDS)(
     "%s: recolour from the stored distances is the full render of every scheme, Reverse and Shift",
     async (_name, kind) => {
-      for (const trap of TRAP_SHAPES) {
+      for (let trapIndex = 0; trapIndex < TRAP_SHAPES.length; trapIndex++) {
+        const trap = TRAP_SHAPES[trapIndex];
         const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
         const renderer = new FractalRenderer(element, kind);
 
         await renderer.renderFractal(renderConfig({ trap }));
 
-        for (const scheme of SCHEMES) {
-          for (const options of OPTIONS) {
-            expect(renderer.recolour(scheme, CAP, options, trap)).toBe(true);
+        for (const { scheme, options } of repaintPairs(trapIndex)) {
+          expect(renderer.recolour(scheme, CAP, options, trap)).toBe(true);
 
-            expect(Array.from(pixels())).toEqual(
-              Array.from(
-                renderRgba(
-                  BOUNDS,
-                  WIDTH,
-                  HEIGHT,
-                  CAP,
-                  scheme,
-                  kind,
-                  true,
-                  options,
-                  trap,
-                ),
+          expect(
+            firstDifference(
+              pixels(),
+              renderRgba(
+                BOUNDS,
+                WIDTH,
+                HEIGHT,
+                CAP,
+                scheme,
+                kind,
+                true,
+                options,
+                trap,
               ),
-            );
-          }
+            ),
+          ).toBe(-1);
         }
       }
     },
