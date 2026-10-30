@@ -8,10 +8,15 @@ import {
   isBlankImage,
   nearUniformShare,
 } from "../blankView";
-import { FRACTAL_TYPES, defaultViewFor } from "../fractalTypes";
+import {
+  FRACTAL_TYPES,
+  defaultViewFor,
+  resolveFractalKind,
+} from "../fractalTypes";
+import { autoIterations, calculateZoomBounds } from "../mandelbrot";
 import { NEWTON_POLYNOMIALS } from "../newton";
-import { createCanvasThumbnailRender } from "../placeThumbnails";
-import { PLACES, type Place } from "../places";
+import type { Place } from "../places";
+import { colourRgbaRows, countRgbaRows } from "../renderRgba";
 
 const WIDTH = 64;
 const HEIGHT = 48;
@@ -160,54 +165,104 @@ describe("canvasIsBlank", () => {
   });
 });
 
-/** The Node stand-in for a 2D canvas the thumbnail tests use. */
-function createFakeCanvas(width: number, height: number) {
-  const pixels = new Uint8ClampedArray(width * height * 4);
-  const context = {
-    createImageData: (w: number, h: number) => ({
-      data: new Uint8ClampedArray(w * h * 4),
-      width: w,
-      height: h,
-    }),
-    putImageData: (picture: { data: Uint8ClampedArray }) => {
-      pixels.set(picture.data);
-    },
-    getImageData: () => ({ data: pixels.slice() }),
-  };
-
-  return {
-    width,
-    height,
-    getContext: () => context,
-  } as unknown as HTMLCanvasElement;
+/** A view's iteration counts, and the cap they were counted with. */
+interface CountedView {
+  counts: Float64Array;
+  maxIterations: number;
 }
 
-async function pictureOf(candidate: Place, scheme: ColorScheme) {
-  const render = createCanvasThumbnailRender(createFakeCanvas);
+/**
+ * The counts of a place's thumbnail view: the first half of every render, at
+ * the size and count the page draws a thumbnail with -- the bounds its zoom
+ * level gives, the count Auto picks, unsmoothed, exactly as
+ * `createCanvasThumbnailRender` asks the renderer. A picture is those counts
+ * coloured, so they are kept: colouring them in another scheme draws that
+ * scheme's picture with no orbit walked a second time (the whole of what a
+ * renderer's repaint does).
+ *
+ * A pure function of the place, memoised on the view it draws, so the five
+ * schemes of one fractal share one walk of the orbit rather than five and two
+ * places that draw different pictures never share counts.
+ */
+const countedViews = new Map<string, CountedView>();
 
-  return render({
-    place: candidate,
+function countsOf(candidate: Place): CountedView {
+  const key = [
+    candidate.fractal,
+    candidate.variant ?? "",
+    candidate.centerX,
+    candidate.centerY,
+    candidate.zoom,
+  ].join("|");
+
+  const kept = countedViews.get(key);
+  if (kept !== undefined) return kept;
+
+  const maxIterations = autoIterations(candidate.zoom);
+  const counts = new Float64Array(WIDTH * HEIGHT);
+
+  countRgbaRows(
+    counts,
+    0,
+    HEIGHT,
+    calculateZoomBounds(candidate.centerX, candidate.centerY, candidate.zoom),
+    WIDTH,
+    HEIGHT,
+    maxIterations,
+    resolveFractalKind(candidate.fractal, candidate.variant ?? ""),
+    false,
+  );
+
+  const view = { counts, maxIterations };
+  countedViews.set(key, view);
+  return view;
+}
+
+/**
+ * Those counts coloured in a scheme: the second half of a render, and the
+ * picture a colour change repaints. It is byte for byte the picture a full
+ * render draws in that scheme -- `fractalRenderer.test.ts` holds the two
+ * halves of the pipeline to it for every kind.
+ */
+function pictureIn(view: CountedView, scheme: ColorScheme): Uint8ClampedArray {
+  const pixels = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+
+  colourRgbaRows(
+    pixels,
+    view.counts,
+    0,
+    HEIGHT,
+    WIDTH,
+    view.maxIterations,
     scheme,
-    width: WIDTH,
-    height: HEIGHT,
-    signal: new AbortController().signal,
-  });
+  );
+
+  return pixels;
+}
+
+/** A fractal's opening frame, as the page makes it: Julia's first named constant. */
+function openingPlace(id: string): Place {
+  return {
+    id: `default-${id}`,
+    name: id,
+    fractal: id,
+    ...(id === "julia" ? { variant: "Classic" } : {}),
+    ...defaultViewFor(id),
+  };
 }
 
 describe("what the detector says of real pictures", () => {
-  it("does not call the Mandelbrot overview blank", async () => {
-    const overview: Place = {
-      id: "overview",
-      name: "overview",
-      fractal: "mandelbrot",
-      ...defaultViewFor("mandelbrot"),
-    };
-    const picture = await pictureOf(overview, "classic");
-
-    expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(false);
-  }, 30000);
-
-  it("calls a view inside the cardioid blank", async () => {
+  // The catalogue's own blank guard lives in places.test.ts, which draws every
+  // place at 64x48 with the count Auto picks, in the place's own scheme, and
+  // refuses a flat field (a share of pixels differing from the corner below
+  // 0.05). This file drew those same pictures through
+  // `createCanvasThumbnailRender` and checked the same pictures with
+  // `isBlankImage`, so its copy proved that guard twice; the place guard is
+  // kept in places.test.ts (fr-etlv), so every place is still drawn and
+  // checked. What stays here is the detector's own real pictures: two blank
+  // views, Newton's whole set and one basin, and every fractal's opening frame
+  // in every scheme.
+  it("calls a view inside the cardioid blank", () => {
     const inside: Place = {
       id: "inside",
       name: "inside",
@@ -216,12 +271,12 @@ describe("what the detector says of real pictures", () => {
       centerY: 0,
       zoom: 20,
     };
-    const picture = await pictureOf(inside, "classic");
+    const picture = pictureIn(countsOf(inside), "classic");
 
-    expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(true);
-  }, 30000);
+    expect(isBlankImage(picture, WIDTH, HEIGHT)).toBe(true);
+  });
 
-  it("calls a view in the field outside the set blank", async () => {
+  it("calls a view in the field outside the set blank", () => {
     const outside: Place = {
       id: "outside",
       name: "outside",
@@ -230,10 +285,10 @@ describe("what the detector says of real pictures", () => {
       centerY: 1.9,
       zoom: 127,
     };
-    const picture = await pictureOf(outside, "classic");
+    const picture = pictureIn(countsOf(outside), "classic");
 
-    expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(true);
-  }, 30000);
+    expect(isBlankImage(picture, WIDTH, HEIGHT)).toBe(true);
+  });
 
   const schemes: ColorScheme[] = [
     "classic",
@@ -246,28 +301,28 @@ describe("what the detector says of real pictures", () => {
   // The Newton fractal has no inside and no outside: every point is in a
   // basin, so the whole-basins view is large flat fields. It is not blank
   // because three of them show, each a different colour family, so the
-  // commonest colour is a share of the picture and not nearly all of it.
+  // commonest colour is a share of the picture and not nearly all of it. Every
+  // scheme is drawn, because the scheme decides whether two of those fields
+  // read as one colour.
   it.each(schemes)(
     "the Newton whole-basins view is not blank in %s, and no one colour holds most of it",
-    async (scheme) => {
+    (scheme) => {
       const whole: Place = {
         id: "newton-whole-check",
         name: "newton",
         fractal: "newton",
         ...defaultViewFor("newton"),
       };
-      const picture = await pictureOf(whole, scheme);
+      const picture = pictureIn(countsOf(whole), scheme);
+      const share = nearUniformShare(picture, WIDTH, HEIGHT);
 
-      expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(false);
-      expect(
-        nearUniformShare(picture.data, WIDTH, HEIGHT),
-        `${scheme}: ${nearUniformShare(picture.data, WIDTH, HEIGHT)}`,
-      ).toBeLessThan(0.6);
+      expect(isBlankImage(picture, WIDTH, HEIGHT)).toBe(false);
+      expect(share, `${scheme}: ${share}`).toBeLessThan(0.6);
     },
     30000,
   );
 
-  it("calls a deep view inside one Newton basin blank, since one basin is one colour family", async () => {
+  it("calls a deep view inside one Newton basin blank, since one basin is one colour family", () => {
     // Zoom 40 around a point of the basin of the root 1, far from any
     // boundary: no second basin in the frame, just the shading of one.
     const inside: Place = {
@@ -278,11 +333,19 @@ describe("what the detector says of real pictures", () => {
       centerY: 0.05,
       zoom: 40,
     };
-    const picture = await pictureOf(inside, "grayscale");
+    const picture = pictureIn(countsOf(inside), "grayscale");
 
-    expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(true);
-  }, 30000);
+    expect(isBlankImage(picture, WIDTH, HEIGHT)).toBe(true);
+  });
 
+  // Every fractal's opening frame in all five schemes -- the full grid the
+  // file drew before, and not a rotation of it, so a view that flattens in one
+  // scheme fails in that scheme. What is saved is the orbit, not the check: a
+  // picture is counts coloured, so each fractal's counts are drawn once and
+  // coloured five times, which is twelve walks for the sixty pictures rather
+  // than sixty. The Mandelbrot overview -- the picture a visitor opens on -- is
+  // the first case, in classic, which is what the page opens with.
+  //
   // Julia's default is drawn with the first named constant, as the page does.
   it.each(
     FRACTAL_TYPES.flatMap((type) =>
@@ -290,17 +353,10 @@ describe("what the detector says of real pictures", () => {
     ),
   )(
     "the default %s view is not blank in %s",
-    async (id, scheme) => {
-      const opening: Place = {
-        id: `default-${id}`,
-        name: id,
-        fractal: id,
-        ...(id === "julia" ? { variant: "Classic" } : {}),
-        ...defaultViewFor(id),
-      };
-      const picture = await pictureOf(opening, scheme);
+    (id, scheme) => {
+      const picture = pictureIn(countsOf(openingPlace(id)), scheme);
 
-      expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(false);
+      expect(isBlankImage(picture, WIDTH, HEIGHT)).toBe(false);
     },
     30000,
   );
@@ -311,13 +367,20 @@ describe("what the detector says of real pictures", () => {
   // one above; the variants of a fractal that takes one are not all promised
   // to be busy — a Julia Dendrite drawn in ocean at 64x48 is one colour, which
   // is what the hint is for.)
+  //
+  // Each polynomial's opening frame is drawn in every scheme too, from its own
+  // one walk of the orbit. (The title takes the scheme, so a failure names the
+  // colouring that was drawn: the title substitutes its `%s` in argument
+  // order, and it used to name the variant id where the scheme goes.)
   it.each(
     NEWTON_POLYNOMIALS.flatMap((polynomial) =>
-      schemes.map((scheme) => [polynomial.label, polynomial.id, scheme] as const),
+      schemes.map(
+        (scheme) => [polynomial.label, scheme, polynomial.id] as const,
+      ),
     ),
   )(
     "the Newton fractal's %s view is not blank in %s",
-    async (_label, variant, scheme) => {
+    (_label, scheme, variant) => {
       const opening: Place = {
         id: `default-newton-${variant}`,
         name: "newton",
@@ -325,22 +388,9 @@ describe("what the detector says of real pictures", () => {
         variant,
         ...defaultViewFor("newton"),
       };
-      const picture = await pictureOf(opening, scheme);
+      const picture = pictureIn(countsOf(opening), scheme);
 
-      expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(false);
-    },
-    30000,
-  );
-
-  it.each(PLACES.map((candidate) => [candidate.id, candidate] as const))(
-    "%s is not blank",
-    async (_id, candidate) => {
-      const picture = await pictureOf(
-        candidate,
-        candidate.colorScheme ?? "classic",
-      );
-
-      expect(isBlankImage(picture.data, WIDTH, HEIGHT)).toBe(false);
+      expect(isBlankImage(picture, WIDTH, HEIGHT)).toBe(false);
     },
     30000,
   );
