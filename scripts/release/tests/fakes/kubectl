@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+#
+# Fake kubectl for the k8s_lib.sh tests (bead dv-60ph). It answers the Services
+# read the app's service is found with and plays the one long-running command the
+# library starts, `port-forward`: it prints the line the real one prints once it
+# is listening, then stays alive until it is stopped, and records that it was.
+#
+# It follows the fakes' two rules (_fake.sh): every call is recorded, and no
+# credential value is ever read into the log. What it records about the
+# kubeconfig it was handed is whether KUBECONFIG named a file, that file's mode,
+# and whether the user's token is the one in the test's token file -- as yes or no,
+# never the token.
+#
+# Fake-specific environment:
+#   FAKE_LOG                   where invocations are recorded
+#   FAKE_KUBECTL_SERVICES      a JSON file `get services -o json` prints instead of
+#                              the built-in list
+#   FAKE_KUBECTL_FAIL_DELETE   set and `delete namespaces` records itself, then fails
+#   FAKE_FORWARD_NEVER_READY   set to 1 and port-forward never prints its
+#                              "Forwarding from" line
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+# kubeconfig_summary is what the process would have authenticated with.
+kubeconfig_summary='kubeconfig=absent'
+if [[ -n ${KUBECONFIG:-} && -f ${KUBECONFIG} ]]; then
+  mode=$(stat -c %a "$KUBECONFIG" 2>/dev/null || stat -f %Lp "$KUBECONFIG" 2>/dev/null || printf '?')
+  token_match=no
+  if [[ -n ${TOKEN_FILE:-} && -f ${TOKEN_FILE} ]] &&
+    [[ $(jq -r '.users[0].user.token // ""' "$KUBECONFIG" 2>/dev/null) == "$(<"$TOKEN_FILE")" ]]; then
+    token_match=yes
+  fi
+  kubeconfig_summary="kubeconfig=present kubeconfig_mode=$mode kubeconfig_token_is_the_jobs=$token_match"
+fi
+
+case "$*" in
+*"get services"*)
+  fake_log "kubectl $* $kubeconfig_summary"
+  if [[ -n ${FAKE_KUBECTL_SERVICES:-} ]]; then
+    cat "$FAKE_KUBECTL_SERVICES"
+  else
+    cat <<'JSON'
+{"items":[
+  {"metadata":{"name":"temporal"},"spec":{"ports":[{"port":7233}]}},
+  {"metadata":{"name":"temporal-ui"},"spec":{"ports":[{"port":8080}]}},
+  {"metadata":{"name":"minio"},"spec":{"ports":[{"port":9000}]}},
+  {"metadata":{"name":"minio-console"},"spec":{"ports":[{"port":9001}]}},
+  {"metadata":{"name":"ui"},"spec":{"ports":[{"port":3000}]}},
+  {"metadata":{"name":"api"},"spec":{"ports":[{"port":8081}]}}
+]}
+JSON
+  fi
+  ;;
+*port-forward*)
+  fake_log "kubectl $* $kubeconfig_summary"
+  ports=''
+  for word in "$@"; do
+    [[ $word =~ ^[0-9]+:[0-9]+$ ]] && ports=$word
+  done
+  [[ ${FAKE_FORWARD_NEVER_READY:-} == 1 ]] || printf 'Forwarding from 127.0.0.1:%s -> %s\n' "${ports%%:*}" "${ports##*:}"
+  tail -f /dev/null &
+  child=$!
+  trap 'fake_log "kubectl port-forward stopped"; kill "$child" 2>/dev/null; exit 0' TERM
+  wait "$child"
+  ;;
+*"delete namespaces"*)
+  fake_log "kubectl $* $kubeconfig_summary"
+  fake_state_set released 1
+  [[ -z ${FAKE_KUBECTL_FAIL_DELETE:-} ]] || exit 1
+  ;;
+*)
+  fake_log "kubectl $* $kubeconfig_summary"
+  ;;
+esac

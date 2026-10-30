@@ -5,7 +5,8 @@
 #
 # Each test gets a fresh temporary directory holding:
 #
-#   bin/     the fake docker, gcloud, pulumi, curl, date and sleep, first on PATH,
+#   bin/     the fake docker, gcloud, pulumi, curl, date, sleep, kubectl, make and
+#            reaperschedule, first on PATH,
 #            so a script under test cannot reach a real tool even by accident
 #            (date is the real one unless a test sets FAKE_DATE_BAD or asks
 #            for the clock with +%s; sleep never waits, it moves the clock)
@@ -39,7 +40,7 @@ setup_release_env() {
   FAKE_BIN=$BATS_TEST_TMPDIR/bin
   mkdir -p "$FAKE_BIN"
   cp -R "$BATS_TEST_DIRNAME/fakes/." "$FAKE_BIN/"
-  chmod +x "$FAKE_BIN"/docker "$FAKE_BIN"/gcloud "$FAKE_BIN"/pulumi "$FAKE_BIN"/curl "$FAKE_BIN"/date "$FAKE_BIN"/sleep
+  chmod +x "$FAKE_BIN"/docker "$FAKE_BIN"/gcloud "$FAKE_BIN"/pulumi "$FAKE_BIN"/curl "$FAKE_BIN"/date "$FAKE_BIN"/sleep "$FAKE_BIN"/kubectl "$FAKE_BIN"/make "$FAKE_BIN"/reaperschedule
   PATH="$FAKE_BIN:$PATH"
   export PATH
 
@@ -208,6 +209,16 @@ make_checkout() {
   "${git[@]}" tag "$tag"
 }
 
+# copy_checkout TEMPLATE DIR gives a test its own checkout by copying one that a
+# setup_file made with make_checkout, instead of running git init, add, commit
+# and tag again for every test. A git checkout is a few dozen small files, so
+# one cp is a fraction of the six or seven git processes it replaces, and what a
+# test does to its copy (a commit, a checkout of a side branch, a dirty file)
+# never reaches the template or another test (bead dv-5og9).
+copy_checkout() {
+  cp -R "$1" "$2"
+}
+
 # point_origin_main DIR [REV] points DIR's origin/main remote-tracking ref at
 # REV, which defaults to HEAD. It is what makes a checkout from make_checkout
 # look like the checkout a landing build runs in: build_push_staging.sh reads
@@ -281,12 +292,12 @@ refute_in_log() {
 }
 
 # release_scripts lists the scripts that are commands: every .sh in the release
-# directory except lib.sh, which is sourced by them and has no interface of its
-# own.
+# directory except lib.sh and k8s_lib.sh, which are sourced and have no
+# interface of their own.
 release_scripts() {
   local script
   for script in "$RELEASE_DIR"/*.sh; do
-    [[ ${script##*/} == 'lib.sh' ]] && continue
+    [[ ${script##*/} == 'lib.sh' || ${script##*/} == 'k8s_lib.sh' ]] && continue
     printf '%s\n' "$script"
   done
 }

@@ -11,6 +11,7 @@ package release
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -130,6 +131,7 @@ func TestReleaseScriptsArePresent(t *testing.T) {
 func TestShellFilesParse(t *testing.T) {
 	for _, file := range bashFiles(t) {
 		t.Run(file, func(t *testing.T) {
+			declareInputs()
 			out, err := exec.Command("bash", "-n", file).CombinedOutput()
 			if err != nil {
 				t.Fatalf("bash -n %s = %v\n%s", file, err, out)
@@ -153,6 +155,7 @@ func TestShellFilesShellcheck(t *testing.T) {
 	}
 	for _, file := range shellFiles(t) {
 		t.Run(file, func(t *testing.T) {
+			declareInputs()
 			out, err := exec.Command(shellcheck, "-x", "-S", "warning", "-e", "SC2034", file).CombinedOutput()
 			if err != nil {
 				t.Fatalf("shellcheck %s = %v\n%s", file, err, out)
@@ -160,6 +163,78 @@ func TestShellFilesShellcheck(t *testing.T) {
 		})
 	}
 }
+
+// batsBudget is how long the bats suite in tests/ may run before it is stopped,
+// and it is a measurement rather than a round number (bead dv-psid).
+//
+// What the suite costs is what 158 checks cost: a process spawn each, on a fake
+// clock, so nothing waits for time to pass. The same 158 checks were measured
+// at 121.3s and at 181.9s on this host on 2026-10-16 -- 113.4s of the first is
+// inside the checks themselves and the rest is bats starting them -- and the
+// difference between those runs is what the machine's own load is worth to a
+// suite this size. This host is shared with every other session the town is
+// running, so an idle CPU is the exception rather than the rule, and the gate
+// adds its own load on top: `go test ./...` starts the test binary of every
+// package side by side, four of the packages beside this one run bats suites of
+// their own, and ops/wizards runs its shell harnesses in parallel (dv-befl).
+// Six of those heavy packages beside this one put the package at 210.9s; the
+// whole gate put it at 344.7s.
+//
+// So the five minutes this suite used to be given was 1.6x the 181.9s it cost
+// on the day it failed, which is less than the gate's own load is worth, and
+// the child was killed while it was still working: the gate printed
+// `FAIL gt.local/devops/scripts/release 344.693s` on
+// polecat/halyard/dv-wg4y+mvbawb1u, a branch that changes nothing here (dv-psid).
+//
+// Eight minutes was that measured cost with room to be wrong in: 1.4x the 344.7s
+// the package cost under the gate's load, and 2.3x the 210.9s a fan-out of the
+// gate's heavy packages cost it. It is also as much as this package can be
+// given. go test stops a package at its own -timeout, ten minutes by default
+// and the gate names none, so a budget at or past that could never be the
+// failure a reader sees -- the package's timeout panic would be, with the
+// suite's output lost. Sizing the budget to the load above is a promise about
+// this much load; a kill that does happen says which budget ran out, so the
+// next reader can tell a busier gate from a broken script.
+//
+// Two gt done runs on 2026-10-16 then reported this package at 372.9s and
+// 385.1s, with the host's load at 21-26 on 24 cores and three gates running
+// (bead dv-5og9): 62% of the ten minutes go test allows, spent by one bats
+// process running 16 files one after another. The files do not share anything
+// -- every check works in its own BATS_TEST_TMPDIR -- so TestBatsSuite now
+// starts one bats per file and lets them run side by side, which needs no GNU
+// parallel, and the budget is each file's, all of them running at once.
+//
+// Measured on 2026-10-16 with 24 busy loops beside the test, a load of 27-37 on
+// 24 cores. One bats over the 16 files, a file after another, took 163s (the
+// five slowest: build_push_staging 63s, build_push 16s, secrets 12s,
+// wait_version 11s, deploy 9s; 40s with no loops on a host at load 9). Side by
+// side the package took 99.7s and 111.3s, and the slowest file took 92.7s and
+// 102.9s: build_push_staging, whose 19 checks each start a git checkout and a
+// script that calls git, so it is the file that gets nothing from the others
+// running beside it. build_push and build_push_staging now copy one checkout
+// made per file (copy_checkout in tests/helpers.bash) rather than running git
+// init, add, commit and tag for every check; on the loaded host that took the
+// staging file from 43-72s to 30-62s, which is within what the host's other
+// sessions move it by.
+//
+// The budget stays eight minutes. The slowest file under that load costs 103s,
+// which is 4.7x of margin to the budget and the package's 111s is 5.4x of
+// margin to the ten minutes go test allows, against the 1.6x the suite had
+// when it was killed (dv-psid).
+const batsBudget = 8 * time.Minute
+
+// batsTestTimeout is the bound on any ONE bats test, set for bats as
+// BATS_TEST_TIMEOUT (bats-core 1.14 stops the test and reports `not ok N <name> #
+// timeout after Ns`). The suite budget above bounds the whole file, so a single
+// hung test used to spend all of it: the 10-minute kills of 2026-10-22 and 10-23
+// (dv-gqbk, dv-honu.7) were one test that never finished while the others passed.
+// With this bound the hang fails alone, in a minute, under its own name.
+//
+// Measured on 2026-10-23 with `bats -T tests`: the slowest legitimate test in
+// the suite takes 1.9 s and the next 1.6 s, so a minute is about 30 times what
+// any test needs. A test that needs more is a test to cut or move to the
+// integration tier, not a reason to raise this (dv-88al).
+const batsTestTimeout = 60 * time.Second
 
 // TestBatsSuite runs the bats suite in tests/. It is the check the beads name
 // by hand: the scripts, the fakes, the acceptance items of dv-cgu, and the
@@ -179,18 +254,72 @@ func TestBatsSuite(t *testing.T) {
 		bats = found
 	}
 
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	files, err := filepath.Glob("tests/*.bats")
+	if err != nil {
+		t.Fatalf("glob tests/*.bats: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatal("no bats files match tests/*.bats")
+	}
+	for _, file := range files {
+		t.Run(filepath.Base(file), func(t *testing.T) {
+			t.Parallel()
+			if err := runBatsSuite(t.Context(), bats, file, batsBudget); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// runBatsSuite runs bats over dir under a budget and returns what went wrong,
+// or nil when the suite passed.
+//
+// The ways this can fail are kept apart because they call for different
+// answers: a suite that exited by itself is a broken script or a broken bats --
+// what it printed says which -- while a child that was still running when its
+// budget ran out is a question about the machine the gate is on rather than
+// about the scripts (dv-psid). Only the last one is worth a message that says
+// how long it ran and which budget it ran against, and that is the reason this
+// is a function rather than a few lines inside the test: the stand-ins in
+// bats_test.go go through the same door.
+func runBatsSuite(ctx context.Context, bats, dir string, budget time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, bats, "tests")
+	declareInputs()
+	cmd := exec.CommandContext(ctx, bats, dir)
 	cmd.Dir = "."
+	cmd.Env = append(os.Environ(), fmt.Sprintf("BATS_TEST_TIMEOUT=%d", int(batsTestTimeout.Seconds())))
+	// A suite that is stopped leaves the subshells of the checks it was
+	// running behind, and they hold the pipe the output is read from. Without a
+	// delay here, the wait this budget exists to bound could be followed by
+	// minutes of waiting on orphans: bats itself is gone by then, so this only
+	// ever costs time when a check left something running.
+	cmd.WaitDelay = 15 * time.Second
+
+	start := time.Now()
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("bats tests = %v\n%s", err, out)
+	ran := time.Since(start).Round(time.Second)
+
+	switch {
+	case ctx.Err() != nil:
+		return fmt.Errorf("the bats suite was still running when its %s budget ran out and was stopped after %s (bead dv-psid). Every test is bound by BATS_TEST_TIMEOUT=%ds, so one hung test is stopped long before this; reaching the suite budget means many tests were slow at once, which is a cost to cut and not a budget to raise. What it printed:\n%s", budget, ran, int(batsTestTimeout.Seconds()), out)
+	case err != nil:
+		return fmt.Errorf("bats %s = %v after %s%s\n%s", dir, err, ran, timeoutNote(out), out)
+	case strings.Contains(string(out), "not ok"):
+		return fmt.Errorf("bats reported a failing test%s\n%s", timeoutNote(out), out)
 	}
-	if strings.Contains(string(out), "not ok") {
-		t.Fatalf("bats reported a failing test\n%s", out)
+	return nil
+}
+
+// timeoutNote names BATS_TEST_TIMEOUT when bats stopped a test for it, so a hung
+// test reads as a hang to cut and not as a broken script: bats prints `# timeout
+// after Ns` on the test's own `not ok` line. It is empty when no test timed out.
+func timeoutNote(out []byte) string {
+	if !strings.Contains(string(out), "timeout after") {
+		return ""
 	}
+	return fmt.Sprintf(" (a test was stopped by BATS_TEST_TIMEOUT=%ds: it hung or ran far past what any test here needs; find why it did not finish, do not raise the timeout)", int(batsTestTimeout.Seconds()))
 }
 
 // TestNoHostSpecificPaths fails if any file in the package names a path that
@@ -241,6 +370,7 @@ func TestTheReleaseScriptsImpersonateTheAccountBootstrapCreates(t *testing.T) {
 
 	// The environment a release runs in: APP and PROJECT are what release_target
 	// resolves GT_APP and GT_PROJECT into.
+	declareInputs()
 	cmd := exec.Command("bash", "-c", ". ./lib.sh; deployer_sa")
 	cmd.Env = append(os.Environ(), "APP="+m.App, "PROJECT="+m.Project)
 	out, err := cmd.CombinedOutput()

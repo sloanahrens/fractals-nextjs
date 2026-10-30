@@ -8,7 +8,7 @@ a Forgejo job running as `gt-cloud` (bead B5.4) and are wired together by
 
 | Script | Step | What it does |
 |---|---|---|
-| `build_push.sh` | 2 | Builds the app's Dockerfile at the release tag, pushes it, prints `<registry>@sha256:<64hex>` |
+| `build_push.sh` | 2 | Builds the app's Dockerfile (and one `Dockerfile.<name>` per further image in `GT_IMAGES`) at the release tag, pushes it, prints `<registry>@sha256:<64hex>` |
 | `build_push_staging.sh` | — | The landing build: builds the commit main is at, pushes it as `<image>:main-<12 hex of the commit>`, prints the digest |
 | `mint_token.sh` | 3 | Mints a one-hour token for the app's deployer SA from the base key |
 | `preview.sh` | 4 | Pins the digest in the stack config and writes the `pulumi preview` diff the release is read from |
@@ -185,7 +185,42 @@ the app's Pulumi project is the name its manifest states as `pulumiProject`
 `.pulumi/stacks/<pulumiProject>/<env>.json` -- the path the patrol reads an
 app's state under (cmd/patrol's `readState`, beads dv-iou and dv-4fu).
 
-A release writes at most two values into a stack's config, and the rest of the
+### Named images (`GT_IMAGES`)
+
+An app releases one image or several. `GT_IMAGES` is a space-separated list of
+image names, `app` by default, and it comes from the app's registry entry
+(`images:` in `apps/<app>.yaml`; `appsctl env <app>` prints it as `GT_IMAGES`).
+For each name `n`:
+
+| | list of one (the default) | several |
+|---|---|---|
+| Dockerfile | `Dockerfile` for `app`, else `Dockerfile.<n>` | the same |
+| image path | `<registry>/<project>/apps/<app>`, where every app has always pushed | `<registry>/<project>/apps/<app>/<n>` |
+| stack config key | `image.<n>`, and `imageDigest` too for the primary image | the same |
+
+Names match `^[a-z][a-z0-9-]{0,28}$` and are not repeated. A missing Dockerfile
+fails before any build and names the file.
+
+`build_push.sh` and `build_push_staging.sh` build, push and read back every
+image, then print `image=`, `tag=` and `digest=` for the app image as they always
+have (a list of one prints the same lines it did), `image.<n>=<digest>` for every
+image, and `images=<n>=<digest> ...` for every image but `app` (the only line
+with no dot in its key, because the workflows copy lines shaped `^[a-z_]+=` into
+their step outputs). A list with no `app` and more than one entry prints no
+`digest=`, and `--digest-file` is refused.
+
+`preview.sh`, `up.sh` and `promote.sh` take `--digest` for the primary image
+(the only image of a list of one, else `app`), as before, and pin it as
+`imageDigest` and as `image.<primary>`. Each other image is passed
+as `--image <n>=<digest>` (repeatable) or through `GT_IMAGE_DIGESTS`, the
+`images=` line; the name must be in `GT_IMAGES`, and the value must be a digest
+for that image's own repository (`<image path>` above).
+`digest_for_tag.sh` resolves the app image's tag only.
+
+### Stack config written by a release
+
+A release writes at most two values into a stack's config (plus `image.<n>` for
+each image the app names), and the rest of the
 app's `Spec` (`name`, `env`, `project`, `region`, `port`, `healthPath`) stays
 with the app repo, in `Pulumi.<env>.yaml`, which is what the app's Pulumi
 program reads (`examples/app/main.go`).

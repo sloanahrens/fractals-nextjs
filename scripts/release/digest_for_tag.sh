@@ -99,6 +99,12 @@ require_release_tag "$TAG"
 # release_target derives IMAGE (the registry path this app's releases push to),
 # so the read below asks about exactly the image build_push.sh pushes.
 release_target
+# The digest this script prints is the app image's: the image of a list of one,
+# else `app`. Its path is $IMAGE for the default list and $IMAGE/app for a list
+# of several (lib.sh, "Named images"); a list with neither has no digest here.
+primary=$(primary_image) ||
+  die "GT_IMAGES (${IMAGE_NAMES[*]}) lists no app image, and this script resolves the digest of that one"
+IMAGE=$(image_ref "${IMAGE_NAMES[$primary]}")
 need "--token-file (or GT_TOKEN_FILE)" "$TOKEN_FILE"
 
 # Nothing is printed on the way to the read, unlike the other scripts: the

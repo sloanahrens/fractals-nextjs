@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#
+# Fake reaperschedule for the k8s_lib.sh tests (bead dv-60ph): stands in for
+# cmd/reaperschedule, which asks internal/gcp.ReaperScheduleAt for the reaper's
+# cron spec. It records the label it was asked for, prints the spec for the one
+# expiry the tests use, and refuses any other label the way the real command
+# does: a message on stderr and status 1.
+#
+# Fake-specific environment:
+#   FAKE_LOG  where invocations are recorded
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+fake_log "reaperschedule $*"
+
+if [[ $# -ne 1 ]]; then
+  printf 'usage: reaperschedule GT_EXPIRES_AT\n' >&2
+  exit 2
+fi
+if [[ $1 != 2026-10-19t18-00-00z ]]; then
+  printf 'reaperschedule: %s is not an expiry the fake knows\n' "$1" >&2
+  exit 1
+fi
+printf '0 18 19 10 *\n'

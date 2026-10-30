@@ -85,6 +85,35 @@ setup() {
   refute_in_log '^docker '
 }
 
+@test "promote pins the named images it is given as image.<name> in the prod stack" {
+  local engine="$IMAGE/engine@sha256:$DIGEST_HEX"
+
+  GT_IMAGES="app engine" run "$RELEASE_DIR/promote.sh" "$IMAGE@sha256:$DIGEST_HEX" --app "$APP" --project "$PROJECT" \
+    --image "engine=$engine" --token-file "$TOKEN_FILE" --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"pulumi config set imageDigest $IMAGE@sha256:$DIGEST_HEX --stack prod"* ]]
+  [[ $output == *"pulumi config set image.app $IMAGE@sha256:$DIGEST_HEX --stack prod"* ]]
+  [[ $output == *"pulumi config set image.engine $engine --stack prod"* ]]
+}
+
+@test "promote pins a one-image list under that image's name, not image.app" {
+  GT_IMAGES="engine" run "$RELEASE_DIR/promote.sh" "$IMAGE@sha256:$DIGEST_HEX" --app "$APP" --project "$PROJECT" \
+    --token-file "$TOKEN_FILE" --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"pulumi config set image.engine $IMAGE@sha256:$DIGEST_HEX --stack prod"* ]]
+  [[ $output != *"pulumi config set image.app"* ]]
+}
+
+@test "promote refuses an --image digest for another image's repository" {
+  GT_IMAGES="app engine" run "$RELEASE_DIR/promote.sh" "$IMAGE@sha256:$DIGEST_HEX" --app "$APP" \
+    --image "engine=$IMAGE/ui@sha256:$DIGEST_HEX" --token-file "$TOKEN_FILE" --dry-run
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"another repository"* ]]
+}
+
 @test "promote has no environment flag: promotion is prod" {
   run "$RELEASE_DIR/promote.sh" "$IMAGE@sha256:$DIGEST_HEX" --app "$APP" --env staging --token-file "$TOKEN_FILE" --dry-run
 

@@ -133,7 +133,9 @@ done
 ENV_NAME=staging
 release_target
 [[ -d $SOURCE ]] || die "source directory does not exist: $SOURCE"
-[[ -f $SOURCE/Dockerfile ]] || die "no Dockerfile in $SOURCE (an app repo provides one at its root)"
+require_dockerfiles "$SOURCE"
+[[ -z $DIGEST_FILE ]] || primary_image >/dev/null ||
+  die "--digest-file holds the digest of the app image, and GT_IMAGES (${IMAGE_NAMES[*]}) lists none: read the image.<name>= lines instead"
 
 # Everything below reads the checkout with git, so a directory that is not one
 # is refused before anything else: there is no commit to publish and no ref to
@@ -208,29 +210,13 @@ fi
 # which takes Turbopack -- the compiler that stopped, at 4.8 seconds into it --
 # out of the build. That is a person's diagnostic step and not something this
 # script does; it is written down here because this is where the build is.
-step "Building $IMAGE:$TAG"
-docker_build_bounded "$IMAGE:$TAG" "$SOURCE" "GIT_SHA=$head_commit"
+#
+# Every image GT_IMAGES names is built, pushed and read back the same way
+# (lib.sh, build_push_images); the default list is the one image, at the path
+# every app has always landed to.
+build_push_images "$TAG" "$SOURCE" "GIT_SHA=$head_commit"
 
-step "Pushing $IMAGE:$TAG"
-run docker push "$IMAGE:$TAG"
-
-# The registry's own record of the push is what the deploy steps get, read back
-# rather than assumed, so a push that did not land cannot hand the workflow a
-# digest for an image that is not there.
-step "Reading the pushed digest"
-digest=$(capture docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$TAG" || true)
-if [[ -z $digest ]]; then
-  note "no digest available in a dry run"
-  printf 'image=%s\ntag=%s\ndigest=%s\n' "$IMAGE" "$TAG" ''
-  exit 0
-fi
-is_digest "$digest" || die "docker inspect returned something that is not a digest: $digest"
-[[ $digest == "$IMAGE@"* ]] ||
-  die "docker inspect returned a digest for another repository: $digest (expected $IMAGE)"
-
-if [[ -n $DIGEST_FILE ]]; then
-  printf '%s\n' "$digest" >"$DIGEST_FILE"
-  note "wrote the digest to $DIGEST_FILE"
-fi
-
-printf 'image=%s\ntag=%s\ndigest=%s\n' "$IMAGE" "$TAG" "$digest"
+# The registry's own record of each push is what the deploy steps get.
+# image=, tag= and digest= describe the app image as they always have;
+# image.<name>= carries each image's digest.
+print_image_report "$TAG" "$DIGEST_FILE"

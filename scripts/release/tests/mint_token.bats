@@ -90,3 +90,23 @@ setup() {
   [ ! -e "$out" ]
   [ ! -s "$FAKE_LOG" ]
 }
+
+@test "mints a token for a kubernetes app, which has no staging environment" {
+  local out=$BATS_TEST_TMPDIR/k8s.token
+
+  GT_PLATFORM=kubernetes run "$RELEASE_DIR/mint_token.sh" --app "$APP" --project "$PROJECT" --key-file "$KEY_FILE" --token-file "$out"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"token_file=$out"* ]]
+  [[ $output == *"deployer_sa=deployer-$APP@$PROJECT.iam.gserviceaccount.com"* ]]
+  [ "$(cat "$out")" = "$FAKE_ACCESS_TOKEN" ]
+  [ "$(file_mode "$out")" = '600' ]
+  grep -q -- '--lifetime=3600' "$FAKE_LOG"
+}
+
+@test "a platform that is neither cloudrun nor kubernetes is still refused" {
+  GT_PLATFORM=lambda run "$RELEASE_DIR/mint_token.sh" --app "$APP" --key-file "$KEY_FILE" --token-file "$BATS_TEST_TMPDIR/out.token"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"platform must be cloudrun or kubernetes, got: lambda"* ]]
+}

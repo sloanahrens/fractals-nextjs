@@ -20,14 +20,24 @@
 #                              at once, as every other fake's work is.
 #   FAKE_DOCKER_BUILD_HANGS    1 is a build that never returns: the clock has
 #                              moved and docker has nothing more to say, which is
-#                              the shape 2026-10-15's stall had. Nothing in this
-#                              fake ends it -- the script's bound has to, and a
-#                              test that has no bound to reach hangs rather than
-#                              passes, which is the honest answer.
+#                              the shape 2026-10-15's stall had. The script's
+#                              bound is what ends it; when the bound does not,
+#                              this fake ends it itself (see the cap below), so
+#                              a bound that fails costs the test seconds and not
+#                              the file's budget (dv-fcq2).
 #   FAKE_DOCKER_BUILD_STATUS   the build's exit status, default 0.
 #   FAKE_DOCKER_BUILD_LINES    how many numbered lines the build writes before
 #                              it ends, so a test can say which of them the
 #                              script printed after it stopped.
+#
+# A hung build is also the one thing here that outlives the test's clock: how
+# long it hangs for is real seconds, so it has a real-time cap of its own,
+# FAKE_DOCKER_HANG_CAP_SECONDS (default 90). The script's bound is the only
+# other thing that ends a hang, and a bound that does not end one is what
+# dv-honu.7's third rejection looked like (the file ran 495 s and the gate's
+# budget killed it). Under the cap, a bound that fails costs a test a minute at
+# worst, and the test fails on the message below rather than on the file's
+# budget.
 
 set -euo pipefail
 # shellcheck source=scripts/release/tests/fakes/_fake.sh
@@ -50,9 +60,34 @@ build | push)
       fake_clock_advance "$FAKE_DOCKER_BUILD_SECONDS"
     fi
     if [[ ${FAKE_DOCKER_BUILD_HANGS:-0} == 1 ]]; then
+      # The hang ends when the script's bound kills it, which takes this whole
+      # process with it and prints nothing. Everything below is for the case
+      # where that does not happen, so that a bound which misses cannot spend a
+      # budget: the loop ends itself when the process that ran the build is
+      # gone (nothing is left to stop it, and its reader is waiting), and
+      # after a real-time cap. The clock here is bash's $SECONDS and not the
+      # test's: FAKE_CLOCK_FILE is what the test drives, so a hang measured on
+      # it would never end. Both endings are non-zero and say so, and the hang
+      # tests that reach one fail on this line instead of on the file's budget.
+      hang_cap=${FAKE_DOCKER_HANG_CAP_SECONDS:-90}
+      if [[ ! $hang_cap =~ ^[0-9]+$ ]] || ((hang_cap < 1)); then
+        printf 'fake docker: FAKE_DOCKER_HANG_CAP_SECONDS must be a whole number of seconds, got: %s\n' "$hang_cap" >&2
+        exit 2
+      fi
+      hang_start=$SECONDS
       # /bin/sleep, not sleep: the script's PATH has the fake one, which does
       # not wait, and a build that hangs has to stay there until it is stopped.
-      while :; do /bin/sleep 0.05; done
+      while :; do
+        if ! kill -0 "$PPID" 2>/dev/null; then
+          printf "fake docker: hung build was never stopped by the script's bound: the process that ran it (pid %s) is gone\n" "$PPID" >&2
+          exit 1
+        fi
+        if ((SECONDS - hang_start >= hang_cap)); then
+          printf "fake docker: hung build was never stopped by the script's bound: still running after %ss\n" "$hang_cap" >&2
+          exit 1
+        fi
+        /bin/sleep 0.05
+      done
     fi
     exit "${FAKE_DOCKER_BUILD_STATUS:-0}"
   fi
