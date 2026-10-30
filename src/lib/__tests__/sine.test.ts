@@ -207,16 +207,31 @@ describe("the interior known in closed form", () => {
   it("keeps every orbit inside the disc of radius |c|, which is why it never leaves", () => {
     // |sin z| <= sinh |z|, so from a point of modulus at most |c| a step lands at
     // modulus at most |c| sinh |c| <= |c|: the orbit is held in that disc.
+    // Every orbit point is checked, in one assertion over the lot (an expect per
+    // point costs more than the walk does); the first offenders are named.
+    const offenders: string[] = [];
+    let walked = 0;
+
     for (const c of grid(-0.88, 0.88, -0.88, 0.88, 14)) {
       const size = Math.hypot(c.real, c.imaginary);
       if (size >= SINE_INTERIOR_RADIUS) continue;
 
       for (const point of sineKind.orbit!(c, 120).slice(1)) {
-        expect(Math.hypot(point.real, point.imaginary)).toBeLessThanOrEqual(
-          size + 1e-12,
-        );
+        walked++;
+        if (
+          Math.hypot(point.real, point.imaginary) > size + 1e-12 &&
+          offenders.length < 5
+        ) {
+          offenders.push(
+            `c = ${c.real},${c.imaginary} reached ${point.real},${point.imaginary}`,
+          );
+        }
       }
     }
+
+    // An empty grid would prove nothing.
+    expect(walked).toBeGreaterThan(10000);
+    expect(offenders).toEqual([]);
   });
 
   it("gives the same count as walking the orbit, inside the disc and well past its edge", () => {
