@@ -21,6 +21,7 @@ import {
   autoIterations,
   calculateZoomBounds,
 } from "../mandelbrot";
+import { colourRgbaRows, countRgbaRows } from "../renderRgba";
 import type { ColorScheme } from "../../types/fractal";
 import { newtonPolynomialFor } from "../newton";
 import {
@@ -711,32 +712,9 @@ describe("PLACES", () => {
         expect(decoded.variant).toBe(entry.variant);
       });
 
-      it("renders a picture, not a blank", async () => {
-        const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
-        const renderer = new FractalRenderer(
-          element,
-          resolveFractalKind(entry.fractal, entry.variant ?? ""),
-        );
-
-        await renderer.renderFractal(
-          {
-            bounds: calculateZoomBounds(
-              entry.centerX,
-              entry.centerY,
-              entry.zoom,
-            ),
-            // What Auto draws it at, which is how the page will.
-            maxIterations: autoIterations(entry.zoom),
-            width: WIDTH,
-            height: HEIGHT,
-            colorScheme: entry.colorScheme ?? "classic",
-          },
-          undefined,
-          false,
-        );
-
+      it("renders a picture, not a blank", () => {
         expect(
-          differingFromCorner(pixels(), WIDTH, HEIGHT),
+          differingFromCorner(pictureOf(entry), WIDTH, HEIGHT),
         ).toBeGreaterThanOrEqual(BLANK_SHARE);
       });
     },
@@ -809,16 +787,27 @@ describe("featuredPlace", () => {
         false,
       );
 
-      expect(isBlankImage(pixels(), WIDTH, HEIGHT)).toBe(false);
+      const picture = pictureOf(featured);
+      const uniform = nearUniformShare(picture, WIDTH, HEIGHT);
+
+      // The page draws the place through the renderer; the guard above holds
+      // the picture `renderRgba`'s two halves draw for it. This ties the two
+      // together, so a renderer that stopped colouring or drew another view
+      // cannot leave the cheaper guard alone passing.
+      expect(
+        samePicture(pixels(), picture),
+        `${featured.id}: the renderer's picture is not the one the catalogue guard holds`,
+      ).toBe(true);
+      expect(isBlankImage(picture, WIDTH, HEIGHT)).toBe(false);
       // Past "not one colour": a featured place should be full of detail.
       expect(
-        differingFromCorner(pixels(), WIDTH, HEIGHT),
+        differingFromCorner(picture, WIDTH, HEIGHT),
       ).toBeGreaterThanOrEqual(FEATURED_DETAIL_SHARE);
       // And not a flat field: the one colour may hold at most 60% of it, so a
       // gradient or a thin shape in an empty field fails by place id.
       expect(
-        nearUniformShare(pixels(), WIDTH, HEIGHT),
-        `${featured.id} is ${Math.round(nearUniformShare(pixels(), WIDTH, HEIGHT) * 100)}% one colour`,
+        uniform,
+        `${featured.id} is ${Math.round(uniform * 100)}% one colour`,
       ).toBeLessThanOrEqual(FEATURED_MAX_UNIFORM_SHARE);
     });
   });
@@ -1028,6 +1017,66 @@ function createFakeCanvas(width: number, height: number) {
     element: canvas as unknown as HTMLCanvasElement,
     pixels: () => state.pixels,
   };
+}
+
+/** Each catalogue place's picture, drawn once and held for every test that reads it. */
+const PICTURES = new Map<string, Uint8ClampedArray>();
+
+/**
+ * The picture the page draws for a place at the size the blank guards read it:
+ * 64x48, Auto's count at the place's zoom, in the place's own scheme.
+ *
+ * It is `countRgbaRows` then `colourRgbaRows`, the two halves of the one
+ * pipeline every render runs (invariant 4), so it is the picture
+ * `FractalRenderer` paints for the same numbers — the featured place's test
+ * checks that. Drawing it here rather than through the renderer skips a
+ * microtask per row and a timer every ten, which on 110 places cost more than
+ * the counts.
+ */
+function pictureOf(entry: Place): Uint8ClampedArray {
+  const held = PICTURES.get(entry.id);
+  if (held) return held;
+
+  const bounds = calculateZoomBounds(entry.centerX, entry.centerY, entry.zoom);
+  // What Auto draws it at, which is how the page will.
+  const maxIterations = autoIterations(entry.zoom);
+  const counts = new Float64Array(WIDTH * HEIGHT);
+  const picture = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+
+  countRgbaRows(
+    counts,
+    0,
+    HEIGHT,
+    bounds,
+    WIDTH,
+    HEIGHT,
+    maxIterations,
+    resolveFractalKind(entry.fractal, entry.variant ?? ""),
+    false,
+  );
+  colourRgbaRows(
+    picture,
+    counts,
+    0,
+    HEIGHT,
+    WIDTH,
+    maxIterations,
+    entry.colorScheme ?? "classic",
+  );
+
+  PICTURES.set(entry.id, picture);
+  return picture;
+}
+
+/** Whether two pictures are the same size and byte for byte the same. */
+function samePicture(a: Uint8ClampedArray, b: Uint8ClampedArray): boolean {
+  if (a.length !== b.length) return false;
+
+  for (let at = 0; at < a.length; at++) {
+    if (a[at] !== b[at]) return false;
+  }
+
+  return true;
 }
 
 /** The share of pixels whose colour differs from the top-left pixel's. */
