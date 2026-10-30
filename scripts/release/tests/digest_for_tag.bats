@@ -64,6 +64,22 @@ run_resolve() {
   assert_no_token_value "$RESOLVE_STDOUT$RESOLVE_STDERR"
 }
 
+@test "reads the app image's own path when the app releases several images" {
+  GT_IMAGES="app ui" run_resolve --app "$APP" --tag v1.2.3 --token-file "$TOKEN_FILE"
+
+  [ "$RESOLVE_STATUS" -eq 0 ]
+  [ "$RESOLVE_STDOUT" = "digest=$IMAGE/app@sha256:$FAKE_AR_DIGEST_HEX" ]
+  assert_in_log "gcloud artifacts docker images describe $IMAGE/app:v1.2.3"
+}
+
+@test "refuses a list with no app image, which has no digest to print" {
+  GT_IMAGES="engine ui" run_resolve --app "$APP" --tag v1.2.3 --token-file "$TOKEN_FILE"
+
+  [ "$RESOLVE_STATUS" -ne 0 ]
+  [ -z "$RESOLVE_STDOUT" ]
+  [[ $RESOLVE_STDERR == *"lists no app image"* ]]
+}
+
 @test "resolves the tag it is given, not a fixed one" {
   run_resolve --app "$APP" --tag v9.9.9 --token-file "$TOKEN_FILE"
 

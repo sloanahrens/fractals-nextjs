@@ -76,8 +76,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 # This script has no environment of its own; release_target needs one to name a
-# stack it never touches.
-ENV_NAME=staging
+# stack it never touches, and the environment it accepts depends on the platform:
+# a kubernetes app has only the ephemeral stack, so naming staging would be
+# refused. Any other platform value keeps staging, and release_target rejects it.
+if [[ ${GT_PLATFORM:-cloudrun} == kubernetes ]]; then
+  ENV_NAME=ephemeral
+else
+  ENV_NAME=staging
+fi
 release_target
 require_key_file "$KEY_FILE"
 

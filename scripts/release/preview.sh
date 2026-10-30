@@ -15,7 +15,12 @@
 #
 # Usage:
 #   preview.sh --app APP --digest <registry>@sha256:<64hex> --token-file FILE
-#              [--env staging|prod] [--preview-file FILE] [--init-stack] [--dry-run]
+#              [--image NAME=<registry>@sha256:<64hex>]... [--env staging|prod]
+#              [--preview-file FILE] [--init-stack] [--dry-run]
+#
+# --digest is the primary image (the only image of a list of one, else app),
+# pinned as imageDigest and as image.<name>; each --image pins another image of
+# GT_IMAGES as image.<NAME> (see up.sh).
 #
 # Environment fallbacks: GT_APP, GT_ENV, GT_PROJECT, GT_DIGEST, GT_TOKEN_FILE,
 # GT_BASE_KEY_FILE, GT_PREVIEW_FILE, GT_STACK_DIR, GT_BACKEND_URL, DRY_RUN=1.
@@ -44,6 +49,7 @@ usage() {
     '' \
     '  --app APP           app name (GT_APP)' \
     '  --digest DIGEST     image digest to preview, from build_push.sh (GT_DIGEST)' \
+    '  --image NAME=DIGEST digest of another image in GT_IMAGES; repeatable' \
     '  --token-file FILE   token from mint_token.sh (GT_TOKEN_FILE)' \
     '  --env staging|prod  stack to preview, default staging (GT_ENV)' \
     '  --project gt-APP    GCP project, default gt-APP (GT_PROJECT)' \
@@ -78,6 +84,10 @@ while [[ $# -gt 0 ]]; do
     TOKEN_FILE=${2:-}
     shift 2
     ;;
+  --image)
+    add_image_flag "${2:-}"
+    shift 2
+    ;;
   --preview-file)
     PREVIEW_FILE=${2:-}
     shift 2
@@ -94,6 +104,7 @@ done
 # input that is wrong, whatever else the caller got wrong too.
 require_digest "$DIGEST" "digest"
 release_target
+require_extra_images
 PREVIEW_FILE=${PREVIEW_FILE:-preview-$STACK.diff}
 # The stack's committed settings are required before Pulumi is given anything:
 # a stack whose settings file does not name this project's secrets provider
@@ -108,6 +119,7 @@ note "backend: $BACKEND_URL"
 
 ensure_stack
 set_digest_config "$DIGEST"
+set_extra_image_configs
 preview_stack "$PREVIEW_FILE"
 
 printf 'preview_file=%s\nstack=%s\n' "$PREVIEW_FILE" "$STACK"

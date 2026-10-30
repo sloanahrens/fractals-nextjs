@@ -17,6 +17,9 @@
 #   FAKE_DATE_BAD     set to 1 to answer with text that is not an RFC 3339
 #                     timestamp, so a test can watch a release refuse to deploy
 #   FAKE_CLOCK_FILE   the fake clock (see _fake.sh); `date +%s` reads it
+#   FAKE_DATE_DELAY   real seconds `date +%s` waits before it answers, so a test
+#                     can fix the order of a race between a script's clock read
+#                     and a fake command that moves the clock
 
 set -euo pipefail
 # shellcheck source=scripts/release/tests/fakes/_fake.sh
@@ -30,6 +33,14 @@ if [[ ${FAKE_DATE_BAD:-0} == 1 ]]; then
 fi
 
 if [[ -n ${FAKE_CLOCK_FILE:-} && $# -eq 1 && $1 == '+%s' ]]; then
+  # FAKE_DATE_DELAY is a number of real seconds to wait before answering. It
+  # lets a test decide the order of a race it is about, instead of hoping for
+  # it: a script that launches a command and then reads the clock gives a fake
+  # command that moves the clock the time to do so first (bead dv-lqrk).
+  # /bin/sleep, not sleep: the fake sleep moves the clock instead of waiting.
+  if [[ -n ${FAKE_DATE_DELAY:-} ]]; then
+    /bin/sleep "$FAKE_DATE_DELAY"
+  fi
   fake_clock_now
   exit 0
 fi

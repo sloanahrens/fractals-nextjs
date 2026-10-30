@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#
+# Fake make for the k8s_lib.sh tests (bead dv-60ph): the app's `make
+# integration-k8s`. It records the call and its arguments, and whether the
+# forward the tests run against is up when it is called, and fails when asked to.
+#
+# Fake-specific environment:
+#   FAKE_LOG        where invocations are recorded
+#   FAKE_MAKE_FAIL  set to 1 and the call exits with status 3
+
+set -euo pipefail
+# shellcheck source=scripts/release/tests/fakes/_fake.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_fake.sh"
+
+if grep -q 'kubectl .*port-forward' "${FAKE_LOG:-/dev/null}" && ! grep -q 'port-forward stopped' "${FAKE_LOG:-/dev/null}"; then
+  forward=up
+else
+  forward=down
+fi
+fake_log "make $* forward=$forward"
+
+if [[ ${FAKE_MAKE_FAIL:-} == 1 ]]; then
+  printf 'make: *** [integration-k8s] Error 1\n' >&2
+  exit 3
+fi

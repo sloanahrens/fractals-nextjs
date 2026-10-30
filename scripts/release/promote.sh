@@ -25,6 +25,10 @@
 # Usage:
 #   promote.sh <registry>@sha256:<64hex> --app APP --token-file FILE
 #              [--project gt-APP] [--staging-digest DIGEST] [--init-stack] [--dry-run]
+#              [--image NAME=<registry>@sha256:<64hex>]...
+#
+# DIGEST is the primary image (the only image of a list of one, else app); each
+# --image pins another image of GT_IMAGES as image.<NAME>, as up.sh does.
 #
 # The digest may also be given as --digest or GT_DIGEST.
 # Environment fallbacks: GT_APP, GT_PROJECT, GT_DIGEST, GT_STAGING_DIGEST,
@@ -56,6 +60,7 @@ usage() {
     '' \
     '  DIGEST              the <registry>@sha256:<64hex> staging runs; a tag is refused' \
     '  --app APP           app name (GT_APP)' \
+    '  --image NAME=DIGEST digest of another image in GT_IMAGES; repeatable' \
     '  --token-file FILE   token from mint_token.sh (GT_TOKEN_FILE)' \
     '  --project gt-APP    GCP project, default gt-APP (GT_PROJECT)' \
     '  --staging-digest D  refuse to promote a digest different from the staging one' \
@@ -92,6 +97,10 @@ while [[ $# -gt 0 ]]; do
     TOKEN_FILE=${2:-}
     shift 2
     ;;
+  --image)
+    add_image_flag "${2:-}"
+    shift 2
+    ;;
   --init-stack)
     INIT_STACK=1
     shift
@@ -115,6 +124,7 @@ require_digest "$DIGEST" "the digest to promote"
 # Promotion is a prod action and this script has no --env flag to say otherwise.
 ENV_NAME=prod
 release_target
+require_extra_images
 # The prod stack's committed settings are required before Pulumi is given
 # anything: a stack whose settings file does not name this project's secrets
 # provider cannot be promoted to, and saying so here needs no credentials
@@ -135,4 +145,5 @@ note "backend: $BACKEND_URL"
 
 ensure_stack
 set_digest_config "$DIGEST"
+set_extra_image_configs
 apply_digest "$DIGEST"

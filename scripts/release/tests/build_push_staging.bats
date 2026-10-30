@@ -20,11 +20,15 @@
 
 load helpers.bash
 
+setup_file() {
+  make_checkout "$BATS_FILE_TMPDIR/app" v1.0.0
+  point_origin_main "$BATS_FILE_TMPDIR/app"
+}
+
 setup() {
   setup_release_env
   CHECKOUT=$BATS_TEST_TMPDIR/app
-  make_checkout "$CHECKOUT" v1.0.0
-  point_origin_main "$CHECKOUT"
+  copy_checkout "$BATS_FILE_TMPDIR/app" "$CHECKOUT"
   HEAD_COMMIT=$(git -C "$CHECKOUT" rev-parse HEAD)
   SHORT_COMMIT=${HEAD_COMMIT:0:12}
 }
@@ -50,6 +54,52 @@ commit_after_main() {
   # image carries, so a service reporting GIT_SHA reports the landing's commit.
   grep -q "docker build --file $CHECKOUT/Dockerfile --tag $IMAGE:main-$SHORT_COMMIT --build-arg GIT_SHA=$HEAD_COMMIT $CHECKOUT" "$FAKE_LOG"
   grep -q "docker push $IMAGE:main-$SHORT_COMMIT" "$FAKE_LOG"
+}
+
+# add_dockerfiles NAME... commits a Dockerfile.NAME per name and moves
+# origin/main onto that commit, so the checkout is still one main carries, as
+# the ancestry check requires, and the named images have their own files.
+add_dockerfiles() {
+  local name
+  for name in "$@"; do
+    printf 'FROM scratch\nLABEL part=%s\n' "$name" >"$CHECKOUT/Dockerfile.$name"
+  done
+  git -C "$CHECKOUT" add -A
+  git -C "$CHECKOUT" -c commit.gpgsign=false -c user.name=test -c user.email=test@example.invalid \
+    commit -qm "images: $*"
+  point_origin_main "$CHECKOUT"
+  HEAD_COMMIT=$(git -C "$CHECKOUT" rev-parse HEAD)
+  SHORT_COMMIT=${HEAD_COMMIT:0:12}
+}
+
+@test "GT_IMAGES builds one image per name, each at its own path, and prints each digest" {
+  add_dockerfiles ui
+
+  GT_IMAGES="app ui" run "$RELEASE_DIR/build_push_staging.sh" --app "$APP" --project "$PROJECT" --source "$CHECKOUT"
+
+  [ "$status" -eq 0 ]
+  grep -q "docker build --file $CHECKOUT/Dockerfile --tag $IMAGE/app:main-$SHORT_COMMIT --build-arg GIT_SHA=$HEAD_COMMIT $CHECKOUT" "$FAKE_LOG"
+  grep -q "docker build --file $CHECKOUT/Dockerfile.ui --tag $IMAGE/ui:main-$SHORT_COMMIT --build-arg GIT_SHA=$HEAD_COMMIT $CHECKOUT" "$FAKE_LOG"
+  grep -q "docker push $IMAGE/ui:main-$SHORT_COMMIT" "$FAKE_LOG"
+  # The app image keeps digest= and the path it has always had; the other image
+  # is the images= line the deploy steps pass on as GT_IMAGE_DIGESTS.
+  [[ $output == *"digest=$IMAGE/app@sha256:$DIGEST_HEX"* ]]
+  [[ $output == *"image.ui=$IMAGE/ui@sha256:$DIGEST_HEX"* ]]
+  [[ $output == *$'\nimages=ui='"$IMAGE/ui@sha256:$DIGEST_HEX"* ]]
+}
+
+@test "refuses --digest-file when the list has no app image to take the digest from" {
+  add_dockerfiles engine ui
+  local digest_file=$BATS_TEST_TMPDIR/digest.txt
+
+  GT_IMAGES="engine ui" run "$RELEASE_DIR/build_push_staging.sh" --app "$APP" --project "$PROJECT" \
+    --source "$CHECKOUT" --digest-file "$digest_file"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"--digest-file holds the digest of the app image"* ]]
+  [[ $output == *"lists none"* ]]
+  [ ! -e "$digest_file" ]
+  [ ! -s "$FAKE_LOG" ]
 }
 
 @test "a commit behind main is built: a queued landing is skipped by the workflow, not here" {
@@ -258,6 +308,36 @@ commit_after_main() {
   [ "$(grep -c '^docker build ' "$FAKE_LOG")" -eq 2 ]
 }
 
+@test "a build that moves the clock the instant it starts still meets its bound at once" {
+  # run_under_bound reads the clock for its start BEFORE it launches the build.
+  # Read after, a build that moves the clock as soon as it starts (this fake does)
+  # wins the race under load, the start already holds the jump, and the bound is
+  # only ever reached by waiting it out one check at a time (bead dv-lqrk: a
+  # 0.7 s test took 25-71 s two times in three under load, and under the gate's
+  # load it was the 10-minute kill). FAKE_DATE_DELAY decides the race: every clock
+  # read waits 0.3 s of real time, long enough for the fake docker to have moved
+  # the clock first. With the start read first, the bound is met on the first
+  # check; with it read after, the loop needs about 60 checks, each of them a fake
+  # sleep that the log records.
+  export GT_BUILD_BOUND_SECONDS=60
+  export FAKE_DOCKER_BUILD_SECONDS=100000
+  export FAKE_DOCKER_BUILD_HANGS=1
+  export FAKE_DATE_DELAY=0.3
+
+  run "$RELEASE_DIR/build_push_staging.sh" --app "$APP" --project "$PROJECT" --source "$CHECKOUT"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"ran past its 60s bound on both attempts"* ]]
+
+  # One fake sleep after each stop, two attempts. A handful is the bound being
+  # met by the clock; sixty or more is it being waited out.
+  waits=$(grep -c '^sleep ' "$FAKE_LOG")
+  [ "$waits" -le 4 ] || {
+    echo "the bound was waited out, not met: $waits fake sleeps (want at most 4)" >&2
+    return 1
+  }
+}
+
 @test "a build that finishes inside its bound is built once and not retried" {
   export GT_BUILD_BOUND_SECONDS=60
   export FAKE_DOCKER_BUILD_SECONDS=30
@@ -304,4 +384,26 @@ commit_after_main() {
   [ "$status" -ne 0 ]
   [[ $output == *"ran past its 480s bound"* ]]
   [[ $output != *"ran past its 600s bound"* ]]
+}
+
+@test "a hung build the script's bound misses ends itself, so it fails this check and not the file's budget" {
+  # The two checks above leave the fake hanging on purpose, because the bound is
+  # what they are about. That left the fake with no ending of its own: when the
+  # bound did not stop one (dv-honu.7's third rejection, 495 s in a gate that had
+  # run nothing else here), the file ran until the suite's budget killed it and
+  # the failure said nothing about the build. So the fake has a real-time cap,
+  # one second here, and this is the check that it ends itself on it. It is the
+  # only real wait in this file; the hang the cap ends is the fake's, so the
+  # clock the test owns is not involved.
+  export FAKE_DOCKER_BUILD_HANGS=1
+  export FAKE_DOCKER_HANG_CAP_SECONDS=1
+
+  local started=$SECONDS
+  run "$FAKE_BIN/docker" build --tag "fake:hang" --file Dockerfile .
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"fake docker: hung build was never stopped by the script's bound"* ]]
+  # A few seconds for a one second cap: the loop checks every 50 ms, and a
+  # loaded machine can stretch a second. It cannot stretch it by a minute.
+  [ $((SECONDS - started)) -le 10 ]
 }

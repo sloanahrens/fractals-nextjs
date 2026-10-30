@@ -157,6 +157,41 @@ settings-end staging"
   [ ! -s "$FAKE_LOG" ]
 }
 
+@test "a cloud run app refuses the ephemeral env" {
+  run "$RELEASE_DIR/init_stack.sh" --app "$APP" --env ephemeral --token-file "$TOKEN_FILE"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"env must be staging or prod"* ]]
+  [ ! -s "$FAKE_LOG" ]
+}
+
+@test "a kubernetes app creates its ephemeral stack with the project's gcpkms secrets provider" {
+  GT_PLATFORM=kubernetes run "$RELEASE_DIR/init_stack.sh" --app "$APP" --project "$PROJECT" \
+    --env ephemeral --token-file "$TOKEN_FILE"
+
+  [ "$status" -eq 0 ]
+  [[ $output == *"stack=ephemeral"* ]]
+  [[ $output == *"created=yes"* ]]
+  assert_in_log "pulumi stack init ephemeral --cwd $STACK_DIR --secrets-provider $(secrets_provider_url)"
+  refute_in_log 'passphrase'
+}
+
+@test "a kubernetes app refuses staging and prod" {
+  GT_PLATFORM=kubernetes run "$RELEASE_DIR/init_stack.sh" --app "$APP" --env staging --token-file "$TOKEN_FILE"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"env must be ephemeral for a kubernetes app"* ]]
+  [ ! -s "$FAKE_LOG" ]
+}
+
+@test "a platform that is neither cloudrun nor kubernetes is refused" {
+  GT_PLATFORM=lambda run "$RELEASE_DIR/init_stack.sh" --app "$APP" --env staging --token-file "$TOKEN_FILE"
+
+  [ "$status" -ne 0 ]
+  [[ $output == *"platform must be cloudrun or kubernetes, got: lambda"* ]]
+  [ ! -s "$FAKE_LOG" ]
+}
+
 @test "requires a token file" {
   run "$RELEASE_DIR/init_stack.sh" --app "$APP" --env staging
 

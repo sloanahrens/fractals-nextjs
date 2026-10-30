@@ -33,7 +33,7 @@ service_url=${FAKE_SERVICE_URL:-https://fractals-nextjs-staging-abc123.us-centra
 
 # mutating_words are the verbs that would change the cloud. A call containing
 # one is recorded as a MUTATION, so a test can assert that a script made none.
-mutating_words='^(deploy|delete|update|create|add-iam-policy-binding|remove-iam-policy-binding|set-iam-policy|update-traffic)$'
+mutating_words='^(deploy|delete|update|create|add-iam-policy-binding|remove-iam-policy-binding|set-iam-policy|update-traffic|resume|pause)$'
 
 record() {
   local word mutation=no
@@ -96,6 +96,40 @@ artifacts)
     record "$@"
     ;;
   esac
+  ;;
+compute)
+  # The disk list k8s_lib.sh reads. A call with a --filter asks for the volume
+  # disks (FAKE_DISKS); one without asks for every disk in the project
+  # (FAKE_DISKS_ALL, which defaults to FAKE_DISKS). Both are space-separated names.
+  case "${2:-} ${3:-}" in
+  'disks list')
+    filtered=no
+    for word in "$@"; do
+      [[ $word == --filter=* ]] && filtered=yes
+    done
+    record "$@"
+    [[ -z ${FAKE_DISKS_FAIL:-} ]] || exit 1
+    if [[ $filtered == yes ]]; then
+      names=${FAKE_DISKS:-}
+      # FAKE_DISKS_AFTER_RELEASE is what the project lists once kubectl has been
+      # asked to delete the namespaces (the fake kubectl notes it).
+      if [[ -n ${FAKE_DISKS_AFTER_RELEASE+set} && $(fake_state_get released) == 1 ]]; then
+        names=$FAKE_DISKS_AFTER_RELEASE
+      fi
+    else
+      names=${FAKE_DISKS_ALL:-${FAKE_DISKS:-}}
+    fi
+    read -ra list <<<"$names"
+    [[ ${#list[@]} -eq 0 ]] || printf '%s\n' "${list[@]}"
+    ;;
+  *)
+    record "$@"
+    ;;
+  esac
+  ;;
+scheduler)
+  # update, resume and pause of the reaper job are mutations (mutating_words).
+  record "$@"
   ;;
 run)
   case "${2:-} ${3:-}" in

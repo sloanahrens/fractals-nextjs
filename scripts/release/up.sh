@@ -21,7 +21,14 @@
 #
 # Usage:
 #   up.sh --app APP --digest <registry>@sha256:<64hex> --token-file FILE
-#         [--env staging|prod] [--init-stack] [--dry-run]
+#         [--image NAME=<registry>@sha256:<64hex>]... [--env staging|prod]
+#         [--init-stack] [--dry-run]
+#
+# --digest is the primary image (the only image of a list of one, else app): it
+# is pinned as imageDigest and as image.<name>. An app that releases more images
+# (GT_IMAGES, lib.sh "Named images") passes each of the others as --image
+# NAME=DIGEST, pinned as image.<NAME>; the name must be in GT_IMAGES and its
+# digest must be for that image's repository.
 #
 # Prints url=<service url> on stdout, which is what health.sh checks.
 # Environment fallbacks: GT_APP, GT_ENV, GT_PROJECT, GT_DIGEST, GT_TOKEN_FILE,
@@ -50,6 +57,7 @@ usage() {
     '' \
     '  --app APP           app name (GT_APP)' \
     '  --digest DIGEST     image digest to apply, from build_push.sh (GT_DIGEST)' \
+    '  --image NAME=DIGEST digest of another image in GT_IMAGES; repeatable' \
     '  --token-file FILE   token from mint_token.sh (GT_TOKEN_FILE)' \
     '  --env staging|prod  stack to apply, default staging (GT_ENV)' \
     '  --project gt-APP    GCP project, default gt-APP (GT_PROJECT)' \
@@ -83,6 +91,10 @@ while [[ $# -gt 0 ]]; do
     TOKEN_FILE=${2:-}
     shift 2
     ;;
+  --image)
+    add_image_flag "${2:-}"
+    shift 2
+    ;;
   --init-stack)
     INIT_STACK=1
     shift
@@ -95,6 +107,7 @@ done
 # input that is wrong, whatever else the caller got wrong too.
 require_digest "$DIGEST" "digest"
 release_target
+require_extra_images
 # The stack's committed settings are required before Pulumi is given anything:
 # a stack whose settings file does not name this project's secrets provider
 # cannot be applied, and saying so here needs no credentials (lib.sh,
@@ -108,4 +121,5 @@ note "backend: $BACKEND_URL"
 
 ensure_stack
 set_digest_config "$DIGEST"
+set_extra_image_configs
 apply_digest "$DIGEST"

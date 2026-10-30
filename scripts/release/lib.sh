@@ -297,10 +297,16 @@ run_under_bound() {
 
   : >"$logfile"
 
+  # The start is read BEFORE the command is launched. Read after, a command that
+  # moves the clock as soon as it starts (the fake docker in the bats suite does)
+  # can win the race, and the baseline then already holds the jump: the bound is
+  # never reached by the clock and only by waiting it out, one check at a time.
+  # Measured 2026-10-23 (bead dv-lqrk): a 0.7 s test took 25-71 s in two thirds
+  # of runs under load, and under the gate's load that was the 10-minute kill.
+  start=$(now_s)
   "$@" >>"$logfile" 2>&1 &
   pid=$!
 
-  start=$(now_s)
   while kill -0 "$pid" 2>/dev/null; do
     flush_new_output "$logfile"
 
@@ -332,7 +338,9 @@ run_under_bound() {
 
 # docker_build_bounded TAG SOURCE [BUILD_ARG...] builds SOURCE's Dockerfile as
 # TAG -- `docker build --file SOURCE/Dockerfile --tag TAG --build-arg ... SOURCE`
-# -- with a bound on the attempt and one automatic retry.
+# -- with a bound on the attempt and one automatic retry. DOCKERFILE, when set,
+# names the file under SOURCE to build instead of Dockerfile (build_push_images
+# sets it for each named image).
 #
 # This is the one place either release script builds an image, and the two build
 # the same one (workflows/README.md, "one build, two names"): build_push.sh
@@ -345,7 +353,7 @@ run_under_bound() {
 docker_build_bounded() {
   local tag=$1 source=$2
   shift 2
-  local -a build=(docker build --file "$source/Dockerfile" --tag "$tag")
+  local -a build=(docker build --file "$source/${DOCKERFILE:-Dockerfile}" --tag "$tag")
   local arg attempt bound logfile status
 
   for arg in "$@"; do
@@ -415,9 +423,21 @@ release_target() {
   [[ $APP =~ ^[a-z][a-z0-9-]{1,28}$ ]] ||
     die "app name must match ^[a-z][a-z0-9-]{1,28}$ (pkg/appdeploy Spec.Name), got: $APP"
 
-  case $ENV_NAME in
-  staging | prod) ;;
-  *) die "env must be staging or prod, got: $ENV_NAME" ;;
+  # The environments an app has depend on its platform (manifests: platform,
+  # default cloudrun). A cloud run app deploys to staging and prod; a kubernetes
+  # app has only the ephemeral cluster stack (docs/design/jobhost.md, section 8).
+  PLATFORM=${GT_PLATFORM:-cloudrun}
+  case $PLATFORM in
+  cloudrun)
+    case $ENV_NAME in
+    staging | prod) ;;
+    *) die "env must be staging or prod, got: $ENV_NAME" ;;
+    esac
+    ;;
+  kubernetes)
+    [[ $ENV_NAME == ephemeral ]] || die "env must be ephemeral for a kubernetes app, got: $ENV_NAME"
+    ;;
+  *) die "platform must be cloudrun or kubernetes, got: $PLATFORM" ;;
   esac
 
   PROJECT=${PROJECT:-gt-$APP}
@@ -430,6 +450,7 @@ release_target() {
 
   REGISTRY_HOST="$REGION-docker.pkg.dev"
   IMAGE="$REGISTRY_HOST/$PROJECT/apps/$APP"
+  release_images
   # The stack is the bare environment name, not "$APP-$ENV_NAME". Pulumi names
   # a stack's state object "<project>/<stack>" inside the backend
   # (.pulumi/stacks/<project>/<stack>.json), and the app's Pulumi project is the
@@ -451,6 +472,174 @@ release_target() {
   BACKEND_URL=${BACKEND_URL:-gs://$PROJECT-pulumi-state}
 
   [[ -d $STACK_DIR ]] || die "stack directory does not exist: $STACK_DIR"
+}
+
+# ──────────────────────────────────────────────────────────────────────────
+# Named images (GT_IMAGES)
+# ──────────────────────────────────────────────────────────────────────────
+
+# An app releases one image or several. GT_IMAGES is a space-separated list of
+# image names, `app` by default, and the Cloud Run path is the list of one:
+#
+#   - the Dockerfile of image n is Dockerfile.<n>, or Dockerfile for `app`;
+#   - the image is pushed to $IMAGE/<n> when the list has more than one entry,
+#     and to $IMAGE, the path every app released from before, when it has one,
+#     so fractals-nextjs and abc do not move;
+#   - the stack config key that pins its digest is image.<n>, and the primary
+#     image (the only image of a list of one, else `app`) is also pinned as
+#     imageDigest, the key appdeploy.Spec.ImageDigest reads.
+#
+# IMAGE_NAMES holds the names, in the order given. It always has at least one,
+# which is why nothing here has to guard an empty array (bash 3.2, which macOS
+# ships, fails on one under set -u).
+
+# IMAGE_NAME_RE is a name the registry path, the Dockerfile and the config key
+# can all carry: it starts with a letter and holds no dot, so `image.<n>` has
+# exactly one dot and Dockerfile.<n> cannot name another file.
+IMAGE_NAME_RE='^[a-z][a-z0-9-]{0,28}$'
+
+# release_images reads GT_IMAGES into IMAGE_NAMES
+# and refuses a list that is empty, holds a name that is not a name, or names
+# one twice. release_target calls it, so every script that has a target has a
+# validated list.
+release_images() {
+  local list name seen=' '
+  list=$(default_of GT_IMAGES app)
+  IMAGE_NAMES=()
+  for name in $list; do
+    [[ $name =~ $IMAGE_NAME_RE ]] ||
+      die "GT_IMAGES entry must match $IMAGE_NAME_RE, got: $name"
+    [[ $seen != *" $name "* ]] || die "GT_IMAGES names $name twice: $list"
+    seen+="$name "
+    IMAGE_NAMES+=("$name")
+  done
+  ((${#IMAGE_NAMES[@]} > 0)) || die "GT_IMAGES names no image (the default is app)"
+}
+
+# image_ref NAME prints the registry path image NAME is pushed to.
+image_ref() {
+  if ((${#IMAGE_NAMES[@]} > 1)); then
+    printf '%s/%s' "$IMAGE" "$1"
+  else
+    printf '%s' "$IMAGE"
+  fi
+}
+
+# image_dockerfile NAME prints the Dockerfile image NAME builds from.
+image_dockerfile() {
+  if [[ $1 == app ]]; then
+    printf 'Dockerfile'
+  else
+    printf 'Dockerfile.%s' "$1"
+  fi
+}
+
+# primary_image prints the index in IMAGE_NAMES of the image whose digest the
+# scripts have always called "the digest": the only image of a list of one, else
+# `app`. It fails when the list has neither, as GT_IMAGES="engine ui" does.
+primary_image() {
+  local i
+  if ((${#IMAGE_NAMES[@]} == 1)); then
+    printf 0
+    return 0
+  fi
+  for i in "${!IMAGE_NAMES[@]}"; do
+    if [[ ${IMAGE_NAMES[$i]} == app ]]; then
+      printf '%s' "$i"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# require_dockerfiles SOURCE fails on the first image whose Dockerfile SOURCE
+# lacks, naming it. It runs before the first build so that a list whose last
+# image is missing its file does not spend minutes building the others.
+require_dockerfiles() {
+  local source=$1 name file
+  for name in "${IMAGE_NAMES[@]}"; do
+    file=$(image_dockerfile "$name")
+    [[ -f $source/$file ]] ||
+      die "no $file in $source (the $name image builds from it; an app repo provides it at its root)"
+  done
+}
+
+# build_push_images TAG SOURCE BUILD_ARG... builds and pushes every image in
+# IMAGE_NAMES as <ref>:TAG, then reads each pushed digest back from docker. It
+# leaves the digests in IMAGE_DIGESTS, parallel to IMAGE_NAMES; in a dry run
+# they are empty, because nothing was pushed.
+#
+# Each digest is read back from the registry's record of its own push and must
+# be for the repository it was pushed to, so a push that did not land cannot
+# hand the workflow a digest for an image that is not there.
+#
+# The caller runs require_dockerfiles SOURCE first: both build scripts do, and
+# doing it there refuses a missing Dockerfile before the tag and login work
+# rather than in the loop. Doing it here as well would be the same check twice.
+build_push_images() {
+  local tag=$1 source=$2 name ref digest i
+  shift 2
+  IMAGE_DIGESTS=()
+
+  for name in "${IMAGE_NAMES[@]}"; do
+    ref=$(image_ref "$name")
+    step "Building $ref:$tag"
+    DOCKERFILE=$(image_dockerfile "$name") docker_build_bounded "$ref:$tag" "$source" "$@"
+
+    step "Pushing $ref:$tag"
+    run docker push "$ref:$tag"
+  done
+
+  step "Reading the pushed digests"
+  for i in "${!IMAGE_NAMES[@]}"; do
+    name=${IMAGE_NAMES[$i]}
+    ref=$(image_ref "$name")
+    digest=$(capture docker inspect --format '{{index .RepoDigests 0}}' "$ref:$tag" || true)
+    if [[ -z $digest ]]; then
+      note "no digest available for $name in a dry run"
+      IMAGE_DIGESTS+=('')
+      continue
+    fi
+    is_digest "$digest" || die "docker inspect returned something that is not a digest for $name: $digest"
+    [[ $digest == "$ref@"* ]] ||
+      die "docker inspect returned a digest for another repository: $digest (expected $ref)"
+    IMAGE_DIGESTS+=("$digest")
+  done
+}
+
+# print_image_report TAG DIGEST_FILE prints what a build step hands the
+# workflow: image=, tag= and digest= for the primary image, as they have always
+# been printed, then image.<name>=<digest> for every image that was pushed, the
+# value its stack config key takes. DIGEST_FILE, when not empty, receives the
+# primary image's digest.
+print_image_report() {
+  local tag=$1 digest_file=${2:-} primary='' i
+  primary=$(primary_image) || primary=''
+
+  if [[ -n $primary ]]; then
+    printf 'image=%s\ntag=%s\ndigest=%s\n' "$(image_ref "${IMAGE_NAMES[$primary]}")" "$tag" "${IMAGE_DIGESTS[$primary]}"
+    if [[ -n $digest_file && -n ${IMAGE_DIGESTS[$primary]} ]]; then
+      printf '%s\n' "${IMAGE_DIGESTS[$primary]}" >"$digest_file"
+      note "wrote the digest to $digest_file"
+    fi
+  else
+    printf 'tag=%s\n' "$tag"
+  fi
+  for i in "${!IMAGE_NAMES[@]}"; do
+    [[ -z ${IMAGE_DIGESTS[$i]} ]] || printf 'image.%s=%s\n' "${IMAGE_NAMES[$i]}" "${IMAGE_DIGESTS[$i]}"
+  done
+
+  # images= is the same digests in the one line a workflow step can pass on:
+  # NAME=DIGEST for every image but app, space-separated, which is what
+  # GT_IMAGE_DIGESTS takes (see add_env_images). Its key has no dot because the
+  # workflows copy only lines shaped ^[a-z_]+= into their step outputs.
+  local pairs=''
+  for i in "${!IMAGE_NAMES[@]}"; do
+    [[ ${IMAGE_NAMES[$i]} != app && -n ${IMAGE_DIGESTS[$i]} ]] ||
+      continue
+    pairs+="${pairs:+ }${IMAGE_NAMES[$i]}=${IMAGE_DIGESTS[$i]}"
+  done
+  [[ -z $pairs ]] || printf 'images=%s\n' "$pairs"
 }
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -735,10 +924,93 @@ require_stack_settings() {
 # value is all a release changes; name, env, project, region, port and
 # healthPath stay with the app repo in Pulumi.<env>.yaml. The value is
 # plaintext on purpose: an image digest is public.
+#
+# The same digest is pinned a second time as image.<name> for the primary image
+# (primary_image: the only image of a list of one, else `app`), the key every
+# named image has (see "Named images"), so a program that reads image.<name> for
+# each image reads the primary image the same way. The name is not hard-coded to
+# `app`: a list of one named `engine` pins image.engine, and pinning image.app
+# there would be a key no image of that list answers to. imageDigest keeps being
+# written for the Cloud Run program that reads it.
+#
+# A list of several images with no `app` has no primary image, so there is no
+# digest for --digest to name; release_images and print_image_report say the
+# same thing, and this refuses rather than pin one image's digest under
+# another's key.
 set_digest_config() {
-  local digest=$1
+  local digest=$1 primary
   require_digest "$digest" "digest"
+  primary=$(primary_image) ||
+    die "--digest is the digest of the primary image, and GT_IMAGES (${IMAGE_NAMES[*]}) names no app image: a list of several images names one of them app, the image imageDigest belongs to"
   run pulumi config set imageDigest "$digest" --stack "$STACK" --cwd "$STACK_DIR" --plaintext
+  set_image_config "${IMAGE_NAMES[$primary]}" "$digest"
+}
+
+# set_image_config NAME DIGEST pins one named image's digest as image.<NAME>.
+set_image_config() {
+  local name=$1 digest=$2
+  require_digest "$digest" "the digest of image $name"
+  run pulumi config set "image.$name" "$digest" --stack "$STACK" --cwd "$STACK_DIR" --plaintext
+}
+
+# add_image_flag NAME=DIGEST records one --image argument in EXTRA_IMAGES. It
+# only records: the pair is checked by require_extra_images once release_target
+# has said which images the list holds.
+EXTRA_IMAGES=()
+add_image_flag() {
+  [[ ${1:-} == *=* ]] || die "--image takes NAME=DIGEST, got: ${1:-nothing}"
+  EXTRA_IMAGES+=("$1")
+}
+
+# add_env_images records GT_IMAGE_DIGESTS, a space-separated list of NAME=DIGEST
+# pairs, as --image arguments. It is the form a workflow step uses: the build
+# job prints it as images= (print_image_report) and the later jobs pass it on
+# unchanged. Reading it is split on whitespace only, never expanded, so a value
+# with a glob character is a refused pair and not a file list.
+add_env_images() {
+  local -a pairs
+  local pair
+  read -ra pairs <<<"${GT_IMAGE_DIGESTS:-}"
+  for pair in ${pairs[@]+"${pairs[@]}"}; do
+    add_image_flag "$pair"
+  done
+}
+
+# require_extra_images checks every --image pair before Pulumi is given
+# anything: the name must be one GT_IMAGES lists, it must not be the image
+# --digest already pins, and the digest must be for that image's repository.
+#
+# The image --digest pins is the primary image, which is `app` only when the
+# list names it: on a list of one called `engine`, --image engine=... would pin
+# the same key twice and --digest is already that image. The repository check is
+# the same one build_push_images makes on a push's read-back: a digest is
+# immutable but it is not self-describing, so `engine` given a digest of `ui`
+# would pin an image the engine container does not run.
+require_extra_images() {
+  local pair name primary='' primary_name='' ref
+  local list=" ${IMAGE_NAMES[*]} "
+  primary=$(primary_image) || primary=''
+  [[ -z $primary ]] || primary_name=${IMAGE_NAMES[$primary]}
+  add_env_images
+  for pair in ${EXTRA_IMAGES[@]+"${EXTRA_IMAGES[@]}"}; do
+    name=${pair%%=*}
+    [[ $list == *" $name "* ]] || die "--image $name is not in GT_IMAGES (${IMAGE_NAMES[*]})"
+    [[ $name != "$primary_name" ]] ||
+      die "--image $name=... is the image --digest sets, and pinning it twice is refused"
+    require_digest "${pair#*=}" "the digest of image $name"
+    ref=$(image_ref "$name")
+    [[ ${pair#*=} == "$ref@"* ]] ||
+      die "--image $name must be the digest of $ref, and this one names another repository: ${pair#*=} (expected ${ref}@sha256:...)"
+  done
+}
+
+# set_extra_image_configs pins every --image pair. Call it after
+# set_digest_config.
+set_extra_image_configs() {
+  local pair
+  for pair in ${EXTRA_IMAGES[@]+"${EXTRA_IMAGES[@]}"}; do
+    set_image_config "${pair%%=*}" "${pair#*=}"
+  done
 }
 
 # apply_digest TARGET_DIGEST is the last thing up.sh and promote.sh do: it

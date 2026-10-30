@@ -15,7 +15,10 @@
 # Fake-specific environment:
 #   FAKE_LOG                   where invocations are recorded (default /dev/null)
 #   FAKE_SERVICE_URL           the URL `stack output url` answers with
-#   FAKE_PULUMI_FAIL           a subcommand to fail, so a test can watch a release stop
+#   FAKE_PULUMI_FAIL           a subcommand to fail (preview, up, destroy, export), so a
+#                              test can watch a release stop
+#   FAKE_CLUSTER_EXPIRES_AT    the expiresAt output of the cluster stack
+#   FAKE_CLUSTER_CA_CERT       its caCert output; FAKE_CLUSTER_NAME its name output
 #   FAKE_PULUMI_NO_URL         set to 1 to make `stack output url` print nothing
 #   FAKE_PULUMI_STACKS         the JSON `stack ls --json` prints (default [])
 #   FAKE_PULUMI_ENCRYPTED_KEY  the encryptedkey `stack init` writes (default below)
@@ -212,6 +215,15 @@ up)
     'Resources:' \
     '    + 2 created'
   ;;
+destroy)
+  if [[ ${FAKE_PULUMI_FAIL:-} == destroy ]]; then
+    pulumi_log "$* (failed)"
+    printf 'error: destroy failed\n' >&2
+    exit 1
+  fi
+  pulumi_log "$*"
+  printf '%s\n' 'Destroying (ephemeral):' 'Resources:' '    - 2 deleted'
+  ;;
 stack)
   case ${2:-} in
   init)
@@ -224,7 +236,15 @@ stack)
     ;;
   output)
     pulumi_log "$*"
-    [[ ${FAKE_PULUMI_NO_URL:-} == 1 ]] || printf '%s\n' "$service_url"
+    # The four outputs of the cluster stack (examples/jobhost-cluster) answer by
+    # name; any other name is the Cloud Run stack's url, as before.
+    case ${3:-} in
+    expiresAt) printf '%s\n' "${FAKE_CLUSTER_EXPIRES_AT:-2026-10-19t18-00-00z}" ;;
+    endpoint) printf '%s\n' '203.0.113.7' ;;
+    caCert) printf '%s\n' "${FAKE_CLUSTER_CA_CERT:-Y2EtZGF0YQ==}" ;;
+    name) printf '%s\n' "${FAKE_CLUSTER_NAME:-fractals-nextjs-ephemeral}" ;;
+    *) [[ ${FAKE_PULUMI_NO_URL:-} == 1 ]] || printf '%s\n' "$service_url" ;;
+    esac
     ;;
   export)
     if [[ ${FAKE_PULUMI_FAIL:-} == export ]]; then
