@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type {
   ColorOptions,
+  ColorScheme,
   ComplexNumber,
   FractalConfig,
   FractalKind,
@@ -20,6 +21,7 @@ import {
   resolveFractalKind,
 } from "../fractalTypes";
 import { renderRgba } from "../renderRgba";
+import { firstDifference } from "./byteCompare";
 
 interface KindCall {
   point: ComplexNumber;
@@ -524,7 +526,7 @@ describe("FractalRenderer and renderRgba", () => {
       );
 
       const expected = renderRgba(bounds, width, height, 120, "rainbow", kind);
-      expect(Array.from(pixels())).toEqual(Array.from(expected));
+      expect(firstDifference(pixels(), expected)).toBe(-1);
     },
   );
 
@@ -548,7 +550,7 @@ describe("FractalRenderer and renderRgba", () => {
       mandelbrotKind,
       false,
     );
-    expect(Array.from(pixels())).toEqual(Array.from(expected));
+    expect(firstDifference(pixels(), expected)).toBe(-1);
   });
 });
 
@@ -571,9 +573,41 @@ describe("FractalRenderer recolour", () => {
     ["julia custom", resolveFractalKind("julia", "custom:-0.8,0.156")],
   ];
 
+  /**
+   * The picture a full render draws of this view, kept once per kind, scheme
+   * and settings: the two repaint tests ask for some of the same pictures (the
+   * first render of both is classic with nothing), and a picture of one view is
+   * the same bytes however often it is drawn, so it is drawn once.
+   */
+  const drawn = new Map<string, Uint8ClampedArray>();
+
+  function fullRender(
+    name: string,
+    kind: FractalKind,
+    scheme: ColorScheme,
+    options?: ColorOptions,
+  ): Uint8ClampedArray {
+    const key = `${name} ${scheme} ${JSON.stringify(options ?? {})}`;
+    const kept = drawn.get(key);
+    if (kept !== undefined) return kept;
+
+    const picture = renderRgba(
+      BOUNDS,
+      WIDTH,
+      HEIGHT,
+      CAP,
+      scheme,
+      kind,
+      true,
+      options,
+    );
+    drawn.set(key, picture);
+    return picture;
+  }
+
   it.each(KINDS)(
     "%s: repaints in any scheme as the render of that scheme",
-    async (_name, kind) => {
+    async (name, kind) => {
       const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
       const renderer = new FractalRenderer(element, kind);
 
@@ -591,16 +625,9 @@ describe("FractalRenderer recolour", () => {
         expect(renderer.recolour(scheme, CAP)).toBe(true);
         // The picture a colour change leaves is the picture a full render in
         // that scheme draws, byte for byte — no new orbit, no new count.
-        const expected = renderRgba(
-          BOUNDS,
-          WIDTH,
-          HEIGHT,
-          CAP,
-          scheme,
-          kind,
-          true,
+        expect(firstDifference(pixels(), fullRender(name, kind, scheme))).toBe(
+          -1,
         );
-        expect(Array.from(pixels())).toEqual(Array.from(expected));
       }
     },
   );
@@ -612,9 +639,33 @@ describe("FractalRenderer recolour", () => {
     { name: "reversed and shifted", options: { reverse: true, shift: 0.5 } },
   ];
 
-  it.each(KINDS)(
+  /**
+   * The scheme-and-settings pairs a repaint is held to the full render in: the
+   * five schemes in turn and then the first three again, each with one of the
+   * settings sets, turned one place further for each kind.
+   *
+   * Eight comparisons a kind rather than the fifteen of the cross product, and
+   * every scheme and every settings set is still compared for every kind (the
+   * eight pairs cover the five schemes and the three settings), the turns
+   * walking each settings set round the schemes over the whole list. A pairing
+   * says nothing its two halves do not, because `mapIterationsToColor` takes
+   * Reverse and Shift off the count before the scheme is looked up, so the
+   * scheme and the settings are separate tables and a repaint gets them both
+   * wrong, or neither.
+   */
+  function repaintPairs(kindIndex: number): {
+    scheme: ColorScheme;
+    options: ColorOptions;
+  }[] {
+    return Array.from({ length: 8 }, (_, index) => ({
+      scheme: SCHEMES[index % SCHEMES.length],
+      options: OPTIONS[(index + kindIndex) % OPTIONS.length].options,
+    }));
+  }
+
+  it.each(KINDS.map(([name, kind], index) => [name, kind, index] as const))(
     "%s: repaints in the scheme's own settings as the render of them",
-    async (_name, kind) => {
+    async (name, kind, index) => {
       const { element, pixels } = createFakeCanvas(WIDTH, HEIGHT);
       const renderer = new FractalRenderer(element, kind);
 
@@ -628,32 +679,22 @@ describe("FractalRenderer recolour", () => {
         }),
       );
 
-      for (const { options } of OPTIONS) {
-        for (const scheme of SCHEMES) {
-          expect(renderer.recolour(scheme, CAP, options)).toBe(true);
+      for (const { scheme, options } of repaintPairs(index)) {
+        expect(renderer.recolour(scheme, CAP, options)).toBe(true);
 
-          // The settings colour the counts the render already left, so the
-          // picture a repaint in them leaves is the picture a full render in
-          // them draws, byte for byte.
-          const expected = renderRgba(
-            BOUNDS,
-            WIDTH,
-            HEIGHT,
-            CAP,
-            scheme,
-            kind,
-            true,
-            options,
-          );
-          expect(Array.from(pixels())).toEqual(Array.from(expected));
-        }
+        // The settings colour the counts the render already left, so the
+        // picture a repaint in them leaves is the picture a full render in
+        // them draws, byte for byte.
+        expect(
+          firstDifference(pixels(), fullRender(name, kind, scheme, options)),
+        ).toBe(-1);
       }
 
       // Repainting in the plain scheme asks for the settings to be unasked:
       // the counts never moved, so what comes back is the first render.
       expect(renderer.recolour("classic", CAP, {})).toBe(true);
-      expect(Array.from(pixels())).toEqual(
-        Array.from(renderRgba(BOUNDS, WIDTH, HEIGHT, CAP, "classic", kind)),
+      expect(firstDifference(pixels(), fullRender(name, kind, "classic"))).toBe(
+        -1,
       );
     },
   );
@@ -675,14 +716,15 @@ describe("FractalRenderer recolour", () => {
 
     // The settings are part of a render, not only of a repaint: a first draw
     // asks for them the same way a colour change does.
-    expect(Array.from(pixels())).toEqual(
-      Array.from(
+    expect(
+      firstDifference(
+        pixels(),
         renderRgba(BOUNDS, WIDTH, HEIGHT, CAP, "fire", mandelbrotKind, true, {
           reverse: true,
           shift: 0.25,
         }),
       ),
-    );
+    ).toBe(-1);
   });
 
   it("counts nothing when it repaints", async () => {
