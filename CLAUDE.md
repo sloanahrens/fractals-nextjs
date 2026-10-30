@@ -20,7 +20,10 @@ ones broken by accident.
 
 ## Commands
 
-Only targets that exist in the `Makefile`; `make help` prints the full list.
+Only targets that exist in the `Makefile`; `make help` prints the full list. A fresh
+checkout or worktree needs no setup first: `lint`, `typecheck`, `build`, `test` and
+`presubmit` run `npm ci` themselves when `node_modules` is missing or older than
+`package-lock.json`.
 
 ```bash
 make gate          # ci-install -> check -> build -> test: exactly what CI runs

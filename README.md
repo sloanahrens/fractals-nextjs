@@ -58,6 +58,10 @@ npm ci        # or: make install
 npm run dev   # or: make dev, which serves the app on http://localhost:3000
 ```
 
+A fresh checkout or worktree needs no setup for `make lint`, `make typecheck`,
+`make build`, `make test` and `make presubmit`: they run `npm ci` themselves when
+`node_modules` is missing or older than `package-lock.json`.
+
 ## Commands
 
 `make help` prints the full list; these are the ones to reach for.

@@ -4,13 +4,24 @@
  * The staging workflow runs `make integration` in a fresh checkout, so the
  * target takes `ci-install` as a prerequisite, and no path through `gate`
  * reaches the integration tier. Both facts live in the Makefile and nowhere
- * else, so this parses it rather than shelling out to `make -n`.
+ * else, so this parses it; the install check at the end runs `make -n` in a
+ * temporary directory, because what it pins is make's own decision.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   INTEGRATION_URL_VAR,
@@ -29,7 +40,7 @@ interface Target {
 }
 
 /** A rule line: `name: prerequisites`, but not a `:=` assignment. */
-const RULE = /^([A-Za-z0-9_.-]+)\s*:(?!=)\s*(.*)$/;
+const RULE = /^([A-Za-z0-9_./-]+)\s*:(?!=)\s*(.*)$/;
 
 /**
  * Every rule in a Makefile, as written.
@@ -265,5 +276,95 @@ describe("the gate", () => {
     // the suite against a stand-in on this machine, which is not the same
     // thing as the gate needing a deployment to pass.
     expect(reached).not.toContain("smoke");
+  });
+});
+
+/** The stamp npm writes into node_modules on every install. */
+const STAMP = "node_modules/.package-lock.json";
+
+describe("dependencies install themselves", () => {
+  it("has a deps target that needs the install stamp, and the stamp needs the lockfile", () => {
+    expect(target("deps").prerequisites).toEqual([STAMP]);
+    expect(target(".PHONY").prerequisites).toContain("deps");
+    expect(target(STAMP).prerequisites).toEqual(["package-lock.json"]);
+    expect(target(STAMP).recipe).toContain("npm ci");
+  });
+
+  it("is taken by the targets an agent runs before it submits, and by presubmit through them", () => {
+    for (const name of ["lint", "typecheck", "build", "test"]) {
+      expect(target(name).prerequisites, name).toContain("deps");
+    }
+    for (const from of ["check", "presubmit", "gate"]) {
+      expect(reachable(targets, from), from).toContain("deps");
+    }
+  });
+
+  it("leaves the gate's own install alone, and the deployed tiers and docker out of it", () => {
+    expect(target("ci-install").recipe).toEqual(["npm ci"]);
+    expect(target("ci-install").prerequisites).toEqual([]);
+    // The gate's install comes first, so the stamp is fresh when `check` runs.
+    expect(target("gate").prerequisites.indexOf("ci-install")).toBe(0);
+
+    for (const name of [
+      "integration",
+      "integration-prod",
+      "smoke",
+      "test-docker",
+    ]) {
+      expect(reachable(targets, name), name).not.toContain("deps");
+    }
+  });
+});
+
+describe("make decides to install from the lockfile and the stamp", () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  /**
+   * A directory with the Makefile and a package-lock.json, and the stamp if
+   * `stamp` is a time. File times are set outright, so the answer does not
+   * depend on how fast the files were written or on the filesystem's clock.
+   */
+  function tree(lockfile: Date, stamp?: Date): string {
+    const dir = mkdtempSync(join(tmpdir(), "fractals-make-"));
+    dirs.push(dir);
+    copyFileSync(MAKEFILE, join(dir, "Makefile"));
+    writeFileSync(join(dir, "package-lock.json"), "{}\n");
+    utimesSync(join(dir, "package-lock.json"), lockfile, lockfile);
+    if (stamp) {
+      mkdirSync(join(dir, "node_modules"));
+      writeFileSync(join(dir, STAMP), "{}\n");
+      utimesSync(join(dir, STAMP), stamp, stamp);
+    }
+    return dir;
+  }
+
+  /** How many times a dry run of `make lint` would run `npm ci`. */
+  function installs(dir: string): number {
+    const run = spawnSync("make", ["--no-print-directory", "-n", "lint"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(run.status, run.stderr).toBe(0);
+    return run.stdout.split("\n").filter((line) => line === "npm ci").length;
+  }
+
+  const OLD = new Date("2026-01-01T00:00:00Z");
+  const NEW = new Date("2026-01-01T00:01:00Z");
+
+  it("installs once in a fresh checkout with no node_modules", () => {
+    expect(installs(tree(OLD))).toBe(1);
+  });
+
+  it("installs once when the lockfile is newer than what is installed", () => {
+    expect(installs(tree(NEW, OLD))).toBe(1);
+  });
+
+  it("installs nothing when what is installed is newer than the lockfile", () => {
+    expect(installs(tree(OLD, NEW))).toBe(0);
   });
 });
