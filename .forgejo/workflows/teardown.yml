@@ -153,6 +153,82 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # And the commit the tag points at has to be one main carries (bead
+      # dv-1g45, the same check deploy.yml makes after bead dv-whlv). The step
+      # above reads the tag's name, and a name is a string: an account allowed
+      # to push tags can put `teardown-v1.2.3` on any commit it can reach, whose
+      # copy of this file then previews a destroy with the base key in scope.
+      # Only the ancestry read ties the run to the commits the landing gate let
+      # onto main, and it runs before the token is minted so a refused run reads
+      # no credential. origin/main is the checkout's own remote-tracking ref —
+      # fetch-depth: 0 above brings it — so the step makes no network call; a
+      # checkout without it fails the run rather than skipping the check.
+      - name: Refuse a release tag whose commit is not on main
+        run: |
+          set -euo pipefail
+          if ! git rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+            printf 'refusing the release tag %s: this checkout has no origin/main, so its commit cannot be\n' \
+              "$GITHUB_REF_NAME" >&2
+            printf 'checked against main, and a release tag must point at a commit on main\n' >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            printf 'refusing a release tag whose commit is not on main: %s at %s\n' \
+              "$GITHUB_SHA" "$GITHUB_REF_NAME" >&2
+            printf 'a release tag must point at a commit on main, and this one is not an ancestor of origin/main\n' >&2
+            exit 1
+          fi
+          printf 'release tag %s points at %s, which is on main\n' "$GITHUB_REF_NAME" "$GITHUB_SHA"
+
+      # A teardown that destroys staging has to follow the owner's `down` (bead
+      # dv-74vm). `ops/app-power.sh down` lands deploy/OFF on main before it pushes
+      # the tag, and staging.yml skips every landing while the file is there. A
+      # tag pushed without it destroys staging and the next landing deploys it
+      # again. This job cannot land the marker itself (main takes no push, and the
+      # deploy runner holds no push credential), so it refuses instead, before
+      # the token is minted. The tag's commit is the checkout, so the file read is
+      # the one the tag carries. The marker's first line records which environments
+      # the owner took down: `env=staging`, `env=prod` or `env=all`, which
+      # ops/app-power.sh writes on every `down`. A marker with no readable env=
+      # is refused rather than read as `all` (the wrapper's own reader treats a
+      # marker from before the field as `all`; a guard that gates a destroy fails
+      # closed). A `-prod` tag leaves staging up and needs no marker. The check is
+      # inline here, beside the not-on-main step above and up.yml's, so the
+      # templates' guards do not diverge; moving both into the release command is
+      # a follow-up.
+      - name: Refuse a staging teardown whose commit does not carry deploy/OFF
+        env:
+          GT_ENVS: ${{ steps.ref.outputs.envs }}
+        run: |
+          set -euo pipefail
+          case " $GT_ENVS " in
+            *" staging "*) ;;
+            *)
+              printf 'teardown of %s leaves staging up, so it needs no deploy/OFF\n' "$GT_ENVS"
+              exit 0
+              ;;
+          esac
+          if [[ ! -f deploy/OFF ]]; then
+            printf '::error::refusing a teardown of %s: %s has no deploy/OFF, so a landing would deploy staging again\n' \
+              "$GT_ENVS" "$GITHUB_SHA"
+            printf 'run the power wrapper (app-power.sh down) first: it lands deploy/OFF on main, then pushes the tag\n'
+            exit 1
+          fi
+          recorded="$(head -n 1 deploy/OFF | sed -n 's/.* env=\([^ ]*\).*/\1/p')"
+          if [[ -z $recorded ]]; then
+            printf '::error::refusing a teardown of %s: deploy/OFF at %s records no readable env=, so it cannot be told to cover the tag\n' \
+              "$GT_ENVS" "$GITHUB_SHA"
+            printf 're-land deploy/OFF with env=<env> (app-power.sh down writes it)\n'
+            exit 1
+          fi
+          if [[ $recorded != all && $recorded != "$GT_ENVS" ]]; then
+            printf '::error::refusing a teardown of %s: deploy/OFF at %s records env=%s, which does not cover it\n' \
+              "$GT_ENVS" "$GITHUB_SHA" "$recorded"
+            printf 'run the power wrapper (app-power.sh down) for the environments this tag destroys\n'
+            exit 1
+          fi
+          printf 'deploy/OFF at %s records env=%s, which covers the teardown of %s\n' "$GITHUB_SHA" "$recorded" "$GT_ENVS"
+
       - name: Mint a one-hour token for the app's deployer service account
         id: token
         run: |

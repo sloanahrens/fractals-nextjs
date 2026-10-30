@@ -117,6 +117,9 @@ env:
   GT_PROJECT: gt-fractals-m4xq
   GT_STACK_DIR: deploy
   GT_HEALTH_PATH: /api/health
+  # The images the app releases (deploy.yml explains it): `app` is the one image
+  # built from Dockerfile at the app's own registry path.
+  GT_IMAGES: app
 
 jobs:
   # Every job below names a timeout-minutes, and every number is a measurement
@@ -323,6 +326,8 @@ jobs:
       GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
     outputs:
       digest: ${{ steps.push.outputs.digest }}
+      # The other images of GT_IMAGES as NAME=DIGEST pairs; empty for the one-image app.
+      images: ${{ steps.push.outputs.images }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -424,6 +429,7 @@ jobs:
         id: up
         env:
           DIGEST: ${{ needs.build.outputs.digest }}
+          GT_IMAGE_DIGESTS: ${{ needs.build.outputs.images }}
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail

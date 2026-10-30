@@ -79,6 +79,11 @@ env:
   # The health path declared in the app's Spec, which both health checks below
   # poll and the integration tier's wait follows.
   GT_HEALTH_PATH: /api/health
+  # The images the app releases (deploy.yml explains it). This workflow resolves
+  # and applies the app image's digest only: digest_for_tag.sh reads the path of
+  # the `app` image (or of the list's one image), and the k8s workflows resolve
+  # every image's digest.
+  GT_IMAGES: app
 
 jobs:
   # Every job below names a timeout-minutes, sized by the rule staging.yml
@@ -174,6 +179,33 @@ jobs:
           # the run is at. persist-credentials is off as in every other job here.
           fetch-depth: 0
           persist-credentials: false
+
+      # And the commit the tag points at has to be one main carries (bead
+      # dv-1g45, the same check deploy.yml makes after bead dv-whlv). The step
+      # above reads the tag's name, and a name is a string: an account allowed
+      # to push tags can put `up-v1.2.3` on any commit it can reach, whose copy
+      # of scripts/release/ then runs here with the base key in scope. Only the
+      # ancestry read ties the run to the commits the landing gate let onto
+      # main, and it runs before the token is minted so a refused run reads no
+      # credential. origin/main is the checkout's own remote-tracking ref —
+      # fetch-depth: 0 above brings it — so the step makes no network call; a
+      # checkout without it fails the run rather than skipping the check.
+      - name: Refuse a release tag whose commit is not on main
+        run: |
+          set -euo pipefail
+          if ! git rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+            printf 'refusing the release tag %s: this checkout has no origin/main, so its commit cannot be\n' \
+              "$GITHUB_REF_NAME" >&2
+            printf 'checked against main, and a release tag must point at a commit on main\n' >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            printf 'refusing a release tag whose commit is not on main: %s at %s\n' \
+              "$GITHUB_SHA" "$GITHUB_REF_NAME" >&2
+            printf 'a release tag must point at a commit on main, and this one is not an ancestor of origin/main\n' >&2
+            exit 1
+          fi
+          printf 'release tag %s points at %s, which is on main\n' "$GITHUB_REF_NAME" "$GITHUB_SHA"
 
       # Each job mints its own token: a token is good for an hour and one job,
       # and jobs do not share a filesystem. The scripts print notes and a final

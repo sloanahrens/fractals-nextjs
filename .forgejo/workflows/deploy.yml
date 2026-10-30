@@ -5,15 +5,21 @@
 # release scripts the app repo carries at the tagged commit (scripts/release/,
 # copied from this repo — workflows/README.md says which revision and why), one
 # job per phase of the release flow: build and push the tag, preview staging,
-# deploy the tag's digest to staging, promote that same digest to prod.
+# deploy the tag's digest to staging, promote that same digest to prod, and run
+# the app's own integration tier against prod.
 #
 # Nothing here holds a credential. The base key is a file on the deploy runner
 # (GT_BASE_KEY_FILE), mint_token.sh turns it into a one-hour token for the app's
 # deployer service account, and every script hands that token to a tool through
 # the environment, never through a command line (scripts/release/README.md).
-# No job may run outside `runs-on: deploy`: that label is the only runner with
-# the key and a container runtime, and Forgejo restricts it to the app and
-# devops repos (bead B5.4). The ci-base gate runner never sees a credential.
+# Every job that touches the cloud runs on `runs-on: deploy`: that label is the
+# only runner with the key and a container runtime, and Forgejo restricts it to
+# the app and devops repos (bead B5.4). The ci-base gate runner never sees a
+# credential, and the one job here that runs on it, `prod-integration` (bead
+# dv-jokk.1), is why GT_BASE_KEY_FILE is declared on the four jobs that run on
+# the deploy runner rather than at the top of the file: a workflow-level
+# variable is inherited by every job, and an inherited variable is a key path
+# the job holds (staging.yml states the same rule).
 #
 # Release identity is the digest the first job prints. Every later job deploys
 # that value, prod takes it from the staging job's output, and promote.sh
@@ -61,9 +67,12 @@ on:
 #
 # Forgejo documents this key, but its Actions engine is Gitea's: older versions
 # listed `concurrency` among the keys they ignore, so the queueing is not
-# something to assume. workflows/README.md asks whoever installs the runner to
-# confirm it holds one run at a time. The declared group is what makes that
-# checkable, and it takes effect the moment the runner honours it.
+# something to assume. It was measured on this instance instead of assumed
+# (bead dv-shob; workflows/README.md): the runs held one at a time in dispatch
+# order, an arriving run queued behind a run already waiting rather than
+# cancelling it — which is where this engine differs from GitHub — and the
+# control with cancel-in-progress: true cancelled a running run, so false here
+# is what keeps a release alive and not a key nobody reads.
 concurrency:
   group: deploy-${{ github.repository }}
   cancel-in-progress: false
@@ -89,10 +98,12 @@ env:
   GT_STACK_DIR: deploy
   # The health path declared in the app's Spec (docs/plan.md, bead B4.5).
   GT_HEALTH_PATH: /api/health
-  # The base key, as a path: the deploy runner mounts it mode 600 inside a home
-  # only gt-cloud can read (bead B5.4). Never key material, and never a Forgejo
-  # secret — a workflow file is editable by any worker, a mount is not.
-  GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+  # The images the app releases, from its registry entry's `images:` (apps/<app>.yaml,
+  # printed as GT_IMAGES by `appsctl env`). `app` is the one image built from
+  # Dockerfile at the app's own registry path; the scripts read this variable
+  # themselves, so naming more builds and pins more (scripts/release/lib.sh,
+  # "Named images").
+  GT_IMAGES: app
 
 jobs:
   # Every job below names a timeout-minutes, and every number is a measurement
@@ -115,8 +126,18 @@ jobs:
     # automatic retry (scripts/release/build_push.sh, lib.sh), and this job has
     # to hold two of those plus the checkout and the token.
     timeout-minutes: 20
+    # The base key, as a path: the deploy runner mounts it mode 600 inside a home
+    # only gt-cloud can read (bead B5.4). Never key material, and never a Forgejo
+    # secret — a workflow file is editable by any worker, a mount is not. It is
+    # declared on the jobs that run on the deploy runner and not at the top of the
+    # file, so that prod-integration, which runs on the runner that mounts no key,
+    # does not inherit it.
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
     outputs:
       digest: ${{ steps.push.outputs.digest }}
+      # The other images of GT_IMAGES as NAME=DIGEST pairs; empty for the one-image app.
+      images: ${{ steps.push.outputs.images }}
     steps:
       # First, before the checkout and before any call that touches the cloud:
       # a run that is not at a protected release tag is refused here, and every
@@ -241,6 +262,9 @@ jobs:
     # releases: twice it is 134s, so the rule leaves this at its five-minute
     # floor.
     timeout-minutes: 5
+    # The base key's path, on this job and not at the top of the file (see build).
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
     steps:
       - uses: actions/checkout@v4
         with:
@@ -263,6 +287,7 @@ jobs:
         id: preview
         env:
           DIGEST: ${{ needs.build.outputs.digest }}
+          GT_IMAGE_DIGESTS: ${{ needs.build.outputs.images }}
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
@@ -314,8 +339,12 @@ jobs:
     # leave this at its floor; the bead names 15, the number staging.yml's own
     # staging job carries.
     timeout-minutes: 15
+    # The base key's path, on this job and not at the top of the file (see build).
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
     outputs:
       digest: ${{ needs.build.outputs.digest }}
+      images: ${{ needs.build.outputs.images }}
       url: ${{ steps.up.outputs.url }}
     steps:
       - uses: actions/checkout@v4
@@ -339,6 +368,7 @@ jobs:
         id: up
         env:
           DIGEST: ${{ needs.build.outputs.digest }}
+          GT_IMAGE_DIGESTS: ${{ needs.build.outputs.images }}
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
           set -euo pipefail
@@ -367,6 +397,14 @@ jobs:
     # 134s over 20 releases (the slowest is 140s), so twice it is four and a
     # half minutes and the rule leaves this at its five-minute floor.
     timeout-minutes: 5
+    # The base key's path, on this job and not at the top of the file (see build).
+    env:
+      GT_BASE_KEY_FILE: /Users/gt-cloud/.config/gt/base-key.json
+    # The URL of the service this run's promotion wrote, for prod-integration
+    # below: it tests the service the run deployed and does not look one up for
+    # itself.
+    outputs:
+      url: ${{ steps.promote.outputs.url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -420,6 +458,7 @@ jobs:
         id: promote
         env:
           DIGEST: ${{ needs.staging.outputs.digest }}
+          GT_IMAGE_DIGESTS: ${{ needs.staging.outputs.images }}
           STAGING_DIGEST: ${{ steps.staged.outputs.digest }}
           TOKEN_FILE: ${{ steps.token.outputs.token_file }}
         run: |
@@ -465,3 +504,73 @@ jobs:
             printf 'No approval is recorded: this Forgejo has no Actions environments,\n'
             printf 'so the tag push above is the release authorization (docs/design.md, section 6.1).\n'
           } >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+  # Step 8 of the flow, and the last (bead dv-jokk.1): the app's own integration
+  # tier against prod, so "this release is green" is a fact about the commit the
+  # tag names and not about whatever prod happens to serve when a sweep fires.
+  # It is staging.yml's integration job one environment later: wait for the
+  # service to report the tag's commit, then run the app's own make target
+  # against it. The target is `integration-prod` and not `integration`, because
+  # the staging suite may write to the service it tests and prod's is read-only.
+  #
+  # This job is on the CI runner and reaches for nothing: no key path, no token,
+  # no cloud call, and it names the run's repository token nowhere. What it does
+  # is read the deployed service over HTTP, and what it writes is a job result,
+  # so it cannot change what prod serves. A failure here is a red job on a
+  # release that already reached prod: nothing is rolled back, because recovery
+  # is a human redeploying the previous digest through this same flow
+  # (docs/design.md, section 6). `needs: prod` means a release that never
+  # reached prod skips this job rather than reporting a pass.
+  #
+  # The name is a constant: the promotion plugin reads this job's result by it,
+  # and a rename would read as "no prod integration ran".
+  prod-integration:
+    runs-on: ci-base
+    needs: prod
+    # The version wait polls for up to 300s by default and the app's suite is the
+    # app's own. The bound is the one staging.yml, up.yml and health.yml give the
+    # same suite, so a service that never settles cannot hold a runner past it.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The app's own suite and the Makefile that runs it are in this
+          # repository at the tag; this job reads no history and leaves no token
+          # in .git/config behind it.
+          persist-credentials: false
+
+      # A health check is not this fact: a revision that answers on its health
+      # path can still be the one before it. wait_version.sh exits 1 when prod
+      # reports another commit and 2 when it never answers, and both fail the
+      # job. GITHUB_SHA is the commit the tag points at, which the build job
+      # proved is one main carries.
+      - name: Wait for prod to report the commit this release names
+        env:
+          PROD_URL: ${{ needs.prod.outputs.url }}
+        run: |
+          set -euo pipefail
+          scripts/release/wait_version.sh --url "$PROD_URL" --sha "$GITHUB_SHA"
+
+      # Both values reach make as command-line variables and through the
+      # environment, never as text interpolated into the script, so a suite
+      # cannot pass by testing whatever happens to be up.
+      - name: Run the app's integration tests against prod
+        env:
+          PROD_URL: ${{ needs.prod.outputs.url }}
+          EXPECT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # An app without the target is a failure that names the contract, as
+          # staging.yml's is: an app with no prod tests and an app whose prod
+          # tests failed are different findings.
+          if ! target_err=$(make --dry-run integration-prod 2>&1 >/dev/null); then
+            printf '::error::%s has no `make integration-prod` target, so this run cannot say whether\n' "$GT_APP"
+            printf 'the release it deployed is green. Define one: `make integration-prod\n'
+            printf 'PROD_URL=<url> EXPECT_SHA=<commit>` must test the service at %s read-only and exit\n' "$PROD_URL"
+            printf 'non-zero unless it reports commit %s\n' "$EXPECT_SHA"
+            printf '%s\n' "$target_err"
+            exit 1
+          fi
+
+          make integration-prod PROD_URL="$PROD_URL" EXPECT_SHA="$EXPECT_SHA"
