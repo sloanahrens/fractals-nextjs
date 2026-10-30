@@ -2,8 +2,8 @@
 
 An interactive explorer for the Mandelbrot set and its relatives: the Julia
 sets, the Burning Ship, the Perpendicular Ship, the Tricorn, the Multibrot sets,
-the Newton fractal, the Celtic Mandelbrot set, the Magnet sets, the Phoenix sets
-and the Nova fractal. Zoom, pan and recolour a picture the browser draws itself,
+the Newton fractal, the Celtic Mandelbrot set, the Magnet sets, the Phoenix sets,
+the Nova fractal and the Sine set. Zoom, pan and recolour a picture the browser draws itself,
 read the mathematics behind it, and share a view or a whole walk as a link.
 
 ![Next Fractals Preview](public/og-card-2.png)

@@ -164,7 +164,7 @@ export function orbitMinExtent(fractalId: string): number {
  * Whether a fractal is drawn by escape at the radius the plot draws.
  *
  * The escape-time kinds that leave at a radius of 2 -- every kind here but
- * Newton, the Magnet and Nova -- get the plot's circle of 2 to show what
+ * Newton, the Magnet, Nova and the Sine set -- get the plot's circle of 2 to show what
  * "gone" means. Newton's method is not an escape-time set — its orbits
  * converge on the cube roots of 1 — so it has no circle at all. The Magnet's
  * orbits do leave, but at 100 rather than 2 (they wander out to about 4 and are
@@ -173,12 +173,19 @@ export function orbitMinExtent(fractalId: string): number {
  * is still the escape-time frame, which is the scale its wandering happens at.
  * Nova's orbits settle on a point of the plane and only leave past a million,
  * so a circle of 2 would mean nothing there either, and it too keeps the
- * escape-time frame.
+ * escape-time frame. The Sine set's orbits leave by height, not by radius: an
+ * orbit is gone once it is more than 20 off the real axis, so a circle of 2
+ * would sit inside orbits that stay, and it keeps the escape-time frame too.
  * @param fractalId - The `FRACTAL_TYPES` id on the canvas
  * @returns True when the plot should show the escape circle
  */
 export function hasEscapeCircle(fractalId: string): boolean {
-  return fractalId !== "newton" && fractalId !== "magnet" && fractalId !== "nova";
+  return (
+    fractalId !== "newton" &&
+    fractalId !== "magnet" &&
+    fractalId !== "nova" &&
+    fractalId !== "sine"
+  );
 }
 
 /**

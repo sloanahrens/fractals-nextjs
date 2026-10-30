@@ -147,6 +147,29 @@ describe("viewLinkToUpdates", () => {
     });
   });
 
+  it("puts a Sine link's fractal on the page and leaves the constant standing", () => {
+    expect(
+      viewLinkToUpdates(
+        decodeView("#v=1&f=sine&x=0.1&y=1.4&z=5&s=fire&i=auto&w=800&h=600"),
+      ),
+    ).toMatchObject({
+      fractalType: "sine",
+      variant: DEFAULT_VIEW_LINK_UPDATES.variant,
+      centerX: 0.1,
+      centerY: 1.4,
+      zoomLevel: 5,
+    });
+  });
+
+  it("opens a Sine link that names only the fractal on the Sine set's own frame", () => {
+    expect(viewLinkToUpdates(decodeView("#v=1&f=sine"))).toMatchObject({
+      fractalType: "sine",
+      centerX: 0,
+      centerY: 0,
+      zoomLevel: 1,
+    });
+  });
+
   it("puts a Perpendicular Ship link's fractal on the page and leaves the variant standing", () => {
     expect(
       viewLinkToUpdates(
