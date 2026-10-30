@@ -272,8 +272,9 @@ describe("the gate", () => {
     expect(reached).not.toContain("check-integration-url");
     expect(reached).not.toContain("check-integration-prod-url");
     expect(reached).not.toContain("check-prod-url");
-    // `smoke` calls a service like `integration` does. Its own checks run in
-    // the suite against a stand-in on this machine, which is not the same
+    // `smoke` calls a service like `integration` does, and the checks that
+    // watch it fail run in the integration tier against a stand-in on this
+    // machine (tests/integration/smoke-target.test.ts), which is not the same
     // thing as the gate needing a deployment to pass.
     expect(reached).not.toContain("smoke");
   });

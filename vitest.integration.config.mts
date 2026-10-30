@@ -3,7 +3,10 @@ import { defineConfig } from "vitest/config";
 
 /**
  * The integration tier: the checks that call a deployed app, and the only suite
- * here that needs the network.
+ * here that needs the network. One of them, `smoke-target.test.ts`, calls no
+ * deployment at all: it runs `make smoke` against a stand-in on this machine,
+ * and is here because health.sh's retry loop is a real second of waiting that
+ * the unit run cannot afford.
  *
  * It is a config of its own rather than a directory inside `vitest.config.mts`,
  * because `make gate` runs that one and the gate has no network and no
