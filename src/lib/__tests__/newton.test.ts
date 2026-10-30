@@ -147,19 +147,35 @@ describe("the three bands", () => {
     // The bands do not overlap and keep a gap between them, so the slowest
     // shade of one root is never the fastest shade of the next.
     const nearEdge = NEWTON_BAND_MARGIN * THIRD;
+    const offenders: string[] = [];
+    let settled = 0;
 
     for (const point of grid(60, 45)) {
       for (const smooth of [false, true]) {
         const value = newtonKind.iterations(point, CAP, smooth);
         if (value >= CAP) continue;
 
+        settled++;
         const root = Math.floor(value / THIRD);
-        expect(root).toBeGreaterThanOrEqual(0);
-        expect(root).toBeLessThanOrEqual(2);
-        expect(value - root * THIRD).toBeGreaterThanOrEqual(nearEdge - 1e-9);
-        expect((root + 1) * THIRD - value).toBeGreaterThan(nearEdge - 1e-9);
+        if (
+          root < 0 ||
+          root > 2 ||
+          value - root * THIRD < nearEdge - 1e-9 ||
+          !((root + 1) * THIRD - value > nearEdge - 1e-9)
+        ) {
+          if (offenders.length < 5) {
+            offenders.push(
+              `${JSON.stringify(point)} smooth=${smooth} gave ${value}`,
+            );
+          }
+        }
       }
     }
+
+    // One assertion over the whole grid, the first offenders named; a grid that
+    // settled nothing would prove nothing.
+    expect(settled).toBeGreaterThan(1000);
+    expect(offenders).toEqual([]);
   });
 
   it("agree with textbook Newton about which root every point reaches", () => {
@@ -311,15 +327,25 @@ describe("points that never settle", () => {
   });
 
   it("is finite and in range at every point of the default view", () => {
+    // 15,000 samples checked in one assertion (the first offenders are named):
+    // an expect per sample costs more than the count does.
+    const offenders: string[] = [];
+
     for (const point of grid(100, 75)) {
       for (const smooth of [false, true]) {
         const value = newtonKind.iterations(point, CAP, smooth);
 
-        expect(Number.isFinite(value)).toBe(true);
-        expect(value).toBeGreaterThanOrEqual(0);
-        expect(value).toBeLessThanOrEqual(CAP);
+        if (!Number.isFinite(value) || value < 0 || value > CAP) {
+          if (offenders.length < 5) {
+            offenders.push(
+              `${JSON.stringify(point)} smooth=${smooth} gave ${value}`,
+            );
+          }
+        }
       }
     }
+
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -644,6 +670,8 @@ describe.each(POLYNOMIAL_CASES)("the $id polynomial", ({ kind, roots, turn, mirr
 
   it("keeps the bands disjoint, each well inside its own share of the range", () => {
     const nearEdge = NEWTON_BAND_MARGIN * band;
+    const offenders: string[] = [];
+    let settled = 0;
 
     for (let row = 0; row < 45; row++) {
       for (let column = 0; column < 60; column++) {
@@ -654,13 +682,23 @@ describe.each(POLYNOMIAL_CASES)("the $id polynomial", ({ kind, roots, turn, mirr
         const value = kind.iterations(point, CAP, false);
         if (value >= CAP) continue;
 
+        settled++;
         const root = Math.floor(value / band);
-        expect(root).toBeGreaterThanOrEqual(0);
-        expect(root).toBeLessThan(rootCount);
-        expect(value - root * band).toBeGreaterThanOrEqual(nearEdge - 1e-9);
-        expect((root + 1) * band - value).toBeGreaterThan(nearEdge - 1e-9);
+        if (
+          root < 0 ||
+          root >= rootCount ||
+          value - root * band < nearEdge - 1e-9 ||
+          !((root + 1) * band - value > nearEdge - 1e-9)
+        ) {
+          if (offenders.length < 5) {
+            offenders.push(`${JSON.stringify(point)} gave ${value}`);
+          }
+        }
       }
     }
+
+    expect(settled).toBeGreaterThan(500);
+    expect(offenders).toEqual([]);
   });
 
   it("returns a number in range, never NaN, for far, huge and non-finite points", () => {

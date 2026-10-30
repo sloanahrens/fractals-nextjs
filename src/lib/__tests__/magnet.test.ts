@@ -349,6 +349,11 @@ describe.each(CASES)("magnet type $type", (typeCase) => {
   });
 
   it("keeps a finite count in range everywhere", () => {
+    // 16,200 samples, so one assertion over the whole grid rather than three per
+    // sample: an expect per sample costs more than the count does. The first few
+    // offenders are named, so a failure still says where.
+    const offenders: string[] = [];
+
     for (let row = 0; row < 90; row++) {
       for (let column = 0; column < 90; column++) {
         const point = {
@@ -358,18 +363,23 @@ describe.each(CASES)("magnet type $type", (typeCase) => {
 
         for (const smooth of [false, true]) {
           const count = kind.iterations(point, CAP, smooth);
-          const where = `${JSON.stringify(point)} smooth=${smooth}`;
 
-          expect(Number.isFinite(count), where).toBe(true);
-          expect(count, where).toBeLessThanOrEqual(CAP);
           // A point just off a pole steps out enormously, and the smooth count
           // of an enormous step is a little under zero; the other kinds' is
           // too, and the colour mapping reads a negative count as the start of
           // the palette rather than refusing it.
-          expect(count, where).toBeGreaterThan(-8);
+          if (!Number.isFinite(count) || count > CAP || !(count > -8)) {
+            if (offenders.length < 5) {
+              offenders.push(
+                `${JSON.stringify(point)} smooth=${smooth} gave ${count}`,
+              );
+            }
+          }
         }
       }
     }
+
+    expect(offenders).toEqual([]);
   });
 
   it("runs the cap for a point that is not a number or is at infinity", () => {

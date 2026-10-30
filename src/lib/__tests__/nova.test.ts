@@ -279,13 +279,26 @@ describe("the smooth count", () => {
 
   it("moves by under a tenth of a step between samples 1e-4 apart along a line", () => {
     let last = count(at(0.4), CAP, true);
+    let largestJump = 0;
+    let largestJumpAt = 0.4;
+    let samples = 0;
 
+    // 26,000 samples; the largest jump is kept and asserted once, with where it
+    // was, because an expect per sample costs more than the count does.
     for (let real = 0.4001; real < 3; real += 1e-4) {
       const current = count(at(real), CAP, true);
+      const jump = Math.abs(current - last);
 
-      expect(Math.abs(current - last)).toBeLessThan(0.1);
+      if (jump > largestJump) {
+        largestJump = jump;
+        largestJumpAt = real;
+      }
+      samples++;
       last = current;
     }
+
+    expect(samples).toBeGreaterThan(25000);
+    expect(largestJump, `at c = ${largestJumpAt}`).toBeLessThan(0.1);
   });
 
   it("is continuous across the first step's boundary, where |c| crosses the tolerance", () => {
