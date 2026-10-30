@@ -9,9 +9,11 @@ import {
   createThumbnailStore,
   type ThumbnailEntry,
   type ThumbnailImage,
+  type ThumbnailLook,
   type ThumbnailRenderRequest,
 } from "../placeThumbnails";
 import { PLACES, placeColorScheme, type Place } from "../places";
+import { firstDifferenceBeyond } from "./byteCompare";
 
 const WIDTH = 4;
 const HEIGHT = 3;
@@ -75,6 +77,52 @@ function newStore(options: { capacity?: number } = {}, fake = fakeRender()) {
 /** Let the store's start-of-render timer fire and the render promises settle. */
 async function tick(): Promise<void> {
   await vi.advanceTimersByTimeAsync(0);
+}
+
+/**
+ * More event-loop turns than any render here can need: a 64x48 picture yields
+ * once per ten rows (six turns) and the store's start-of-render takes one more.
+ * Past that a render is not slow, it is stuck, and the bound ends it rather
+ * than letting it hang the file.
+ */
+const RENDER_TURNS = 64;
+
+/**
+ * Run a render to completion on the fake clock, turning the timers it yields on
+ * as they come due.
+ *
+ * The renderer hands the event loop back every ten rows so a page stays
+ * responsive. A real `setTimeout` costs about 1.4 ms on this host, and six of
+ * them came to most of what this file spent; not one of those milliseconds was
+ * the drawing the tests are about. With the clock fake a turn costs only the
+ * microtasks between timers, and the same pictures come out.
+ */
+async function settle<T>(work: Promise<T>): Promise<T> {
+  let settled = false;
+  const watched = work.then(
+    (value) => {
+      settled = true;
+      return value;
+    },
+    (error) => {
+      settled = true;
+      throw error;
+    },
+  );
+  // The caller asserts on a rejection; this keeps it from being reported as
+  // unhandled while the turns below are still being turned.
+  watched.catch(() => {});
+
+  for (let turn = 0; !settled; turn++) {
+    if (turn === RENDER_TURNS) {
+      throw new Error(
+        `a render was still running after ${RENDER_TURNS} turns of the clock`,
+      );
+    }
+    await vi.advanceTimersByTimeAsync(1);
+  }
+
+  return watched;
 }
 
 beforeEach(() => {
@@ -696,11 +744,6 @@ describe("createThumbnailStore", () => {
 });
 
 describe("createCanvasThumbnailRender", () => {
-  // Real timers: FractalRenderer yields on setTimeout while it draws.
-  beforeEach(() => {
-    vi.useRealTimers();
-  });
-
   /** The same Node stand-in for a 2D canvas the renderer tests use, plus getImageData. */
   function createFakeCanvas(width: number, height: number) {
     const state = {
@@ -750,6 +793,38 @@ describe("createCanvasThumbnailRender", () => {
     return found;
   };
 
+  /** What makes a tile's picture: the place, the scheme, and the look over it. */
+  const tiles = new Map<string, Promise<ThumbnailImage>>();
+
+  /**
+   * One place's tile, drawn once and handed to every test that asks for the
+   * same picture. Each of the three traps compares against the same plain tile,
+   * and each was drawing that tile again: one picture, three renders.
+   */
+  function tileOf(
+    candidate: Place,
+    scheme: ColorScheme,
+    look?: ThumbnailLook,
+  ): Promise<ThumbnailImage> {
+    const key = `${candidate.id}|${scheme}|${JSON.stringify(look ?? null)}`;
+    const held = tiles.get(key);
+
+    if (held) return held;
+
+    const picture = settle(
+      createCanvasThumbnailRender(createFakeCanvas)({
+        place: candidate,
+        scheme,
+        options: look,
+        width: 64,
+        height: 48,
+        signal: new AbortController().signal,
+      }),
+    );
+    tiles.set(key, picture);
+    return picture;
+  }
+
   it("renders a Mandelbrot, a Julia and a Burning Ship place as non-blank 64x48 pictures", async () => {
     const store = createThumbnailStore({
       render: createCanvasThumbnailRender(createFakeCanvas),
@@ -762,16 +837,18 @@ describe("createCanvasThumbnailRender", () => {
       byId("burning-ship-hull-and-rigging"),
     ];
 
-    const entries = await Promise.all(
-      places.map(
-        (candidate) =>
-          new Promise<ThumbnailEntry>((resolve) => {
-            store.request(
-              candidate,
-              candidate.colorScheme ?? "classic",
-              resolve,
-            );
-          }),
+    const entries = await settle(
+      Promise.all(
+        places.map(
+          (candidate) =>
+            new Promise<ThumbnailEntry>((resolve) => {
+              store.request(
+                candidate,
+                candidate.colorScheme ?? "classic",
+                resolve,
+              );
+            }),
+        ),
       ),
     );
 
@@ -804,26 +881,32 @@ describe("createCanvasThumbnailRender", () => {
       resolveFractalKind(candidate.fractal, candidate.variant ?? ""),
     );
 
-    await renderer.renderFractal(
-      {
-        bounds: calculateZoomBounds(
-          candidate.centerX,
-          candidate.centerY,
-          candidate.zoom,
-        ),
-        maxIterations: autoIterations(candidate.zoom),
-        width: 64,
-        height: 48,
-        colorScheme: scheme,
-      },
-      undefined,
-      false,
+    await settle(
+      renderer.renderFractal(
+        {
+          bounds: calculateZoomBounds(
+            candidate.centerX,
+            candidate.centerY,
+            candidate.zoom,
+          ),
+          maxIterations: autoIterations(candidate.zoom),
+          width: 64,
+          height: 48,
+          colorScheme: scheme,
+        },
+        undefined,
+        false,
+      ),
     );
 
     return canvas.getContext("2d")!.getImageData(0, 0, 64, 48).data;
   }
 
-  /** The mean absolute difference per colour channel, 0 to 255. */
+  /**
+   * The mean absolute difference per colour channel, 0 to 255, for the checks
+   * that two pictures must *not* be the same: an average says how much of the
+   * picture a viewer could see differ, which one byte beyond a bound does not.
+   */
   function meanChannelDifference(
     first: Uint8ClampedArray,
     second: Uint8ClampedArray,
@@ -855,24 +938,23 @@ describe("createCanvasThumbnailRender", () => {
   it.each(PLACES.map((candidate) => [candidate.id, candidate] as const))(
     "%s looks like the picture a click on it draws",
     async (_id, candidate) => {
-      const render = createCanvasThumbnailRender(createFakeCanvas);
       // The page is in a scheme no place uses by default; a place that names
       // none follows it, and the two sides must follow it alike.
       const current: ColorScheme = "grayscale";
-      const thumbnail = await render({
-        place: candidate,
-        scheme: placeColorScheme(candidate, current),
-        width: 64,
-        height: 48,
-        signal: new AbortController().signal,
-      });
+      const thumbnail = await tileOf(
+        candidate,
+        placeColorScheme(candidate, current),
+      );
 
+      // Held to the byte, so a difference names the pixel it starts at rather
+      // than an average to interpret.
       expect(
-        meanChannelDifference(
+        firstDifferenceBeyond(
           thumbnail.data,
           await mainRenderOf(candidate, current),
+          THUMBNAIL_MAIN_DIFFERENCE_BOUND,
         ),
-      ).toBeLessThanOrEqual(THUMBNAIL_MAIN_DIFFERENCE_BOUND);
+      ).toBe(-1);
     },
     30000,
   );
@@ -894,50 +976,45 @@ describe("createCanvasThumbnailRender", () => {
       const candidate = byId(id);
       const scheme = placeColorScheme(candidate, "classic");
       const look = { reverse: true, shift: 0.25, trap } as const;
-      const tile = await createCanvasThumbnailRender(createFakeCanvas)({
-        place: candidate,
-        scheme,
-        options: look,
-        width: 64,
-        height: 48,
-        signal: new AbortController().signal,
-      });
+      const tile = await tileOf(candidate, scheme, look);
 
       const canvas = createFakeCanvas(64, 48);
-      await new FractalRenderer(
-        canvas,
-        resolveFractalKind(candidate.fractal, candidate.variant ?? ""),
-      ).renderFractal(
-        {
-          bounds: calculateZoomBounds(
-            candidate.centerX,
-            candidate.centerY,
-            candidate.zoom,
-          ),
-          maxIterations: autoIterations(candidate.zoom),
-          width: 64,
-          height: 48,
-          colorScheme: scheme,
-          colorOptions: { reverse: true, shift: 0.25 },
-          trap,
-        },
-        undefined,
-        false,
+      await settle(
+        new FractalRenderer(
+          canvas,
+          resolveFractalKind(candidate.fractal, candidate.variant ?? ""),
+        ).renderFractal(
+          {
+            bounds: calculateZoomBounds(
+              candidate.centerX,
+              candidate.centerY,
+              candidate.zoom,
+            ),
+            maxIterations: autoIterations(candidate.zoom),
+            width: 64,
+            height: 48,
+            colorScheme: scheme,
+            colorOptions: { reverse: true, shift: 0.25 },
+            trap,
+          },
+          undefined,
+          false,
+        ),
       );
       const click = canvas.getContext("2d")!.getImageData(0, 0, 64, 48).data;
 
-      expect(meanChannelDifference(tile.data, click)).toBeLessThanOrEqual(
-        THUMBNAIL_MAIN_DIFFERENCE_BOUND,
-      );
+      expect(
+        firstDifferenceBeyond(
+          tile.data,
+          click,
+          THUMBNAIL_MAIN_DIFFERENCE_BOUND,
+        ),
+      ).toBe(-1);
 
       // ...and it is not the plain tile, so the look reached the renderer.
-      const plain = await createCanvasThumbnailRender(createFakeCanvas)({
-        place: candidate,
-        scheme,
-        options: { reverse: true, shift: 0.25 },
-        width: 64,
-        height: 48,
-        signal: new AbortController().signal,
+      const plain = await tileOf(candidate, scheme, {
+        reverse: true,
+        shift: 0.25,
       });
       expect(meanChannelDifference(tile.data, plain.data)).toBeGreaterThan(1);
     },
@@ -948,14 +1025,7 @@ describe("createCanvasThumbnailRender", () => {
     // The bug this guards: the tile in the page's colours, the click in the
     // place's own. Rendering that tile must exceed the bound.
     const candidate = byId("mandelbrot-lightning");
-    const render = createCanvasThumbnailRender(createFakeCanvas);
-    const wrongTile = await render({
-      place: candidate,
-      scheme: "grayscale",
-      width: 64,
-      height: 48,
-      signal: new AbortController().signal,
-    });
+    const wrongTile = await tileOf(candidate, "grayscale");
 
     expect(candidate.colorScheme).not.toBe("grayscale");
     expect(

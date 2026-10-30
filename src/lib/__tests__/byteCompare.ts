@@ -9,6 +9,12 @@
  * none — so `expect(firstDifference(a, b)).toBe(-1)` names that index in its
  * failure, which is the whole of what the copied arrays said.
  *
+ * A picture compared with one drawn by another path may leave room for
+ * rounding, so `firstDifferenceBeyond` takes the largest difference that still
+ * agrees — the same walk, the same named index, a bound rather than exactness.
+ * `placeThumbnails.test.ts` holds a tile to the picture a click draws with it,
+ * where a mean over the picture could hide one byte far out.
+ *
  * The samples `sweep.ts` checks are numbers a kind computed, and a NaN among
  * them would slip through a bare comparison, so it fails one before asking the
  * caller's bound. These are the bytes of a `Uint8ClampedArray`: whole numbers 0
@@ -18,7 +24,34 @@
  */
 
 /**
- * The index of the first byte two buffers disagree on.
+ * The index of the first byte two buffers disagree on by more than a tolerance.
+ *
+ * A picture drawn twice by the same arithmetic is the same bytes, but a picture
+ * compared with one the page drew may leave room for rounding: `tolerance` is
+ * how far apart two bytes may be and still count as agreeing, and 0 asks for
+ * the same bytes exactly.
+ * @param first - One buffer
+ * @param second - The buffer to hold it to
+ * @param tolerance - The largest difference, in 0 to 255, that still agrees
+ * @returns That index, -1 when every shared byte agrees, or the length of the
+ *   shorter buffer when one ends before the other and the shared part agrees
+ */
+export function firstDifferenceBeyond(
+  first: Uint8ClampedArray,
+  second: Uint8ClampedArray,
+  tolerance: number,
+): number {
+  const shared = Math.min(first.length, second.length);
+
+  for (let index = 0; index < shared; index++) {
+    if (Math.abs(first[index] - second[index]) > tolerance) return index;
+  }
+
+  return first.length === second.length ? -1 : shared;
+}
+
+/**
+ * The index of the first byte two buffers disagree on at all.
  * @param first - One buffer
  * @param second - The buffer to hold it to
  * @returns That index, -1 when both hold the same bytes, or the length of the
@@ -28,11 +61,5 @@ export function firstDifference(
   first: Uint8ClampedArray,
   second: Uint8ClampedArray,
 ): number {
-  const shared = Math.min(first.length, second.length);
-
-  for (let index = 0; index < shared; index++) {
-    if (first[index] !== second[index]) return index;
-  }
-
-  return first.length === second.length ? -1 : shared;
+  return firstDifferenceBeyond(first, second, 0);
 }
