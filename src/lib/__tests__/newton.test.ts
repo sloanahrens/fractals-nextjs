@@ -15,6 +15,7 @@ import {
   newtonPolynomialFor,
   parseNewtonPolynomial,
 } from "../newton";
+import { sweep } from "./sweep";
 
 const CAP = 300;
 const THIRD = CAP * NEWTON_BAND;
@@ -147,19 +148,40 @@ describe("the three bands", () => {
     // The bands do not overlap and keep a gap between them, so the slowest
     // shade of one root is never the fastest shade of the next.
     const nearEdge = NEWTON_BAND_MARGIN * THIRD;
-
-    for (const point of grid(60, 45)) {
-      for (const smooth of [false, true]) {
-        const value = newtonKind.iterations(point, CAP, smooth);
-        if (value >= CAP) continue;
-
-        const root = Math.floor(value / THIRD);
-        expect(root).toBeGreaterThanOrEqual(0);
-        expect(root).toBeLessThanOrEqual(2);
-        expect(value - root * THIRD).toBeGreaterThanOrEqual(nearEdge - 1e-9);
-        expect((root + 1) * THIRD - value).toBeGreaterThan(nearEdge - 1e-9);
+    const points = grid(60, 45);
+    let settled = 0;
+    function* samples() {
+      for (const point of points) {
+        for (const smooth of [false, true]) {
+          yield {
+            at: { point, smooth },
+            value: newtonKind.iterations(point, CAP, smooth),
+          };
+        }
       }
     }
+
+    // One assertion over the whole grid (see sweep.ts); a value that is not a
+    // finite number fails before the bands are asked about it. A point that
+    // never settles is drawn at the cap and is not in a band.
+    const { offenders, checked } = sweep(samples(), (value) => {
+      if (value >= CAP) return true;
+
+      settled++;
+      const root = Math.floor(value / THIRD);
+
+      return (
+        root >= 0 &&
+        root <= 2 &&
+        value - root * THIRD >= nearEdge - 1e-9 &&
+        (root + 1) * THIRD - value > nearEdge - 1e-9
+      );
+    });
+
+    expect(checked).toBe(points.length * 2);
+    // A grid that settled nothing would prove nothing.
+    expect(settled).toBeGreaterThan(1000);
+    expect(offenders).toEqual([]);
   });
 
   it("agree with textbook Newton about which root every point reaches", () => {
@@ -311,15 +333,27 @@ describe("points that never settle", () => {
   });
 
   it("is finite and in range at every point of the default view", () => {
-    for (const point of grid(100, 75)) {
-      for (const smooth of [false, true]) {
-        const value = newtonKind.iterations(point, CAP, smooth);
-
-        expect(Number.isFinite(value)).toBe(true);
-        expect(value).toBeGreaterThanOrEqual(0);
-        expect(value).toBeLessThanOrEqual(CAP);
+    // 15,000 samples swept in one assertion (see sweep.ts): an expect per sample
+    // costs more than the count does, and a NaN fails whatever the bound says.
+    const points = grid(100, 75);
+    function* samples() {
+      for (const point of points) {
+        for (const smooth of [false, true]) {
+          yield {
+            at: { point, smooth },
+            value: newtonKind.iterations(point, CAP, smooth),
+          };
+        }
       }
     }
+
+    const { offenders, checked } = sweep(
+      samples(),
+      (value) => value >= 0 && value <= CAP,
+    );
+
+    expect(checked).toBe(points.length * 2);
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -644,23 +678,39 @@ describe.each(POLYNOMIAL_CASES)("the $id polynomial", ({ kind, roots, turn, mirr
 
   it("keeps the bands disjoint, each well inside its own share of the range", () => {
     const nearEdge = NEWTON_BAND_MARGIN * band;
+    let settled = 0;
+    function* samples() {
+      for (let row = 0; row < 45; row++) {
+        for (let column = 0; column < 60; column++) {
+          const point = {
+            real: -2 + (4 * (column + 0.37)) / 60,
+            imaginary: -1.5 + (3 * (row + 0.61)) / 45,
+          };
 
-    for (let row = 0; row < 45; row++) {
-      for (let column = 0; column < 60; column++) {
-        const point = {
-          real: -2 + (4 * (column + 0.37)) / 60,
-          imaginary: -1.5 + (3 * (row + 0.61)) / 45,
-        };
-        const value = kind.iterations(point, CAP, false);
-        if (value >= CAP) continue;
-
-        const root = Math.floor(value / band);
-        expect(root).toBeGreaterThanOrEqual(0);
-        expect(root).toBeLessThan(rootCount);
-        expect(value - root * band).toBeGreaterThanOrEqual(nearEdge - 1e-9);
-        expect((root + 1) * band - value).toBeGreaterThan(nearEdge - 1e-9);
+          yield { at: point, value: kind.iterations(point, CAP, false) };
+        }
       }
     }
+
+    // One assertion over the whole grid (see sweep.ts); a value that is not a
+    // finite number fails before the bands are asked about it.
+    const { offenders, checked } = sweep(samples(), (value) => {
+      if (value >= CAP) return true;
+
+      settled++;
+      const root = Math.floor(value / band);
+
+      return (
+        root >= 0 &&
+        root < rootCount &&
+        value - root * band >= nearEdge - 1e-9 &&
+        (root + 1) * band - value > nearEdge - 1e-9
+      );
+    });
+
+    expect(checked).toBe(45 * 60);
+    expect(settled).toBeGreaterThan(500);
+    expect(offenders).toEqual([]);
   });
 
   it("returns a number in range, never NaN, for far, huge and non-finite points", () => {

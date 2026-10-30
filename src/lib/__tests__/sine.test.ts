@@ -18,6 +18,7 @@ import {
   SINE_START,
   sineKind,
 } from "../sine";
+import { sweep } from "./sweep";
 
 const CAP = 400;
 
@@ -207,30 +208,27 @@ describe("the interior known in closed form", () => {
   it("keeps every orbit inside the disc of radius |c|, which is why it never leaves", () => {
     // |sin z| <= sinh |z|, so from a point of modulus at most |c| a step lands at
     // modulus at most |c| sinh |c| <= |c|: the orbit is held in that disc.
-    // Every orbit point is checked, in one assertion over the lot (an expect per
-    // point costs more than the walk does); the first offenders are named.
-    const offenders: string[] = [];
-    let walked = 0;
+    // Every orbit point is checked, in one assertion over the lot (see
+    // sweep.ts); the value is how far past |c| the point went, and a point that
+    // is not a number fails whatever the bound says.
+    function* samples() {
+      for (const c of grid(-0.88, 0.88, -0.88, 0.88, 14)) {
+        const size = Math.hypot(c.real, c.imaginary);
+        if (size >= SINE_INTERIOR_RADIUS) continue;
 
-    for (const c of grid(-0.88, 0.88, -0.88, 0.88, 14)) {
-      const size = Math.hypot(c.real, c.imaginary);
-      if (size >= SINE_INTERIOR_RADIUS) continue;
-
-      for (const point of sineKind.orbit!(c, 120).slice(1)) {
-        walked++;
-        if (
-          Math.hypot(point.real, point.imaginary) > size + 1e-12 &&
-          offenders.length < 5
-        ) {
-          offenders.push(
-            `c = ${c.real},${c.imaginary} reached ${point.real},${point.imaginary}`,
-          );
+        for (const point of sineKind.orbit!(c, 120).slice(1)) {
+          yield {
+            at: { c, point },
+            value: Math.hypot(point.real, point.imaginary) - size,
+          };
         }
       }
     }
 
+    const { offenders, checked } = sweep(samples(), (excess) => excess <= 1e-12);
+
     // An empty grid would prove nothing.
-    expect(walked).toBeGreaterThan(10000);
+    expect(checked).toBeGreaterThan(10000);
     expect(offenders).toEqual([]);
   });
 
