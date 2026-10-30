@@ -19,6 +19,7 @@ import { NEWTON_ROOTS, createNewtonKind, newtonKind } from "../newton";
 import { celticKind } from "../celtic";
 import { MAGNET_TYPES, createMagnetKind } from "../magnet";
 import { novaKind } from "../nova";
+import { sineKind } from "../sine";
 import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
@@ -150,6 +151,18 @@ const CASES: KindCase[] = [
     // The Hourglass set is around the origin, and this grid holds points of it
     // and points that leave.
     grid: { real: -1.2, imaginary: -1.2, span: 2.4 },
+  },
+  {
+    name: "sine",
+    kind: sineKind,
+    // c = 0 sends every point to 0 and keeps it there.
+    neverEnds: ORIGIN,
+    // The first step lands on c (sin(pi/2) = 1), so a c more than 20 off the real
+    // axis is away on its first step, counted as step 0.
+    endsAt: { point: { real: 0, imaginary: 21 }, steps: 0 },
+    packsOutcomes: false,
+    // The central disc (|c| < 1) is in the set and the plane above it is not.
+    grid: { real: -0.8, imaginary: 0.2, span: 1.6 },
   },
   {
     name: "nova",
@@ -325,6 +338,7 @@ describe("every kind this app ships", () => {
       ...MAGNET_TYPES.map(createMagnetKind),
       ...PHOENIX_CONSTANTS.map((entry) => createPhoenixKind(entry.constant)),
       novaKind,
+      sineKind,
       newtonKind,
     ];
 

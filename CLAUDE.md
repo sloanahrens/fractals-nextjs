@@ -103,7 +103,13 @@ failures say what is left.
    fractal with a setting adds a `fractalVariants` descriptor, its
    `defaultVariant` and its `isVariantValue`.
 3. `FRACTAL_MATH` in `src/lib/fractalMath.ts` (invariant 3), `defaultViewFor`,
-   and the switcher row in `src/lib/helpEntries.ts`.
+   and the switcher row in `src/lib/helpEntries.ts` (it reads its names off
+   `FRACTAL_TYPES`, so nothing to write). Two places no test makes you visit:
+   `FRACTAL_NOUNS` in `src/lib/viewPreview.ts`, which names the fractal in a
+   link's preview line (an id it lacks shows as the raw id), and, for a
+   kind that is gone at something other than a radius of 2, `hasEscapeCircle`
+   in `src/lib/orbitPlot.ts`, so the orbit plot does not draw a circle that
+   marks nothing.
 4. `src/lib/presets.ts` — at least one built-in view for it.
 5. `src/lib/places.ts` — catalogue places, a `FEATURED_PLACE_IDS` entry (held
    to the flat-field guard in `places.test.ts`), and the whole-set place

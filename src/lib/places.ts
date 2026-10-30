@@ -1174,6 +1174,70 @@ const NOVA_PLACES: readonly Place[] = [
   },
 ];
 
+// Drawn headless on contact sheets at 400x300 in several schemes, and the
+// frames that carry detail found by scoring a grid of windows (the share of
+// pixels that run 6 steps or more without reaching the cap of 300, which is the
+// filigree) and keeping the best of each zoom. The set is symmetric about both
+// axes and the whole real axis is in it, so the frames sit in the upper half
+// plane. Most of the plane outside the set escapes in a step or two and reads
+// as one smooth wash, so every place has set in it: a disc, a bud or a copy.
+const SINE_PLACES: readonly Place[] = [
+  {
+    id: "sine-whole",
+    name: "The whole Sine set",
+    fractal: "sine",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "fire",
+  },
+  {
+    id: "sine-bead-chain",
+    name: "A chain of beads along the axis",
+    fractal: "sine",
+    centerX: 2.64,
+    centerY: 0,
+    zoom: 3,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "sine-top-bud",
+    name: "A bud with copies hanging from it",
+    fractal: "sine",
+    centerX: 0,
+    centerY: 1.32,
+    zoom: 5,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "sine-disc-edge",
+    name: "Filigree on a disc's edge",
+    fractal: "sine",
+    centerX: 1.98,
+    centerY: 0.66,
+    zoom: 8,
+    colorScheme: "fire",
+  },
+  {
+    id: "sine-end-copy",
+    name: "A small copy at the end of the line",
+    fractal: "sine",
+    centerX: 2.805,
+    centerY: 0,
+    zoom: 16,
+    colorScheme: "classic",
+  },
+  {
+    id: "sine-lace",
+    name: "Lace between two discs",
+    fractal: "sine",
+    centerX: 2.31,
+    centerY: 0.33,
+    zoom: 16,
+    colorScheme: "fire",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -1191,6 +1255,7 @@ export const PLACES: readonly Place[] = [
   ...MAGNET_PLACES,
   ...PHOENIX_PLACES,
   ...NOVA_PLACES,
+  ...SINE_PLACES,
 ];
 
 /**
@@ -1240,6 +1305,9 @@ export function placesForFractal(fractal: string): Place[] {
  *   picture at one frame, and the silhouette is what says what it is.
  * - Nova: the whole set (an exception above), the one picture that says what
  *   the fractal is.
+ * - Sine: the whole set (an exception above): a central disc flanked by a
+ *   chain of smaller ones, with the filigree between, is what says what it is,
+ *   and it is also the frame the fractal opens on.
  *
  * The rest of the catalogue was redrawn and kept: each is a picture rather
  * than a flat field, which the guard in `places.test.ts` holds.
@@ -1256,6 +1324,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   magnet: "magnet-1-drift",
   phoenix: "phoenix-classic-whole",
   nova: "nova-whole",
+  sine: "sine-whole",
 };
 
 /**

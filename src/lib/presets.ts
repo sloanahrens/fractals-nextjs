@@ -440,6 +440,41 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     fractal: "celtic",
   },
   {
+    id: "sine-overview",
+    name: "Sine set",
+    description: "The whole Sine set: a central disc and a chain of beads",
+    // The Sine default view (0, 0) at zoom 1: 4 by 3 about the origin.
+    bounds: {
+      minReal: -2,
+      maxReal: 2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "fire",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "sine",
+  },
+  {
+    id: "sine-bud",
+    name: "Sine bud",
+    description:
+      "A bud above the central disc, with small copies hanging from it",
+    // Centre (0, 1.32) at zoom 5: 0.8 by 0.6.
+    bounds: {
+      minReal: -0.4,
+      maxReal: 0.4,
+      minImaginary: 1.02,
+      maxImaginary: 1.62,
+    },
+    maxIterations: 300,
+    colorScheme: "rainbow",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "sine",
+  },
+  {
     id: "perpendicular-ship-overview",
     name: "Perpendicular Ship",
     description: "The whole Perp. Ship, hull, row of masts and spike",
@@ -670,7 +705,7 @@ export function presetsForFractal(
  * variants still load and a view saved now still reads in an older build; any
  * other family's setting is written as `variant`. A fractal with no variant --
  * the Mandelbrot set, the Burning Ship, the Perpendicular Ship, the Tricorn,
- * the Celtic set or Nova -- gets neither key at all, so its stored JSON stays
+ * the Celtic set, Nova or the Sine set -- gets neither key at all, so its stored JSON stays
  * the shape it had before these fields existed.
  * @param fractalId - Id of the fractal on the canvas
  * @param variant - Variant on the canvas; written only for a fractal that takes one

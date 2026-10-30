@@ -76,7 +76,7 @@ function sentences(blurb: string): string[] {
 }
 
 /**
- * Every way the eleven descriptions say the colours come from the orbit's own
+ * Every way the twelve descriptions say the colours come from the orbit's own
  * end — how fast it ran away, which root it reached, how many steps that took —
  * or name a black a trap picture has not got (a trap holds every pixel inside
  * `TRAP_POSITION_MIN`..`TRAP_POSITION_MAX` of the palette, so none is black; see
@@ -243,6 +243,12 @@ describe("the rule, read aloud", () => {
     );
   });
 
+  it("reads the Sine set's rule: c times the sine of z", () => {
+    expect(rule("sine")).toBe(
+      "z becomes c times the sine of open bracket z close bracket",
+    );
+  });
+
   it("reads the second magnetic type's rule", () => {
     expect(rule("magnet", "2")).toBe(
       "z becomes open bracket the fraction z cubed plus 3 times open bracket c minus 1 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket over 3 times z squared plus 3 times open bracket c minus 2 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket plus 1 end fraction close bracket squared",
@@ -348,6 +354,12 @@ describe("where each point starts", () => {
     expect(start("nova")).toBe("z sub 0 equals 1, c equals the pixel's point");
   });
 
+  it("starts the Sine set at pi over 2, the critical point of c sin z", () => {
+    expect(start("sine")).toBe(
+      "z sub 0 equals the fraction π over 2 end fraction, c equals the pixel's point",
+    );
+  });
+
   it("starts Julia and Newton at the pixel's point", () => {
     expect(start("julia")).toBe("z sub 0 equals the pixel's point");
     expect(start("newton")).toBe("z sub 0 equals the pixel's point");
@@ -363,6 +375,7 @@ describe("the setting", () => {
       "celtic",
       "perpendicular-ship",
       "nova",
+      "sine",
     ]) {
       expect(describeFractalMath(id, "").setting).toBeNull();
     }
@@ -474,6 +487,24 @@ describe("the setting", () => {
     expect(blurbFor(blurb, null)).toMatch(/Newton's method for z cubed = 1/);
     expect(escape).toMatch(/less than 0\.000001/);
     expect(escape).toMatch(/orbit plot/);
+  });
+
+  it("says in plain words how the Sine set is judged and what its picture shows", () => {
+    const { title, blurb, escape } = describeFractalMath("sine", "");
+
+    expect(title).toBe("Sine set");
+    expect(blurbFor(blurb, null)).toMatch(
+      /sine of the number instead of squaring/,
+    );
+    expect(escape).toMatch(/imaginary part of z passes 20/);
+    expect(escape).toMatch(/real axis never leaves it/);
+  });
+
+  it("leaves the Sine set's colour sentence out when a trap is on", () => {
+    const { blurb } = describeFractalMath("sine", "");
+
+    expect(blurbFor(blurb, "point")).not.toMatch(/how many steps/);
+    expect(blurbFor(blurb, null)).toMatch(/how many steps/);
   });
 
   it("shows the Magnet's magnetic type", () => {
@@ -612,7 +643,7 @@ describe("the paragraph under the rows", () => {
     describeFractalMath(id, variant).blurb;
 
   it("reads exactly as it read before a Look could change it", () => {
-    // The eleven default paragraphs, word for word as they stood before this
+    // The twelve default paragraphs, word for word as they stood before this
     // bead. Nothing here may drift: a trap changes the paragraph by leaving
     // sentences out, never by rewording one.
     const expected: Record<string, string> = {
@@ -636,6 +667,7 @@ describe("the paragraph under the rows", () => {
         "Each step forms a fraction out of z and c, squares it, and starts again from there. Almost every c has an orbit that settles on the fixed point z = 1, and that settled set is the flat black of the picture; the colours draw the small island of c whose orbit runs off to infinity instead. The two magnetic types are the same question asked of two different fractions.",
       phoenix:
         "This is a Julia set with a memory: every step squares the number and adds c, and also adds p times the number from the step before. That extra term feeds the past back into each new point, which feathers the picture into flame-like shapes that a plain Julia set never makes. Points whose numbers stay small are the black body and the rest are coloured by how fast they run away.",
+      sine: "The same game as the Mandelbrot set, but each step takes the sine of the number instead of squaring it, and then multiplies by c. The sine of a number that has strayed far from the real line is enormous, so a point either settles or is thrown out almost at once: the set is a chain of round bulbs along the real axis, and the filigree is where the two meet. Points that stay put are the black bulbs; the rest are coloured by how many steps it takes to throw them out.",
       nova: "Nova is Newton's method for z cubed = 1 with a constant added after every step. Pick a point on the plane and call it c, start at 1 and keep improving the guess and adding c. Instead of three tidy basins the picture is a Mandelbrot-like set with spirals and bulbs in it, where the Newton basins are folded into the shapes.",
     };
 

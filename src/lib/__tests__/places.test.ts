@@ -426,6 +426,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   magnet: [4, 6],
   phoenix: [4, 6],
   nova: [4, 6],
+  sine: [4, 6],
 };
 
 describe("PLACES", () => {
@@ -991,6 +992,7 @@ const FEATURED_IS_OPENING_VIEW = new Set([
   "perpendicular-ship",
   "phoenix",
   "nova",
+  "sine",
 ]);
 
 /**

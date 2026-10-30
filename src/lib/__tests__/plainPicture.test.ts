@@ -84,6 +84,11 @@ const GOLDEN: Record<string, string> = {
   magnet: "7e1bc9a7",
   phoenix: "ba1539dc",
   nova: "815504b9",
+  // The Sine set came after the trap engine, so its value is not from 2866a45:
+  // it was taken from the tree that added the set (fr-tkax), once the opening
+  // view had been drawn and looked at (a central disc, a chain of beads and the
+  // filigree between), and it pins that picture from then on.
+  sine: "c789dd4b",
 };
 
 describe("the plain (iteration-count) picture", () => {

@@ -300,6 +300,10 @@ describe("trapDistance stops on a cycle or a fixed point", () => {
     ["tricorn", "", { real: -1.2, imaginary: 0.05 }],
     ["celtic", "", { real: -1.2, imaginary: -0.09 }],
     ["perpendicular-ship", "", { real: -1.04, imaginary: -0.09 }],
+    // Inside the central disc (|c| < 1) the orbit settles on the fixed point 0;
+    // inside the next disc, on a cycle.
+    ["sine", "", { real: 0.3, imaginary: 0.4 }],
+    ["sine", "", { real: 1.6, imaginary: 0.1 }],
   ];
 
   it.each(SETTLING)(

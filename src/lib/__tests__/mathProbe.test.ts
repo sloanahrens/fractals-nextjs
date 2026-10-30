@@ -35,6 +35,7 @@ import { renderRgba } from "../renderRgba";
 import { celticKind } from "../celtic";
 import { createMagnetKind } from "../magnet";
 import { novaKind } from "../nova";
+import { sineKind } from "../sine";
 import { createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
@@ -67,6 +68,9 @@ const KINDS: {
   // Nova's picture is around -0.55, so its view is the frame the fractal opens
   // on: the arc, the disks, the bands and the flat field beyond them.
   { name: "nova", kind: novaKind, view: calculateZoomBounds(-0.55, 0, 1.5) },
+  // The Sine set is built around the origin: its opening frame holds the central
+  // disc, the discs beside it and the filigree between them.
+  { name: "sine", kind: sineKind, view: calculateZoomBounds(0, 0, 1) },
   { name: "perpendicular-ship", kind: perpendicularShipKind },
   { name: "multibrot 3", kind: createMultibrotKind(3) },
   { name: "multibrot 5", kind: createMultibrotKind(5) },

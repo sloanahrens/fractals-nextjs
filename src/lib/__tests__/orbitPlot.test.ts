@@ -148,6 +148,11 @@ describe("orbitMinExtent and hasEscapeCircle", () => {
     // The Magnet's orbits leave at 100 rather than 2, so the circle of 2 would
     // sit inside the wandering rather than at the edge of the picture.
     expect(hasEscapeCircle("magnet")).toBe(false);
+    // The Sine set's orbits leave by height (more than 20 off the real axis),
+    // not by radius, so a circle of 2 would mark nothing; it keeps the
+    // escape-time frame.
+    expect(hasEscapeCircle("sine")).toBe(false);
+    expect(orbitMinExtent("sine")).toBe(ORBIT_ESCAPE_RADIUS);
   });
 
   it("still plots the Magnet's orbit in the escape-time frame", () => {

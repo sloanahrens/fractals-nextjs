@@ -346,6 +346,9 @@ describe("describeViewLine", () => {
     expect(line({ ...base, fractalType: "nova", zoomLevel: 1.5 })).toBe(
       "Nova fractal, 1.5x",
     );
+    expect(line({ ...base, fractalType: "sine", zoomLevel: 1 })).toBe(
+      "Sine set, 1x",
+    );
     expect(line({ ...base, fractalType: "perpendicular-ship" })).toBe(
       "Perpendicular Ship, 1x",
     );

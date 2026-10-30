@@ -100,7 +100,7 @@ const MAGNET = stop({
 });
 
 // One stop per fractal, as many as a tour link can hold. The picker offers
-// eleven fractals and `MAX_TOUR_STOPS` is eight, so one link cannot name them
+// twelve fractals and `MAX_TOUR_STOPS` is eight, so one link cannot name them
 // all; MAGNET, the Phoenix and Nova are left out here and are round-tripped in
 // their own tests below.
 const EVERY_FRACTAL = [

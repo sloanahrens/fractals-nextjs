@@ -792,6 +792,47 @@ const NOVA: FractalMath = {
     "A point is done when a step moves it by less than 0.000001, which means it has settled; the colour is the number of steps that took. A point whose numbers pass 1,000,000 has escaped and is coloured by its step the same way, and a point that has not settled within the iteration cap, circling or wandering for good, is painted black. In the orbit plot a settling point is a path that closes in on one spot, and a point that circles is a path that keeps going round.",
 };
 
+/** z₀ = π/2, c = the pixel's point: the critical point of c sin z, so the first step lands on c. */
+const START_AT_HALF_PI = row(
+  subscript(z, number(0)),
+  EQUALS,
+  fraction(number("π"), number(2)),
+  operator(","),
+  c,
+  EQUALS,
+  PIXELS_POINT,
+);
+
+const SINE: FractalMath = {
+  title: "Sine set",
+  rule: row(
+    z,
+    ARROW,
+    c,
+    operator(INVISIBLE_TIMES),
+    identifier("sin", "the sine of"),
+    OPEN,
+    z,
+    CLOSE,
+  ),
+  start: START_AT_HALF_PI,
+  setting: null,
+  blurb: [
+    {
+      text: "The same game as the Mandelbrot set, but each step takes the sine of the number instead of squaring it, and then multiplies by c.",
+    },
+    {
+      text: "The sine of a number that has strayed far from the real line is enormous, so a point either settles or is thrown out almost at once: the set is a chain of round bulbs along the real axis, and the filigree is where the two meet.",
+    },
+    {
+      text: "Points that stay put are the black bulbs; the rest are coloured by how many steps it takes to throw them out.",
+      colouring: true,
+    },
+  ],
+  escape:
+    "A point escapes when the imaginary part of z passes 20: the sine of such a number is about a hundred million times bigger again, so it never comes back. The colour is the step on which that happens, smoothed between steps; a point that never escapes within the iteration cap is painted black. A point on the real axis never leaves it, which is why a thin black line runs the whole width of the picture.",
+};
+
 function julia(variant: string): FractalMath {
   // The renderer falls back to the first named constant for a name it cannot
   // read, so the card says the constant that is actually drawn.
@@ -869,6 +910,7 @@ export const FRACTAL_MATH: Readonly<
   celtic: () => CELTIC,
   phoenix,
   nova: () => NOVA,
+  sine: () => SINE,
 };
 
 /**

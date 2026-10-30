@@ -234,6 +234,32 @@ describe("encodeView", () => {
     });
   });
 
+  it("writes the Sine set as f=sine, with no k, and reads it back", () => {
+    const view = {
+      fractalType: "sine",
+      centerX: 2.64,
+      centerY: 0,
+      zoomLevel: 3,
+      colorScheme: "fire" as const,
+      autoIterationsOn: true,
+      canvasWidth: 800,
+      canvasHeight: 600,
+      // A variant left over from Julia is not written beside a fractal that
+      // takes none.
+      variant: "Dendrite",
+    };
+    const link = encodeView(view);
+
+    expect(link).toBe("v=1&f=sine&x=2.64&y=0&z=3&s=fire&i=auto&w=800&h=600");
+    expect(decodeView(`#${link}`)).toMatchObject({
+      fractalType: "sine",
+      centerX: 2.64,
+      centerY: 0,
+      zoomLevel: 3,
+      colorScheme: "fire",
+    });
+  });
+
   it("writes the Perpendicular Ship as f=perpendicular-ship, with no k, and reads it back", () => {
     const view = {
       fractalType: "perpendicular-ship",

@@ -32,6 +32,7 @@ import {
 } from "./phoenix";
 import { novaKind } from "./nova";
 import { perpendicularShipKind } from "./perpendicularShip";
+import { sineKind } from "./sine";
 import { tricornKind } from "./tricorn";
 
 /**
@@ -67,6 +68,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "magnet", label: "Magnet" },
   { id: "phoenix", label: "Phoenix" },
   { id: "nova", label: "Nova" },
+  { id: "sine", label: "Sine" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -237,7 +239,7 @@ export function isCustomVariant(fractalId: string, value: string): boolean {
  *
  * The picker names a fractal and the renderer wants a {@link FractalKind}. A
  * plain kind -- the Mandelbrot set, the Burning Ship, the Perpendicular Ship,
- * the Tricorn, the Celtic set or Nova -- is the same thing. Julia is a family
+ * the Tricorn, the Celtic set, Nova or the Sine set -- is the same thing. Julia is a family
  * rather than a picture, so the choice carries a constant as well -- one of the
  * named ones, or a custom spelling of any other point -- and the Multibrot,
  * Newton, the Magnet and the Phoenix are families of their own setting. A value
@@ -260,6 +262,7 @@ export function resolveFractalKind(
   }
   if (typeId === "celtic") return celticKind;
   if (typeId === "nova") return novaKind;
+  if (typeId === "sine") return sineKind;
   if (typeId === "magnet") {
     return createMagnetKind(parseMagnetType(variant) ?? MAGNET_TYPES[0]);
   }
@@ -375,6 +378,20 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // crops Type I's top and bottom lobes, which is the most of its height the
   // explorer can show at once. The corner is the flat black of the settled set.
   if (typeId === "magnet") return { centerX: 1.3, centerY: 0, zoom: 1 };
+
+  // The Sine set is the c whose orbit under z -> c sin z, started at the
+  // critical point pi/2, is not thrown out. Every point of the real axis is in
+  // it (an orbit that starts real stays real), and the picture is a chain of
+  // round bulbs along that axis: measured on a 0.002 grid at a cap of 400 along
+  // y = 0.1, the in-set runs are x 0..0.994 (the central disc, |c| < 1, where
+  // the fixed point 0 attracts because its multiplier is c), 1.008..2.256 and
+  // 2.29..2.596, then 4.536..4.994, and at x = 0.3 the central disc rises to
+  // y = 0.954 (sqrt(1 - 0.09)). The set is symmetric about both axes, so the
+  // origin centres it. Zoom 1 (x -2..2, y -1.5..1.5) is the widest view there
+  // is: it holds the central disc whole, the next disc to 2.256 less its last
+  // 0.26, and both buds above and below the central disc, and 47.8% of its
+  // pixels are in the set (measured on 400 by 300 at the cap of 400).
+  if (typeId === "sine") return { centerX: 0, centerY: 0, zoom: 1 };
 
   // A Phoenix set is a Julia set of the two-term step, so like Julia's it is
   // framed on the origin and every constant draws about it. Measured with a
