@@ -19,11 +19,13 @@
  *
  * The social card's creator is the one value here that belongs to the
  * deployment rather than to the app: it is the handle the deployment's params
- * file names (`deploymentParams.ts`). No params file, or no handle in it, means
- * no creator tag at all — the head credits nobody rather than a stand-in.
+ * file names (`deploymentParams.ts`), fixed when the app was built. No params
+ * file, or no handle in it, means no creator tag at all — the head credits
+ * nobody rather than a stand-in.
  */
 
 import type { Metadata } from "next";
+import { pageMetadataConfig } from "./deploymentParams";
 import { CARD_HEIGHT, CARD_PATH, CARD_WIDTH } from "./ogImage";
 import { CARD_ALT, DESCRIPTION, TITLE, TWITTER_DESCRIPTION } from "./siteText";
 import { previewFor, type SearchParams } from "./viewPreview";
@@ -61,20 +63,18 @@ export interface PageMetadataConfig {
   twitterCreator?: string | null;
 }
 
-/** A head with no deployment values: the state of a checkout with no params. */
-const NO_CONFIG: PageMetadataConfig = {};
-
 /**
  * The page's metadata for a request.
  *
  * @param origin - The origin the request was served from, no trailing slash
  * @param searchParams - The request's query; omitted for the static head
- * @param config - The deployment's values; omitted for no params file
+ * @param config - The deployment's values; omitted for the ones the build
+ *   compiled in, which is what the page passes in production
  */
 export function pageMetadata(
   origin: string,
   searchParams: SearchParams = {},
-  config: PageMetadataConfig = NO_CONFIG,
+  config: PageMetadataConfig = pageMetadataConfig(),
 ): Metadata {
   const preview = previewFor(searchParams);
   const creator = config.twitterCreator;

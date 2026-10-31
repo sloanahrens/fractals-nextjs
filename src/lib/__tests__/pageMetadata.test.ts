@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { twitterCreatorFromParams } from "../deploymentParams";
+import { twitterCreatorFromParams } from "../deploymentParamsFile";
 import { defaultVariant } from "../fractalTypes";
 import { ogUrl, pageMetadata } from "../pageMetadata";
 import { DESCRIPTION, TITLE } from "../siteText";

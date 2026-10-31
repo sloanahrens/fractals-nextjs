@@ -1,27 +1,29 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   readDeploymentParams,
-  readPageMetadataConfig,
+  twitterCreatorAtBuild,
   twitterCreatorFromParams,
-} from "../deploymentParams";
+} from "../deploymentParamsFile";
+import { pageMetadata } from "../pageMetadata";
 
+// `require` for the Next config, which is a CommonJS module.
+const require = createRequire(import.meta.url);
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
-const source = (path: string) => readFileSync(join(ROOT, path), "utf8");
+const ORIGIN = "https://fractals.example.com";
+
+/** The creator tag a metadata object carries, if it carries one. */
+const creatorOf = (metadata: ReturnType<typeof pageMetadata>) =>
+  (metadata.twitter as { creator?: string }).creator;
 
 const roots: string[] = [];
 
-/** A temporary checkout under `t.TempDir`'s counterpart, never the real one. */
+/** A temporary checkout, never the real one. */
 function checkout(contents?: string): string {
   const root = mkdtempSync(join(tmpdir(), "fractals-params-"));
   roots.push(root);
@@ -34,6 +36,7 @@ function checkout(contents?: string): string {
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  vi.unstubAllEnvs();
 });
 
 describe("twitterCreatorFromParams", () => {
@@ -117,36 +120,91 @@ describe("readDeploymentParams", () => {
   });
 });
 
-describe("readPageMetadataConfig", () => {
-  it("gives the head the handle the params file names", () => {
-    const root = checkout(
-      JSON.stringify({ twitterCreator: "@made-up-name", projectId: "p" }),
-    );
-
-    expect(readPageMetadataConfig(root)).toEqual({
-      twitterCreator: "@made-up-name",
-    });
+describe("twitterCreatorAtBuild", () => {
+  it("is the handle the params file names", () => {
+    expect(
+      twitterCreatorAtBuild(
+        checkout(JSON.stringify({ twitterCreator: "@made-up-name" })),
+      ),
+    ).toBe("@made-up-name");
   });
 
-  it("gives the head no handle when the file gives none", () => {
-    expect(readPageMetadataConfig(checkout(JSON.stringify({})))).toEqual({
-      twitterCreator: null,
-    });
-    expect(readPageMetadataConfig(checkout())).toEqual({ twitterCreator: null });
+  it("is null when the checkout has no params file", () => {
+    expect(twitterCreatorAtBuild(checkout())).toBeNull();
   });
-});
 
-describe("the deployment wiring", () => {
-  it("hands the params value to the head from both metadata call sites", () => {
-    for (const file of ["src/app/page.tsx", "src/app/layout.tsx"]) {
-      expect(source(file), file).toContain("pageMetadataConfig()");
+  it("is null when the file names no handle", () => {
+    for (const contents of [
+      JSON.stringify({}),
+      JSON.stringify({ twitterCreator: null }),
+      JSON.stringify({ twitterCreator: "  " }),
+    ]) {
+      expect(twitterCreatorAtBuild(checkout(contents))).toBeNull();
     }
   });
 
-  it("carries the params file into the image the page runs in", () => {
-    expect(source("Dockerfile")).toContain(
-      "COPY --from=builder /app/deploy/params.json ./deploy/params.json",
+  it("fails the build on JSON that does not parse", () => {
+    expect(() => twitterCreatorAtBuild(checkout("{"))).toThrow(
+      /not valid JSON/,
     );
-    expect(source(".dockerignore")).toContain("!deploy/params.json");
+  });
+
+  it("fails the build on a creator that is not a string", () => {
+    expect(() =>
+      twitterCreatorAtBuild(checkout(JSON.stringify({ twitterCreator: 7 }))),
+    ).toThrow(/twitterCreator must be a string/);
+  });
+});
+
+describe("the build", () => {
+  it("compiles the params file's creator into the environment Next inlines", () => {
+    const config = require("../../../next.config.js");
+
+    expect(config.env.DEPLOYMENT_TWITTER_CREATOR).toBe(
+      twitterCreatorAtBuild(ROOT) ?? "",
+    );
+  });
+});
+
+describe("the head's creator", () => {
+  /** The metadata module as a build that compiled `creator` into `env` runs. */
+  async function headBuiltWith(creator: string) {
+    vi.stubEnv("DEPLOYMENT_TWITTER_CREATOR", creator);
+    vi.resetModules();
+
+    return import("../pageMetadata");
+  }
+
+  it("is the handle the build compiled in", async () => {
+    const { pageMetadata: built } = await headBuiltWith("@made-up-name");
+
+    expect(creatorOf(built(ORIGIN))).toBe("@made-up-name");
+    expect(creatorOf(built(ORIGIN, { v: "1" }))).toBe("@made-up-name");
+  });
+
+  it("is absent when the build compiled in no handle", async () => {
+    const { pageMetadata: built } = await headBuiltWith("");
+
+    expect(built(ORIGIN).twitter).not.toHaveProperty("creator");
+  });
+
+  it("carries a params file's handle from the file to the tag", () => {
+    const root = checkout(JSON.stringify({ twitterCreator: "@made-up-name" }));
+
+    const metadata = pageMetadata(ORIGIN, {}, {
+      twitterCreator: twitterCreatorAtBuild(root),
+    });
+
+    expect(creatorOf(metadata)).toBe("@made-up-name");
+  });
+
+  it("emits no tag for a params file that names none", () => {
+    const root = checkout(JSON.stringify({ twitterCreator: "" }));
+
+    const metadata = pageMetadata(ORIGIN, {}, {
+      twitterCreator: twitterCreatorAtBuild(root),
+    });
+
+    expect(metadata.twitter).not.toHaveProperty("creator");
   });
 });
