@@ -25,6 +25,7 @@ import {
   parseNewtonPolynomial,
 } from "./newton";
 import { celticKind } from "./celtic";
+import { cosineKind } from "./cosine";
 import {
   PHOENIX_CONSTANTS,
   createPhoenixKind,
@@ -69,6 +70,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "phoenix", label: "Phoenix" },
   { id: "nova", label: "Nova" },
   { id: "sine", label: "Sine" },
+  { id: "cosine", label: "Cosine" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -263,6 +265,7 @@ export function resolveFractalKind(
   if (typeId === "celtic") return celticKind;
   if (typeId === "nova") return novaKind;
   if (typeId === "sine") return sineKind;
+  if (typeId === "cosine") return cosineKind;
   if (typeId === "magnet") {
     return createMagnetKind(parseMagnetType(variant) ?? MAGNET_TYPES[0]);
   }
@@ -392,6 +395,21 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // 0.26, and both buds above and below the central disc, and 47.8% of its
   // pixels are in the set (measured on 400 by 300 at the cap of 400).
   if (typeId === "sine") return { centerX: 0, centerY: 0, zoom: 1 };
+
+  // The Cosine set is the c whose orbit under z -> c cos z, started at the
+  // critical point 0, is not thrown out. It is two large discs that meet at
+  // the origin, where the set stands 0.662 tall either side (the invariant
+  // radius of the interior argument in cosine.ts), with smaller discs strung
+  // along the real axis: measured on a 0.001 grid at a cap of 200 along
+  // y = 0.02, the in-set runs are x 0..1.828 (the two discs), 1.831..1.940,
+  // 2.304..2.338 and then thinner bulbs further out, and the set's thickest
+  // point is |y| 1.39. Every point of the real axis is in it (an orbit that
+  // starts real stays real), which draws a thin black line the whole width,
+  // and the set is symmetric about both axes, so the origin centres it. Zoom 1
+  // (x -2..2, y -1.5..1.5) holds both discs whole and the first small disc to
+  // 1.94, the second lying just outside, and 42.6% of its pixels are in the
+  // set (measured on 400 by 300 at Auto's cap of 100 for this zoom).
+  if (typeId === "cosine") return { centerX: 0, centerY: 0, zoom: 1 };
 
   // A Phoenix set is a Julia set of the two-term step, so like Julia's it is
   // framed on the origin and every constant draws about it. Measured with a

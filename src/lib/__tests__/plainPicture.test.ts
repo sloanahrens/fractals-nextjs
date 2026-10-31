@@ -89,6 +89,11 @@ const GOLDEN: Record<string, string> = {
   // view had been drawn and looked at (a central disc, a chain of beads and the
   // filigree between), and it pins that picture from then on.
   sine: "c789dd4b",
+  // The Cosine set, likewise not from 2866a45: its value is from the tree that
+  // registered it (fr-tce2), once the opening view had been drawn and looked at
+  // (two large discs meeting at the origin, smaller discs along the axis), and
+  // it pins that picture from then on.
+  cosine: "3be46901",
 };
 
 describe("the plain (iteration-count) picture", () => {

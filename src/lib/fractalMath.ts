@@ -833,6 +833,37 @@ const SINE: FractalMath = {
     "A point escapes when the imaginary part of z passes 20: the sine of such a number is about a hundred million times bigger again, so it never comes back. The colour is the step on which that happens, smoothed between steps; a point that never escapes within the iteration cap is painted black. A point on the real axis never leaves it, which is why a thin black line runs the whole width of the picture.",
 };
 
+/** z₀ = 0, c = the pixel's point: the critical point of c cos z, so the first step lands on c. */
+const COSINE: FractalMath = {
+  title: "Cosine set",
+  rule: row(
+    z,
+    ARROW,
+    c,
+    operator(INVISIBLE_TIMES),
+    identifier("cos", "the cosine of"),
+    OPEN,
+    z,
+    CLOSE,
+  ),
+  start: START_AT_ZERO,
+  setting: null,
+  blurb: [
+    {
+      text: "The same game as the Mandelbrot set, but each step takes the cosine of the number instead of squaring it, and then multiplies by c.",
+    },
+    {
+      text: "The cosine of a number that has strayed far from the real line is enormous, so a point either settles or is thrown out almost at once: the set is two large discs that touch at the origin, with smaller discs strung along the real axis, and the filigree is where they meet.",
+    },
+    {
+      text: "Points that stay put are the black discs; the rest are coloured by how many steps it takes to throw them out.",
+      colouring: true,
+    },
+  ],
+  escape:
+    "A point escapes when the imaginary part of z passes 20: the cosine of such a number is about a hundred million times bigger again, so it never comes back. The colour is the step on which that happens, smoothed between steps; a point that never escapes within the iteration cap is painted black. A point on the real axis never leaves it, which is why a thin black line runs the whole width of the picture.",
+};
+
 function julia(variant: string): FractalMath {
   // The renderer falls back to the first named constant for a name it cannot
   // read, so the card says the constant that is actually drawn.
@@ -911,6 +942,7 @@ export const FRACTAL_MATH: Readonly<
   phoenix,
   nova: () => NOVA,
   sine: () => SINE,
+  cosine: () => COSINE,
 };
 
 /**

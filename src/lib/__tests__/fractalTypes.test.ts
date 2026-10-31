@@ -20,6 +20,7 @@ import { createMultibrotKind } from "../multibrot";
 import { createNewtonKind, newtonKind } from "../newton";
 import { novaKind } from "../nova";
 import { sineKind } from "../sine";
+import { cosineKind } from "../cosine";
 import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
@@ -41,7 +42,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the twelve fractals in order, each once", () => {
+  it("offers the thirteen fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -57,6 +58,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "phoenix", label: "Phoenix" },
       { id: "nova", label: "Nova" },
       { id: "sine", label: "Sine" },
+      { id: "cosine", label: "Cosine" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -116,6 +118,12 @@ describe("resolveFractalKind", () => {
     expect(resolveFractalKind("sine", "Dendrite")).toBe(sineKind);
     expect(resolveFractalKind("sine", "4")).toBe(sineKind);
     expect(resolveFractalKind("sine", "")).toBe(sineKind);
+  });
+
+  it("draws the Cosine set for its own id, whatever variant is beside it", () => {
+    expect(resolveFractalKind("cosine", "Dendrite")).toBe(cosineKind);
+    expect(resolveFractalKind("cosine", "4")).toBe(cosineKind);
+    expect(resolveFractalKind("cosine", "")).toBe(cosineKind);
   });
 
   it("draws the Nova fractal for its own id, whatever variant is beside it", () => {
@@ -426,6 +434,19 @@ describe("defaultViewFor", () => {
     expect(defaultViewFor("sine")).toEqual({ centerX: 0, centerY: 0, zoom: 1 });
   });
 
+  it("frames the Cosine set on the origin at zoom 1, where the two discs meet", () => {
+    // Measured on a 0.001 grid at a cap of 200 along y = 0.02: the in-set runs
+    // are x 0..1.828 (the two large discs), 1.831..1.940 and 2.304..2.338. The
+    // set is symmetric about both axes and the whole real axis is in it, so
+    // the origin centres it, and zoom 1 (x -2..2, y -1.5..1.5) holds both discs
+    // and the first small one.
+    expect(defaultViewFor("cosine")).toEqual({
+      centerX: 0,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("falls back to the Mandelbrot view for an unknown id", () => {
     expect(defaultViewFor("lyapunov")).toEqual({
       centerX: -0.75,
@@ -494,6 +515,7 @@ describe("fractalVariants", () => {
     expect(fractalVariants("celtic")).toBeNull();
     expect(fractalVariants("nova")).toBeNull();
     expect(fractalVariants("sine")).toBeNull();
+    expect(fractalVariants("cosine")).toBeNull();
     expect(fractalVariants("lyapunov")).toBeNull();
   });
 
@@ -515,6 +537,7 @@ describe("defaultVariant", () => {
     expect(defaultVariant("celtic")).toBe("");
     expect(defaultVariant("nova")).toBe("");
     expect(defaultVariant("sine")).toBe("");
+    expect(defaultVariant("cosine")).toBe("");
     expect(defaultVariant("perpendicular-ship")).toBe("");
     expect(defaultVariant("lyapunov")).toBe("");
   });
@@ -628,6 +651,7 @@ describe("isVariantValue", () => {
     expect(isVariantValue("nova", "Classic")).toBe(false);
     expect(isVariantValue("nova", "3")).toBe(false);
     expect(isVariantValue("sine", "Classic")).toBe(false);
+    expect(isVariantValue("cosine", "Classic")).toBe(false);
     expect(isVariantValue("perpendicular-ship", "4")).toBe(false);
   });
 });
