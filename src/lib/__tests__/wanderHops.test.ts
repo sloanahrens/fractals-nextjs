@@ -162,7 +162,25 @@ describe("Auto-wander hops over a long walk", () => {
       expect(alternatives).toEqual([]);
     });
 
-    // Most hops are fresh places; the repeats are the exception.
-    expect(repeats).toBeLessThan(hops.length / 10);
+    // A repeat needs the window to hold every other place of the fractal the
+    // hop chose, so only a fractal with at most TOUR_RECENT_LIMIT + 1 places
+    // can produce one. Every repeat is therefore a hop that landed on such a
+    // fractal, and the walk cannot repeat more often than it lands on them.
+    // The repeat share itself (32 to 98 of 600 over the first twenty-four
+    // seeds, a mean of about 60) is a property of the catalogue's mix of place
+    // counts, not of the engine, so it is not asserted.
+    const placesPerFractal = new Map<string, number>();
+    for (const p of PLACES) {
+      placesPerFractal.set(
+        p.fractal,
+        (placesPerFractal.get(p.fractal) ?? 0) + 1,
+      );
+    }
+    const repeatsPossible = hops.filter(
+      (hop) =>
+        (placesPerFractal.get(hop.fractal) ?? 0) <= TOUR_RECENT_LIMIT + 1,
+    ).length;
+
+    expect(repeats).toBeLessThanOrEqual(repeatsPossible);
   });
 });

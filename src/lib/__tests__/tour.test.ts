@@ -72,6 +72,99 @@ function walk(
 
 const switched = (hop: Hop) => hop.place.fractal !== hop.before.view.fractal;
 
+/** The fractals of a catalogue and how many of its places each holds. */
+function placeCounts(places: readonly Place[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const p of places) {
+    counts.set(p.fractal, (counts.get(p.fractal) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+/**
+ * The share of a long tour each fractal earns, from its place count.
+ *
+ * A hop switches fractal about once in `1 / TOUR_FRACTAL_SWITCH_ODDS`, choosing
+ * the place uniformly among the places of every other fractal, so a switch out
+ * of fractal i lands on fractal j with chance n_j / (N - n_i). The walk between
+ * fractals is then in detailed balance with a share of hops on a fractal of n
+ * places, out of N in all, of n(N - n) / SUM, over the fractals, of g(N - g):
+ * n_i(N - n_i) n_j / (N - n_i) is n_i n_j either way round, and every visit to
+ * a fractal has the same mean length because the switch roll does not depend on
+ * the fractal. The recent window moves a pick from a place visited lately to
+ * another place of the same fractal, so it leaves this share alone; what it
+ * does bend is that neighbouring hops are not independent.
+ */
+function modelledShares(places: readonly Place[]): Map<string, number> {
+  const counts = placeCounts(places);
+  const weights = new Map(
+    [...counts].map(
+      ([fractal, n]) => [fractal, n * (places.length - n)] as const,
+    ),
+  );
+  const total = [...weights.values()].reduce((sum, weight) => sum + weight, 0);
+
+  return new Map(
+    [...weights].map(([fractal, weight]) => [fractal, weight / total]),
+  );
+}
+
+/** A catalogue with the run length its place counts ask for. */
+interface TourModel {
+  readonly places: readonly Place[];
+  /** Each fractal's modelled share of the hops, by id. */
+  readonly shares: ReadonlyMap<string, number>;
+  /** How long a walk has to be for the share bounds to mean anything. */
+  readonly hops: number;
+}
+
+/**
+ * A catalogue and the walk the share and reach tests measure over.
+ *
+ * The run is long enough that the rarest fractal is expected on 30 stays,
+ * where a stay is a switch plus the first hop: a run of H hops holds about
+ * H * TOUR_FRACTAL_SWITCH_ODDS switches, so H = ceil(30 / p_min /
+ * TOUR_FRACTAL_SWITCH_ODDS), with p_min the smallest {@link modelledShares}
+ * share. Adding a fractal with few places lowers p_min and so lengthens the
+ * run by itself.
+ */
+function tourModel(places: readonly Place[]): TourModel {
+  const shares = modelledShares(places);
+  const rarest = Math.min(...shares.values());
+
+  return {
+    places,
+    shares,
+    hops: Math.ceil(30 / rarest / TOUR_FRACTAL_SWITCH_ODDS),
+  };
+}
+
+/** One fixed seed, so the committed walk replays; not a seed picked for luck. */
+const TOUR_SEED = 8;
+
+const walks = new WeakMap<TourModel, Hop[]>();
+
+/** The model's one walk, computed on first use and shared after. */
+function modelWalk(model: TourModel): Hop[] {
+  let hops = walks.get(model);
+  if (hops === undefined) {
+    hops = walk(model.places, model.hops, seeded(TOUR_SEED));
+    walks.set(model, hops);
+  }
+
+  return hops;
+}
+
+/** A catalogue of fifteen fractals, the last of them with only two places. */
+const SYNTHETIC_PLACES: Place[] = [
+  19, 15, 12, 10, 10, 9, 6, 6, 6, 6, 6, 5, 4, 3, 2,
+].flatMap((count, fractal) =>
+  Array.from({ length: count }, (_, index) =>
+    place(`f${fractal}-p${index}`, `fractal-${fractal}`, fractal * 10 + index),
+  ),
+);
+
 describe("tour constants", () => {
   it("are the owner-approved timings and odds", () => {
     expect(TOUR_DWELL_MS).toBe(8000);
@@ -166,35 +259,6 @@ describe("nextTourStop", () => {
     }
   });
 
-  it("reaches every fractal in the catalogue", () => {
-    const fractals = new Set(PLACES.map((p) => p.fractal));
-    const seen = new Set(
-      walk(PLACES, 400, seeded(5)).map((h) => h.place.fractal),
-    );
-
-    expect(fractals.size).toBe(12);
-    expect(seen).toEqual(fractals);
-  });
-
-  it("gives each fractal a plausible share of a 400-hop run", () => {
-    const share = new Map<string, number>();
-    for (const hop of walk(PLACES, 400, seeded(8))) {
-      share.set(hop.place.fractal, (share.get(hop.place.fractal) ?? 0) + 1);
-    }
-
-    // Eight fractals share the 400 hops, about 50 each. A walk stays on a
-    // fractal for a few hops at a time, so one seed's share is streaky, and a
-    // short run can leave one fractal with almost nothing (over 200 hops,
-    // twelve seeds ranged from 0 to 62); 400 hops is long enough that twelve
-    // seeds ranged from 8 to 124, so the floor only rules out a fractal the
-    // walk has all but forgotten.
-    for (const fractal of new Set(PLACES.map((p) => p.fractal))) {
-      const visits = share.get(fractal) ?? 0;
-      expect(visits).toBeGreaterThanOrEqual(10);
-      expect(visits).toBeLessThanOrEqual(120);
-    }
-  });
-
   it("changes colour scheme as places change, by the shared rule", () => {
     const schemes = new Set(
       walk(PLACES, 100, seeded(6)).map((hop) =>
@@ -214,6 +278,67 @@ describe("nextTourStop", () => {
     }
   });
 });
+
+// The same assertions over the real catalogue and over one built to be unlike
+// it (fifteen fractals, place counts from nineteen down to two), so a
+// thirteenth fractal with any number of places cannot turn them red.
+const CATALOGUES: readonly { name: string; places: readonly Place[] }[] = [
+  { name: "the real catalogue", places: PLACES },
+  {
+    name: "a synthetic catalogue of fifteen fractals",
+    places: SYNTHETIC_PLACES,
+  },
+];
+
+for (const { name, places } of CATALOGUES) {
+  describe(`a place-weighted tour over ${name}`, () => {
+    const model = tourModel(places);
+
+    it("reaches every fractal in the catalogue", () => {
+      const seen = new Set(modelWalk(model).map((hop) => hop.place.fractal));
+
+      expect(seen).toEqual(new Set(placeCounts(places).keys()));
+    });
+
+    it("gives each fractal the share its place count earns", () => {
+      const hops = modelWalk(model);
+      const stays = hops.filter(switched).length + 1;
+
+      const visits = new Map<string, number>();
+      for (const hop of hops) {
+        visits.set(hop.place.fractal, (visits.get(hop.place.fractal) ?? 0) + 1);
+      }
+
+      // One stay draws a fractal with the modelled share, so a share measured
+      // over S stays varies by about sqrt(p (1 - p) / S). A walk is streaky —
+      // it bobs about one fractal rather than drawing every stay afresh — and
+      // measured spreads over seeds ran about 1.15 times that figure, so the
+      // bound here is four of those; the floor never asks for less than one
+      // visit, and the ceiling never more than the run.
+      const misses: {
+        fractal: string;
+        seen: number;
+        floor: number;
+        ceiling: number;
+      }[] = [];
+
+      for (const [fractal, share] of model.shares) {
+        const expected = share * hops.length;
+        const tolerance =
+          4 * 1.15 * Math.sqrt((share * (1 - share)) / stays) * hops.length;
+        const seen = visits.get(fractal) ?? 0;
+        const floor = Math.max(1, expected - tolerance);
+        const ceiling = Math.min(hops.length, expected + tolerance);
+
+        if (seen < floor || seen > ceiling) {
+          misses.push({ fractal, seen, floor, ceiling });
+        }
+      }
+
+      expect(misses).toEqual([]);
+    });
+  });
+}
 
 describe("nextTourStop on a degenerate catalogue", () => {
   const view: PlaceView = {
