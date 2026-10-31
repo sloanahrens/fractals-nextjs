@@ -45,6 +45,90 @@ export const SINE_INTERIOR_RADIUS = Math.asinh(1);
 const SINE_INTERIOR_RADIUS_SQUARED =
   SINE_INTERIOR_RADIUS * SINE_INTERIOR_RADIUS;
 
+/**
+ * How near a point must come to one saved a few steps back for the walk to try
+ * a cycle proof (see {@link cycleIsTrapped}). The saving doubles its reach at
+ * every save, as in `sineTrap`, so the points it offers back are 1, 2, 4, ...
+ * steps old and any step from 1 up to the reach.
+ *
+ * This only decides whether the proof is attempted. A return this close is
+ * not itself read as a cycle: the walk ends early only when the proof holds,
+ * so the distance cannot change a count, whichever way it is set -- a loose
+ * one spends the attempts on returns that prove nothing and a tight one never
+ * spends them, and both only cost time. It is loose enough that a settling
+ * orbit reaches the proof early and tight enough that a chaotic one rarely
+ * reaches it at all. A millionth is a three-thousandth of a pixel at the
+ * opening view.
+ */
+const SINE_RETURN_TOLERANCE = 1e-6;
+
+/**
+ * The longest span, in steps, a certified cycle may close over.
+ *
+ * The proof re-walks the span, so it costs a step per step of the span on the
+ * walk that ends; a span of the whole cap would cost more than it saves.
+ */
+const SINE_CYCLE_MAX_STEPS = 32;
+
+/**
+ * How many times one walk may try the proof.
+ *
+ * A near-return that does not prove anything costs the span's steps and leaves
+ * the walk running, so a path that keeps grazing an earlier point could pay
+ * for the proof again and again. Three attempts bound that cost to a small
+ * multiple of the span; a pixel whose first returns do not prove anything is
+ * left to the plain walk.
+ */
+const SINE_CYCLE_ATTEMPTS = 3;
+
+/**
+ * The balls around 0 that hold an orbit for good, each paired with the largest
+ * |c| squared it covers. The first pair the point's |c| fits is the one used.
+ *
+ * If an orbit ever reaches a point of modulus at most R, every later point has
+ * modulus at most |c| sinh R, because |sin z| <= sinh |z|; so with
+ * |c| sinh R <= R the whole orbit stays in the ball of radius R, whose height
+ * |Im z| is at most R -- under 1, far below the escape height -- and the point
+ * is in the set, whatever the cap. That is the same inequality the disc of
+ * radius asinh(1) rests on, applied to the orbit once it has come in rather
+ * than to the first step alone, which is what carries it past |c| = asinh(1)
+ * and up to |c| = 1.
+ *
+ * Each radius is the round R whose bound, R / sinh R, is rounded DOWN for
+ * comfort: 0.5 / sinh 0.5 = 0.9595 -> 0.95, so 0.9025; 0.25 / sinh 0.25 =
+ * 0.9896 -> 0.989, so 0.978121; 0.1 / sinh 0.1 = 0.99833 -> 0.998, so
+ * 0.996004; 0.05 / sinh 0.05 = 0.99958 -> 0.9995, so 0.99900025; 0.01 / sinh
+ * 0.01 = 0.9999833 -> 0.99998, so 0.99996. A wider ball catches the orbit
+ * sooner, so the pairs run widest first.
+ *
+ * There is no row for |c| under asinh(1): the disc of that radius answers
+ * those points before the walk begins, so a row there would never be read.
+ *
+ * `sine.test.ts` holds every row to |c| sinh R <= R, which is the whole of the
+ * argument: a row that let |c| through would end walks that could still leave.
+ */
+export const SINE_TRAP_RADII: readonly (readonly [number, number])[] = [
+  [0.9025, 0.25],
+  [0.978121, 0.0625],
+  [0.996004, 0.01],
+  [0.99900025, 0.0025],
+  [0.99996, 0.0001],
+];
+
+/**
+ * The squared radius of the ball that holds this c's orbit once it arrives, or
+ * 0 when no ball does (|c| at least 1, where 0 is no longer attracting).
+ * @param cSquared - |c| squared
+ * @returns The ball's squared radius, or 0 for none
+ */
+function trapRadiusSquared(cSquared: number): number {
+  for (const [cMaxSquared, radiusSquared] of SINE_TRAP_RADII) {
+    if (cSquared <= cMaxSquared) return radiusSquared;
+  }
+
+  return 0;
+}
+
 /** cosh of the escape height: the most |sin z| can be across when |Im z| is at the height. */
 const COSH_ESCAPE_HEIGHT = Math.cosh(SINE_ESCAPE_HEIGHT);
 
@@ -82,6 +166,94 @@ function smoothCount(
 }
 
 /**
+ * Prove that a walk can never leave, from a return it has just made.
+ *
+ * The walk has gone `steps` steps from `from` to a point `now` that is within
+ * the return tolerance of `from` (the caller has checked that). This asks
+ * whether the whole orbit from `from` is held for good by the closed ball of
+ * some radius about `from`, and answers yes only when a bound proves it.
+ *
+ * The bound. Let g = f^steps, with f(z) = c sin z. The ball B(from, r) is sent
+ * by f into a ball of radius L r about f(from), where L is the most |f'| is
+ * anywhere on B(from, r); and |f'| = |c cos z|, whose growth off the point z is
+ * |c| |sin| r, with |sin| <= cosh |Im z|. So a ball of radius q_j about the
+ * j-th point grows to radius q_{j+1} <= |c| (|cos z_j| + q_j cosh(|Im z_j| +
+ * q_j)) q_j at the next step, and after `steps` steps the ball about `from`
+ * has become a ball of radius q about `now`. If q + |now - from| <= r, every
+ * point of B(from, r) is carried into B(from, r) by g, so an orbit that is in
+ * that ball once is in it forever, every `steps` steps.
+ *
+ * No contraction is needed for that: a map that sends a closed ball into
+ * itself keeps every orbit that it holds in it. The radius r is the least one
+ * with r >= q(r) + |now - from|, found by starting at twice the gap and
+ * stepping up; `q` grows with r, so the walk up may fail to settle, and then
+ * this answers no.
+ *
+ * Two cheap tests close the argument. The ball holds the points the walk has
+ * not reached yet, but it must also leave them under the escape height: the
+ * tallest point of any of the balls is compared with `SINE_ESCAPE_HEIGHT`, so
+ * a ball that reached as high as the escape height is refused. And the walk
+ * that ends at the cap is the same walk the count already makes, since the
+ * proof re-walks the very steps taken, with the same arithmetic.
+ * @param cReal - Real part of c
+ * @param cImaginary - Imaginary part of c
+ * @param cMagnitude - |c|
+ * @param from - The point the walk returned to, a whole `steps` steps back
+ * @param now - Where the walk is, within the return tolerance of `from`
+ * @param steps - How many steps separate the two, at most SINE_CYCLE_MAX_STEPS
+ * @returns True only when the ball is proved to be held, so the count is the cap
+ */
+export function cycleIsTrapped(
+  cReal: number,
+  cImaginary: number,
+  cMagnitude: number,
+  fromReal: number,
+  fromImaginary: number,
+  nowReal: number,
+  nowImaginary: number,
+  steps: number,
+): boolean {
+  const gap = Math.hypot(nowReal - fromReal, nowImaginary - fromImaginary);
+
+  for (let attempt = 0, radius = 2 * gap; attempt < 2; attempt++) {
+    // Carry a ball of this radius along the very steps that were taken, the
+    // centre following the orbit and the radius growing by the bound above.
+    let image = radius;
+    let real = fromReal;
+    let imaginary = fromImaginary;
+    let tallest = Math.abs(imaginary) + radius;
+
+    for (let step = 0; step < steps; step++) {
+      const up = Math.exp(imaginary);
+      const down = 1 / up;
+      const cosh = (up + down) / 2;
+      const sinh = (up - down) / 2;
+      const cosine = Math.hypot(Math.cos(real) * cosh, Math.sin(real) * sinh);
+      const growth =
+        cMagnitude * (cosine + image * Math.cosh(Math.abs(imaginary) + image));
+      image *= growth;
+      if (!(image < 2)) return false;
+
+      const sineReal = (Math.sin(real) * (up + down)) / 2;
+      const sineImaginary = (Math.cos(real) * (up - down)) / 2;
+      real = cReal * sineReal - cImaginary * sineImaginary;
+      imaginary = cReal * sineImaginary + cImaginary * sineReal;
+
+      const height = Math.abs(imaginary) + image;
+      if (height > tallest) tallest = height;
+    }
+
+    if (image + gap <= radius) return tallest < SINE_ESCAPE_HEIGHT;
+
+    const least = (image + gap) / (1 - image / radius);
+    if (!(least > 0) || least > 2) return false;
+    radius = least;
+  }
+
+  return false;
+}
+
+/**
  * Walk one sine orbit from z = pi / 2 and count the steps it survives.
  *
  * The step is z -> c sin(z), with sin(x + iy) = sin x cosh y + i cos x sinh y,
@@ -93,6 +265,15 @@ function smoothCount(
  * with |Im z| above {@link SINE_ESCAPE_HEIGHT}; a point that ends is counted by
  * the steps it completed, as the Mandelbrot loop counts them, and a point that
  * never does returns the cap.
+ *
+ * Two proofs end a walk at the cap's count before the cap: one that the orbit
+ * has come into a ball around 0 that holds it for good (see
+ * {@link SINE_TRAP_RADII}), and one that the orbit returns to its own
+ * neighbourhood in a way that holds it there for good (see
+ * {@link cycleIsTrapped}). Neither can end a walk that would have left: each
+ * is a bound on where the orbit can go, not a reading of where it has been.
+ * They matter because the pixels in the set but outside the disc of radius
+ * asinh(1) run four fifths of the loop's steps at the opening view.
  *
  * The set is the same under c -> -c and under conjugation of c. sin is odd,
  * so the orbit of -c has the even-numbered points of the orbit of c and the
@@ -110,25 +291,42 @@ function sineIterations(
   maxIterations: number,
   smooth: boolean,
 ): number {
+  const cReal = c.real;
+  const cImaginary = c.imaginary;
+  const cSquared = cReal * cReal + cImaginary * cImaginary;
+
   // The disc of radius asinh(1) is in the set by a two-line argument, and most
   // of the cost of a view framed on the set is its in-set pixels running the cap.
-  if (
-    c.real * c.real + c.imaginary * c.imaginary <
-    SINE_INTERIOR_RADIUS_SQUARED
-  ) {
+  if (cSquared < SINE_INTERIOR_RADIUS_SQUARED) {
     return maxIterations;
   }
 
+  // Beyond the disc most of the in-set pixels still come in to 0, and once one
+  // is in this ball it can never leave: a shortcut for them, a plain walk for
+  // the rest (see SINE_TRAP_RADII). Zero when |c| is at least 1.
+  const trapSquared = trapRadiusSquared(cSquared);
+
   let real = SINE_START;
   let imaginary = 0;
+
+  // Brent's saving, as in sineTrap: keep a point saved 1, 2, 4, ... steps
+  // back, so a point that comes back within the return tolerance of it can
+  // have the cycle proof tried on it. The saving and the tolerance decide only
+  // when the proof is attempted; the proof alone decides whether the walk ends.
+  let savedReal = SINE_START;
+  let savedImaginary = 0;
+  let savedStep = -1;
+  let sinceSave = 0;
+  let saveEvery = 1;
+  let attempts = 0;
 
   for (let iterations = 0; iterations < maxIterations; iterations++) {
     const up = Math.exp(imaginary);
     const down = 1 / up;
     const sineReal = (Math.sin(real) * (up + down)) / 2;
     const sineImaginary = (Math.cos(real) * (up - down)) / 2;
-    real = c.real * sineReal - c.imaginary * sineImaginary;
-    imaginary = c.real * sineImaginary + c.imaginary * sineReal;
+    real = cReal * sineReal - cImaginary * sineImaginary;
+    imaginary = cReal * sineImaginary + cImaginary * sineReal;
 
     const height = Math.abs(imaginary);
     if (height > SINE_ESCAPE_HEIGHT) {
@@ -136,7 +334,47 @@ function sineIterations(
         return iterations;
       }
 
-      return smoothCount(iterations, height, Math.hypot(c.real, c.imaginary));
+      return smoothCount(iterations, height, Math.hypot(cReal, cImaginary));
+    }
+
+    // The escape test comes first, so a point that has just left is counted as
+    // gone before any proof can call the orbit held.
+    if (trapSquared > 0 && real * real + imaginary * imaginary <= trapSquared) {
+      return maxIterations;
+    }
+
+    if (
+      attempts < SINE_CYCLE_ATTEMPTS &&
+      Math.abs(real - savedReal) < SINE_RETURN_TOLERANCE &&
+      Math.abs(imaginary - savedImaginary) < SINE_RETURN_TOLERANCE
+    ) {
+      attempts++;
+      const steps = iterations - savedStep;
+
+      if (
+        steps > 0 &&
+        steps <= SINE_CYCLE_MAX_STEPS &&
+        cycleIsTrapped(
+          cReal,
+          cImaginary,
+          Math.hypot(cReal, cImaginary),
+          savedReal,
+          savedImaginary,
+          real,
+          imaginary,
+          steps,
+        )
+      ) {
+        return maxIterations;
+      }
+    }
+
+    if (++sinceSave === saveEvery) {
+      savedReal = real;
+      savedImaginary = imaginary;
+      savedStep = iterations;
+      saveEvery *= 2;
+      sinceSave = 0;
     }
   }
 
