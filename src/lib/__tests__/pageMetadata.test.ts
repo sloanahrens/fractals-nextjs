@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { twitterCreatorFromParams } from "../deploymentParamsFile";
 import { defaultVariant } from "../fractalTypes";
 import { ogUrl, pageMetadata } from "../pageMetadata";
 import { DESCRIPTION, TITLE } from "../siteText";
@@ -8,6 +9,7 @@ import {
   DEFAULT_VIEW_LINK_UPDATES,
   type ViewLinkUpdates,
 } from "../viewLinkState";
+import { creatorOf } from "./metadataHelpers";
 
 const ORIGIN = "https://fractals.example.com";
 const VIEW = {
@@ -52,6 +54,66 @@ describe("pageMetadata without a view", () => {
     expect(pageMetadata(ORIGIN, { v: "1" }).openGraph).not.toHaveProperty(
       "url",
     );
+  });
+});
+
+describe("the Twitter card creator", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  /** The head's configuration as the deployment's params file gives it. */
+  const config = (params: Record<string, unknown>) => ({
+    twitterCreator: twitterCreatorFromParams(params),
+  });
+
+  it("is the handle the params file gives", () => {
+    const metadata = pageMetadata(
+      ORIGIN,
+      {},
+      config({ twitterCreator: "@made-up-name" }),
+    );
+
+    expect(creatorOf(metadata)).toBe("@made-up-name");
+  });
+
+  it("is the handle on a view's preview too", () => {
+    const metadata = pageMetadata(
+      ORIGIN,
+      VIEW,
+      config({ twitterCreator: "@made-up-name" }),
+    );
+
+    expect(creatorOf(metadata)).toBe("@made-up-name");
+    expect(metadata.title).toBe(`Julia set, Dendrite, 400x - ${TITLE}`);
+  });
+
+  it("is absent, tag and all, when the params file gives none", () => {
+    for (const params of [
+      {},
+      { twitterCreator: null },
+      { twitterCreator: "" },
+      { twitterCreator: "   " },
+    ]) {
+      for (const searchParams of [{}, VIEW]) {
+        const metadata = pageMetadata(ORIGIN, searchParams, config(params));
+
+        expect(metadata.twitter).not.toHaveProperty("creator");
+      }
+    }
+  });
+
+  it("is absent from a head built without a configuration", async () => {
+    // The build's constant is read when the module loads, so the empty value
+    // is stubbed before a fresh import: the test controls the input rather
+    // than depending on the environment it happens to run in.
+    vi.stubEnv("DEPLOYMENT_TWITTER_CREATOR", "");
+    vi.resetModules();
+    const { pageMetadata: built } = await import("../pageMetadata");
+
+    expect(built(ORIGIN).twitter).not.toHaveProperty("creator");
+    expect(built(ORIGIN, VIEW).twitter).not.toHaveProperty("creator");
   });
 });
 

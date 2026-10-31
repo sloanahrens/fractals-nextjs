@@ -1,3 +1,5 @@
+const { twitterCreatorAtBuild } = require("./src/lib/deploymentParamsFile");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -11,6 +13,12 @@ const nextConfig = {
   // what lets /api/version report it from a running server.
   env: {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+    // The deployment's Twitter card creator, read from `deploy/params.json` at
+    // the same moment (`deploymentParamsFile.js`). An absent file or an empty
+    // handle compiles in an empty string, which emits no creator tag; the image
+    // itself carries no params file. The head reads the constant through
+    // `pageMetadataConfig` (`src/lib/deploymentParams.ts`).
+    DEPLOYMENT_TWITTER_CREATOR: twitterCreatorAtBuild(__dirname) ?? "",
   },
   // The pre-built link previews under public/og: one picture per
   // catalogue place, a static file Next would otherwise serve with

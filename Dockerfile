@@ -17,6 +17,9 @@ RUN npm ci && \
 
 # Copy all source code files
 # This happens after dependency installation to leverage caching
+# deploy/params.json is read in this stage, once, by next.config.js: the handle
+# it names is compiled into the server, so the file is not carried into the
+# image. A checkout without the file builds exactly as one that sets no value.
 COPY . .
 
 # Build the Next.js application

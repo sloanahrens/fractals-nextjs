@@ -27,4 +27,14 @@ export default [
     },
   },
   ...tseslint.configs.recommended,
+  {
+    name: "next-fractals/commonjs",
+    // These two run before the build, as CommonJS: `next.config.js` is loaded
+    // by Node itself, and `deploymentParamsFile.js` is what it requires, so
+    // `require()` is the only import form either can have.
+    files: ["next.config.js", "src/lib/deploymentParamsFile.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ];

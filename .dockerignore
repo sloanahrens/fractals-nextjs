@@ -3,8 +3,12 @@ devops
 infra
 
 # The deploy program and the release scripts the deploy runner executes from
-# its own checkout; neither runs inside the app's image (deploy/README.md)
-deploy
+# its own checkout; neither runs inside the app's image (deploy/README.md).
+# The one exception is the deployment's params file: next.config.js reads it at
+# build time and compiles the value the app uses into the server, so it must be
+# in the build context, but it is never copied into the image.
+deploy/*
+!deploy/params.json
 scripts
 
 # Dependencies

@@ -16,9 +16,16 @@
  * og:url is the one field here that is not in the Metadata object: Next
  * collapses a root url with no query to the bare origin, so `ogUrl` is what
  * `src/app/page.tsx` renders as a tag of its own.
+ *
+ * The social card's creator is the one value here that belongs to the
+ * deployment rather than to the app: it is the handle the deployment's params
+ * file names (`deploymentParams.ts`), fixed when the app was built. No params
+ * file, or no handle in it, means no creator tag at all — the head credits
+ * nobody rather than a stand-in.
  */
 
 import type { Metadata } from "next";
+import { pageMetadataConfig } from "./deploymentParams";
 import { CARD_HEIGHT, CARD_PATH, CARD_WIDTH } from "./ogImage";
 import { CARD_ALT, DESCRIPTION, TITLE, TWITTER_DESCRIPTION } from "./siteText";
 import { previewFor, type SearchParams } from "./viewPreview";
@@ -45,16 +52,32 @@ export function ogUrl(origin: string, searchParams: SearchParams = {}): string {
 }
 
 /**
+ * The head's deployment-specific values: what the deployment's params file
+ * gives the page, and nothing that the app itself already knows.
+ */
+export interface PageMetadataConfig {
+  /**
+   * The social card's creator, as a Twitter handle such as `@name`; null when
+   * the params file names none. The head then emits no creator tag.
+   */
+  twitterCreator?: string | null;
+}
+
+/**
  * The page's metadata for a request.
  *
  * @param origin - The origin the request was served from, no trailing slash
  * @param searchParams - The request's query; omitted for the static head
+ * @param config - The deployment's values; omitted for the ones the build
+ *   compiled in, which is what the page passes in production
  */
 export function pageMetadata(
   origin: string,
   searchParams: SearchParams = {},
+  config: PageMetadataConfig = pageMetadataConfig(),
 ): Metadata {
   const preview = previewFor(searchParams);
+  const creator = config.twitterCreator;
 
   const image = preview ? `${origin}${preview.image}` : `${origin}${CARD_PATH}`;
   const imageType = preview ? preview.imageType : "image/png";
@@ -101,7 +124,9 @@ export function pageMetadata(
       title,
       description: twitterDescription,
       images: [{ url: image, alt }],
-      creator: "@sloanahrens",
+      // No `creator` at all when the deployment names no handle: the tag is
+      // absent, not empty, so the head credits nobody.
+      ...(creator ? { creator } : {}),
     },
     robots: {
       index: true,
