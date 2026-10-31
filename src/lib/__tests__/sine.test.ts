@@ -16,6 +16,7 @@ import {
   SINE_ESCAPE_HEIGHT,
   SINE_INTERIOR_RADIUS,
   SINE_START,
+  SINE_TRAP_RADII,
   sineKind,
 } from "../sine";
 import { sweep } from "./sweep";
@@ -269,6 +270,101 @@ describe("the symmetries", () => {
         count(at(-c.real, -c.imaginary), SHORT),
         `${c.real},${c.imaginary}`,
       ).toBe(count(c, SHORT));
+    }
+  });
+});
+
+describe("the walk cut short", () => {
+  /** The loop with no shortcut at all: every step to the cap, the count as it was. */
+  function plainWalk(c: ComplexNumber, cap: number): number {
+    let real = SINE_START;
+    let imaginary = 0;
+
+    for (let iterations = 0; iterations < cap; iterations++) {
+      const up = Math.exp(imaginary);
+      const down = 1 / up;
+      const sineReal = (Math.sin(real) * (up + down)) / 2;
+      const sineImaginary = (Math.cos(real) * (up - down)) / 2;
+      real = c.real * sineReal - c.imaginary * sineImaginary;
+      imaginary = c.real * sineImaginary + c.imaginary * sineReal;
+
+      if (Math.abs(imaginary) > SINE_ESCAPE_HEIGHT) return iterations;
+    }
+
+    return cap;
+  }
+
+  it("gives the count the whole walk gives, over a grid that crosses the annulus and the band", () => {
+    // Two grids: one through the annulus between the closed-form disc and the
+    // unit disc, where the ball shortcut does its work, and one along the band
+    // around the real axis, where only the cycle check ends a walk early.
+    function* samples() {
+      for (const cap of [50, 100, 400, 1000]) {
+        for (const c of [
+          ...grid(-1, 1, -1, 1, 48),
+          ...grid(-2, 2, -0.4, 0.4, 40),
+        ]) {
+          yield { at: { c, cap }, value: count(c, cap) - plainWalk(c, cap) };
+        }
+      }
+    }
+
+    const { offenders, checked } = sweep(
+      samples(),
+      (difference) => difference === 0,
+    );
+
+    // A grid that touched no shortcut would prove nothing.
+    expect(checked).toBeGreaterThan(16000);
+    expect(offenders).toEqual([]);
+  });
+
+  it("is exercised by that grid: it holds points in both shortcut regions", () => {
+    const annulus = grid(-1, 1, -1, 1, 48).filter((c) => {
+      const squared = c.real * c.real + c.imaginary * c.imaginary;
+
+      return (
+        squared >= SINE_INTERIOR_RADIUS * SINE_INTERIOR_RADIUS &&
+        squared < 1 &&
+        count(c, 200) === 200
+      );
+    });
+    const band = grid(-2, 2, -0.4, 0.4, 40).filter(
+      (c) =>
+        c.real * c.real + c.imaginary * c.imaginary >= 1 &&
+        count(c, 200) === 200,
+    );
+
+    expect(annulus.length).toBeGreaterThan(20);
+    expect(band.length).toBeGreaterThan(20);
+  });
+});
+
+describe("the balls that hold an orbit", () => {
+  it("keeps |c| sinh R at or under R in every row, which is what traps the orbit", () => {
+    expect(SINE_TRAP_RADII.length).toBeGreaterThan(0);
+
+    for (const [cMaxSquared, radiusSquared] of SINE_TRAP_RADII) {
+      const cMax = Math.sqrt(cMaxSquared);
+      const radius = Math.sqrt(radiusSquared);
+
+      expect(
+        cMax * Math.sinh(radius),
+        `|c| up to ${cMax}, R ${radius}`,
+      ).toBeLessThanOrEqual(radius);
+      // A ball taller than the escape height would not be a proof of staying.
+      expect(radius).toBeLessThan(SINE_ESCAPE_HEIGHT);
+    }
+  });
+
+  it("runs from the widest ball to the narrowest, each for a smaller |c|", () => {
+    for (let index = 1; index < SINE_TRAP_RADII.length; index++) {
+      expect(SINE_TRAP_RADII[index][1]).toBeLessThan(
+        SINE_TRAP_RADII[index - 1][1],
+      );
+      expect(SINE_TRAP_RADII[index][0]).toBeGreaterThan(
+        SINE_TRAP_RADII[index - 1][0],
+      );
     }
   });
 });

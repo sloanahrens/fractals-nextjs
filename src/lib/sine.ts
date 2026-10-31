@@ -45,6 +45,68 @@ export const SINE_INTERIOR_RADIUS = Math.asinh(1);
 const SINE_INTERIOR_RADIUS_SQUARED =
   SINE_INTERIOR_RADIUS * SINE_INTERIOR_RADIUS;
 
+/**
+ * How near a point must come to one the orbit visited a power-of-two number of
+ * steps ago for the walk to count the orbit as closed on a cycle and end there.
+ *
+ * That is a reading of the orbit, not a theorem: a point that comes back this
+ * close to an earlier one follows the same path again to within that distance,
+ * and the count is the cap either way -- unless the two paths part far enough
+ * for the later one to leave where the earlier did not, which is the one way
+ * this can change a count. Measured on the shipped kind it does not: over ten
+ * views at caps from 50 to 1000 (3.4 million pixels) and 2.2 million random
+ * points the cut walk and the full walk gave the same count everywhere, and
+ * `sine.test.ts` holds the two equal over a grid at four caps. The value is a
+ * millionth of the opening view's width, a three-thousandth of a pixel there.
+ */
+const SINE_CYCLE_TOLERANCE = 1e-6;
+
+/**
+ * The balls around 0 that hold an orbit for good, each paired with the largest
+ * |c| squared it covers. The first pair the point's |c| fits is the one used.
+ *
+ * If an orbit ever reaches a point of modulus at most R, every later point has
+ * modulus at most |c| sinh R, because |sin z| <= sinh |z|; so with
+ * |c| sinh R <= R the whole orbit stays in the ball of radius R, whose height
+ * |Im z| is at most R -- under 1, far below the escape height -- and the point
+ * is in the set, whatever the cap. That is the same inequality the disc of
+ * radius asinh(1) rests on, applied to the orbit once it has come in rather
+ * than to the first step alone, which is what carries it past |c| = asinh(1)
+ * and up to |c| = 1.
+ *
+ * Each radius is the round R whose bound, R / sinh R, is rounded DOWN for
+ * comfort: 1 / sinh 1 = 0.8509 -> 0.85, so 0.85² = 0.7225; 0.5 / sinh 0.5 =
+ * 0.9595 -> 0.95, so 0.9025; 0.25 / sinh 0.25 = 0.9896 -> 0.989, so 0.978121;
+ * 0.1 / sinh 0.1 = 0.99833 -> 0.998, so 0.996004; 0.05 / sinh 0.05 = 0.99958 ->
+ * 0.9995, so 0.99900025; 0.01 / sinh 0.01 = 0.9999833 -> 0.99998, so 0.99996.
+ * A wider ball catches the orbit sooner, so the pairs run widest first.
+ *
+ * `sine.test.ts` holds every row to |c| sinh R <= R, which is the whole of the
+ * argument: a row that let |c| through would end walks that could still leave.
+ */
+export const SINE_TRAP_RADII: readonly (readonly [number, number])[] = [
+  [0.7225, 1],
+  [0.9025, 0.25],
+  [0.978121, 0.0625],
+  [0.996004, 0.01],
+  [0.99900025, 0.0025],
+  [0.99996, 0.0001],
+];
+
+/**
+ * The squared radius of the ball that holds this c's orbit once it arrives, or
+ * 0 when no ball does (|c| at least 1, where 0 is no longer attracting).
+ * @param cSquared - |c| squared
+ * @returns The ball's squared radius, or 0 for none
+ */
+function trapRadiusSquared(cSquared: number): number {
+  for (const [cMaxSquared, radiusSquared] of SINE_TRAP_RADII) {
+    if (cSquared <= cMaxSquared) return radiusSquared;
+  }
+
+  return 0;
+}
+
 /** cosh of the escape height: the most |sin z| can be across when |Im z| is at the height. */
 const COSH_ESCAPE_HEIGHT = Math.cosh(SINE_ESCAPE_HEIGHT);
 
@@ -94,6 +156,13 @@ function smoothCount(
  * the steps it completed, as the Mandelbrot loop counts them, and a point that
  * never does returns the cap.
  *
+ * Two readings of the orbit end a walk at the cap's count before the cap: one
+ * that has come into a ball around 0 that holds it for good (see
+ * {@link SINE_TRAP_RADII}, a proof), and one that has closed on a cycle (see
+ * {@link SINE_CYCLE_TOLERANCE}, a reading). They are where the time goes at the
+ * opening view, where the pixels in the set but outside the disc of radius
+ * asinh(1) run four fifths of the loop's steps.
+ *
  * The set is the same under c -> -c and under conjugation of c. sin is odd,
  * so the orbit of -c has the even-numbered points of the orbit of c and the
  * negatives of the odd-numbered ones; the heights |Im z| are the same, so the
@@ -110,25 +179,39 @@ function sineIterations(
   maxIterations: number,
   smooth: boolean,
 ): number {
+  const cReal = c.real;
+  const cImaginary = c.imaginary;
+  const cSquared = cReal * cReal + cImaginary * cImaginary;
+
   // The disc of radius asinh(1) is in the set by a two-line argument, and most
   // of the cost of a view framed on the set is its in-set pixels running the cap.
-  if (
-    c.real * c.real + c.imaginary * c.imaginary <
-    SINE_INTERIOR_RADIUS_SQUARED
-  ) {
+  if (cSquared < SINE_INTERIOR_RADIUS_SQUARED) {
     return maxIterations;
   }
 
+  // Beyond the disc most of the in-set pixels still come in to 0, and once one
+  // is in this ball it can never leave: a shortcut for them, a plain walk for
+  // the rest (see SINE_TRAP_RADII). Zero when |c| is at least 1.
+  const trapSquared = trapRadiusSquared(cSquared);
+
   let real = SINE_START;
   let imaginary = 0;
+
+  // Brent's cycle check, as in sineTrap: keep a point saved 1, 2, 4, ... steps
+  // back, so a point that comes within the tolerance of it is read as having
+  // closed on a cycle, and the walk ends at the cap.
+  let savedReal = SINE_START;
+  let savedImaginary = 0;
+  let sinceSave = 0;
+  let saveEvery = 1;
 
   for (let iterations = 0; iterations < maxIterations; iterations++) {
     const up = Math.exp(imaginary);
     const down = 1 / up;
     const sineReal = (Math.sin(real) * (up + down)) / 2;
     const sineImaginary = (Math.cos(real) * (up - down)) / 2;
-    real = c.real * sineReal - c.imaginary * sineImaginary;
-    imaginary = c.real * sineImaginary + c.imaginary * sineReal;
+    real = cReal * sineReal - cImaginary * sineImaginary;
+    imaginary = cReal * sineImaginary + cImaginary * sineReal;
 
     const height = Math.abs(imaginary);
     if (height > SINE_ESCAPE_HEIGHT) {
@@ -136,7 +219,27 @@ function sineIterations(
         return iterations;
       }
 
-      return smoothCount(iterations, height, Math.hypot(c.real, c.imaginary));
+      return smoothCount(iterations, height, Math.hypot(cReal, cImaginary));
+    }
+
+    // The escape test comes first, so a point that has just left is counted as
+    // gone before either shortcut can call a near-return a cycle.
+    if (trapSquared > 0 && real * real + imaginary * imaginary <= trapSquared) {
+      return maxIterations;
+    }
+
+    if (
+      Math.abs(real - savedReal) < SINE_CYCLE_TOLERANCE &&
+      Math.abs(imaginary - savedImaginary) < SINE_CYCLE_TOLERANCE
+    ) {
+      return maxIterations;
+    }
+
+    if (++sinceSave === saveEvery) {
+      savedReal = real;
+      savedImaginary = imaginary;
+      saveEvery *= 2;
+      sinceSave = 0;
     }
   }
 
