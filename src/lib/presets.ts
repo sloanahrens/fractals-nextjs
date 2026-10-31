@@ -656,6 +656,47 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasHeight: 600,
     fractal: "nova",
   },
+  {
+    id: "sin-z-squared-overview",
+    name: "Sine of z squared set",
+    description:
+      "The whole Sine of z squared set: the diamond and the satellites on its axes",
+    // Centre (0, 0) at zoom 1.2: 10/3 by 5/2. The opening view of zoom 1 (4 by
+    // 3) carries only eighteen different iteration counts, and the per-fractal
+    // guard in `presets.test.ts` refuses a frame with fewer than twenty, so the
+    // view is tightened until the diamond fills it and the boundary round the
+    // rim has counts to colour.
+    bounds: {
+      minReal: -5 / 3,
+      maxReal: 5 / 3,
+      minImaginary: -5 / 4,
+      maxImaginary: 5 / 4,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "sin-z-squared",
+  },
+  {
+    id: "sin-z-squared-edge",
+    name: "Sine of z squared edge",
+    description:
+      "The diamond's top point, with satellites strung along the edge",
+    // Centre (0, 1.4) at zoom 6: 2/3 by 1/2, the view the catalogue place
+    // `sin-z-squared-top` names.
+    bounds: {
+      minReal: -1 / 3,
+      maxReal: 1 / 3,
+      minImaginary: 1.15,
+      maxImaginary: 1.65,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "sin-z-squared",
+  },
 ];
 
 /**
