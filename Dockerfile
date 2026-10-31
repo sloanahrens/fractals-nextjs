@@ -19,6 +19,12 @@ RUN npm ci && \
 # This happens after dependency installation to leverage caching
 COPY . .
 
+# deploy/params.json is generated for a deployment and is not committed, so a
+# plain build has none; an empty object keeps the copy below working and reads
+# exactly like a params file that sets no value. The file is not read at build
+# time, only by the server at runtime (src/lib/deploymentParams.ts).
+RUN test -f deploy/params.json || printf '{}\n' > deploy/params.json
+
 # Build the Next.js application
 # NEXT_TELEMETRY_DISABLED: Disables Next.js telemetry data collection
 # NODE_ENV=production: Ensures production optimizations are applied
@@ -54,6 +60,12 @@ ENV HOSTNAME="0.0.0.0"
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+
+# The deployment's params file, which the page reads for the values that belong
+# to this deployment rather than to the app (src/lib/deploymentParams.ts).
+# Only this one file is carried over: the rest of deploy/ runs on the release
+# runner, not in the image (.dockerignore).
+COPY --from=builder /app/deploy/params.json ./deploy/params.json
 
 # Note: No need to copy node_modules when using standalone output
 # The standalone build already includes all necessary dependencies

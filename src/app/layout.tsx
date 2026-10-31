@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { pageMetadataConfig } from "@/lib/deploymentParams";
 import { pageMetadata } from "@/lib/pageMetadata";
 import { requestOrigin } from "./requestOrigin";
 import "./globals.css";
@@ -18,7 +19,7 @@ export const viewport: Viewport = {
  * because only a page is given the search parameters.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  return pageMetadata(await requestOrigin());
+  return pageMetadata(await requestOrigin(), {}, pageMetadataConfig());
 }
 
 export default function RootLayout({

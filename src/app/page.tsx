@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadataConfig } from "@/lib/deploymentParams";
 import { ogUrl, pageMetadata } from "@/lib/pageMetadata";
 import type { SearchParams } from "@/lib/viewPreview";
 import FractalExplorer from "./FractalExplorer";
@@ -16,7 +17,11 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
-  return pageMetadata(await requestOrigin(), await searchParams);
+  return pageMetadata(
+    await requestOrigin(),
+    await searchParams,
+    pageMetadataConfig(),
+  );
 }
 
 export default async function Page({
