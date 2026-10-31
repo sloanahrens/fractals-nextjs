@@ -1,4 +1,4 @@
-.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration integration-prod check-integration-url check-integration-prod-url check-prod-url smoke deploy-check
+.PHONY: help install dev build start lint format typecheck check clean docker-build docker-run test-docker test integration integration-prod check-integration-url check-integration-prod-url check-prod-url smoke deploy-check check-registry-url
 
 # Default target
 help:
@@ -206,14 +206,36 @@ check-prod-url:
 # ── The deploy program (deploy/, a Go module of its own) ──────────────────
 # The Pulumi program the release flow runs, and the mock test that covers it
 # (deploy/README.md). It is not part of `gate`: the landing gate runs in a Node
-# image with no Go toolchain and no route to the Forgejo Go registry that
-# serves gt.local/devops, the one module this needs. GOPROXY defaults to that
-# registry with the public proxy behind it, following the devops repo's
-# consume.yml; override it (make deploy-check GOPROXY=...) on a runner that
-# reaches the module another way.
-GOPROXY ?= http://forgejo:3000/api/packages/sloan/go,https://proxy.golang.org,direct
+# image with no Go toolchain and no route to a Go registry that serves
+# gt.local/devops, the one module this needs.
+#
+# The registry is the deployment's own, so its URL is not written here: it is
+# the `registryUrl` key of the params file (PARAMS_FILE), so a fork points it
+# at the registry it publishes the deploy library to and this file does not
+# change. GOPROXY takes that URL with the public proxy behind it, following
+# the devops repo's consume.yml; a caller who sets GOPROXY still wins (make
+# deploy-check GOPROXY=...) on a runner that reaches the module another way.
+# The file is read with sed, which `make` already needs, so the deploy half
+# still needs no Node.
+PARAMS_FILE ?= deploy/params.json
+REGISTRY_URL = $(shell sed -n 's/.*"registryUrl"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' '$(PARAMS_FILE)' | head -n 1)
+GOPROXY ?= $(REGISTRY_URL),https://proxy.golang.org,direct
 DEPLOY_GO_ENV = GOPROXY=$(GOPROXY) GOPRIVATE=gt.local GONOPROXY=none GONOSUMDB=gt.local GOFLAGS=-mod=mod
 
-deploy-check:
+# Refuse a run whose params file names no registry, before Go is reached. A
+# missing or unreadable file, or a file without the key, yields no URL, and a
+# run with no URL would hand go the malformed list ",https://proxy.golang.org,
+# direct"; it stops here instead. A caller who set GOPROXY gives the run its
+# own value, so the check is skipped for them.
+check-registry-url:
+	@if [ "$(origin GOPROXY)" = "file" ] && [ -z "$(strip $(REGISTRY_URL))" ]; then \
+		printf '%s\n' \
+			'$(PARAMS_FILE) names no registryUrl, so there is no Go module registry to resolve the deploy library through.' \
+			'Set registryUrl to the registry this deployment publishes gt.local/devops to, or name one for this run:' \
+			'    make deploy-check GOPROXY=<url>,https://proxy.golang.org,direct' >&2; \
+		exit 1; \
+	fi
+
+deploy-check: check-registry-url
 	cd deploy && $(DEPLOY_GO_ENV) go test ./...
 	cd deploy && $(DEPLOY_GO_ENV) go vet ./...
