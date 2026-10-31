@@ -309,6 +309,8 @@ describe("trapDistance stops on a cycle or a fixed point", () => {
     // axis it settles on a 4-cycle (about 1.578, -0.015, 1.883, -0.576).
     ["cosine", "", { real: 0.3, imaginary: 0.4 }],
     ["cosine", "", { real: 1.88, imaginary: 0.02 }],
+    // c = 0 keeps the orbit on the fixed point 0, so it runs the cap.
+    ["sin-z-squared", "", { real: 0, imaginary: 0 }],
   ];
 
   it.each(SETTLING)(

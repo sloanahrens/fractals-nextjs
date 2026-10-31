@@ -23,6 +23,7 @@ declare module "react" {
       msub: MathMLProps;
       mfrac: MathMLProps;
       mover: MathMLProps<{ accent?: "true" | "false" }>;
+      msqrt: MathMLProps;
     }
   }
 }

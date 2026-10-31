@@ -27,6 +27,7 @@ import { createMagnetKind } from "../magnet";
 import { novaKind } from "../nova";
 import { sineKind } from "../sine";
 import { cosineKind } from "../cosine";
+import { SINE_SQUARED_START, sineSquaredKind } from "../sineSquared";
 import { createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
@@ -199,6 +200,21 @@ const CASES: KindCase[] = [
     // The first step lands on c, so a c more than 20 off the real axis leaves on
     // the first step: the start and that one point.
     endsAt: { point: { real: 0, imaginary: 21 }, steps: 0 },
+    endedLength: (steps) => steps + 2,
+    escapes: true,
+  },
+  {
+    name: "sin-z-squared",
+    kind: sineSquaredKind,
+    // Every Sine of z squared orbit starts at sqrt(pi / 2), whatever c is.
+    starts: () => ({ real: SINE_SQUARED_START, imaginary: 0 }),
+    // c = 0 sends every point to 0 and keeps it there.
+    neverEnds: ORIGIN,
+    neverEndsLength: (maxSteps) => maxSteps + 1,
+    // The first step lands on c, so a c whose square has an imaginary part
+    // above 20 (5 + 5i gives 50) leaves on the first step: the start and that
+    // one point.
+    endsAt: { point: { real: 5, imaginary: 5 }, steps: 0 },
     endedLength: (steps) => steps + 2,
     escapes: true,
   },
