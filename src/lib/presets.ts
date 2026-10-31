@@ -475,6 +475,43 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     fractal: "sine",
   },
   {
+    id: "cosine-overview",
+    name: "Cosine set",
+    description: "The whole Cosine set: two discs meeting at the origin",
+    // The Cosine default view (0, 0) at zoom 1: 4 by 3 about the origin.
+    bounds: {
+      minReal: -2,
+      maxReal: 2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "fire",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "cosine",
+  },
+  {
+    id: "cosine-notch",
+    name: "Cosine notch",
+    description: "The notch where the two big discs meet",
+    // Centre (0, 0.88) at zoom 6: 2/3 by 1/2. Centred on the notch's cusp at
+    // (0, 0.67) the frame is nearly nine tenths set, which the per-fractal
+    // guard in `presets.test.ts` refuses, so the view is moved up until the
+    // cusp sits about a sixth of the way up and the gap widens above it.
+    bounds: {
+      minReal: -1 / 3,
+      maxReal: 1 / 3,
+      minImaginary: 0.63,
+      maxImaginary: 1.13,
+    },
+    maxIterations: 400,
+    colorScheme: "fire",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "cosine",
+  },
+  {
     id: "perpendicular-ship-overview",
     name: "Perpendicular Ship",
     description: "The whole Perp. Ship, hull, row of masts and spike",
