@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { twitterCreatorFromParams } from "../deploymentParamsFile";
 import { defaultVariant } from "../fractalTypes";
@@ -9,6 +9,7 @@ import {
   DEFAULT_VIEW_LINK_UPDATES,
   type ViewLinkUpdates,
 } from "../viewLinkState";
+import { creatorOf } from "./metadataHelpers";
 
 const ORIGIN = "https://fractals.example.com";
 const VIEW = {
@@ -57,12 +58,15 @@ describe("pageMetadata without a view", () => {
 });
 
 describe("the Twitter card creator", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   /** The head's configuration as the deployment's params file gives it. */
   const config = (params: Record<string, unknown>) => ({
     twitterCreator: twitterCreatorFromParams(params),
   });
-  const creatorOf = (metadata: ReturnType<typeof pageMetadata>) =>
-    (metadata.twitter as { creator?: string }).creator;
 
   it("is the handle the params file gives", () => {
     const metadata = pageMetadata(
@@ -100,9 +104,16 @@ describe("the Twitter card creator", () => {
     }
   });
 
-  it("is absent from a head built without a configuration", () => {
-    expect(pageMetadata(ORIGIN).twitter).not.toHaveProperty("creator");
-    expect(pageMetadata(ORIGIN, VIEW).twitter).not.toHaveProperty("creator");
+  it("is absent from a head built without a configuration", async () => {
+    // The build's constant is read when the module loads, so the empty value
+    // is stubbed before a fresh import: the test controls the input rather
+    // than depending on the environment it happens to run in.
+    vi.stubEnv("DEPLOYMENT_TWITTER_CREATOR", "");
+    vi.resetModules();
+    const { pageMetadata: built } = await import("../pageMetadata");
+
+    expect(built(ORIGIN).twitter).not.toHaveProperty("creator");
+    expect(built(ORIGIN, VIEW).twitter).not.toHaveProperty("creator");
   });
 });
 

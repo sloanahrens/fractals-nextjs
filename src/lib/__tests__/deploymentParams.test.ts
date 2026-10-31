@@ -11,15 +11,12 @@ import {
   twitterCreatorFromParams,
 } from "../deploymentParamsFile";
 import { pageMetadata } from "../pageMetadata";
+import { creatorOf } from "./metadataHelpers";
 
 // `require` for the Next config, which is a CommonJS module.
 const require = createRequire(import.meta.url);
 const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const ORIGIN = "https://fractals.example.com";
-
-/** The creator tag a metadata object carries, if it carries one. */
-const creatorOf = (metadata: ReturnType<typeof pageMetadata>) =>
-  (metadata.twitter as { creator?: string }).creator;
 
 const roots: string[] = [];
 
@@ -81,12 +78,12 @@ describe("twitterCreatorFromParams", () => {
 describe("readDeploymentParams", () => {
   it("parses the file under the checkout it is given", () => {
     const root = checkout(
-      JSON.stringify({ twitterCreator: "@made-up-name", projectId: "p" }),
+      JSON.stringify({ twitterCreator: "@made-up-name", unrelatedKey: "p" }),
     );
 
     expect(readDeploymentParams(root)).toEqual({
       twitterCreator: "@made-up-name",
-      projectId: "p",
+      unrelatedKey: "p",
     });
   });
 
