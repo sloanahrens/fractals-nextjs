@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ComplexNumber } from "../../types/fractal";
 import {
+  cycleIsTrapped,
   SINE_ESCAPE_HEIGHT,
   SINE_INTERIOR_RADIUS,
   SINE_START,
@@ -226,7 +227,10 @@ describe("the interior known in closed form", () => {
       }
     }
 
-    const { offenders, checked } = sweep(samples(), (excess) => excess <= 1e-12);
+    const { offenders, checked } = sweep(
+      samples(),
+      (excess) => excess <= 1e-12,
+    );
 
     // An empty grid would prove nothing.
     expect(checked).toBeGreaterThan(10000);
@@ -296,8 +300,8 @@ describe("the walk cut short", () => {
 
   it("gives the count the whole walk gives, over a grid that crosses the annulus and the band", () => {
     // Two grids: one through the annulus between the closed-form disc and the
-    // unit disc, where the ball shortcut does its work, and one along the band
-    // around the real axis, where only the cycle check ends a walk early.
+    // unit disc, where the ball does its work, and one along the band around
+    // the real axis, where only the cycle proof ends a walk early.
     function* samples() {
       for (const cap of [50, 100, 400, 1000]) {
         for (const c of [
@@ -341,6 +345,15 @@ describe("the walk cut short", () => {
 });
 
 describe("the balls that hold an orbit", () => {
+  it("starts past the closed-form disc, whose points never read the table", () => {
+    // A row for an |c| the disc already answers would never be selected, since
+    // the disc returns before the walk begins. The widest row must therefore
+    // sit outside it.
+    expect(SINE_TRAP_RADII[0][0]).toBeGreaterThan(
+      SINE_INTERIOR_RADIUS * SINE_INTERIOR_RADIUS,
+    );
+  });
+
   it("keeps |c| sinh R at or under R in every row, which is what traps the orbit", () => {
     expect(SINE_TRAP_RADII.length).toBeGreaterThan(0);
 
@@ -366,6 +379,51 @@ describe("the balls that hold an orbit", () => {
         SINE_TRAP_RADII[index - 1][0],
       );
     }
+  });
+});
+
+describe("the proof that a walk comes back to stay", () => {
+  it("holds the ball for an orbit that has settled, and the walk it stands for never leaves", () => {
+    // c = 1.6 is in the bulb beside the central disc. Its orbit comes in on a
+    // fixed point: by the fifth step it has moved less than a millionth, and
+    // the proof carries the ball round that step and finds it kept. The walk
+    // the count stands for is checked the whole way: four thousand steps, and
+    // it never leaves.
+    const c = at(1.6, 0);
+    const points = sineKind.orbit!(c, 100);
+    const returned = points.findIndex(
+      (point, index) =>
+        index > 0 &&
+        Math.abs(point.real - points[index - 1].real) < 1e-6 &&
+        Math.abs(point.imaginary - points[index - 1].imaginary) < 1e-6,
+    );
+
+    expect(returned).toBeGreaterThan(0);
+    const from = points[returned - 1];
+    const to = points[returned];
+
+    expect(
+      cycleIsTrapped(
+        1.6,
+        0,
+        1.6,
+        from.real,
+        from.imaginary,
+        to.real,
+        to.imaginary,
+        1,
+      ),
+    ).toBe(true);
+    expect(sineKind.orbit!(c, 4000)).toHaveLength(4001);
+  });
+
+  it("refuses a ball the map does not keep", () => {
+    // c = 3 throws a neighbourhood of 1 apart: over four steps the ball round
+    // it is wider than it started, so the bound says nothing and the proof
+    // says no. The orbit there is in the set anyway -- a real c keeps an orbit
+    // on the real line -- but a proof that cannot show it leaves the count to
+    // the plain walk rather than guess.
+    expect(cycleIsTrapped(3, 0, 3, 1, 0, 1 + 1e-7, 0, 4)).toBe(false);
   });
 });
 
