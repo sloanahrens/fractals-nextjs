@@ -281,7 +281,7 @@ describe("nextTourStop", () => {
 
 // The same assertions over the real catalogue and over one built to be unlike
 // it (fifteen fractals, place counts from nineteen down to two), so a
-// thirteenth fractal with any number of places cannot turn them red.
+// fourteenth fractal with any number of places cannot turn them red.
 const CATALOGUES: readonly { name: string; places: readonly Place[] }[] = [
   { name: "the real catalogue", places: PLACES },
   {

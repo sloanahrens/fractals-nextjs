@@ -223,6 +223,7 @@ describe("the typeset formula", () => {
       "fraction",
       "conjugate",
       "abs",
+      "sqrt",
     ]) {
       expect(view, kind).toContain(`case "${kind}"`);
     }

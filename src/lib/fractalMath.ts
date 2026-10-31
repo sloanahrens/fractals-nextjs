@@ -54,7 +54,8 @@ export type MathExpr =
   | { kind: "fraction"; numerator: MathExpr; denominator: MathExpr }
   | { kind: "row"; items: MathExpr[] }
   | { kind: "conjugate"; of: MathExpr }
-  | { kind: "abs"; of: MathExpr };
+  | { kind: "abs"; of: MathExpr }
+  | { kind: "sqrt"; of: MathExpr };
 
 /**
  * One sentence of a fractal's paragraph, and whether a look on the picture
@@ -125,6 +126,7 @@ const fraction = (numerator: MathExpr, denominator: MathExpr): MathExpr => ({
 const row = (...items: MathExpr[]): MathExpr => ({ kind: "row", items });
 const conjugate = (of: MathExpr): MathExpr => ({ kind: "conjugate", of });
 const abs = (of: MathExpr): MathExpr => ({ kind: "abs", of });
+const sqrt = (of: MathExpr): MathExpr => ({ kind: "sqrt", of });
 
 /** Minus sign for the typeset formulas; plain text uses the ASCII hyphen. */
 const MINUS = "−";
@@ -277,6 +279,8 @@ function speak(expr: MathExpr): string {
         : `the conjugate of ${speak(expr.of)}`;
     case "abs":
       return `the absolute value of ${speak(expr.of)},`;
+    case "sqrt":
+      return `the square root of ${speak(expr.of)}`;
   }
 }
 
@@ -864,6 +868,45 @@ const COSINE: FractalMath = {
     "A point escapes when the imaginary part of z passes 20: the cosine of such a number is about a hundred million times bigger again, so it never comes back. The colour is the step on which that happens, smoothed between steps; a point that never escapes within the iteration cap is painted black. A point on the real axis never leaves it, which is why a thin black line runs the whole width of the picture.",
 };
 
+/** z₀ = √(π/2), c = the pixel's point: the critical point of c sin z², so the first step lands on c. */
+const START_AT_ROOT_HALF_PI = row(
+  subscript(z, number(0)),
+  EQUALS,
+  sqrt(fraction(number("π"), number(2))),
+  operator(","),
+  c,
+  EQUALS,
+  PIXELS_POINT,
+);
+
+const SINE_SQUARED: FractalMath = {
+  title: "Sine of z squared set",
+  rule: row(
+    z,
+    ARROW,
+    c,
+    operator(INVISIBLE_TIMES),
+    identifier("sin", "the sine of"),
+    SQUARE_OF_Z,
+  ),
+  start: START_AT_ROOT_HALF_PI,
+  setting: null,
+  blurb: [
+    {
+      text: "The same game as the Mandelbrot set, but each step squares the number, takes the sine of the square and then multiplies by c.",
+    },
+    {
+      text: "The sine of a number that has strayed far from the real line is enormous, so a point either settles or is thrown out almost at once: an orbit that starts on the real axis or on the imaginary axis stays on it, so both whole axes are in the set, and the shape is a diamond with smaller copies strung along them.",
+    },
+    {
+      text: "Points that stay put are the black diamond; the rest are coloured by how many steps it takes to throw them out.",
+      colouring: true,
+    },
+  ],
+  escape:
+    "A point escapes when the square of z is more than 20 off the real axis either way (the size of Im z² passes 20): the sine of such a number is about a hundred million times bigger again, so it never comes back. The colour is the step on which that happens, smoothed between steps; a point that never escapes within the iteration cap is painted black. An orbit that starts on either axis stays on it, which is why two black lines cross the picture.",
+};
+
 function julia(variant: string): FractalMath {
   // The renderer falls back to the first named constant for a name it cannot
   // read, so the card says the constant that is actually drawn.
@@ -943,6 +986,7 @@ export const FRACTAL_MATH: Readonly<
   nova: () => NOVA,
   sine: () => SINE,
   cosine: () => COSINE,
+  "sin-z-squared": () => SINE_SQUARED,
 };
 
 /**

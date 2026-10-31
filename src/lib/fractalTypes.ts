@@ -34,6 +34,7 @@ import {
 import { novaKind } from "./nova";
 import { perpendicularShipKind } from "./perpendicularShip";
 import { sineKind } from "./sine";
+import { sineSquaredKind } from "./sineSquared";
 import { tricornKind } from "./tricorn";
 
 /**
@@ -71,6 +72,10 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   { id: "nova", label: "Nova" },
   { id: "sine", label: "Sine" },
   { id: "cosine", label: "Cosine" },
+  // Shortened like "Perp. Ship": the switcher's row is capped at the picture's
+  // width on a phone, where "Sine of z squared" would overflow it. The full
+  // name is what the Math card's title and a link's line say.
+  { id: "sin-z-squared", label: "Sin z²" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -266,6 +271,7 @@ export function resolveFractalKind(
   if (typeId === "nova") return novaKind;
   if (typeId === "sine") return sineKind;
   if (typeId === "cosine") return cosineKind;
+  if (typeId === "sin-z-squared") return sineSquaredKind;
   if (typeId === "magnet") {
     return createMagnetKind(parseMagnetType(variant) ?? MAGNET_TYPES[0]);
   }
@@ -410,6 +416,21 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // 1.94, the second lying just outside, and 42.6% of its pixels are in the
   // set (measured on 400 by 300 at Auto's cap of 100 for this zoom).
   if (typeId === "cosine") return { centerX: 0, centerY: 0, zoom: 1 };
+
+  // The Sine of z squared set is the c whose orbit under z -> c sin(z^2),
+  // started at the critical point sqrt(pi/2), is not thrown out. An orbit that
+  // starts on either axis stays on it: a real c keeps the orbit real and an
+  // imaginary one keeps it imaginary, so both whole axes are in the set, and
+  // the black body is a diamond with satellites strung along those axes.
+  // Measured at a cap of 200 on a 0.002 grid, the in-set runs along y = 0.02
+  // reach x 2.53 (a satellite past the diamond's shoulder), and the set is
+  // symmetric about both axes, so the origin centres it. Zoom 1 (x -2..2,
+  // y -1.5..1.5) is a crop of that: the set fills the width of the og card's
+  // 5.7 by 3 frame at this zoom, so the opening view cuts the satellites on
+  // the real axis and the diamond's top and bottom. 32.2% of its pixels are in
+  // the set (measured on 400 by 300 at Auto's cap of 100 for this zoom).
+  if (typeId === "sin-z-squared")
+    return { centerX: 0, centerY: 0, zoom: 1 };
 
   // A Phoenix set is a Julia set of the two-term step, so like Julia's it is
   // framed on the origin and every constant draws about it. Measured with a

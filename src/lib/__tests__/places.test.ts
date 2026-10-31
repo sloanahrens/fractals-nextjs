@@ -430,6 +430,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   nova: [4, 6],
   sine: [4, 6],
   cosine: [6, 6],
+  "sin-z-squared": [2, 2],
 };
 
 describe("PLACES", () => {
@@ -1047,7 +1048,9 @@ function zoomedInOnRealAxis(place: Place): boolean {
  * what the fractal is. So is Nova's: the whole set is the one picture that
  * shows the arc, the bloom and the string of disks together. The Sine and
  * Cosine sets are each one picture at one frame, and the whole set is what
- * says what it is, so their featured places are their opening views too.
+ * says what it is, so their featured places are their opening views too. So is
+ * the Sine of z squared set's: the black diamond with its satellites is the
+ * silhouette that says what the fractal is.
  */
 const FEATURED_IS_OPENING_VIEW = new Set([
   "tricorn",
@@ -1057,6 +1060,7 @@ const FEATURED_IS_OPENING_VIEW = new Set([
   "nova",
   "sine",
   "cosine",
+  "sin-z-squared",
 ]);
 
 /**

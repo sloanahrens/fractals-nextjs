@@ -21,6 +21,7 @@ import { MAGNET_TYPES, createMagnetKind } from "../magnet";
 import { novaKind } from "../nova";
 import { sineKind } from "../sine";
 import { cosineKind } from "../cosine";
+import { sineSquaredKind } from "../sineSquared";
 import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
@@ -177,6 +178,17 @@ const CASES: KindCase[] = [
     // The disc of the invariant radius (|c| < 0.663) is in the set and the
     // plane above it is not.
     grid: { real: -0.8, imaginary: 0.2, span: 1.6 },
+  },
+  {
+    name: "sin-z-squared",
+    kind: sineSquaredKind,
+    // c = 0 sends every point to 0 and keeps it there.
+    neverEnds: ORIGIN,
+    // The first step lands on c, so a c whose square is more than 20 up -- here
+    // 5 + 5i, whose square has an imaginary part of 50 -- is away on its first
+    // step, counted as step 0.
+    endsAt: { point: { real: 5, imaginary: 5 }, steps: 0 },
+    packsOutcomes: false,
   },
   {
     name: "nova",

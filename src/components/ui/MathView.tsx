@@ -60,6 +60,8 @@ function node(expr: MathExpr, key: number): React.ReactNode {
           <mo>|</mo>
         </mrow>
       );
+    case "sqrt":
+      return <msqrt key={key}>{node(expr.of, 0)}</msqrt>;
   }
 }
 

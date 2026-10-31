@@ -94,6 +94,11 @@ const GOLDEN: Record<string, string> = {
   // (two large discs meeting at the origin, smaller discs along the axis), and
   // it pins that picture from then on.
   cosine: "3be46901",
+  // The Sine of z squared set, likewise not from 2866a45: its value is from the
+  // tree that registered it (fr-38va), once the opening view had been drawn and
+  // looked at (a black diamond with satellites strung along the two axes), and
+  // it pins that picture from then on.
+  "sin-z-squared": "5cfdd090",
 };
 
 describe("the plain (iteration-count) picture", () => {

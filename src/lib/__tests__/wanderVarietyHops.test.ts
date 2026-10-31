@@ -88,7 +88,7 @@ function wiredWalk(seed: number) {
 }
 
 describe("Auto-wander through every fractal and Look", () => {
-  it("visits every (fractal, Look) pair exactly once in 52 consecutive hops", () => {
+  it("visits every (fractal, Look) pair exactly once in 56 consecutive hops", () => {
     for (const seed of [1, 3, 17]) {
       const { steps, wander } = wiredWalk(seed);
       for (let step = 0; step < PAIR_COUNT * WANDER_HOP_EVERY; step += 1) {

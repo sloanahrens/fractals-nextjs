@@ -69,15 +69,15 @@ describe("the Looks", () => {
     expect(WANDER_LOOKS).toEqual([null, "point", "line", "circle"]);
   });
 
-  it("make 52 pairs over the picker's thirteen fractals", () => {
-    expect(FRACTALS).toHaveLength(13);
-    expect(PAIR_COUNT).toBe(52);
+  it("make 56 pairs over the picker's fourteen fractals", () => {
+    expect(FRACTALS).toHaveLength(14);
+    expect(PAIR_COUNT).toBe(56);
   });
 });
 
 describe("a bag of pairs", () => {
   it.each([1, 2, 7, 99])(
-    "visits every fractal in every Look exactly once in 52 hops (seed %i)",
+    "visits every fractal in every Look exactly once in 56 hops (seed %i)",
     (seed) => {
       const visits = walk(seed, PAIR_COUNT);
 

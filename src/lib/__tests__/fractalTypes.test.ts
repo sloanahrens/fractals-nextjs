@@ -21,6 +21,7 @@ import { createNewtonKind, newtonKind } from "../newton";
 import { novaKind } from "../nova";
 import { sineKind } from "../sine";
 import { cosineKind } from "../cosine";
+import { sineSquaredKind } from "../sineSquared";
 import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
@@ -42,7 +43,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the thirteen fractals in order, each once", () => {
+  it("offers the fourteen fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -59,6 +60,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "nova", label: "Nova" },
       { id: "sine", label: "Sine" },
       { id: "cosine", label: "Cosine" },
+      { id: "sin-z-squared", label: "Sin z²" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -124,6 +126,14 @@ describe("resolveFractalKind", () => {
     expect(resolveFractalKind("cosine", "Dendrite")).toBe(cosineKind);
     expect(resolveFractalKind("cosine", "4")).toBe(cosineKind);
     expect(resolveFractalKind("cosine", "")).toBe(cosineKind);
+  });
+
+  it("draws the Sine of z squared set for its own id, whatever variant is beside it", () => {
+    expect(resolveFractalKind("sin-z-squared", "Dendrite")).toBe(
+      sineSquaredKind,
+    );
+    expect(resolveFractalKind("sin-z-squared", "4")).toBe(sineSquaredKind);
+    expect(resolveFractalKind("sin-z-squared", "")).toBe(sineSquaredKind);
   });
 
   it("draws the Nova fractal for its own id, whatever variant is beside it", () => {
@@ -447,6 +457,18 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("frames the Sine of z squared set on the origin at zoom 1, a crop of the wider set", () => {
+    // Measured at a cap of 200 on a 0.002 grid: the in-set runs along y = 0.02
+    // reach x 2.53, and the set fills the width of the og card's 5.7 by 3
+    // frame at zoom 1, so the 4 by 3 opening view cuts the satellites along the
+    // real axis and the diamond's top and bottom.
+    expect(defaultViewFor("sin-z-squared")).toEqual({
+      centerX: 0,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("falls back to the Mandelbrot view for an unknown id", () => {
     expect(defaultViewFor("lyapunov")).toEqual({
       centerX: -0.75,
@@ -516,6 +538,7 @@ describe("fractalVariants", () => {
     expect(fractalVariants("nova")).toBeNull();
     expect(fractalVariants("sine")).toBeNull();
     expect(fractalVariants("cosine")).toBeNull();
+    expect(fractalVariants("sin-z-squared")).toBeNull();
     expect(fractalVariants("lyapunov")).toBeNull();
   });
 
@@ -538,6 +561,7 @@ describe("defaultVariant", () => {
     expect(defaultVariant("nova")).toBe("");
     expect(defaultVariant("sine")).toBe("");
     expect(defaultVariant("cosine")).toBe("");
+    expect(defaultVariant("sin-z-squared")).toBe("");
     expect(defaultVariant("perpendicular-ship")).toBe("");
     expect(defaultVariant("lyapunov")).toBe("");
   });
@@ -652,6 +676,7 @@ describe("isVariantValue", () => {
     expect(isVariantValue("nova", "3")).toBe(false);
     expect(isVariantValue("sine", "Classic")).toBe(false);
     expect(isVariantValue("cosine", "Classic")).toBe(false);
+    expect(isVariantValue("sin-z-squared", "Classic")).toBe(false);
     expect(isVariantValue("perpendicular-ship", "4")).toBe(false);
   });
 });

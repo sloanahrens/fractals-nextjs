@@ -1304,6 +1304,39 @@ const COSINE_PLACES: readonly Place[] = [
   },
 ];
 
+// Drawn headless at 400x300, and the top frame moved from the guess read off a
+// still until it held its share. The set is symmetric about both axes and both
+// axes are in it, so the frames sit on the upper half of the imaginary axis.
+// Both places are drawn in classic rather than fire: a point outside the
+// diamond leaves in one or two steps, and fire paints those steps almost the
+// same dark red, so the whole-set view comes out 86% one colour in fire, past
+// the featured-place guard's 60%, and the close view is nearly all black. In
+// classic the same views are a green field against the black diamond (31% one
+// colour). The diamond's top point is near 0 + 1.4i, where the body narrows
+// and a satellite comes down to meet it; the frame at zoom 6 holds 30.2% set
+// pixels (measured at 64 by 48, Auto's cap for this zoom), inside the 3 to 85
+// percent band.
+const SINE_SQUARED_PLACES: readonly Place[] = [
+  {
+    id: "sin-z-squared-whole",
+    name: "The whole Sine of z squared set",
+    fractal: "sin-z-squared",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "sin-z-squared-top",
+    name: "The diamond's top point",
+    fractal: "sin-z-squared",
+    centerX: 0,
+    centerY: 1.4,
+    zoom: 6,
+    colorScheme: "classic",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -1323,6 +1356,7 @@ export const PLACES: readonly Place[] = [
   ...NOVA_PLACES,
   ...SINE_PLACES,
   ...COSINE_PLACES,
+  ...SINE_SQUARED_PLACES,
 ];
 
 /**
@@ -1378,6 +1412,9 @@ export function placesForFractal(fractal: string): Place[] {
  * - Cosine: the whole set (an exception above), for the same reason: two large
  *   discs that touch, with the smaller ones along the axis, is the picture
  *   that says what the fractal is, and it is the frame it opens on.
+ * - Sine of z squared: the whole set (an exception above), for the same
+ *   reason: a black diamond with satellites along its two axes is the
+ *   silhouette that says what the fractal is, and it is the frame it opens on.
  *
  * The rest of the catalogue was redrawn and kept: each is a picture rather
  * than a flat field, which the guard in `places.test.ts` holds.
@@ -1396,6 +1433,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   nova: "nova-whole",
   sine: "sine-whole",
   cosine: "cosine-whole",
+  "sin-z-squared": "sin-z-squared-whole",
 };
 
 /**

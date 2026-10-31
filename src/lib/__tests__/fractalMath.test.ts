@@ -50,6 +50,7 @@ const KINDS = new Set([
   "row",
   "conjugate",
   "abs",
+  "sqrt",
 ]);
 
 /** Every node of a tree, for checks that look at all of it. */
@@ -65,6 +66,7 @@ function nodes(expr: MathExpr): MathExpr[] {
       return [expr, ...nodes(expr.numerator), ...nodes(expr.denominator)];
     case "conjugate":
     case "abs":
+    case "sqrt":
       return [expr, ...nodes(expr.of)];
     default:
       return [expr];
@@ -121,7 +123,7 @@ describe("every fractal the picker offers has its maths", () => {
         );
       });
 
-      it("builds its formulas from the nine kinds of node and a rule that reads aloud", () => {
+      it("builds its formulas from the ten kinds of node and a rule that reads aloud", () => {
         for (const expr of [
           math.rule,
           math.start,
@@ -255,6 +257,12 @@ describe("the rule, read aloud", () => {
     );
   });
 
+  it("reads the Sine of z squared set's rule: c times the sine of z squared", () => {
+    expect(rule("sin-z-squared")).toBe(
+      "z becomes c times the sine of open bracket z squared close bracket",
+    );
+  });
+
   it("reads the second magnetic type's rule", () => {
     expect(rule("magnet", "2")).toBe(
       "z becomes open bracket the fraction z cubed plus 3 times open bracket c minus 1 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket over 3 times z squared plus 3 times open bracket c minus 2 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket plus 1 end fraction close bracket squared",
@@ -372,6 +380,12 @@ describe("where each point starts", () => {
     );
   });
 
+  it("starts the Sine of z squared set at the square root of pi over 2", () => {
+    expect(start("sin-z-squared")).toBe(
+      "z sub 0 equals the square root of the fraction π over 2 end fraction, c equals the pixel's point",
+    );
+  });
+
   it("starts Julia and Newton at the pixel's point", () => {
     expect(start("julia")).toBe("z sub 0 equals the pixel's point");
     expect(start("newton")).toBe("z sub 0 equals the pixel's point");
@@ -389,6 +403,7 @@ describe("the setting", () => {
       "nova",
       "sine",
       "cosine",
+      "sin-z-squared",
     ]) {
       expect(describeFractalMath(id, "").setting).toBeNull();
     }
@@ -656,7 +671,7 @@ describe("the paragraph under the rows", () => {
     describeFractalMath(id, variant).blurb;
 
   it("reads exactly as it read before a Look could change it", () => {
-    // The thirteen default paragraphs, word for word as they stood before
+    // The fourteen default paragraphs, word for word as they stood before
     // this bead. Nothing here may drift: a trap changes the paragraph by
     // leaving sentences out, never by rewording one.
     const expected: Record<string, string> = {
@@ -684,6 +699,8 @@ describe("the paragraph under the rows", () => {
       nova: "Nova is Newton's method for z cubed = 1 with a constant added after every step. Pick a point on the plane and call it c, start at 1 and keep improving the guess and adding c. Instead of three tidy basins the picture is a Mandelbrot-like set with spirals and bulbs in it, where the Newton basins are folded into the shapes.",
       cosine:
         "The same game as the Mandelbrot set, but each step takes the cosine of the number instead of squaring it, and then multiplies by c. The cosine of a number that has strayed far from the real line is enormous, so a point either settles or is thrown out almost at once: the set is two large discs that touch at the origin, with smaller discs strung along the real axis, and the filigree is where they meet. Points that stay put are the black discs; the rest are coloured by how many steps it takes to throw them out.",
+      "sin-z-squared":
+        "The same game as the Mandelbrot set, but each step squares the number, takes the sine of the square and then multiplies by c. The sine of a number that has strayed far from the real line is enormous, so a point either settles or is thrown out almost at once: an orbit that starts on the real axis or on the imaginary axis stays on it, so both whole axes are in the set, and the shape is a diamond with smaller copies strung along them. Points that stay put are the black diamond; the rest are coloured by how many steps it takes to throw them out.",
     };
 
     expect(Object.keys(expected).sort()).toEqual([...ids].sort());
@@ -803,6 +820,19 @@ describe("toPlainText", () => {
         },
       }),
     ).toBe("the conjugate of z plus 1");
+  });
+
+  it("says a square root as words, over whatever it holds", () => {
+    expect(
+      toPlainText({
+        kind: "sqrt",
+        of: {
+          kind: "fraction",
+          numerator: num("π"),
+          denominator: num("2"),
+        },
+      }),
+    ).toBe("the square root of the fraction π over 2 end fraction");
   });
 
   it("uses an identifier's spoken form when it has one", () => {
