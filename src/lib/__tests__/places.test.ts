@@ -428,6 +428,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   phoenix: [4, 6],
   nova: [4, 6],
   sine: [4, 6],
+  cosine: [2, 2],
 };
 
 describe("PLACES", () => {
@@ -973,7 +974,9 @@ function zoomedInOnRealAxis(place: Place): boolean {
  * views that say what each one is, and the Fractal select opens on them too.
  * So is the Phoenix set's: the whole Classic set is the silhouette that says
  * what the fractal is. So is Nova's: the whole set is the one picture that
- * shows the arc, the bloom and the string of disks together.
+ * shows the arc, the bloom and the string of disks together. The Sine and
+ * Cosine sets are each one picture at one frame, and the whole set is what
+ * says what it is, so their featured places are their opening views too.
  */
 const FEATURED_IS_OPENING_VIEW = new Set([
   "tricorn",
@@ -982,6 +985,7 @@ const FEATURED_IS_OPENING_VIEW = new Set([
   "phoenix",
   "nova",
   "sine",
+  "cosine",
 ]);
 
 /**

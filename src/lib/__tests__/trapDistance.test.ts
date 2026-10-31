@@ -304,6 +304,11 @@ describe("trapDistance stops on a cycle or a fixed point", () => {
     // inside the next disc, on a cycle.
     ["sine", "", { real: 0.3, imaginary: 0.4 }],
     ["sine", "", { real: 1.6, imaginary: 0.1 }],
+    // Inside the disc of the invariant radius the orbit settles on a fixed
+    // point (about 0.351 + 0.362i here); inside the small disc out along the
+    // axis it settles on a 4-cycle (about 1.578, -0.015, 1.883, -0.576).
+    ["cosine", "", { real: 0.3, imaginary: 0.4 }],
+    ["cosine", "", { real: 1.88, imaginary: 0.02 }],
   ];
 
   it.each(SETTLING)(

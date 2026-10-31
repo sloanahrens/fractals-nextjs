@@ -1238,6 +1238,33 @@ const SINE_PLACES: readonly Place[] = [
   },
 ];
 
+// Drawn headless on contact sheets at 400x300, and the frame of the notch
+// moved from the guess read off a still until it held its set share. The set
+// is symmetric about both axes and the whole real axis is in it, so the frames
+// sit in the upper half plane. Outside the set the count is one or two steps,
+// which the fire scheme shows dark, so every place has set in it: the two
+// large discs or the smaller ones along the axis.
+const COSINE_PLACES: readonly Place[] = [
+  {
+    id: "cosine-whole",
+    name: "The whole Cosine set",
+    fractal: "cosine",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "fire",
+  },
+  {
+    id: "cosine-notch",
+    name: "The notch where the two discs meet",
+    fractal: "cosine",
+    centerX: 0,
+    centerY: 0.75,
+    zoom: 6,
+    colorScheme: "fire",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -1256,6 +1283,7 @@ export const PLACES: readonly Place[] = [
   ...PHOENIX_PLACES,
   ...NOVA_PLACES,
   ...SINE_PLACES,
+  ...COSINE_PLACES,
 ];
 
 /**
@@ -1308,6 +1336,9 @@ export function placesForFractal(fractal: string): Place[] {
  * - Sine: the whole set (an exception above): a central disc flanked by a
  *   chain of smaller ones, with the filigree between, is what says what it is,
  *   and it is also the frame the fractal opens on.
+ * - Cosine: the whole set (an exception above), for the same reason: two large
+ *   discs that touch, with the smaller ones along the axis, is the picture
+ *   that says what the fractal is, and it is the frame it opens on.
  *
  * The rest of the catalogue was redrawn and kept: each is a picture rather
  * than a flat field, which the guard in `places.test.ts` holds.
@@ -1325,6 +1356,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   phoenix: "phoenix-classic-whole",
   nova: "nova-whole",
   sine: "sine-whole",
+  cosine: "cosine-whole",
 };
 
 /**
