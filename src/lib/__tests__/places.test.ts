@@ -38,6 +38,7 @@ import {
   type PlaceView,
 } from "../places";
 import { decodeView, encodeView } from "../viewLink";
+import { sweep } from "./sweep";
 
 /** Every colour scheme the page offers, for a test that varies the page's. */
 const SCHEMES: readonly ColorScheme[] = [
@@ -428,7 +429,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   phoenix: [4, 6],
   nova: [4, 6],
   sine: [4, 6],
-  cosine: [2, 2],
+  cosine: [6, 6],
 };
 
 describe("PLACES", () => {
@@ -720,6 +721,68 @@ describe("PLACES", () => {
       });
     },
   );
+
+  // The places fr-0fed added, named rather than taken as "every Cosine place":
+  // a place dropped or renamed fails the lookup instead of quietly leaving the
+  // sweep with fewer to check.
+  describe("the deeper Cosine places", () => {
+    const found = [
+      "cosine-top-bud",
+      "cosine-small-disc",
+      "cosine-lace",
+      "cosine-left-edge",
+    ].map((id) => {
+      const entry = PLACES.find((place) => place.id === id);
+      if (!entry) throw new Error(`the catalogue has no place ${id}`);
+
+      return entry;
+    });
+
+    it("holds both set and edge in every frame, all four in one pass", () => {
+      const { offenders, checked } = sweep(
+        found.map((entry) => ({ at: entry.id, value: setShareOf(entry) })),
+        (share) => share >= SET_SHARE_LEAST && share <= SET_SHARE_MOST,
+      );
+
+      expect(checked).toBe(4);
+      expect(offenders).toEqual([]);
+    });
+
+    it("does not leave one of them a single colour", () => {
+      const { offenders, checked } = sweep(
+        found.map((entry) => ({
+          at: entry.id,
+          value: nearUniformShare(pictureOf(entry), WIDTH, HEIGHT),
+        })),
+        (share) => share <= FEATURED_MAX_UNIFORM_SHARE,
+      );
+
+      expect(checked).toBe(4);
+      expect(offenders).toEqual([]);
+    });
+
+    it("gives no Cosine place another place's mirror image", () => {
+      // The set is the same under c -> -c, so a frame at (-x, y) draws what the
+      // frame at (x, y) draws, and two such places would show one picture.
+      const places = placesForFractal("cosine");
+      const mirrors: string[] = [];
+
+      for (const first of places) {
+        for (const second of places) {
+          if (first === second) continue;
+          if (
+            first.centerX === -second.centerX &&
+            first.centerY === second.centerY &&
+            first.zoom === second.zoom
+          ) {
+            mirrors.push(`${first.id} mirrors ${second.id}`);
+          }
+        }
+      }
+
+      expect(mirrors).toEqual([]);
+    });
+  });
 });
 
 describe("featuredPlace", () => {
@@ -950,6 +1013,14 @@ const FEATURED_DETAIL_SHARE = 0.2;
 /** A picture is blank when fewer than this share of it differs from its corner. */
 const BLANK_SHARE = 0.05;
 
+/**
+ * The share of a frame that must be in the set. Below the least the frame is
+ * all edge and the set it belongs to is out of shot; above the most there is no
+ * edge left to see.
+ */
+const SET_SHARE_LEAST = 0.03;
+const SET_SHARE_MOST = 0.85;
+
 /** How far a centre must be from the real axis, in heights of its view. */
 const OFF_AXIS_VIEW_HEIGHTS = 0.05;
 
@@ -1070,6 +1141,37 @@ function pictureOf(entry: Place): Uint8ClampedArray {
 
   PICTURES.set(entry.id, picture);
   return picture;
+}
+
+/**
+ * The share of a place's picture that is in the set: the pixels whose count
+ * ran to the cap, at the size and the count Auto draws the place at. It is the
+ * same grid and the same walk as `pictureOf`, counted rather than coloured, so
+ * the set share and the flat-field guard describe one picture.
+ */
+function setShareOf(entry: Place): number {
+  const maxIterations = autoIterations(entry.zoom);
+  const counts = new Float64Array(WIDTH * HEIGHT);
+
+  countRgbaRows(
+    counts,
+    0,
+    HEIGHT,
+    calculateZoomBounds(entry.centerX, entry.centerY, entry.zoom),
+    WIDTH,
+    HEIGHT,
+    maxIterations,
+    resolveFractalKind(entry.fractal, entry.variant ?? ""),
+    false,
+  );
+
+  let inside = 0;
+
+  for (const count of counts) {
+    if (count >= maxIterations) inside++;
+  }
+
+  return inside / counts.length;
 }
 
 /** Whether two pictures are the same size and byte for byte the same. */
