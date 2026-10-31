@@ -1238,12 +1238,15 @@ const SINE_PLACES: readonly Place[] = [
   },
 ];
 
-// Drawn headless on contact sheets at 400x300, and the frame of the notch
-// moved from the guess read off a still until it held its set share. The set
-// is symmetric about both axes and the whole real axis is in it, so the frames
-// sit in the upper half plane. Outside the set the count is one or two steps,
-// which the fire scheme shows dark, so every place has set in it: the two
-// large discs or the smaller ones along the axis.
+// The frames were read off a still of the whole set and then moved until each
+// held both set and edge: scored at 64x48 at Auto's count for the zoom by the
+// share of pixels in the set (each between 3 and 85 per cent) and by the share
+// that run six steps or more without reaching the cap, which is the filigree.
+// The set is symmetric about both axes and the whole real axis is in it, so
+// the frames sit in the upper half plane and no two are mirrors of each other.
+// Outside the set the count is one or two steps, which the fire scheme shows
+// dark, so every place has set in it: a bud on the top edge, a smaller disc on
+// the axis, the lace beyond it, and the left disc's upper edge.
 const COSINE_PLACES: readonly Place[] = [
   {
     id: "cosine-whole",
@@ -1262,6 +1265,42 @@ const COSINE_PLACES: readonly Place[] = [
     centerY: 0.75,
     zoom: 6,
     colorScheme: "fire",
+  },
+  {
+    id: "cosine-top-bud",
+    name: "A bud on the top edge",
+    fractal: "cosine",
+    centerX: 0.9,
+    centerY: 1.15,
+    zoom: 5,
+    colorScheme: "fire",
+  },
+  {
+    id: "cosine-small-disc",
+    name: "A small disc on the axis",
+    fractal: "cosine",
+    centerX: 1.8,
+    centerY: 0,
+    zoom: 4,
+    colorScheme: "fire",
+  },
+  {
+    id: "cosine-lace",
+    name: "Lace beyond the last disc",
+    fractal: "cosine",
+    centerX: 2.12,
+    centerY: 0.1,
+    zoom: 6,
+    colorScheme: "rainbow",
+  },
+  {
+    id: "cosine-left-edge",
+    name: "The upper edge of the left disc",
+    fractal: "cosine",
+    centerX: -0.66,
+    centerY: 0.95,
+    zoom: 5,
+    colorScheme: "classic",
   },
 ];
 
