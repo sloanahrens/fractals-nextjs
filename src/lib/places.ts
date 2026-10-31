@@ -1304,18 +1304,27 @@ const COSINE_PLACES: readonly Place[] = [
   },
 ];
 
-// Drawn headless at 400x300, and the top frame moved from the guess read off a
-// still until it held its share. The set is symmetric about both axes and both
-// axes are in it, so the frames sit on the upper half of the imaginary axis.
-// Both places are drawn in classic rather than fire: a point outside the
-// diamond leaves in one or two steps, and fire paints those steps almost the
-// same dark red, so the whole-set view comes out 86% one colour in fire, past
-// the featured-place guard's 60%, and the close view is nearly all black. In
-// classic the same views are a green field against the black diamond (31% one
-// colour). The diamond's top point is near 0 + 1.4i, where the body narrows
+// Drawn headless at 400x300, and each frame moved from the guess read off a
+// still until it held its share: scored at 64x48 at Auto's count for the zoom
+// by the share of pixels in the set (each between 3 and 85 per cent) and by
+// the share of the single commonest colour (at most 60). The set is symmetric
+// about both axes and both axes are in it, so the frames sit on the upper half
+// of the imaginary axis or off it, and no two are mirrors of each other. Every
+// place is drawn in classic rather than fire: a point outside the diamond
+// leaves in one or two steps, and fire paints those steps almost the same dark
+// red, so every frame came out 79 to 98 per cent one colour, past the
+// flat-field guard's 60% (the whole-set view was 86.5% and the top place
+// nearly all black when the two places were first added); classic paints the
+// same frames 23 to 37 per cent one colour, a green field against the black
+// diamond. The diamond's top point is near 0 + 1.4i, where the body narrows
 // and a satellite comes down to meet it; the frame at zoom 6 holds 30.2% set
-// pixels (measured at 64 by 48, Auto's cap for this zoom), inside the 3 to 85
-// percent band.
+// pixels (measured at 64 by 48, Auto's cap for this zoom). The four deeper
+// frames: the diamond's right point near 1.5 (35.2% set, 35.2% one colour),
+// the bud strung above its top point at 0 + 1.5i at zoom 8 (23.7%, 22.9%), the
+// beads out along the real axis at 2.0 (11.5%, 35.7%) and the satellites on
+// its upper right edge at 0.85 + 0.7i (35.0%, 37.4%). The bead's bud guess at
+// 0 + 1.3i, zoom 5, draws the frame the top place already has, so it moved up
+// to the bud above it.
 const SINE_SQUARED_PLACES: readonly Place[] = [
   {
     id: "sin-z-squared-whole",
@@ -1333,6 +1342,42 @@ const SINE_SQUARED_PLACES: readonly Place[] = [
     centerX: 0,
     centerY: 1.4,
     zoom: 6,
+    colorScheme: "classic",
+  },
+  {
+    id: "sin-z-squared-right",
+    name: "The diamond's right point",
+    fractal: "sin-z-squared",
+    centerX: 1.5,
+    centerY: 0,
+    zoom: 6,
+    colorScheme: "classic",
+  },
+  {
+    id: "sin-z-squared-bud",
+    name: "A bud hanging above the top point",
+    fractal: "sin-z-squared",
+    centerX: 0,
+    centerY: 1.5,
+    zoom: 8,
+    colorScheme: "classic",
+  },
+  {
+    id: "sin-z-squared-beads",
+    name: "Beads strung beyond the last disc",
+    fractal: "sin-z-squared",
+    centerX: 2,
+    centerY: 0,
+    zoom: 6,
+    colorScheme: "classic",
+  },
+  {
+    id: "sin-z-squared-edge",
+    name: "Satellites on the upper right edge",
+    fractal: "sin-z-squared",
+    centerX: 0.85,
+    centerY: 0.7,
+    zoom: 5,
     colorScheme: "classic",
   },
 ];

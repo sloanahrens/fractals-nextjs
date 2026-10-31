@@ -430,7 +430,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   nova: [4, 6],
   sine: [4, 6],
   cosine: [6, 6],
-  "sin-z-squared": [2, 2],
+  "sin-z-squared": [6, 6],
 };
 
 describe("PLACES", () => {
@@ -775,6 +775,73 @@ describe("PLACES", () => {
             first.centerX === -second.centerX &&
             first.centerY === second.centerY &&
             first.zoom === second.zoom
+          ) {
+            mirrors.push(`${first.id} mirrors ${second.id}`);
+          }
+        }
+      }
+
+      expect(mirrors).toEqual([]);
+    });
+  });
+
+  // The places fr-rln5 added, named rather than taken as "every Sine of z
+  // squared place": a place dropped or renamed fails the lookup instead of
+  // quietly leaving the sweep with fewer to check.
+  describe("the deeper Sine of z squared places", () => {
+    const found = [
+      "sin-z-squared-right",
+      "sin-z-squared-bud",
+      "sin-z-squared-beads",
+      "sin-z-squared-edge",
+    ].map((id) => {
+      const entry = PLACES.find((place) => place.id === id);
+      if (!entry) throw new Error(`the catalogue has no place ${id}`);
+
+      return entry;
+    });
+
+    it("holds both set and edge in every frame, all four in one pass", () => {
+      const { offenders, checked } = sweep(
+        found.map((entry) => ({ at: entry.id, value: setShareOf(entry) })),
+        (share) => share >= SET_SHARE_LEAST && share <= SET_SHARE_MOST,
+      );
+
+      expect(checked).toBe(4);
+      expect(offenders).toEqual([]);
+    });
+
+    it("does not leave one of them a single colour", () => {
+      const { offenders, checked } = sweep(
+        found.map((entry) => ({
+          at: entry.id,
+          value: nearUniformShare(pictureOf(entry), WIDTH, HEIGHT),
+        })),
+        (share) => share <= FEATURED_MAX_UNIFORM_SHARE,
+      );
+
+      expect(checked).toBe(4);
+      expect(offenders).toEqual([]);
+    });
+
+    it("gives no Sine of z squared place the same picture under a symmetry", () => {
+      // The set is the same under x -> -x, y -> -y and both at once, so a frame
+      // at any of c's three other sign flips draws what the frame at c draws,
+      // and two such places would show one picture.
+      const places = placesForFractal("sin-z-squared");
+      const mirrors: string[] = [];
+
+      for (const first of places) {
+        const flips = [
+          [-first.centerX, first.centerY],
+          [first.centerX, -first.centerY],
+          [-first.centerX, -first.centerY],
+        ];
+
+        for (const second of places) {
+          if (first === second || second.zoom !== first.zoom) continue;
+          if (
+            flips.some(([x, y]) => second.centerX === x && second.centerY === y)
           ) {
             mirrors.push(`${first.id} mirrors ${second.id}`);
           }
