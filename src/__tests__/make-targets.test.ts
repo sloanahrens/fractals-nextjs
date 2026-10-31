@@ -124,7 +124,12 @@ function echoed(recipe: string[]): string {
  */
 function make(...args: string[]) {
   const env = { ...process.env };
-  for (const name of [INTEGRATION_URL_VAR, STAGING_URL_VAR, "PROD_URL"]) {
+  for (const name of [
+    INTEGRATION_URL_VAR,
+    STAGING_URL_VAR,
+    "PROD_URL",
+    "GOPROXY",
+  ]) {
     delete env[name];
   }
   const run = spawnSync("make", ["--no-print-directory", ...args], {
@@ -367,5 +372,79 @@ describe("make decides to install from the lockfile and the stamp", () => {
 
   it("installs nothing when what is installed is newer than the lockfile", () => {
     expect(installs(tree(OLD, NEW))).toBe(0);
+  });
+});
+
+/** The params file `make deploy-check` reads its registry URL from. */
+const PARAMS_FILE = join(ROOT, "deploy/params.json");
+const PARAMS = JSON.parse(readFileSync(PARAMS_FILE, "utf8")) as {
+  registryUrl?: string;
+};
+
+describe("the deploy program's registry", () => {
+  const source = readFileSync(MAKEFILE, "utf8");
+
+  it("takes the registry URL from the params file, not from this Makefile", () => {
+    expect(PARAMS.registryUrl).toBeTruthy();
+    // The URL names this deployment's owner, so a fork must not inherit it.
+    expect(source).not.toContain(PARAMS.registryUrl);
+    expect(source).toMatch(
+      /^REGISTRY_URL = \$\(shell sed .*registryUrl.*\$\(PARAMS_FILE\)/m,
+    );
+  });
+
+  it("keeps the public proxy and direct behind the registry", () => {
+    expect(source).toMatch(
+      /^GOPROXY \?= \$\(REGISTRY_URL\),https:\/\/proxy\.golang\.org,direct$/m,
+    );
+  });
+
+  it("checks the params file ahead of the tests and the vet", () => {
+    expect(target("deploy-check").prerequisites).toEqual(["check-registry-url"]);
+  });
+
+  it("hands the run the registry URL the params file names", () => {
+    const dry = make("-n", "deploy-check");
+
+    expect(dry.status).toBe(0);
+    expect(dry.output).toContain(
+      `GOPROXY=${PARAMS.registryUrl},https://proxy.golang.org,direct`,
+    );
+  });
+
+  it("lets a GOPROXY on the make command line win over the params file", () => {
+    const dry = make(
+      "-n",
+      "deploy-check",
+      "GOPROXY=https://caller.test/go,direct",
+    );
+
+    expect(dry.status).toBe(0);
+    expect(dry.output).toContain(
+      "GOPROXY=https://caller.test/go,direct GOPRIVATE=",
+    );
+    // The params value is still expanded into the guard's test, so the line
+    // to look for is the one the run would hand go.
+    expect(dry.output).not.toContain(`GOPROXY=${PARAMS.registryUrl},`);
+  });
+
+  it("refuses a run whose params file names no registry", () => {
+    // A path with no file is the same branch as a file without the key: both
+    // read as no URL, and the run must stop rather than hand go a broken list.
+    const run = make("check-registry-url", "PARAMS_FILE=deploy/absent.json");
+
+    expect(run.status).not.toBe(0);
+    expect(run.output).toContain("names no registryUrl");
+    expect(run.output).toContain("deploy/absent.json");
+  });
+
+  it("accepts a GOPROXY the caller set instead of reading the params file", () => {
+    const run = make(
+      "check-registry-url",
+      "PARAMS_FILE=deploy/absent.json",
+      "GOPROXY=https://caller.test/go",
+    );
+
+    expect(run.status).toBe(0);
   });
 });
