@@ -431,7 +431,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   sine: [4, 6],
   cosine: [6, 6],
   "sin-z-squared": [6, 6],
-  "sine-plus-z": [2, 2],
+  "sine-plus-z": [6, 6],
 };
 
 describe("PLACES", () => {
@@ -850,6 +850,46 @@ describe("PLACES", () => {
       }
 
       expect(mirrors).toEqual([]);
+    });
+  });
+
+  // The places fr-yu7t added, named rather than taken as "every Sin z+z
+  // place": a place dropped or renamed fails the lookup instead of quietly
+  // leaving the sweep with fewer to check.
+  describe("the deeper Sin z+z places", () => {
+    const found = [
+      "sine-plus-z-axis-bead",
+      "sine-plus-z-outer-bead",
+      "sine-plus-z-body-edge",
+      "sine-plus-z-deep-bud",
+    ].map((id) => {
+      const entry = PLACES.find((place) => place.id === id);
+      if (!entry) throw new Error(`the catalogue has no place ${id}`);
+
+      return entry;
+    });
+
+    it("holds both set and edge in every frame, all four in one pass", () => {
+      const { offenders, checked } = sweep(
+        found.map((entry) => ({ at: entry.id, value: setShareOf(entry) })),
+        (share) => share >= SET_SHARE_LEAST && share <= SET_SHARE_MOST,
+      );
+
+      expect(checked).toBe(4);
+      expect(offenders).toEqual([]);
+    });
+
+    it("does not leave one of them a single colour", () => {
+      const { offenders, checked } = sweep(
+        found.map((entry) => ({
+          at: entry.id,
+          value: nearUniformShare(pictureOf(entry), WIDTH, HEIGHT),
+        })),
+        (share) => share <= FEATURED_MAX_UNIFORM_SHARE,
+      );
+
+      expect(checked).toBe(4);
+      expect(offenders).toEqual([]);
     });
   });
 });

@@ -1384,10 +1384,26 @@ const SINE_SQUARED_PLACES: readonly Place[] = [
 
 // The Sin z+z set (fr-o11n), principal branch, drawn headless at 400x300. The
 // whole-set place is the opening view (zoom 1, x -2..2, the widest the explorer
-// allows): the central body and the real axis running out through it. The set is symmetric about the real
-// axis and the first bead off the central body sits on it near x = 6.6 (the
-// outermost in-set points reach 6.77, measured at cap 200 on a 0.01 grid), so
-// the close frame is centred there.
+// allows): the central body, two lobes meeting at the origin, and the real axis
+// running out through it. The set is symmetric about the real axis, so every
+// frame off the axis sits in the upper half plane. The first bead off the
+// central body sits on the axis near x = 6.6 (the outermost in-set points reach
+// 6.77, measured at cap 200 on a 0.01 grid), so the close frame is centred
+// there.
+//
+// The four deeper frames (fr-yu7t) were scored the way the Cosine and Sine of z
+// squared places were, at 64x48 at Auto's count for the zoom, by the share of
+// pixels in the set and by the share of the single commonest colour: two of the
+// beads on the bare thread between the body and that first bead, at 4.246
+// (4.2 per cent set, 25.5 per cent one colour) and 5.3915 (3.3, 33.9), the top
+// edge of the central body at 1 + 1.15i (35.8, 35.2), and the bud strung off
+// that edge at 0.96 + 1.28i, at 30x (43.6, 42.8). Every one is drawn in
+// classic: fire, ocean, rainbow and grayscale paint the beads' near-empty
+// fields 89 to 98 per cent one colour, past the flat-field guard's 60%, where
+// classic's green gradient gives the same frames 25 to 34. The beads are small,
+// half-widths under 0.02 read off the axis at cap 200, so a shallower frame
+// would spend nearly all of itself on the field, which is why the two are drawn
+// at 20x and 22x.
 const SINE_PLUS_Z_PLACES: readonly Place[] = [
   {
     id: "sine-plus-z-whole",
@@ -1406,6 +1422,42 @@ const SINE_PLUS_Z_PLACES: readonly Place[] = [
     centerY: 0,
     zoom: 5,
     colorScheme: "fire",
+  },
+  {
+    id: "sine-plus-z-axis-bead",
+    name: "A bead strung on the axis thread",
+    fractal: "sine-plus-z",
+    centerX: 4.246,
+    centerY: 0,
+    zoom: 20,
+    colorScheme: "classic",
+  },
+  {
+    id: "sine-plus-z-outer-bead",
+    name: "A smaller bead further out along the thread",
+    fractal: "sine-plus-z",
+    centerX: 5.3915,
+    centerY: 0,
+    zoom: 22,
+    colorScheme: "classic",
+  },
+  {
+    id: "sine-plus-z-body-edge",
+    name: "The top edge of the central body",
+    fractal: "sine-plus-z",
+    centerX: 1,
+    centerY: 1.15,
+    zoom: 5,
+    colorScheme: "classic",
+  },
+  {
+    id: "sine-plus-z-deep-bud",
+    name: "The bud strung off the body's top edge",
+    fractal: "sine-plus-z",
+    centerX: 0.96,
+    centerY: 1.28,
+    zoom: 30,
+    colorScheme: "classic",
   },
 ];
 
