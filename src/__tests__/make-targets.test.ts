@@ -10,6 +10,7 @@
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -188,11 +189,23 @@ describe("the integration-prod target", () => {
     ]);
   });
 
-  it("runs the same suite as integration, pointed at PROD_URL", () => {
+  it("runs the same suite as integration, pointed at the exported PROD_URL", () => {
     const recipe = target("integration-prod").recipe.join("\n");
 
     expect(recipe).toContain("npm run test:integration");
-    expect(recipe).toContain(`${INTEGRATION_URL_VAR}="$(PROD_URL)"`);
+    expect(recipe).toContain(`${INTEGRATION_URL_VAR}="$$PROD_URL"`);
+  });
+
+  it("reads PROD_URL as an exported shell variable, never as recipe text", () => {
+    // Spliced into the recipe, the shell parses the URL's own quotes and
+    // $(...) as syntax; exported, it arrives as data.
+    for (const name of ["integration-prod", "check-integration-prod-url"]) {
+      const recipe = target(name).recipe.join("\n");
+
+      expect(recipe, name).not.toContain("$(PROD_URL)");
+      expect(recipe, name).toContain("$$PROD_URL");
+    }
+    expect(readFileSync(MAKEFILE, "utf8")).toMatch(/^export PROD_URL$/m);
   });
 
   it("hands the suite PROD_URL as INTEGRATION_URL and passes EXPECT_SHA on", () => {
@@ -206,7 +219,7 @@ describe("the integration-prod target", () => {
 
     expect(dry.status).toBe(0);
     expect(dry.output).toContain(
-      'INTEGRATION_URL="https://prod.example.test" npm run test:integration',
+      'INTEGRATION_URL="$PROD_URL" npm run test:integration',
     );
   });
 
@@ -238,6 +251,65 @@ describe("the integration-prod target", () => {
     );
 
     expect(run.status).toBe(0);
+  });
+});
+
+describe("the integration-prod guard treats PROD_URL as data", () => {
+  const dirs: string[] = [];
+  /** The file `touch` leaves behind if the URL's own text reaches the shell. */
+  const MARKER = "ran-from-url";
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** A directory holding only the Makefile: anywhere a command in the URL runs. */
+  function makefileOnly(): string {
+    const dir = mkdtempSync(join(tmpdir(), "fractals-prod-url-"));
+    dirs.push(dir);
+    copyFileSync(MAKEFILE, join(dir, "Makefile"));
+    return dir;
+  }
+
+  /** Run the guard on `url` in a fresh directory and see what it left there. */
+  function check(url: string) {
+    const dir = makefileOnly();
+    const run = spawnSync(
+      "make",
+      ["--no-print-directory", "check-integration-prod-url", `PROD_URL=${url}`],
+      { cwd: dir, encoding: "utf8" },
+    );
+    return {
+      status: run.status,
+      output: `${run.stdout}${run.stderr}`,
+      ran: existsSync(join(dir, MARKER)),
+    };
+  }
+
+  it("passes a URL holding a double quote, $(...) or a backtick through, running nothing", () => {
+    for (const url of [
+      `https://prod.example.test/"; touch ${MARKER}; echo "`,
+      `https://prod.example.test/$(touch ${MARKER})`,
+      `https://prod.example.test/\`touch ${MARKER}\``,
+    ]) {
+      const run = check(url);
+
+      // The marker first: a command the URL names is the defect, and the
+      // status it left behind is a symptom that varies with the value.
+      expect(run.ran, url).toBe(false);
+      expect(run.status, url).toBe(0);
+    }
+  });
+
+  it("still refuses a staging URL that disguises itself in shell syntax", () => {
+    const url = `https://prod.example.test/"; touch ${MARKER}; echo "staging`;
+
+    const run = check(url);
+
+    expect(run.status).not.toBe(0);
+    expect(run.output).toContain("names staging");
+    expect(run.ran).toBe(false);
   });
 });
 

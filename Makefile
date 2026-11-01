@@ -149,18 +149,27 @@ check-integration-url:
 # EXPECT_SHA=<commit> makes the version check prove the released commit rather
 # than any commit. PROD_URL is the variable `smoke` takes for the same URL; it
 # becomes INTEGRATION_URL here, ahead of any STAGING_URL in the environment.
+#
+# PROD_URL reaches both recipes as a shell variable, never as recipe text: make
+# exports it here and each recipe reads $$PROD_URL. Written as "$(PROD_URL)" the
+# value is spliced into the command line the shell parses, so a URL holding a
+# double quote or $(...) would run as shell syntax.
+export PROD_URL
+
 integration-prod: check-integration-prod-url ci-install
-	INTEGRATION_URL="$(PROD_URL)" npm run test:integration
+	INTEGRATION_URL="$$PROD_URL" npm run test:integration
 
 # Refuse a run with no URL, and a URL that names staging: the prod check pointed
 # at staging would pass for the wrong deployment. Both answer before the
-# install, as `check-integration-url` does.
+# install, as `check-integration-url` does, and both read the exported shell
+# variable, so the URL is data whatever characters it holds. The first test is
+# the one `$(strip ...)` made: a URL of nothing but whitespace counts as unset.
 check-integration-prod-url:
-	@if [ -z "$(strip $(PROD_URL))" ]; then \
+	@if ! printf '%s' "$$PROD_URL" | grep -q '[^[:space:]]'; then \
 		echo "PROD_URL is not set: make integration-prod PROD_URL=<url> [EXPECT_SHA=<commit>]"; \
 		exit 1; \
 	fi
-	@if printf '%s' "$(PROD_URL)" | grep -qi staging; then \
+	@if printf '%s' "$$PROD_URL" | grep -qi staging; then \
 		echo "PROD_URL names staging, so make integration-prod will not run against it: use make integration INTEGRATION_URL=<url>"; \
 		exit 1; \
 	fi
