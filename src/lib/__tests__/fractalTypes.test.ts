@@ -22,6 +22,7 @@ import { novaKind } from "../nova";
 import { sineKind } from "../sine";
 import { cosineKind } from "../cosine";
 import { sineSquaredKind } from "../sineSquared";
+import { sineZKind } from "../sineZ";
 import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { JULIA_CONSTANTS, createJuliaKind } from "../julia";
 import { mandelbrotKind } from "../mandelbrot";
@@ -43,7 +44,7 @@ function sampledPoints(): ComplexNumber[] {
 }
 
 describe("FRACTAL_TYPES", () => {
-  it("offers the fourteen fractals in order, each once", () => {
+  it("offers the fifteen fractals in order, each once", () => {
     // The first entry is the one the explorer opens on, so the order is part
     // of the contract and not just how the list happens to read.
     expect(FRACTAL_TYPES).toEqual([
@@ -61,6 +62,7 @@ describe("FRACTAL_TYPES", () => {
       { id: "sine", label: "Sine" },
       { id: "cosine", label: "Cosine" },
       { id: "sin-z-squared", label: "Sin z²" },
+      { id: "sine-plus-z", label: "Sin z+z" },
     ]);
 
     const ids = FRACTAL_TYPES.map((type) => type.id);
@@ -457,6 +459,22 @@ describe("defaultViewFor", () => {
     });
   });
 
+  it("draws the Sin z+z set for its own id, whatever variant is beside it", () => {
+    expect(resolveFractalKind("sine-plus-z", "Dendrite")).toBe(sineZKind);
+    expect(resolveFractalKind("sine-plus-z", "")).toBe(sineZKind);
+  });
+
+  it("frames the Sin z+z set on the origin at zoom 1, a crop of the wider set", () => {
+    // Principal branch, cap 200, 0.01 grid: the in-set points off the real
+    // axis run from x -6.77 to 6.77 and reach y 2.41; zoom 1 (the widest the
+    // explorer allows) shows x -2..2.
+    expect(defaultViewFor("sine-plus-z")).toEqual({
+      centerX: 0,
+      centerY: 0,
+      zoom: 1,
+    });
+  });
+
   it("frames the Sine of z squared set on the origin at zoom 1, a crop of the wider set", () => {
     // Measured at a cap of 200 on a 0.002 grid: the in-set runs along y = 0.02
     // reach x 2.53, and the set fills the width of the og card's 5.7 by 3
@@ -539,6 +557,7 @@ describe("fractalVariants", () => {
     expect(fractalVariants("sine")).toBeNull();
     expect(fractalVariants("cosine")).toBeNull();
     expect(fractalVariants("sin-z-squared")).toBeNull();
+    expect(fractalVariants("sine-plus-z")).toBeNull();
     expect(fractalVariants("lyapunov")).toBeNull();
   });
 
@@ -562,6 +581,7 @@ describe("defaultVariant", () => {
     expect(defaultVariant("sine")).toBe("");
     expect(defaultVariant("cosine")).toBe("");
     expect(defaultVariant("sin-z-squared")).toBe("");
+    expect(defaultVariant("sine-plus-z")).toBe("");
     expect(defaultVariant("perpendicular-ship")).toBe("");
     expect(defaultVariant("lyapunov")).toBe("");
   });
@@ -677,6 +697,7 @@ describe("isVariantValue", () => {
     expect(isVariantValue("sine", "Classic")).toBe(false);
     expect(isVariantValue("cosine", "Classic")).toBe(false);
     expect(isVariantValue("sin-z-squared", "Classic")).toBe(false);
+    expect(isVariantValue("sine-plus-z", "Classic")).toBe(false);
     expect(isVariantValue("perpendicular-ship", "4")).toBe(false);
   });
 });

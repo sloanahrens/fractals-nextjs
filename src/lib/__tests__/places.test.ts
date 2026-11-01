@@ -431,6 +431,7 @@ const EXPECTED_COUNTS: Record<string, [number, number]> = {
   sine: [4, 6],
   cosine: [6, 6],
   "sin-z-squared": [6, 6],
+  "sine-plus-z": [2, 2],
 };
 
 describe("PLACES", () => {
@@ -1128,6 +1129,7 @@ const FEATURED_IS_OPENING_VIEW = new Set([
   "sine",
   "cosine",
   "sin-z-squared",
+  "sine-plus-z",
 ]);
 
 /**

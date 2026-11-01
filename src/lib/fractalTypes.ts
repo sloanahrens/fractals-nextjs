@@ -35,6 +35,7 @@ import { novaKind } from "./nova";
 import { perpendicularShipKind } from "./perpendicularShip";
 import { sineKind } from "./sine";
 import { sineSquaredKind } from "./sineSquared";
+import { sineZKind } from "./sineZ";
 import { tricornKind } from "./tricorn";
 
 /**
@@ -76,6 +77,7 @@ export const FRACTAL_TYPES: readonly FractalType[] = [
   // width on a phone, where "Sine of z squared" would overflow it. The full
   // name is what the Math card's title and a link's line say.
   { id: "sin-z-squared", label: "Sin z²" },
+  { id: "sine-plus-z", label: "Sin z+z" },
 ];
 
 /** One choice of a fractal's variant, as a chip or a select option shows it. */
@@ -272,6 +274,7 @@ export function resolveFractalKind(
   if (typeId === "sine") return sineKind;
   if (typeId === "cosine") return cosineKind;
   if (typeId === "sin-z-squared") return sineSquaredKind;
+  if (typeId === "sine-plus-z") return sineZKind;
   if (typeId === "magnet") {
     return createMagnetKind(parseMagnetType(variant) ?? MAGNET_TYPES[0]);
   }
@@ -431,6 +434,23 @@ export function defaultViewFor(typeId: string): FractalDefaultView {
   // the set (measured on 400 by 300 at Auto's cap of 100 for this zoom).
   if (typeId === "sin-z-squared")
     return { centerX: 0, centerY: 0, zoom: 1 };
+
+  // The Sin z+z set is the c whose orbit under z -> c sin z + z, started at
+  // the critical point arccos(-1/c) on the principal branch (real part in
+  // [0, pi]), is not thrown out. The map is odd and f(z + 2 pi) = f(z) + 2 pi,
+  // so every other branch gives the same picture (fr-p5cv). A real c of
+  // modulus 1 or more keeps its orbit on the real axis, so the whole real axis
+  // beyond the central body is in the set. Measured for the principal branch at
+  // a cap of 200 on a 0.01 grid, the in-set points off the real axis run from
+  // x -6.77 to 6.77 and reach y 2.41, with the outermost bead centred near
+  // +-6.6, and the set is symmetric about the real axis. The origin centres it.
+  // Zoom 1 (x -2..2, y -1.5..1.5) is the widest view the explorer has (the bead
+  // named zoom 0.5, which MIN_ZOOM does not allow), and it frames the picture
+  // that says what the set is: two large black discs touching at the origin,
+  // each with buds above and below, in a filigree (seen in a render at 400 by
+  // 300). The beads out along the real axis past x 2 are what the first-bead
+  // place frames.
+  if (typeId === "sine-plus-z") return { centerX: 0, centerY: 0, zoom: 1 };
 
   // A Phoenix set is a Julia set of the two-term step, so like Julia's it is
   // framed on the origin and every constant draws about it. Measured with a

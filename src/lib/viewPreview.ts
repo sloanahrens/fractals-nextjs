@@ -89,6 +89,7 @@ const FRACTAL_NOUNS: Record<string, string> = {
   sine: "Sine set",
   cosine: "Cosine set",
   "sin-z-squared": "Sine of z squared set",
+  "sine-plus-z": "Sine plus z set",
 };
 
 /**

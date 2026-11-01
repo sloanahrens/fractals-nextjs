@@ -160,6 +160,9 @@ describe("orbitMinExtent and hasEscapeCircle", () => {
     // so it gets no circle and keeps the escape-time frame.
     expect(hasEscapeCircle("sin-z-squared")).toBe(false);
     expect(orbitMinExtent("sin-z-squared")).toBe(ORBIT_ESCAPE_RADIUS);
+    // The Sin z+z set's orbits leave by height too, so no circle either.
+    expect(hasEscapeCircle("sine-plus-z")).toBe(false);
+    expect(orbitMinExtent("sine-plus-z")).toBe(ORBIT_ESCAPE_RADIUS);
   });
 
   it("still plots the Magnet's orbit in the escape-time frame", () => {

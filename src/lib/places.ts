@@ -1382,6 +1382,33 @@ const SINE_SQUARED_PLACES: readonly Place[] = [
   },
 ];
 
+// The Sin z+z set (fr-o11n), principal branch, drawn headless at 400x300. The
+// whole-set place is the opening view (zoom 1, x -2..2, the widest the explorer
+// allows): the central body and the real axis running out through it. The set is symmetric about the real
+// axis and the first bead off the central body sits on it near x = 6.6 (the
+// outermost in-set points reach 6.77, measured at cap 200 on a 0.01 grid), so
+// the close frame is centred there.
+const SINE_PLUS_Z_PLACES: readonly Place[] = [
+  {
+    id: "sine-plus-z-whole",
+    name: "The whole Sin z+z set",
+    fractal: "sine-plus-z",
+    centerX: 0,
+    centerY: 0,
+    zoom: 1,
+    colorScheme: "classic",
+  },
+  {
+    id: "sine-plus-z-first-bead",
+    name: "The first bead off the central body",
+    fractal: "sine-plus-z",
+    centerX: 6.62,
+    centerY: 0,
+    zoom: 5,
+    colorScheme: "fire",
+  },
+];
+
 /**
  * Every place the explorer knows, grouped by fractal and, inside a fractal, in
  * the order the picker lists it: the whole picture first, then the places
@@ -1402,6 +1429,7 @@ export const PLACES: readonly Place[] = [
   ...SINE_PLACES,
   ...COSINE_PLACES,
   ...SINE_SQUARED_PLACES,
+  ...SINE_PLUS_Z_PLACES,
 ];
 
 /**
@@ -1479,6 +1507,7 @@ export const FEATURED_PLACE_IDS: Readonly<Record<string, string>> = {
   sine: "sine-whole",
   cosine: "cosine-whole",
   "sin-z-squared": "sin-z-squared-whole",
+  "sine-plus-z": "sine-plus-z-whole",
 };
 
 /**
