@@ -879,6 +879,51 @@ const START_AT_ROOT_HALF_PI = row(
   PIXELS_POINT,
 );
 
+/** z₀ = arccos(−1/c), c = the pixel's point: a critical point of c sin z + z, on the branch with real part in [0, π]. */
+const START_AT_ARCCOS = row(
+  subscript(z, number(0)),
+  EQUALS,
+  identifier("arccos", "the arc cosine of"),
+  OPEN,
+  operator(MINUS),
+  fraction(number(1), c),
+  CLOSE,
+  operator(","),
+  c,
+  EQUALS,
+  PIXELS_POINT,
+);
+
+const SINE_PLUS_Z: FractalMath = {
+  title: "Sine plus z set",
+  rule: row(
+    z,
+    ARROW,
+    c,
+    operator(INVISIBLE_TIMES),
+    identifier("sin", "the sine of"),
+    z,
+    PLUS,
+    z,
+  ),
+  start: START_AT_ARCCOS,
+  setting: null,
+  blurb: [
+    {
+      text: "The same game as the Sine set, but each step adds c times the sine of the number to the number itself, so a point drifts along instead of being thrown back to c.",
+    },
+    {
+      text: "A real c of size 1 or more keeps its orbit on the real axis, so a long black line runs the width of the picture with beads strung along it past the central body, and the filigree is where the body and the beads meet.",
+    },
+    {
+      text: "Points that stay put are the black body and beads; the rest are coloured by how many steps it takes to throw them out.",
+      colouring: true,
+    },
+  ],
+  escape:
+    "A point escapes when the imaginary part of z passes 20: the sine of such a number is about a hundred million times bigger again, so it never comes back. The colour is the step on which that happens, smoothed between steps; a point that never escapes within the iteration cap is painted black.",
+};
+
 const SINE_SQUARED: FractalMath = {
   title: "Sine of z squared set",
   rule: row(
@@ -987,6 +1032,7 @@ export const FRACTAL_MATH: Readonly<
   sine: () => SINE,
   cosine: () => COSINE,
   "sin-z-squared": () => SINE_SQUARED,
+  "sine-plus-z": () => SINE_PLUS_Z,
 };
 
 /**

@@ -28,6 +28,7 @@ import { novaKind } from "../nova";
 import { sineKind } from "../sine";
 import { cosineKind } from "../cosine";
 import { SINE_SQUARED_START, sineSquaredKind } from "../sineSquared";
+import { sineZKind, sineZStart } from "../sineZ";
 import { createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
 import { tricornKind } from "../tricorn";
@@ -215,6 +216,21 @@ const CASES: KindCase[] = [
     // above 20 (5 + 5i gives 50) leaves on the first step: the start and that
     // one point.
     endsAt: { point: { real: 5, imaginary: 5 }, steps: 0 },
+    endedLength: (steps) => steps + 2,
+    escapes: true,
+  },
+  {
+    name: "sine-plus-z",
+    kind: sineZKind,
+    // Every orbit starts at its critical point, arccos(-1/c) on the principal
+    // branch, which depends on c.
+    starts: (point) => sineZStart(point),
+    // A real c of modulus 1 or more keeps the orbit on the real axis for good.
+    neverEnds: { real: 2, imaginary: 0 },
+    neverEndsLength: (maxSteps) => maxSteps + 1,
+    // 3 + 4i leaves on the second step, counted as step 1: the start, the
+    // first step and the point that left.
+    endsAt: { point: { real: 3, imaginary: 4 }, steps: 1 },
     endedLength: (steps) => steps + 2,
     escapes: true,
   },

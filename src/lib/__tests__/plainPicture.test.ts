@@ -99,6 +99,7 @@ const GOLDEN: Record<string, string> = {
   // looked at (a black diamond with satellites strung along the two axes), and
   // it pins that picture from then on.
   "sin-z-squared": "5cfdd090",
+  "sine-plus-z": "8712c4d6",
 };
 
 describe("the plain (iteration-count) picture", () => {

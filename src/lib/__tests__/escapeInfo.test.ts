@@ -21,6 +21,7 @@ import { MAGNET_TYPES, createMagnetKind } from "../magnet";
 import { novaKind } from "../nova";
 import { sineKind } from "../sine";
 import { cosineKind } from "../cosine";
+import { sineZKind } from "../sineZ";
 import { sineSquaredKind } from "../sineSquared";
 import { PHOENIX_CONSTANTS, createPhoenixKind } from "../phoenix";
 import { perpendicularShipKind } from "../perpendicularShip";
@@ -188,6 +189,17 @@ const CASES: KindCase[] = [
     // 5 + 5i, whose square has an imaginary part of 50 -- is away on its first
     // step, counted as step 0.
     endsAt: { point: { real: 5, imaginary: 5 }, steps: 0 },
+    packsOutcomes: false,
+  },
+  {
+    name: "sine-plus-z",
+    kind: sineZKind,
+    // A real c of modulus 1 or more starts on the real axis and keeps its orbit
+    // there, so c = 2 never leaves.
+    neverEnds: { real: 2, imaginary: 0 },
+    // 3 + 4i is thrown out on the second step: the orbit started at its
+    // critical point is at height 0.16, and the first step lands above 20.
+    endsAt: { point: { real: 3, imaginary: 4 }, steps: 1 },
     packsOutcomes: false,
   },
   {

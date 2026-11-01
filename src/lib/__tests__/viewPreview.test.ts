@@ -355,6 +355,9 @@ describe("describeViewLine", () => {
     expect(line({ ...base, fractalType: "sin-z-squared", zoomLevel: 1 })).toBe(
       "Sine of z squared set, 1x",
     );
+    expect(line({ ...base, fractalType: "sine-plus-z", zoomLevel: 1 })).toBe(
+      "Sine plus z set, 1x",
+    );
     expect(line({ ...base, fractalType: "perpendicular-ship" })).toBe(
       "Perpendicular Ship, 1x",
     );

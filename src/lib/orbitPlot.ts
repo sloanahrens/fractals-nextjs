@@ -191,7 +191,8 @@ export function hasEscapeCircle(fractalId: string): boolean {
     fractalId !== "nova" &&
     fractalId !== "sine" &&
     fractalId !== "cosine" &&
-    fractalId !== "sin-z-squared"
+    fractalId !== "sin-z-squared" &&
+    fractalId !== "sine-plus-z"
   );
 }
 

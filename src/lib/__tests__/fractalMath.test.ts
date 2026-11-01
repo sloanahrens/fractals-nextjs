@@ -263,6 +263,12 @@ describe("the rule, read aloud", () => {
     );
   });
 
+  it("reads the Sin z+z set's rule: c times the sine of z, plus z", () => {
+    expect(rule("sine-plus-z")).toBe(
+      "z becomes c times the sine of z plus z",
+    );
+  });
+
   it("reads the second magnetic type's rule", () => {
     expect(rule("magnet", "2")).toBe(
       "z becomes open bracket the fraction z cubed plus 3 times open bracket c minus 1 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket over 3 times z squared plus 3 times open bracket c minus 2 close bracket times z plus open bracket c minus 1 close bracket times open bracket c minus 2 close bracket plus 1 end fraction close bracket squared",
@@ -386,6 +392,12 @@ describe("where each point starts", () => {
     );
   });
 
+  it("starts the Sin z+z set at the arc cosine of minus one over c", () => {
+    expect(start("sine-plus-z")).toBe(
+      "z sub 0 equals the arc cosine of open bracket minus the fraction 1 over c end fraction close bracket, c equals the pixel's point",
+    );
+  });
+
   it("starts Julia and Newton at the pixel's point", () => {
     expect(start("julia")).toBe("z sub 0 equals the pixel's point");
     expect(start("newton")).toBe("z sub 0 equals the pixel's point");
@@ -404,6 +416,7 @@ describe("the setting", () => {
       "sine",
       "cosine",
       "sin-z-squared",
+      "sine-plus-z",
     ]) {
       expect(describeFractalMath(id, "").setting).toBeNull();
     }
@@ -671,7 +684,7 @@ describe("the paragraph under the rows", () => {
     describeFractalMath(id, variant).blurb;
 
   it("reads exactly as it read before a Look could change it", () => {
-    // The fourteen default paragraphs, word for word as they stood before
+    // The fifteen default paragraphs, word for word as they stood before
     // this bead. Nothing here may drift: a trap changes the paragraph by
     // leaving sentences out, never by rewording one.
     const expected: Record<string, string> = {
@@ -699,6 +712,8 @@ describe("the paragraph under the rows", () => {
       nova: "Nova is Newton's method for z cubed = 1 with a constant added after every step. Pick a point on the plane and call it c, start at 1 and keep improving the guess and adding c. Instead of three tidy basins the picture is a Mandelbrot-like set with spirals and bulbs in it, where the Newton basins are folded into the shapes.",
       cosine:
         "The same game as the Mandelbrot set, but each step takes the cosine of the number instead of squaring it, and then multiplies by c. The cosine of a number that has strayed far from the real line is enormous, so a point either settles or is thrown out almost at once: the set is two large discs that touch at the origin, with smaller discs strung along the real axis, and the filigree is where they meet. Points that stay put are the black discs; the rest are coloured by how many steps it takes to throw them out.",
+      "sine-plus-z":
+        "The same game as the Sine set, but each step adds c times the sine of the number to the number itself, so a point drifts along instead of being thrown back to c. A real c of size 1 or more keeps its orbit on the real axis, so a long black line runs the width of the picture with beads strung along it past the central body, and the filigree is where the body and the beads meet. Points that stay put are the black body and beads; the rest are coloured by how many steps it takes to throw them out.",
       "sin-z-squared":
         "The same game as the Mandelbrot set, but each step squares the number, takes the sine of the square and then multiplies by c. The sine of a number that has strayed far from the real line is enormous, so a point either settles or is thrown out almost at once: an orbit that starts on the real axis or on the imaginary axis stays on it, so both whole axes are in the set, and the shape is a diamond with smaller copies strung along them. Points that stay put are the black diamond; the rest are coloured by how many steps it takes to throw them out.",
     };
