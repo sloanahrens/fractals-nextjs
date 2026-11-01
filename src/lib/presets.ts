@@ -697,6 +697,42 @@ export const BUILTIN_PRESETS: FractalPreset[] = [
     canvasHeight: 600,
     fractal: "sin-z-squared",
   },
+  {
+    id: "sine-plus-z-overview",
+    name: "Sine plus z set",
+    description: "The opening view: two central bodies joined at the origin",
+    // The Sin z+z default view (0, 0) at zoom 1: 4 by 3 about the origin, the
+    // opening view the catalogue place `sine-plus-z-whole` names.
+    bounds: {
+      minReal: -2,
+      maxReal: 2,
+      minImaginary: -1.5,
+      maxImaginary: 1.5,
+    },
+    maxIterations: 300,
+    colorScheme: "classic",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "sine-plus-z",
+  },
+  {
+    id: "sine-plus-z-bead",
+    name: "Sine plus z bead",
+    description: "The first bead off the central body, strung on the axis",
+    // Centre (6.62, 0) at zoom 5: 0.8 by 0.6, the view the catalogue place
+    // `sine-plus-z-first-bead` names.
+    bounds: {
+      minReal: 6.22,
+      maxReal: 7.02,
+      minImaginary: -0.3,
+      maxImaginary: 0.3,
+    },
+    maxIterations: 300,
+    colorScheme: "fire",
+    canvasWidth: 800,
+    canvasHeight: 600,
+    fractal: "sine-plus-z",
+  },
 ];
 
 /**
