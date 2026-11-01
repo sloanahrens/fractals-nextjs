@@ -119,6 +119,9 @@ server listening on `$PORT` (8080), the `/api/health` route and no baked
 secrets. The program that deploys the app is `deploy/` (`deploy/README.md`), and
 the scripts a release runs are in `scripts/release/`.
 
+Forking this app? [docs/forking.md](docs/forking.md) lists the values a fork
+supplies in `deploy/params.json` and the file each one reaches.
+
 ## Layout
 
 - `src/lib/` — the logic, pure where it can be, and where its tests live.
