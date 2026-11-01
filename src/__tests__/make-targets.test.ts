@@ -378,18 +378,20 @@ describe("make decides to install from the lockfile and the stamp", () => {
 /** The params file `make deploy-check` reads its registry URL from. */
 const PARAMS_FILE = join(ROOT, "deploy/params.json");
 const PARAMS = JSON.parse(readFileSync(PARAMS_FILE, "utf8")) as {
-  registryUrl?: string;
+  goModuleRegistryUrl?: string;
 };
 
 describe("the deploy program's registry", () => {
   const source = readFileSync(MAKEFILE, "utf8");
 
-  it("takes the registry URL from the params file, not from this Makefile", () => {
-    expect(PARAMS.registryUrl).toBeTruthy();
+  it("takes the Go module URL from the params file, not from this Makefile", () => {
+    expect(PARAMS.goModuleRegistryUrl).toBeTruthy();
     // The URL names this deployment's owner, so a fork must not inherit it.
-    expect(source).not.toContain(PARAMS.registryUrl);
+    expect(source).not.toContain(PARAMS.goModuleRegistryUrl);
+    // `registryUrl` is the registry's host and has no path, so GOPROXY must
+    // read the module URL's own key rather than that one.
     expect(source).toMatch(
-      /^REGISTRY_URL = \$\(shell sed .*registryUrl.*\$\(PARAMS_FILE\)/m,
+      /^REGISTRY_URL = \$\(shell sed .*goModuleRegistryUrl.*\$\(PARAMS_FILE\)/m,
     );
   });
 
@@ -403,12 +405,12 @@ describe("the deploy program's registry", () => {
     expect(target("deploy-check").prerequisites).toEqual(["check-registry-url"]);
   });
 
-  it("hands the run the registry URL the params file names", () => {
+  it("hands the run the Go module URL the params file names", () => {
     const dry = make("-n", "deploy-check");
 
     expect(dry.status).toBe(0);
     expect(dry.output).toContain(
-      `GOPROXY=${PARAMS.registryUrl},https://proxy.golang.org,direct`,
+      `GOPROXY=${PARAMS.goModuleRegistryUrl},https://proxy.golang.org,direct`,
     );
   });
 
@@ -425,16 +427,16 @@ describe("the deploy program's registry", () => {
     );
     // The params value is still expanded into the guard's test, so the line
     // to look for is the one the run would hand go.
-    expect(dry.output).not.toContain(`GOPROXY=${PARAMS.registryUrl},`);
+    expect(dry.output).not.toContain(`GOPROXY=${PARAMS.goModuleRegistryUrl},`);
   });
 
-  it("refuses a run whose params file names no registry", () => {
+  it("refuses a run whose params file names no Go module registry", () => {
     // A path with no file is the same branch as a file without the key: both
     // read as no URL, and the run must stop rather than hand go a broken list.
     const run = make("check-registry-url", "PARAMS_FILE=deploy/absent.json");
 
     expect(run.status).not.toBe(0);
-    expect(run.output).toContain("names no registryUrl");
+    expect(run.output).toContain("names no goModuleRegistryUrl");
     expect(run.output).toContain("deploy/absent.json");
   });
 

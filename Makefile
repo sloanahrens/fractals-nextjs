@@ -210,15 +210,17 @@ check-prod-url:
 # gt.local/devops, the one module this needs.
 #
 # The registry is the deployment's own, so its URL is not written here: it is
-# the `registryUrl` key of the params file (PARAMS_FILE), so a fork points it
-# at the registry it publishes the deploy library to and this file does not
-# change. GOPROXY takes that URL with the public proxy behind it, following
-# the devops repo's consume.yml; a caller who sets GOPROXY still wins (make
+# the `goModuleRegistryUrl` key of the params file (PARAMS_FILE), so a fork
+# points it at the registry it publishes the deploy library to and this file
+# does not change. `registryUrl` is the same registry's host, which the deploy
+# generator wants; GOPROXY needs the module URL, path and all. GOPROXY takes
+# that URL with the public proxy behind it, following the devops repo's
+# consume.yml; a caller who sets GOPROXY still wins (make
 # deploy-check GOPROXY=...) on a runner that reaches the module another way.
 # The file is read with sed, which `make` already needs, so the deploy half
 # still needs no Node.
 PARAMS_FILE ?= deploy/params.json
-REGISTRY_URL = $(shell sed -n 's/.*"registryUrl"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' '$(PARAMS_FILE)' | head -n 1)
+REGISTRY_URL = $(shell sed -n 's/.*"goModuleRegistryUrl"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' '$(PARAMS_FILE)' | head -n 1)
 GOPROXY ?= $(REGISTRY_URL),https://proxy.golang.org,direct
 DEPLOY_GO_ENV = GOPROXY=$(GOPROXY) GOPRIVATE=gt.local GONOPROXY=none GONOSUMDB=gt.local GOFLAGS=-mod=mod
 
@@ -230,8 +232,8 @@ DEPLOY_GO_ENV = GOPROXY=$(GOPROXY) GOPRIVATE=gt.local GONOPROXY=none GONOSUMDB=g
 check-registry-url:
 	@if [ "$(origin GOPROXY)" = "file" ] && [ -z "$(strip $(REGISTRY_URL))" ]; then \
 		printf '%s\n' \
-			'$(PARAMS_FILE) names no registryUrl, so there is no Go module registry to resolve the deploy library through.' \
-			'Set registryUrl to the registry this deployment publishes gt.local/devops to, or name one for this run:' \
+			'$(PARAMS_FILE) names no goModuleRegistryUrl, so there is no Go module registry to resolve the deploy library through.' \
+			'Set goModuleRegistryUrl to the registry this deployment publishes gt.local/devops to, or name one for this run:' \
 			'    make deploy-check GOPROXY=<url>,https://proxy.golang.org,direct' >&2; \
 		exit 1; \
 	fi

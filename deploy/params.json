@@ -3,7 +3,8 @@
   "baseKeyFile": "/Users/gt-cloud/.config/gt/base-key.json",
   "stagingUrl": "https://fractals-nextjs-staging-robymk5mfq-uc.a.run.app",
   "prodUrl": "https://fractals-nextjs-prod-robymk5mfq-uc.a.run.app",
-  "registryUrl": "http://forgejo:3000/api/packages/sloan/go",
+  "registryUrl": "forgejo:3000",
+  "goModuleRegistryUrl": "http://forgejo:3000/api/packages/sloan/go",
   "secretsProvider": "gcpkms://projects/gt-fractals-m4xq/locations/us-central1/keyRings/pulumi/cryptoKeys/secrets",
   "pulumiEncryptedKey": {
     "staging": "CiQAIy+lR2nw14Zo07D988maCzmLY13NY2OD40jpor6ZqrsBcfgSSQBd6seR6HqetW/dInQ5+iih4YA+34TX7dMV7QC3SdLnVzJSxaHxN9633Pz48c3MmIidC1ZaPK1aNrTBEXH0bcUPlmN1b6bqgxg=",
