@@ -1,0 +1,12 @@
+# Blocked words, held only as SHA-256 digests of their lower-case forms so the
+# repository holds no plaintext name. A line is one digest; `#` comments and
+# blank lines are ignored. A word is matched whole (see hygiene.ts).
+#
+# The operator's first name.
+be034c581744e2d11ae7547f0ab239dd53e4b99b1aee041d98f4ace02cf38c5a
+# The operator's family name.
+dae25bc7b90ad062f0d7f944e26210658a643dcfc18ab64aed140783f37183c3
+# The two names run together, as in a GitHub handle or an email local part.
+e935640741692c6145bec1cafb0069a99f90baa514bf2e3be6b0ce0c0836550c
+# A fourth blocked word from the same inventory; the digest is all a scan needs.
+e38a1c90e775710fe4f773326d6efea029da2574c022e799da01a2e766378876

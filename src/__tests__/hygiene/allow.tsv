@@ -1,0 +1,161 @@
+# Line-scoped excuses for src/__tests__/hygiene/. One row is
+# `path<TAB>rule<TAB>line hash<TAB>reason`. The hash is the SHA-256 of the
+# exact line content without its terminator, so a line that changes turns the
+# tree test red until the row is reviewed and regenerated. The hash is empty
+# only for the `binary file` rule, which is excused by path alone: binary
+# content is never scanned. An empty path or reason is refused.
+#
+# The public site byline: public credit, the operator's ruling of 11-05 Q12.
+# Revisit if that ruling changes; a later bead would move it to configuration.
+src/lib/pageMetadata.ts	blocked word	bed01ecd19d65bf6c2e6ce0516d040635be8c2806d5d4bcd9650ecb5747ba83c	public byline credit, operator ruling 11-05 Q12; revisit
+src/lib/pageMetadata.ts	blocked word	283ef984ffc0303443cff62c297a07b63c78baf2c6150c61742dbf068f1e0c95	public byline credit, operator ruling 11-05 Q12; revisit
+src/lib/pageMetadata.ts	blocked word	f178ee840fe2dd27a97c13ea42de21bbdf92e275267f32266dd8a643c9dd6bf8	public byline credit, operator ruling 11-05 Q12; revisit
+#
+# The Forgejo owner in the registry URL: class 3, renaming it is out of scope.
+deploy/params.json	blocked word	4f9e36b4ea7ecd52bb09cdc4d9b56083571f37701e49332c2b801806a873eb75	the Forgejo owner path in the registry URL (class 3)
+#
+# The cloud runner's base-key path in the deploy parameters and the workflow
+# templates. It is a service account's home, not a person's, and the templates
+# write it; class 3.
+deploy/params.json	home path	d591f3b3b011210626fb6697dd974e9f32dbcf8886dfb350154654812d8771f8	the cloud runner's base-key path; not a personal home path (class 3)
+.forgejo/workflows/teardown.yml	home path	132fd7cd8337884505dda037d5a82cd06e7d408298f56241052ead7e3883949a	the cloud runner's base-key path; not a personal home path (class 3)
+.forgejo/workflows/up.yml	home path	533de1d9523278f2fdd02db6a46a1b211cc0dcd32dc84e04575e8d13ebdbd28a	the cloud runner's base-key path; not a personal home path (class 3)
+.forgejo/workflows/deploy.yml	home path	533de1d9523278f2fdd02db6a46a1b211cc0dcd32dc84e04575e8d13ebdbd28a	the cloud runner's base-key path; not a personal home path (class 3)
+.forgejo/workflows/staging.yml	home path	533de1d9523278f2fdd02db6a46a1b211cc0dcd32dc84e04575e8d13ebdbd28a	the cloud runner's base-key path; not a personal home path (class 3)
+#
+# The deploy service account's address, asserted literally by the release
+# check: class 3, and not a person's address.
+scripts/release/release_test.go	email	7a47ad2116621d6d4a2ab53c87adfe650c9625ac437c3303952f7c1c38ee3405	the deploy service account's address in the release check (class 3)
+#
+# Tracked binary assets, excused by path. Binary content is never scanned.
+public/og-card-2.png	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-among-the-masts.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-arches.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-armada.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-blue-water.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-far-out.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-forest-of-masts.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-hull-and-rigging.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-hull-close-up.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-hull-edge.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/burning-ship-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/celtic-arrowhead.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/celtic-branching-dust.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/celtic-fold-line.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/celtic-lace.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/celtic-nose.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/celtic-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/cosine-lace.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/cosine-left-edge.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/cosine-notch.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/cosine-small-disc.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/cosine-top-bud.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/cosine-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-basilica.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-classic-deep-spiral.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-classic-spirals.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-classic-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-coral.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-dendrite-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-douady-rabbit-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-four-leaf-clover.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-s-curve.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/julia-siegel-disk-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/magnet-1-curtain.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/magnet-1-drift.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/magnet-1-dust.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/magnet-1-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/magnet-2-lobe.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/magnet-2-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-double-spiral.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-elephant-curl.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-elephant-valley.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-feather.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-lightning.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-long-antenna.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-needle-bulbs.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-needle-copy.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-rainbow-bulb.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-seahorse-tail.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-seahorse-valley.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-shoulder-bulb.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-spiky-copy.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-spiral-arm.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-spiral-galaxy.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-spiral-garden.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-three-armed-star.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-top-bulb.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/mandelbrot-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-3-cusp.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-3-heart.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-3-small-copy.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-3-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-4-antenna.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-4-cleft.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-4-junction.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-4-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-5-notch.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-5-ringed-bulb.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-5-twin-bulbs.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/multibrot-5-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-4-braid.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-4-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-5-braid.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-5-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-bulb-chain.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-cycle-loop.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-cycle-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-junction-1000x.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-junction-chain.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-junction-copy.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-junction.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-lens.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-root-and-boundary.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-two-junctions.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/newton-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/nova-arc-bands.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/nova-arc-tip.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/nova-bulb-tree.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/nova-pinch.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/nova-twin-disks.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/nova-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/perpendicular-ship-bow.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/perpendicular-ship-masts.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/perpendicular-ship-shredded-sail.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/perpendicular-ship-tendrils.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/perpendicular-ship-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/phoenix-classic-curls.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/phoenix-classic-feathers.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/phoenix-classic-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/phoenix-hourglass-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/phoenix-spirals-arm.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/phoenix-spirals-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sin-z-squared-beads.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sin-z-squared-bud.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sin-z-squared-edge.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sin-z-squared-right.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sin-z-squared-top.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sin-z-squared-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-bead-chain.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-disc-edge.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-end-copy.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-lace.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-plus-z-axis-bead.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-plus-z-body-edge.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-plus-z-deep-bud.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-plus-z-first-bead.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-plus-z-outer-bead.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-plus-z-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-top-bud.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/sine-whole.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-along-the-arm.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-body-meets-arm.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-frayed-edge.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-left-arm-bulb.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-small-tricorn.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-star.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-two-bulbs.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-upper-arm-bulb.jpg	binary file		tracked image asset; binary content is never scanned
+public/og/tricorn-whole.jpg	binary file		tracked image asset; binary content is never scanned
+src/app/apple-icon.png	binary file		tracked image asset; binary content is never scanned
+src/app/icon.png	binary file		tracked image asset; binary content is never scanned
