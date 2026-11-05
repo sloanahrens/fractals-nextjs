@@ -162,12 +162,12 @@ describe("deploy/params.json", () => {
 
   it("refuses a registry address with a scheme or path, and a URL with no host", () => {
     // The two shapes are easy to swap, and the generator would refuse either
-    // one written in the other key. These are the values the file held before
+    // one written in the other key. These are the shapes the file held before
     // the keys were split, plus a scheme with no host.
-    expect(isRegistryHost("http://forgejo:3000/api/packages/sloan/go")).toBe(
+    expect(isRegistryHost("http://forgejo:3000/api/packages/operator/go")).toBe(
       false,
     );
-    expect(isRegistryHost("forgejo:3000/api/packages/sloan/go")).toBe(false);
+    expect(isRegistryHost("forgejo:3000/api/packages/operator/go")).toBe(false);
     expect(isRegistryHost("...")).toBe(false);
 
     expect(isAbsoluteHttpUrl("forgejo:3000")).toBe(false);

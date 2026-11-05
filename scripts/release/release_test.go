@@ -29,7 +29,7 @@ import (
 // wizard was authored in. Both are assembled at run time because this file
 // lives under scripts/release and would otherwise trip the scan it performs
 // (the same trick as ops/ops_test.go).
-var forbidden = []string{"/Users/" + "sloan", "claude-" + "501"}
+var forbidden = []string{"/Users/" + "s" + "loan", "claude-" + "501"}
 
 // commands are every script in this directory that is a command, in the order a
 // first release uses them: the one-time stack creation init_stack.sh (bead
