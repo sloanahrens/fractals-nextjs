@@ -188,24 +188,13 @@ jobs:
       # ancestry read ties the run to the commits the landing gate let onto
       # main, and it runs before the token is minted so a refused run reads no
       # credential. origin/main is the checkout's own remote-tracking ref —
-      # fetch-depth: 0 above brings it — so the step makes no network call; a
-      # checkout without it fails the run rather than skipping the check.
+      # fetch-depth: 0 above brings it — so the read makes no network call; a
+      # checkout without it fails the run rather than skipping the check. The
+      # read and its refusals are the release command's
+      # (refuse-commit-not-on-main, bead dv-6tg6), one tested function rather
+      # than the inline shell this step used to carry.
       - name: Refuse a release tag whose commit is not on main
-        run: |
-          set -euo pipefail
-          if ! git rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
-            printf 'refusing the release tag %s: this checkout has no origin/main, so its commit cannot be\n' \
-              "$GITHUB_REF_NAME" >&2
-            printf 'checked against main, and a release tag must point at a commit on main\n' >&2
-            exit 1
-          fi
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
-            printf 'refusing a release tag whose commit is not on main: %s at %s\n' \
-              "$GITHUB_SHA" "$GITHUB_REF_NAME" >&2
-            printf 'a release tag must point at a commit on main, and this one is not an ancestor of origin/main\n' >&2
-            exit 1
-          fi
-          printf 'release tag %s points at %s, which is on main\n' "$GITHUB_REF_NAME" "$GITHUB_SHA"
+        run: release refuse-commit-not-on-main --sha "$GITHUB_SHA" --tag "$GITHUB_REF_NAME"
 
       # Each job mints its own token: a token is good for an hour and one job,
       # and jobs do not share a filesystem. The scripts print notes and a final
