@@ -13,7 +13,9 @@
  * (`/Users/<name>`, `/home/<name>`), an email-shaped string, and a tracked file
  * whose bytes hold a NUL. A word is a maximal run of Unicode letters and
  * digits, so a hypothetical blocked word `zebra` is held by `crew/zebra` and
- * `zebra-7fc`, and not by `zebra2x`.
+ * `zebra-7fc`, and not by `zebra2x`. The blocked-word rule also reads a
+ * tracked path's own name: a path holding a blocked word is one finding at
+ * line 0, with the word masked, and no allow row excuses it.
  */
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -31,7 +33,17 @@ export interface FileSystem {
   readFile(path: string): Buffer;
 }
 
-/** One report: what, where, and which rule. It never carries the text. */
+/**
+ * The text a blocked word becomes wherever a report prints a path. It stands
+ * in for the word in a finding's path, so the report never repeats the word.
+ */
+export const MASKED_WORD = "[blocked]";
+
+/**
+ * One report: what, where, and which rule. It never carries the text. A
+ * finding about the path's own name has line 0, and its path is the masked
+ * name.
+ */
 export interface Finding {
   path: string;
   line: number;
@@ -170,6 +182,25 @@ function blockedWordFires(
   return false;
 }
 
+/**
+ * The path with each blocked word masked, or `undefined` when no word of the
+ * path's own name is blocked. A word is hashed the same way a line's words are,
+ * so `docs/<word>-notes.md` and `crew/<word>/readme.md` both hit.
+ */
+function maskedPathIfBlocked(
+  path: string,
+  blocked: ReadonlySet<string>,
+): string | undefined {
+  if (blocked.size === 0) return undefined;
+  let hit = false;
+  const masked = path.replace(WORD, (word) => {
+    if (!blocked.has(HashWord(word))) return word;
+    hit = true;
+    return MASKED_WORD;
+  });
+  return hit ? masked : undefined;
+}
+
 function homePathFires(line: string): boolean {
   return HOME_PATH.test(line);
 }
@@ -276,8 +307,10 @@ function readTracked(fsys: FileSystem, path: string): Buffer {
 
 /**
  * Scans `paths` through `fsys` and returns the findings no allow entry
- * excuses. Every path is read in full; a file with a NUL byte is a binary
- * finding at line 1 and its content is never hash-scanned.
+ * excuses. A path whose own name holds a blocked word is one finding at line 0,
+ * with the word masked, and no allow row excuses it. Every path is read in
+ * full; a file with a NUL byte is a binary finding at line 1 and its content is
+ * never hash-scanned.
  */
 export function Scan(
   fsys: FileSystem,
@@ -289,6 +322,10 @@ export function Scan(
   const findings: Finding[] = [];
   for (const path of [...paths].sort()) {
     assertSafePath(path);
+    const maskedPath = maskedPathIfBlocked(path, blocked);
+    if (maskedPath !== undefined) {
+      findings.push({ path: maskedPath, line: 0, rule: BLOCKED_WORD_RULE });
+    }
     const bytes = readTracked(fsys, path);
     if (isBinary(bytes)) {
       const excused = allow.some(
