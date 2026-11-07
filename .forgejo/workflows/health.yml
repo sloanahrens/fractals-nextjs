@@ -133,6 +133,21 @@ on:
 # — and the cost is bounded on this side: an app repo has one of these runs an
 # hour. cancel-in-progress: false for the reason the other files give: the
 # invocation it would cancel may be a release half-way through a stack.
+#
+# Sharing the group is only safe in both directions, and both were measured on
+# this instance (16.0.5, bead dv-shob) rather than assumed. The first is the
+# hold: three runs dispatched into the group, and they ran one at a time, in
+# dispatch order, each starting within seconds of the one before it ending
+# (runs 1302, 1303, 1304). The second is the
+# asymmetry with GitHub: there a newly queued run cancels an older run still
+# *pending* in the group even with cancel-in-progress: false, so an hourly check
+# arriving on a busy landing would cancel the staging run that landing had
+# queued and the release bot would find no green staging for the commit. This
+# instance does not do that — the arriving run queued behind both the run in
+# progress and the one already waiting, the waiting run was not cancelled, and
+# it ran next (runs 1310, 1311, 1312, the third from another file sharing the
+# group, which is the health-arrives-on-a-landing shape). A run of this file is
+# therefore a run that waits, never one that displaces.
 concurrency:
   group: deploy-${{ github.repository }}
   cancel-in-progress: false
@@ -330,6 +345,64 @@ jobs:
           printf 'the app carries %s release tag(s), so this run smokes prod as well as staging\n' "$tags"
           printf 'unreleased=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
 
+  # Whether prod is unpublished on purpose: the one case `released` cannot see.
+  # An app that moved from a container to a static site still carries the old
+  # release tags, so `released` says "released" while the static prod site does
+  # not exist yet and the prod check can only fail. The owner says so with a plain
+  # file, deploy/PROD-NOT-PUBLISHED, beside deploy/OFF, and the prod check is then
+  # skipped with a reason in the run instead of failing hourly for weeks.
+  #
+  # A skip must never outlive the release, so the marker is checked against the
+  # thing it claims: while it is there, prod is read at GT_PROD_URL/version.json,
+  # and an answer of 200 fails this job with a message that says to remove the
+  # marker. A marker with no prod URL to check it against fails too, because a
+  # skip nothing can ever contradict is the permanent skip this job exists to
+  # prevent. Reading the public file needs no credential.
+  unpublished:
+    runs-on: ci-base
+    needs: off
+    if: needs.off.outputs.off != 'true'
+    # A file test and one HTTP read with its own bound: the rule's floor.
+    timeout-minutes: 5
+    outputs:
+      # "true" when deploy/PROD-NOT-PUBLISHED is in the run's commit and prod
+      # does not answer yet. prod-smoke carries the same value as a condition.
+      unpublished: ${{ steps.marker.outputs.unpublished }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Only the tree is read, and no later step needs a credential.
+          persist-credentials: false
+
+      - name: Check whether prod is unpublished on purpose
+        id: marker
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f deploy/PROD-NOT-PUBLISHED ]]; then
+            printf 'deploy/PROD-NOT-PUBLISHED is not there; prod is checked when the app has released\n'
+            printf 'unpublished=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+            exit 0
+          fi
+
+          if [[ -z ${GT_PROD_URL:-} ]]; then
+            printf '::error::marker stale or unchecked: deploy/PROD-NOT-PUBLISHED is there but GT_PROD_URL is empty,\n'
+            printf 'so nothing can tell whether prod is published; set the URL or remove the marker\n'
+            exit 1
+          fi
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$GT_PROD_URL/version.json" || true)
+          if [[ $code == 200 ]]; then
+            printf '::error::marker stale: %s/version.json answers 200, so prod is published;\n' "$GT_PROD_URL"
+            printf 'remove deploy/PROD-NOT-PUBLISHED so the prod check runs again\n'
+            exit 1
+          fi
+
+          msg="prod is unpublished on purpose (deploy/PROD-NOT-PUBLISHED, $GT_PROD_URL/version.json answers ${code:-none}): the prod smoke check is skipped"
+          printf '::notice::%s\n' "$msg"
+          printf '%s\n' "$msg" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+          printf 'unpublished=true\n' >>"${GITHUB_OUTPUT:-/dev/null}"
+
   # The staging check: the app's own integration suite, run against the service
   # staging is serving now. Where the job of the same name in staging.yml says a
   # commit is green, this one says the deployment works, so it names no commit
@@ -398,10 +471,11 @@ jobs:
     runs-on: ci-base
     # Both, and each for its own reason: `off` is the app that is not there, and
     # `released` is the prod that is not there. An app that is off, or has never
-    # released, has nothing to smoke — and the job's status is skipped, so the
-    # answer is legible in the run.
-    needs: [off, released]
-    if: needs.off.outputs.off != 'true' && needs.released.outputs.unreleased != 'true'
+    # released, or whose owner marked prod unpublished (deploy/PROD-NOT-PUBLISHED),
+    # has nothing to smoke — and the job's status is skipped, so the answer is
+    # legible in the run.
+    needs: [off, released, unpublished]
+    if: needs.off.outputs.off != 'true' && needs.released.outputs.unreleased != 'true' && needs.unpublished.outputs.unpublished != 'true'
     # The smoke contract bounds the check itself at under a minute, so twice its
     # p95 is under the rule's floor and five minutes is what the rule leaves
     # (bead dv-96nw). This bound is the backstop under a step that never

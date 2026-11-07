@@ -133,12 +133,12 @@ jobs:
   #
   # The number each job gets is the rule the bead sets, applied to that job's
   # own recent successful runs (measured from the Forgejo API over the two apps
-  # the templates are copied into, arkansas-beaver-committee and
-  # fractals-nextjs): twice the p95, never below five minutes, and never above
-  # the hour the gate bounds every job by. Twice the p95 is the whole of the
-  # headroom argument -- a job already at twice its p95 is a job that is stuck
-  # rather than slow -- and the five-minute floor is there because a bound tight
-  # enough to end a cold pull is a bound that fails a healthy landing.
+  # these templates were copied into): twice the p95, never below five minutes,
+  # and never above the hour the gate bounds every job by. Twice the p95 is the
+  # whole of the headroom argument -- a job already at twice its p95 is a job
+  # that is stuck rather than slow -- and the five-minute floor is there because
+  # a bound tight enough to end a cold pull is a bound that fails a healthy
+  # landing.
   #
   # `build` and `staging` are the two jobs the bead names a number for, and both
   # are at or above what the rule gives them; the rest carry theirs in a comment
@@ -205,9 +205,18 @@ jobs:
   # checkout. What it does hold is the token the runner gives every job of every
   # workflow for the run's own repository, which is what the read authenticates
   # with: every app repo is private, so an anonymous `git ls-remote` of one
-  # answers 401, and until this bead every run of this job failed open on that
-  # answer (bead dv-gx2s). It reads nothing and changes nothing, which is what
-  # lets it be the job every other job waits on.
+  # answers 401, and before bead dv-gx2s every run of this job failed open on
+  # that answer. It reads nothing and changes nothing, which is what lets it be
+  # the job every other job waits on.
+  #
+  # The check fails closed (bead dv-9who, the same om finding dv-bdtx fixed in
+  # staging-static.yml). An answer this job cannot read is not an answer, and it
+  # is not a reason to deploy: a run that deploys because it could not tell
+  # whether it is current can roll staging back behind a newer landing that
+  # already deployed, and nothing in the run says so. So every way the read can
+  # fail ends this job red with the reason on the log, and the three jobs behind
+  # it are skipped and deploy nothing. A red `fresh` is loud, which the fail-open
+  # it replaces was not: that one ran green, deployed, and wrote a notice.
   fresh:
     runs-on: ci-base
     # An app that is off has nothing to deploy, so there is nothing to compare
@@ -218,7 +227,9 @@ jobs:
     # at its five-minute floor, and the bead names five for it. Every one of
     # those 142 is a run in which the read answered 401 and this job failed open
     # on it (bead dv-gx2s); the authenticated read is the same request to the
-    # same server, and the floor is what the rule leaves either way.
+    # same server, and the floor is what the rule leaves either way. A read that
+    # does not answer now ends the job at once rather than carrying on, so the
+    # bound is the same one request it was measured as (bead dv-9who).
     timeout-minutes: 5
     outputs:
       # "true" when main has moved past the commit this run was started for.
@@ -226,10 +237,13 @@ jobs:
       # jobs are skipped rather than successful-and-empty.
       stale: ${{ steps.stale.outputs.stale }}
     steps:
-      # Both ways this read can fail deploy-and-test rather than skip. A wrong
-      # skip is invisible -- staging quietly stops tracking main and nothing
-      # says so -- while a wrong deploy publishes a commit that is on main and
-      # passed the gate, which is what a landing run is for.
+      # Every way this read can fail is a failure, and that is the choice bead
+      # dv-9who makes: a run that cannot tell whether it is current deploys
+      # nothing. Both costs are real, and this is the cheaper one. A read that
+      # fails when it should not costs one landing: the job goes red, nothing is
+      # deployed, and the next landing makes the same comparison. A run that
+      # deploys on a read it could not make instead rolls staging back behind a
+      # newer landing that already published, quietly, and says nothing.
       - name: Check whether main has moved past this run's commit
         id: stale
         run: |
@@ -243,22 +257,25 @@ jobs:
           # gives every job of every workflow for the run's own repository —
           # nothing is minted for it, no key path is read, and it opens this
           # repository and no other. Every app repo is private, so an anonymous
-          # `git ls-remote` of main answers 401: this read has never once
-          # succeeded, and this job has failed open on every run it has had
-          # (bead dv-gx2s).
+          # `git ls-remote` of main answers 401: before bead dv-gx2s this read
+          # had never once succeeded, and the job failed open on every run it
+          # had.
+          #
+          # An answer this job cannot read is not an answer, and it is not a
+          # reason to deploy (bead dv-9who). So each way the read can fail ends
+          # the job, red, with the reason on the log; the jobs that need it are
+          # then skipped and nothing is deployed.
           if [[ -z ${GITHUB_SERVER_URL:-} || -z ${GITHUB_REPOSITORY:-} ]]; then
-            printf '::notice::the runner names no server or repository, so main cannot be read\n'
-            printf 'deploying and testing %s rather than skipping it silently\n' "$GITHUB_SHA"
-            printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
-            exit 0
+            printf '::error::the runner names no server or repository, so main cannot be read\n'
+            printf 'nothing is deployed for %s: a run that cannot tell whether it is current deploys nothing\n' "$GITHUB_SHA"
+            exit 1
           fi
           remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
 
           if [[ -z ${GITHUB_TOKEN:-} ]]; then
-            printf '::notice::this runner gave the job no token, so main cannot be read\n'
-            printf 'deploying and testing %s rather than skipping it silently\n' "$GITHUB_SHA"
-            printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
-            exit 0
+            printf '::error::this runner gave the job no token, so main cannot be read\n'
+            printf 'nothing is deployed for %s: a run that cannot tell whether it is current deploys nothing\n' "$GITHUB_SHA"
+            exit 1
           fi
 
           # git takes the token as basic auth, so the header is
@@ -269,25 +286,30 @@ jobs:
           # this file has to know (services/auth/basic.go, GetRunningTaskByToken).
           auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
 
-          # The header reaches git through its environment — GIT_CONFIG_* is
-          # git's own way to set one config value for one command — so the token
-          # is on no command line for a `ps` in the job's own container to read,
-          # and 2>/dev/null keeps git's own output out of the log, where a URL
-          # it prints on the way out would be the only place the run could leak
-          # anything. No branch below prints the header or the token: what a
-          # reader sees is main's own sha or the notice above.
-          if ! out=$(env GIT_TERMINAL_PROMPT=0 \
-              GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader \
-              GIT_CONFIG_VALUE_0="Authorization: Basic $auth" \
-              git ls-remote "$remote" refs/heads/main 2>/dev/null); then
-            printf '::notice::could not read main from %s\n' "$remote"
-            printf 'deploying and testing %s rather than skipping it silently\n' "$GITHUB_SHA"
-            printf 'stale=false\n' >>"${GITHUB_OUTPUT:-/dev/null}"
-            exit 0
+          # The header reaches git as an environment value of this step's shell
+          # — GIT_CONFIG_* is git's own way to set one config value — and never
+          # as a word of any command's argument list. That is all it does: it
+          # keeps the token out of the arguments a process listing shows and out
+          # of this log (2>/dev/null drops git's own output, where a URL it
+          # prints would be the one place the run could leak anything). A
+          # process of this step's own user can still read this step's
+          # environment. No branch below prints the header or the token: what a
+          # reader sees is main's own sha or the reason the read failed.
+          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader
+          export GIT_CONFIG_VALUE_0="Authorization: Basic $auth"
+          if ! out=$(git ls-remote "$remote" refs/heads/main 2>/dev/null); then
+            printf '::error::could not read main from %s\n' "$remote"
+            printf 'nothing is deployed for %s: a run that cannot tell whether it is current deploys nothing\n' "$GITHUB_SHA"
+            exit 1
           fi
 
           main=${out%%[[:space:]]*}
-          if [[ -n $main && $main != "$GITHUB_SHA" ]]; then
+          if [[ -z $main ]]; then
+            printf '::error::%s answered no sha for refs/heads/main\n' "$remote"
+            printf 'nothing is deployed for %s: a run that cannot tell whether it is current deploys nothing\n' "$GITHUB_SHA"
+            exit 1
+          fi
+          if [[ $main != "$GITHUB_SHA" ]]; then
             printf '::notice::main is at %s and this run is for %s\n' "$main" "$GITHUB_SHA"
             printf 'a newer landing has superseded this run; nothing is deployed and nothing is tested\n'
             printf 'stale=true\n' >>"${GITHUB_OUTPUT:-/dev/null}"
