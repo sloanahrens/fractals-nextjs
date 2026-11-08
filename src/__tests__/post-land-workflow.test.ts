@@ -120,6 +120,24 @@ function liveCopyProblem(livePath: string): string | null {
 const jobs = () => section(SOURCE, "jobs");
 const check = () => block(jobs(), "check", 1);
 
+/**
+ * The lines that write `continue-on-error`, at any level, as `line N: ...`.
+ *
+ * A job or step with the key can fail while the run reads green, so the
+ * post-land status could say green for a red gate. The key is refused whatever
+ * its value. A comment naming it is not a key: the pattern needs the key to
+ * open the line, so a `#` line never matches.
+ */
+function refusedKeys(source: string): string[] {
+  const refused: string[] = [];
+  source.split("\n").forEach((line, index) => {
+    if (/^\s*(?:-\s+)?continue-on-error\s*:/.test(line)) {
+      refused.push(`line ${index + 1}: continue-on-error`);
+    }
+  });
+  return refused;
+}
+
 describe("the reviewed post-land workflow", () => {
   it("starts with the header an operator needs", () => {
     // The first line is a comment, and the header carries the one token an
@@ -184,6 +202,51 @@ describe("the reviewed post-land workflow", () => {
     ]) {
       expect(SOURCE, String(forbidden)).not.toMatch(forbidden);
     }
+  });
+
+  it("holds no continue-on-error, at any level", () => {
+    expect(refusedKeys(SOURCE)).toEqual([]);
+  });
+});
+
+describe("the pin refuses continue-on-error wherever it is written", () => {
+  // Each row inserts the key under one line of the reviewed text, then runs the
+  // same refusedKeys the pin test runs on SOURCE. The anchor must exist, so a
+  // renamed line fails its row rather than leaving the text unchanged.
+  it.each([
+    [
+      "at the job level",
+      "    runs-on: ci-base\n",
+      "    runs-on: ci-base\n    continue-on-error: true\n",
+    ],
+    [
+      "at the step level",
+      "      - run: make gate\n",
+      "      - run: make gate\n        continue-on-error: true\n",
+    ],
+    [
+      "as false, at the job level",
+      "    runs-on: ci-base\n",
+      "    runs-on: ci-base\n    continue-on-error: false\n",
+    ],
+  ])("refuses the key %s", (_where, anchor, inserted) => {
+    expect(SOURCE).toContain(anchor);
+    const mutated = SOURCE.replace(anchor, inserted);
+
+    expect(refusedKeys(mutated)).toEqual([
+      expect.stringContaining("continue-on-error"),
+    ]);
+  });
+
+  it("does not refuse a comment that names the key", () => {
+    const anchor = "    runs-on: ci-base\n";
+    expect(SOURCE).toContain(anchor);
+    const mutated = SOURCE.replace(
+      anchor,
+      `${anchor}    # continue-on-error: true would be refused as a key\n`,
+    );
+
+    expect(refusedKeys(mutated)).toEqual([]);
   });
 });
 
