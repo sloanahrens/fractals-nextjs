@@ -12,8 +12,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   type AllowEntry,
+  BINARY_FILE_RULE,
   BLOCKED_WORD_RULE,
   DefaultRules,
+  EMAIL_RULE,
+  HOME_PATH_RULE,
   HashLine,
   HashWord,
   LoadAllow,
@@ -32,6 +35,26 @@ function words(...parts: string[]): string {
 /** The word the path tests plant, assembled at run time only. */
 function plantedWord(): string {
   return words("ze", "bra");
+}
+
+/** A line with a home path, assembled at run time so the source holds none. */
+function homeLine(): string {
+  return "see /" + words("Us", "ers") + "/alice/x";
+}
+
+/** A line with an address, assembled at run time so the source holds none. */
+function addressLine(): string {
+  return "mail dev" + "@" + "acme.io";
+}
+
+/** The message a call throws, or "" when it returns. */
+function thrownMessage(call: () => unknown): string {
+  try {
+    call();
+    return "";
+  } catch (error) {
+    return (error as Error).message;
+  }
 }
 
 describe("hygiene", () => {
@@ -154,6 +177,73 @@ describe("hygiene", () => {
       rule: BLOCKED_WORD_RULE,
       lineHash: HashLine("clean"),
       reason: "an attempt to excuse the path by a line row",
+    };
+
+    expect(Scan(fsys, [notes], DefaultRules(), blocked, [allow])).toEqual([
+      { path: "docs/" + MASKED_WORD + "-notes.md", line: 0, rule: BLOCKED_WORD_RULE },
+    ]);
+  });
+
+  it("prints the masked path on every content finding of such a file", () => {
+    const word = plantedWord();
+    const blocked = new Set([HashWord(word)]);
+    const notes = "docs/" + word + "-notes.md";
+    const masked = "docs/" + MASKED_WORD + "-notes.md";
+    const fsys = memoryFileSystem({
+      [notes]: [homeLine(), addressLine(), "the " + word + " line"].join("\n"),
+    });
+
+    const findings = Scan(fsys, [notes], DefaultRules(), blocked);
+
+    expect(findings).toEqual([
+      { path: masked, line: 0, rule: BLOCKED_WORD_RULE },
+      { path: masked, line: 1, rule: HOME_PATH_RULE },
+      { path: masked, line: 2, rule: EMAIL_RULE },
+      { path: masked, line: 3, rule: BLOCKED_WORD_RULE },
+    ]);
+    expect(JSON.stringify(findings)).not.toContain(word);
+  });
+
+  it("prints the masked path on the binary finding of such a file", () => {
+    const word = plantedWord();
+    const blocked = new Set([HashWord(word)]);
+    const notes = "docs/" + word + "-notes.md";
+    const fsys = memoryFileSystem({ [notes]: Buffer.from("a\0b", "utf8") });
+
+    const findings = Scan(fsys, [notes], DefaultRules(), blocked);
+
+    expect(findings).toEqual([
+      { path: "docs/" + MASKED_WORD + "-notes.md", line: 0, rule: BLOCKED_WORD_RULE },
+      { path: "docs/" + MASKED_WORD + "-notes.md", line: 1, rule: BINARY_FILE_RULE },
+    ]);
+    expect(JSON.stringify(findings)).not.toContain(word);
+  });
+
+  it("names the masked path, not the word, when a blocked-word file cannot be read", () => {
+    const word = plantedWord();
+    const blocked = new Set([HashWord(word)]);
+    const notes = "docs/" + word + "-notes.md";
+
+    const message = thrownMessage(() =>
+      Scan(memoryFileSystem({}), [notes], DefaultRules(), blocked),
+    );
+
+    expect(message).toBe(
+      "cannot read a tracked file: docs/" + MASKED_WORD + "-notes.md",
+    );
+    expect(message).not.toContain(word);
+  });
+
+  it("matches an allow row on the real path of a masked-name file", () => {
+    const word = plantedWord();
+    const blocked = new Set([HashWord(word)]);
+    const notes = "docs/" + word + "-notes.md";
+    const fsys = memoryFileSystem({ [notes]: homeLine() + "\n" });
+    const allow: AllowEntry = {
+      path: notes,
+      rule: HOME_PATH_RULE,
+      lineHash: HashLine(homeLine()),
+      reason: "an excused home path in a file whose name is masked",
     };
 
     expect(Scan(fsys, [notes], DefaultRules(), blocked, [allow])).toEqual([

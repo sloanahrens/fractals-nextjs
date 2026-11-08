@@ -297,11 +297,19 @@ function assertSafePath(path: string): void {
   }
 }
 
-function readTracked(fsys: FileSystem, path: string): Buffer {
+/**
+ * Reads a tracked file. A failure names `shown`, the path a report may print,
+ * so the read error holds the same masked name as the file's findings.
+ */
+function readTracked(
+  fsys: FileSystem,
+  path: string,
+  shown: string = path,
+): Buffer {
   try {
     return fsys.readFile(path);
   } catch {
-    throw new Error(`cannot read a tracked file: ${path}`);
+    throw new Error(`cannot read a tracked file: ${shown}`);
   }
 }
 
@@ -310,7 +318,8 @@ function readTracked(fsys: FileSystem, path: string): Buffer {
  * excuses. A path whose own name holds a blocked word is one finding at line 0,
  * with the word masked, and no allow row excuses it. Every path is read in
  * full; a file with a NUL byte is a binary finding at line 1 and its content is
- * never hash-scanned.
+ * never hash-scanned. Every finding of such a file, and its read error, prints
+ * the masked name; allow rows still match the real path.
  */
 export function Scan(
   fsys: FileSystem,
@@ -323,15 +332,16 @@ export function Scan(
   for (const path of [...paths].sort()) {
     assertSafePath(path);
     const maskedPath = maskedPathIfBlocked(path, blocked);
+    const shown = maskedPath ?? path;
     if (maskedPath !== undefined) {
-      findings.push({ path: maskedPath, line: 0, rule: BLOCKED_WORD_RULE });
+      findings.push({ path: shown, line: 0, rule: BLOCKED_WORD_RULE });
     }
-    const bytes = readTracked(fsys, path);
+    const bytes = readTracked(fsys, path, shown);
     if (isBinary(bytes)) {
       const excused = allow.some(
         (entry) => entry.path === path && entry.rule === BINARY_FILE_RULE,
       );
-      if (!excused) findings.push({ path, line: 1, rule: BINARY_FILE_RULE });
+      if (!excused) findings.push({ path: shown, line: 1, rule: BINARY_FILE_RULE });
       continue;
     }
     splitLines(bytes).forEach((line, index) => {
@@ -345,7 +355,7 @@ export function Scan(
             entry.rule === rule.name &&
             entry.lineHash === lineHash,
         );
-        if (!excused) findings.push({ path, line: index + 1, rule: rule.name });
+        if (!excused) findings.push({ path: shown, line: index + 1, rule: rule.name });
       }
     });
   }
