@@ -1,0 +1,53 @@
+NOTICE
+
+The MIT licence in LICENSE covers this repository's source code, subject to
+the limits stated below. This file records where the parts of the repository
+that were not written here came from, and the third-party material the licence
+does not cover.
+
+scripts/release/ and .forgejo/workflows/
+    scripts/release/ (the scripts, their bats tests and fakes) is a verbatim
+    copy of that directory in the town's devops repository — the module
+    gt.local/devops pinned in deploy/go.mod — and .forgejo/workflows/ is
+    copied from the same repository's workflow templates and edited here;
+    deploy/README.md records both copies and the pinned version. Both are
+    held by the same owner as this repository, not by a third party. No
+    separate notice found: that repository has no LICENSE or NOTICE and no
+    copyright, SPDX or licence line in either tree. The MIT licence in
+    LICENSE covers these copies only to the extent its holder line covers
+    them.
+
+Icons and link card
+    src/app/icon.png (192x192), src/app/apple-icon.png (180x180) and
+    public/og-card-2.png (1200x630) are written by scripts/make-og-card.mjs,
+    whose header comment records that it draws them through the app's own
+    renderer and its own site text. They are this repository's own images:
+    the MIT licence covers the code only and does not cover them.
+
+Link previews
+    The 128 JPEGs under public/og/ are written by scripts/make-og-previews.mjs
+    through the application's own pixel pipeline (renderRgba), and the set is
+    held to the place catalogue by tests. They are this repository's own
+    images: the MIT licence covers the code only and does not cover them.
+
+Inter
+    The app's font, SIL Open Font License 1.1 (https://rsms.me/inter/). It is
+    fetched at build time by next/font (src/app/layout.tsx) and by
+    scripts/make-og-card.mjs; no font file is committed here, so it is a
+    build-time dependency, not a shipped asset.
+
+create-next-app boilerplate
+    None survives unedited. The repository's first commit (76904a9,
+    2025-09-25) already carries the application, and no generator scaffold
+    file (public/next.svg, public/vercel.svg, src/app/favicon.ico,
+    src/app/page.module.css) exists at any commit. next.config.js,
+    postcss.config.js, tailwind.config.js, src/app/layout.tsx and
+    src/app/globals.css have the template's default shape (the Inter import,
+    the Tailwind directives) and are edited here; none carries a third-party
+    copyright or licence line. Next.js itself is MIT, and the packages that
+    carry it are fetched at install time (Dependencies, below).
+
+Dependencies
+    The packages package.json and package-lock.json name, and the Go modules
+    deploy/go.mod names, keep the licences of their own projects. Neither is
+    vendored: both are fetched at install or build time.

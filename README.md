@@ -142,3 +142,10 @@ here; `CLAUDE.md` carries the guidance for working here.
 
 Changes land through the landing gate on a `land/**` branch, not through a pull
 request.
+
+## Licence
+
+The MIT licence in [`LICENSE`](LICENSE) covers the code in this repository,
+including the release scripts copied from the devops repository to the extent
+its holder line covers them, but not the site's own text and images; the
+third-party material listed in [`NOTICE`](NOTICE) keeps its own terms.
