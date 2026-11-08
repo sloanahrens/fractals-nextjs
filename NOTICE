@@ -1,0 +1,26 @@
+NOTICE
+
+The MIT licence in LICENSE covers this repository's source code. This file
+records where the parts of the repository that were not written here came
+from, and the third-party material that licence does not cover.
+
+scripts/release/
+    A verbatim copy of the scripts/release/ directory of the town's devops
+    repository — the module gt.local/devops pinned in deploy/go.mod
+    (deploy/README.md records the copy). That repository declares no separate
+    licence or copyright notice, so none is reproduced here.
+
+.forgejo/workflows/
+    Copied from the devops repository's workflow templates and edited in this
+    repository (deploy/README.md records which). Those templates declare no
+    separate licence or copyright notice, so none is reproduced here.
+
+Inter
+    The app's font, SIL Open Font License 1.1 (https://rsms.me/inter/). It is
+    fetched at build time by next/font (src/app/layout.tsx) and by
+    scripts/make-og-card.mjs; no font file is committed here.
+
+Dependencies
+    The packages package.json and package-lock.json name, and the Go modules
+    deploy/go.mod names, keep the licences of their own projects. Neither is
+    vendored: both are fetched at install or build time.
