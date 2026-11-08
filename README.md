@@ -145,6 +145,7 @@ request.
 
 ## Licence
 
-The MIT licence in [`LICENSE`](LICENSE) covers the code only — the site's own
-text and images are not covered by it, and the third-party material listed in
-[`NOTICE`](NOTICE) keeps its own terms.
+The MIT licence in [`LICENSE`](LICENSE) covers the code in this repository,
+including the release scripts copied from the devops repository to the extent
+its holder line covers them, but not the site's own text and images; the
+third-party material listed in [`NOTICE`](NOTICE) keeps its own terms.
