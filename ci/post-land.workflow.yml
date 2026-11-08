@@ -1,0 +1,31 @@
+# The post-land check for this repository: `make gate` on main, after the
+# landing worker lands a branch, so the town can read main as GREEN or RED
+# instead of UNKNOWN.
+#
+# Changing the live copy (see .forgejo/workflows/post-land.yml) is a human step:
+# the workflow-protect hook refuses an agent pushing under that directory. This
+# copy is the reviewed text, and a test holds the live copy to it byte for byte.
+#
+# The workflow name and the single job key are the status context
+# "post-land / check (push)". Renaming either orphans the rig setting
+# merge_queue.post_land_status_context, and the rig then reads main as UNKNOWN
+# again.
+#
+# No concurrency block: a cancelled or replaced run would leave a false red or
+# no status at all, and a post-land check that says nothing is worse than none.
+name: post-land
+on:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ci-base
+    # `make gate` is ci-install, then lint, typecheck, build and the unit
+    # suite: the same target the landing gate runs, and it needs no cloud key,
+    # so the runner that holds none runs it. The timeout is far above the run,
+    # so it only catches a hang.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: make gate
