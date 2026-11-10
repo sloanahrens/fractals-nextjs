@@ -69,9 +69,22 @@ export interface Rule {
   fires?: (line: string, blocked: ReadonlySet<string>) => boolean;
 }
 
+/**
+ * The digest of each distinct lower-cased word, held once. A tree holds far
+ * more words than distinct ones, so a word that repeats across lines is hashed
+ * the first time only; its digest never changes, so the memo cannot go stale.
+ */
+const wordDigests = new Map<string, string>();
+
 /** The SHA-256 hex digest of a word, lower-cased first. */
 export function HashWord(word: string): string {
-  return createHash("sha256").update(word.toLowerCase()).digest("hex");
+  const key = word.toLowerCase();
+  let digest = wordDigests.get(key);
+  if (digest === undefined) {
+    digest = createHash("sha256").update(key).digest("hex");
+    wordDigests.set(key, digest);
+  }
+  return digest;
 }
 
 /**
@@ -345,15 +358,16 @@ export function Scan(
       continue;
     }
     splitLines(bytes).forEach((line, index) => {
-      const lineHash = HashLine(line);
       for (const rule of rules) {
         if (rule.scope !== "line" || rule.fires === undefined) continue;
         if (!rule.fires(line, blocked)) continue;
+        // The line is hashed only for an allow row that could excuse it: the
+        // comparison short-circuits on path and rule first.
         const excused = allow.some(
           (entry) =>
             entry.path === path &&
             entry.rule === rule.name &&
-            entry.lineHash === lineHash,
+            entry.lineHash === HashLine(line),
         );
         if (!excused) findings.push({ path: shown, line: index + 1, rule: rule.name });
       }
