@@ -52,7 +52,7 @@ Built with Next.js (App Router), React, strict TypeScript, Tailwind and Vitest.
 
 ## Getting started
 
-Node 20 or later (the `Dockerfile` and the landing gate image build on it), and npm.
+Node 22 or later (the `Dockerfile` and the landing gate image build on it), and npm.
 
 ```bash
 npm ci        # or: make install
@@ -98,7 +98,7 @@ network and no deployment to call; the checks are in
 ```bash
 make docker-build   # docker build --platform linux/amd64 -f Dockerfile .
 make docker-run     # run the image on 8080
-make test-docker    # npm ci, build, lint and typecheck in a node:20-alpine container
+make test-docker    # npm ci, build, lint and typecheck in a node:22-alpine container
 ```
 
 ## Deployment

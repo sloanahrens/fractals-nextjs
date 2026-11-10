@@ -90,7 +90,7 @@ docker-run:
 # Vitest suite deliberately left out, so this is not `make gate`: a change that
 # only this passes has not been through the gate. Run `make gate` for that.
 test-docker:
-	docker run --rm -v $(PWD):/app -w /app node:20-alpine sh -c "npm ci && npm run build && npm run lint && npx tsc --noEmit"
+	docker run --rm -v $(PWD):/app -w /app node:22-alpine sh -c "npm ci && npm run build && npm run lint && npx tsc --noEmit"
 
 # Cleanup
 clean:
