@@ -250,4 +250,33 @@ describe("hygiene", () => {
       { path: "docs/" + MASKED_WORD + "-notes.md", line: 0, rule: BLOCKED_WORD_RULE },
     ]);
   });
+
+  it("gives the same findings when one planted set is scanned twice", () => {
+    // The second scan reads every word's digest from the memo the first scan
+    // filled; the findings must not change between the two.
+    const word = plantedWord();
+    const blocked = new Set([HashWord(word)]);
+    const notes = "docs/" + word + "-notes.md";
+    const fsys = memoryFileSystem({
+      "a.txt": ["clean", "the " + word + " line", word + " and " + word].join("\n"),
+      "b.txt": homeLine() + "\n" + addressLine(),
+      "c.bin": Buffer.from([0, 1]),
+      [notes]: "clean\n",
+    });
+    const paths = ["a.txt", "b.txt", "c.bin", notes];
+    const expected = [
+      { path: "a.txt", line: 2, rule: BLOCKED_WORD_RULE },
+      { path: "a.txt", line: 3, rule: BLOCKED_WORD_RULE },
+      { path: "b.txt", line: 1, rule: HOME_PATH_RULE },
+      { path: "b.txt", line: 2, rule: EMAIL_RULE },
+      { path: "c.bin", line: 1, rule: BINARY_FILE_RULE },
+      { path: "docs/" + MASKED_WORD + "-notes.md", line: 0, rule: BLOCKED_WORD_RULE },
+    ];
+
+    const first = Scan(fsys, paths, DefaultRules(), blocked);
+    const second = Scan(fsys, paths, DefaultRules(), blocked);
+
+    expect(first).toEqual(expected);
+    expect(second).toEqual(first);
+  });
 });
