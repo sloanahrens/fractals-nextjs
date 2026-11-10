@@ -6,7 +6,7 @@
 # Purpose: Build the Next.js application with all dependencies
 # This stage includes dev dependencies needed for building
 # ================================
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy package files and install ALL dependencies (including devDependencies)
@@ -34,7 +34,7 @@ RUN npm run build
 # Purpose: Minimal runtime environment with only necessary files
 # This is the final image that will be deployed
 # ================================
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 # Create a non-root user for security best practices
